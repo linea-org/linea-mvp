@@ -1,0 +1,20 @@
+{
+  "name": "@linea/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "format": "prettier --write \"**/*.ts\""
+  },
+  "devDependencies": {
+    "@linea/eslint-config": "workspace:*",
+    "@linea/typescript-config": "workspace:*",
+    "typescript": "^5.9.3"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  }
+}
