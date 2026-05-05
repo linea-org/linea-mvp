@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pnpm install *)"
+      "Bash(pnpm install *)",
+      "Bash(gh issue *)",
+      "WebFetch(domain:supermemory.ai)",
+      "PowerShell(Get-Content *)",
+      "PowerShell($content = Get-Content \"C:\\\\Users\\\\rohit\\\\projects\\\\linea\\\\apps\\\\docs\\\\.next\\\\static\\\\css\\\\app\\\\layout.css\" -Raw; $allIdx = @\\(\\); $start = 0; while \\($true\\) { $idx = $content.IndexOf\\('.text-3xl', $start\\); if \\($idx -lt 0\\) { break }; $allIdx += $idx; $start = $idx + 1 }; foreach \\($i in $allIdx\\) { Write-Host \"=== At $i ===\"; Write-Host $content.Substring\\($i, 100\\) })"
     ]
   }
 }

@@ -1,0 +1,154 @@
+---
+title: Memory
+description: Store, search, and profile AI agent memory at the workspace level.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Memory
+
+All endpoints scoped to: `/v1/workspaces/:workspaceId/memories`.
+
+## Endpoints
+
+### `POST /v1/workspaces/:wId/memories/ingest`
+
+Extract atomic facts from raw text, embed them, resolve conflicts, and store. This is the primary write path.
+
+**Body**
+```json
+{
+  "content": "Alice mentioned she prefers dark mode and uses VS Code. She deployed v2.3 on 2025-03-10.",
+  "scope": "user",
+  "threadId": "thread-abc",
+  "workflowId": "uuid"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | string | Raw text to extract facts from |
+| `scope` | `thread` \| `workflow` \| `user` | Memory scope |
+| `threadId` | string? | Agent conversation thread |
+| `workflowId` | uuid? | Associated workflow |
+
+**Response** `201`
+```json
+{
+  "memoriesCreated": 3,
+  "memoriesUpdated": 1,
+  "sessionId": "uuid",
+  "memories": [...]
+}
+```
+
+---
+
+### `POST /v1/workspaces/:wId/memories/search`
+
+Hybrid vector + keyword search.
+
+**Body**
+```json
+{
+  "query": "what does Alice prefer?",
+  "scope": "user",
+  "userId": "uuid",
+  "limit": 10
+}
+```
+
+**Response** `200`
+```json
+[{ "id": "uuid", "content": "Alice prefers dark mode", "score": 0.94, ... }]
+```
+
+Scores are merged: vector cosine similarity boosted by `+0.2` for keyword matches.
+
+---
+
+### `GET /v1/workspaces/:wId/memories/profile?userId=:userId`
+
+Return a user's memories grouped by `factType`.
+
+**Response** `200`
+```json
+{
+  "facts": [...],
+  "preferences": [...],
+  "events": [...],
+  "profile": [...],
+  "system": [...],
+  "uncategorized": [...]
+}
+```
+
+---
+
+### `POST /v1/workspaces/:wId/memories`
+
+Store a single memory without extraction (manual insert).
+
+**Body**
+```json
+{
+  "content": "User is based in Berlin",
+  "scope": "user",
+  "factType": "profile",
+  "confidence": 0.9
+}
+```
+
+**Response** `201` — memory object
+
+---
+
+### `GET /v1/workspaces/:wId/memories`
+
+List memories with optional filters.
+
+**Query params**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `scope` | string | `thread` \| `workflow` \| `user` |
+| `threadId` | string | Filter by thread |
+| `workflowId` | uuid | Filter by workflow |
+
+**Response** `200` — array of memory objects (excludes superseded)
+
+---
+
+### `DELETE /v1/workspaces/:wId/memories/:id`
+
+Delete a memory.
+
+**Response** `204`
+
+---
+
+## Memory Object
+
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "userId": "uuid",
+  "threadId": "thread-abc",
+  "workflowId": null,
+  "scope": "user",
+  "content": "Alice prefers dark mode",
+  "source": "ingested",
+  "factType": "preference",
+  "eventDate": null,
+  "supersededById": null,
+  "confidence": 0.97,
+  "metadata": {},
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-01-01T00:00:00Z"
+}
+```
+
+<Callout>
+  Memories with `supersededById != null` are stale — they have been replaced by a newer, semantically equivalent fact. All list/search endpoints exclude them automatically.
+</Callout>

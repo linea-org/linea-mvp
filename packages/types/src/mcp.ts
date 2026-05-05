@@ -1,4 +1,4 @@
-import type { ID, Timestamp } from './common';
+import type { ID, Timestamp } from './common.js';
 
 export type MCPAuthType = 'none' | 'api_key' | 'bearer' | 'oauth';
 export type MCPServerStatus = 'unknown' | 'connected' | 'error';

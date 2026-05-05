@@ -1,0 +1,44 @@
+---
+title: HTTP Status Codes
+description: Status codes returned by the Linea API and what they mean.
+---
+
+# HTTP Status Codes
+
+## Success Codes
+
+| Code | Meaning | When Used |
+|------|---------|-----------|
+| `200 OK` | Request succeeded | GET, PATCH responses |
+| `201 Created` | Resource created | POST responses |
+| `204 No Content` | Success, no body | DELETE responses |
+
+## Client Error Codes
+
+| Code | Meaning | Common Causes |
+|------|---------|---------------|
+| `400 Bad Request` | Invalid input | Validation failure, missing required field |
+| `401 Unauthorized` | Missing or invalid auth | No token, expired Clerk JWT, invalid API key |
+| `403 Forbidden` | Auth valid but insufficient permission | Wrong workspace role, accessing another user's data |
+| `404 Not Found` | Resource doesn't exist | Wrong ID, resource belongs to a different workspace/space |
+| `409 Conflict` | State conflict | Duplicate slug, already-trashed workflow |
+| `422 Unprocessable Entity` | Semantic validation error | Invalid cron expression, unsupported transport type |
+
+## Server Error Codes
+
+| Code | Meaning | Notes |
+|------|---------|-------|
+| `500 Internal Server Error` | Unexpected failure | Check API logs |
+| `503 Service Unavailable` | Dependency down | Redis or PostgreSQL unreachable |
+
+## Guard-Specific Responses
+
+The authorization guards return structured errors before reaching the controller:
+
+| Guard | Condition | Status |
+|-------|-----------|--------|
+| `AuthGuard` | Token missing or invalid | `401` |
+| `WorkspaceGuard` | Workspace not found | `404` |
+| `WorkspaceGuard` | User not a member | `403` |
+| `SpaceGuard` | Space not found or wrong workspace | `404` |
+| `ApiKeyGuard` | Key invalid or revoked | `401` |

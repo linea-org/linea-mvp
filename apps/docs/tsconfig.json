@@ -1,0 +1,20 @@
+{
+  "extends": "@linea/typescript-config/nextjs.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".source/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

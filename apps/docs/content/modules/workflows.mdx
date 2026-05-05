@@ -1,0 +1,83 @@
+---
+title: Workflows
+description: Defining, deploying, and managing workflows within a space.
+---
+
+import { Callout } from 'nextra/components'
+
+# Workflows
+
+A **Workflow** is the core unit of automation in Linea. It belongs to a **Space** and defines a sequence of steps that are executed together.
+
+## Schema
+
+```typescript
+workflows: {
+  id: uuid PK
+  spaceId: uuid FK → spaces (cascade delete)
+  name: text
+  description: text | null
+  definition: jsonb             // step graph (runtime-defined)
+  deployedAt: timestamp | null  // null = draft
+  starred: boolean              // user favourite
+  deletedAt: timestamp | null   // soft delete (trash)
+  createdAt: timestamp
+  updatedAt: timestamp
+}
+```
+
+## Lifecycle States
+
+| State | Condition |
+|-------|-----------|
+| **Draft** | `deployedAt IS NULL` and `deletedAt IS NULL` |
+| **Deployed** | `deployedAt IS NOT NULL` and `deletedAt IS NULL` |
+| **Trashed** | `deletedAt IS NOT NULL` |
+
+Workflows can be trashed and restored. Trashed workflows are excluded from all list queries by default.
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/workspaces/:wId/spaces/:sId/workflows` | List (supports `?trashed=true`, `?starred=true`) |
+| `POST` | `/workspaces/:wId/spaces/:sId/workflows` | Create workflow |
+| `GET` | `/workspaces/:wId/spaces/:sId/workflows/:id` | Get workflow |
+| `PATCH` | `/workspaces/:wId/spaces/:sId/workflows/:id` | Update name/description/definition |
+| `PATCH` | `/workspaces/:wId/spaces/:sId/workflows/:id/star` | Toggle `starred` |
+| `PATCH` | `/workspaces/:wId/spaces/:sId/workflows/:id/trash` | Soft delete |
+| `PATCH` | `/workspaces/:wId/spaces/:sId/workflows/:id/restore` | Restore from trash |
+
+## Service: Key Methods
+
+### `findAll(spaceId, query)`
+
+```typescript
+const conditions = [eq(workflows.spaceId, spaceId)]
+if (query.trashed) {
+  conditions.push(isNotNull(workflows.deletedAt))
+} else {
+  conditions.push(isNull(workflows.deletedAt))
+  if (query.starred) conditions.push(eq(workflows.starred, true))
+}
+```
+
+### `trash(spaceId, id, membership)`
+
+Requires `editor` role or above. Sets `deletedAt = now()`.
+
+### `restore(spaceId, id, membership)`
+
+Requires `editor` role. Sets `deletedAt = null`.
+
+## Frontend
+
+The workflows page lives at `/spaces/[spaceId]/workflows` and supports three view tabs:
+
+- **All** — active (non-trashed) workflows
+- **Starred** — active + `starred = true`
+- **Trash** — trashed workflows with a Restore action
+
+<Callout>
+  The "New workflow" button is currently disabled pending the visual workflow builder. The `definition` JSONB field is reserved for the step graph once the builder ships.
+</Callout>

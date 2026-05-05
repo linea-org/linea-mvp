@@ -1,0 +1,161 @@
+---
+title: Workflows
+description: Create, deploy, and manage workflows within a space.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Workflows
+
+All workflow endpoints are scoped to a space: `/v1/workspaces/:workspaceId/spaces/:spaceId/workflows`.
+
+## Endpoints
+
+### `POST /v1/workspaces/:wId/spaces/:sId/workflows`
+
+Create a workflow. Requires `editor+`.
+
+**Body**
+```json
+{
+  "name": "Daily Digest",
+  "description": "Summarise news every morning",
+  "definition": {}
+}
+```
+
+**Response** `201` — workflow object
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/workflows`
+
+List workflows.
+
+**Query params**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `trashed` | boolean | `false` | Return trashed workflows instead |
+| `starred` | boolean | — | Filter to starred only |
+
+**Response** `200` — array of workflow objects
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/workflows/:id`
+
+Get a single workflow.
+
+**Response** `200` — workflow object
+
+---
+
+### `PATCH /v1/workspaces/:wId/spaces/:sId/workflows/:id`
+
+Update name, description, or definition. Requires `editor+`.
+
+**Body** — any subset of `{ name, description, definition }`
+
+**Response** `200`
+
+---
+
+### `DELETE /v1/workspaces/:wId/spaces/:sId/workflows/:id`
+
+Permanently delete a workflow. Requires `editor+`.
+
+**Response** `204`
+
+---
+
+### `POST /v1/workspaces/:wId/spaces/:sId/workflows/:id/deploy`
+
+Mark a workflow as deployed (sets `deployedAt`). Requires `admin+`.
+
+**Response** `200`
+
+---
+
+### `PATCH /v1/workspaces/:wId/spaces/:sId/workflows/:id/star`
+
+Star or unstar a workflow.
+
+**Body** `{ "starred": true }`
+
+**Response** `200`
+
+---
+
+### `PATCH /v1/workspaces/:wId/spaces/:sId/workflows/:id/trash`
+
+Move to trash (soft delete). Requires `editor+`.
+
+**Response** `200`
+
+---
+
+### `PATCH /v1/workspaces/:wId/spaces/:sId/workflows/:id/restore`
+
+Restore from trash. Requires `editor+`.
+
+**Response** `200`
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/workflows/:id/versions`
+
+List version history for a workflow.
+
+**Response** `200` — array of version snapshots
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/workflows/:id/versions/:version`
+
+Get a specific version snapshot by version number.
+
+**Response** `200`
+
+---
+
+### `POST /v1/workspaces/:wId/spaces/:sId/workflows/from-template/:templateId`
+
+Clone a public template into this space. Requires `editor+`.
+
+**Response** `201` — new workflow object
+
+---
+
+## Templates
+
+### `GET /v1/templates`
+
+List public workflow templates. No auth required.
+
+**Query** `?search=` — filter by name
+
+**Response** `200`
+
+---
+
+## Workflow Object
+
+```json
+{
+  "id": "uuid",
+  "spaceId": "uuid",
+  "name": "Daily Digest",
+  "description": "Summarise news every morning",
+  "definition": {},
+  "deployedAt": null,
+  "starred": false,
+  "deletedAt": null,
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-01-01T00:00:00Z"
+}
+```
+
+<Callout>
+  `definition` is a free-form JSONB field reserved for the visual workflow builder step graph. It is not validated by the API yet.
+</Callout>

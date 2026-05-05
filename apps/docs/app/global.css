@@ -1,0 +1,55 @@
+@import "@linea/ui/globals.css";
+@import "fumadocs-ui/style.css";
+
+/* Scan docs app + UI package for Tailwind classes */
+@source "./**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+
+/* ─── Brand theme ───────────────────────────────────────────────────────────
+   Override fumadocs' --fd-primary with an orange accent (≈ orange-500 #F97316).
+   Also align @linea/ui --primary so buttons/rings match.
+   Fumadocs variables use HSL triplets: H S% L%
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Fumadocs primary → warm orange */
+  --fd-primary: 25 95% 53%;
+  --fd-primary-foreground: 0 0% 100%;
+  /* Subtle orange tint for hover states */
+  --fd-accent: 25 80% 95%;
+  --fd-accent-foreground: 25 60% 25%;
+  /* Focus ring matches accent */
+  --fd-ring: 25 70% 65%;
+
+  /* @linea/ui primary → match orange */
+  --primary: oklch(0.70 0.19 40);
+  --primary-foreground: oklch(0.99 0.005 40);
+  --ring: oklch(0.72 0.16 40);
+}
+
+.dark {
+  /* Fumadocs primary → slightly lighter orange on dark background */
+  --fd-primary: 25 90% 58%;
+  --fd-primary-foreground: 0 0% 5%;
+  /* Dark orange tint for hover */
+  --fd-accent: 25 40% 12%;
+  --fd-accent-foreground: 25 80% 75%;
+  --fd-ring: 25 60% 45%;
+
+  /* @linea/ui primary on dark */
+  --primary: oklch(0.73 0.17 40);
+  --primary-foreground: oklch(0.12 0.02 40);
+  --ring: oklch(0.68 0.17 40);
+}
+
+/* Fix Tailwind v4 + Tailwind v3 double-translate conflict.
+   Fumadocs style.css is compiled Tailwind v3 and uses transform: translate(var(--tw-translate-x), ...).
+   Tailwind v4 (from @linea/ui) also generates the 'translate' CSS property for the same classes.
+   Both apply simultaneously, causing -50% to be applied twice. Cancel the v4 translate property
+   so that only the v3 transform handles centering (e.g. search dialog, dialogs). */
+.-translate-x-1\/2 { translate: none; }
+.-translate-y-1\/2 { translate: none; }
+
+.roadmap-issue-link:hover {
+  text-decoration: underline;
+}

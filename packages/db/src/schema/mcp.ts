@@ -1,13 +1,6 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  jsonb,
-  pgEnum,
-  customType,
-} from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, jsonb, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { vector } from './_vector';
 import { workspaces } from './workspaces';
 
 export const mcpAuthTypeEnum = pgEnum('mcp_auth_type', [
@@ -22,22 +15,6 @@ export const mcpServerStatusEnum = pgEnum('mcp_server_status', [
   'connected',
   'error',
 ]);
-
-// pgvector custom type — requires the `vector` extension in PostgreSQL
-const vector = customType<{ data: number[]; driverData: string }>({
-  dataType(config) {
-    return `vector(${(config as { dimensions?: number } | undefined)?.dimensions ?? 1536})`;
-  },
-  toDriver(value: number[]): string {
-    return `[${value.join(',')}]`;
-  },
-  fromDriver(value: string): number[] {
-    return value
-      .slice(1, -1)
-      .split(',')
-      .map(Number);
-  },
-});
 
 export const mcpServers = pgTable('mcp_servers', {
   id: uuid('id').primaryKey().defaultRandom(),

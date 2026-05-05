@@ -1,30 +1,13 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  jsonb,
-  pgEnum,
-  customType,
-} from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, jsonb, pgEnum, real } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { vector } from './_vector';
 import { workspaces } from './workspaces';
 import { users } from './users';
 import { workflows } from './workflows';
 
 export const memoryScopeEnum = pgEnum('memory_scope', ['thread', 'workflow', 'user']);
-
-const vector = customType<{ data: number[]; driverData: string }>({
-  dataType(config) {
-    return `vector(${(config as { dimensions?: number } | undefined)?.dimensions ?? 1536})`;
-  },
-  toDriver(value: number[]): string {
-    return `[${value.join(',')}]`;
-  },
-  fromDriver(value: string): number[] {
-    return value.slice(1, -1).split(',').map(Number);
-  },
-});
+export const memorySourceEnum = pgEnum('memory_source', ['manual', 'extracted', 'ingested']);
+export const memoryFactTypeEnum = pgEnum('memory_fact_type', ['fact', 'preference', 'event', 'profile', 'system']);
 
 export const memories = pgTable('memories', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -37,6 +20,24 @@ export const memories = pgTable('memories', {
   scope: memoryScopeEnum('scope').notNull(),
   content: text('content').notNull(),
   embedding: vector('embedding', { dimensions: 1536 }),
+  source: memorySourceEnum('source').default('manual').notNull(),
+  factType: memoryFactTypeEnum('fact_type'),
+  eventDate: timestamp('event_date', { withTimezone: true }),
+  supersededById: uuid('superseded_by_id'),
+  confidence: real('confidence').default(1.0).notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const memorySessions = pgTable('memory_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id')
+    .references(() => workspaces.id, { onDelete: 'cascade' })
+    .notNull(),
+  rawContent: text('raw_content').notNull(),
+  memoriesExtracted: text('memories_extracted').array().notNull().default([]),
+  memoriesUpdated: text('memories_updated').array().notNull().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -48,6 +49,7 @@ export const knowledgeBases = pgTable('knowledge_bases', {
   name: text('name').notNull(),
   description: text('description'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const knowledgeEntries = pgTable('knowledge_entries', {
@@ -67,11 +69,24 @@ export const memoriesRelations = relations(memories, ({ one }) => ({
   workflow: one(workflows, { fields: [memories.workflowId], references: [workflows.id] }),
 }));
 
+export const memorySessionsRelations = relations(memorySessions, ({ one }) => ({
+  workspace: one(workspaces, { fields: [memorySessions.workspaceId], references: [workspaces.id] }),
+}));
+
 export const knowledgeBasesRelations = relations(knowledgeBases, ({ one, many }) => ({
   workspace: one(workspaces, { fields: [knowledgeBases.workspaceId], references: [workspaces.id] }),
   entries: many(knowledgeEntries),
 }));
 
+export const knowledgeEntriesRelations = relations(knowledgeEntries, ({ one }) => ({
+  knowledgeBase: one(knowledgeBases, { fields: [knowledgeEntries.knowledgeBaseId], references: [knowledgeBases.id] }),
+}));
+
 export type Memory = typeof memories.$inferSelect;
+export type NewMemory = typeof memories.$inferInsert;
+export type MemorySession = typeof memorySessions.$inferSelect;
+export type NewMemorySession = typeof memorySessions.$inferInsert;
 export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
+export type NewKnowledgeBase = typeof knowledgeBases.$inferInsert;
 export type KnowledgeEntry = typeof knowledgeEntries.$inferSelect;
+export type NewKnowledgeEntry = typeof knowledgeEntries.$inferInsert;

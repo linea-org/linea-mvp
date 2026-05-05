@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.2.7",
     "@hugeicons/core-free-icons": "^4.1.1",
     "@hugeicons/react": "^1.1.6",
     "@linea/ui": "workspace:*",
@@ -21,12 +22,12 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
+    "@linea/eslint-config": "workspace:^",
+    "@linea/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^25.1.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
-    "@linea/eslint-config": "workspace:^",
-    "@linea/typescript-config": "workspace:*",
     "eslint": "^9.39.2",
     "typescript": "^5.9.3"
   }

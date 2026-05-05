@@ -1,5 +1,6 @@
 export * from './users';
 export * from './workspaces';
+export * from './spaces';
 export * from './workflows';
 export * from './executions';
 export * from './mcp';

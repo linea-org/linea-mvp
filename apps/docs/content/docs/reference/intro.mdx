@@ -1,0 +1,70 @@
+---
+title: API Overview
+description: Authentication, base URL, and conventions for the Linea REST API.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# API Overview
+
+## Base URL
+
+All API requests are made to:
+
+```
+https://api.linea.dev/v1
+```
+
+For local development:
+
+```
+http://localhost:3001/v1
+```
+
+## Authentication
+
+All endpoints (except webhook triggers) require a `Bearer` token in the `Authorization` header.
+
+### Clerk JWT (User Auth)
+
+Obtain a short-lived JWT from Clerk on the frontend and pass it directly:
+
+```
+Authorization: Bearer <clerk-jwt>
+```
+
+### Linea API Key (Machine Auth)
+
+For programmatic / server-to-server access, use a workspace API key:
+
+```
+Authorization: Bearer lin_<key>
+```
+
+<Callout>
+  API keys are prefixed with `lin_` and scoped to a single workspace. They are stored as SHA-256 hashes — the raw key is shown once at creation and never again.
+</Callout>
+
+## Request Format
+
+All request bodies are JSON. Include the `Content-Type: application/json` header on write operations.
+
+## Response Format
+
+Successful responses return the resource object directly. List endpoints return an array. Errors follow the NestJS exception format:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Workflow not found",
+  "error": "Not Found"
+}
+```
+
+## Pagination
+
+List endpoints do not currently paginate — they return all results. Pagination will be added in a future release.
+
+## Rate Limiting
+
+Rate limiting is not yet enforced. It will be introduced alongside resource quotas in the billing layer.

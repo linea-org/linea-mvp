@@ -1,0 +1,4 @@
+{
+  "title": "Modules",
+  "pages": ["index", "workflows", "executions", "memory", "knowledge", "mcp", "schedules-webhooks", "notifications"]
+}

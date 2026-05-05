@@ -7,7 +7,13 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "turbo format",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "db:push": "turbo db:push --filter=@linea/db",
+    "db:generate": "turbo db:generate --filter=@linea/db",
+    "db:studio": "turbo db:studio --filter=@linea/db",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:reset": "docker compose down -v && docker compose up -d"
   },
   "devDependencies": {
     "@linea/eslint-config": "workspace:*",

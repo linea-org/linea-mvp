@@ -1,0 +1,26 @@
+---
+title: API Reference
+description: Complete REST API reference for the Linea platform.
+---
+
+import { Cards, Card } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# API Reference
+
+<Callout type="info">
+  Base URL: `http://localhost:3001/v1` (dev) · All endpoints require a `Bearer` token unless marked **Public**.
+</Callout>
+
+<Cards>
+  <Card title="Workspaces" href="/docs/reference/workspaces" />
+  <Card title="Spaces" href="/docs/reference/spaces" />
+  <Card title="Workflows" href="/docs/reference/workflows" />
+  <Card title="Executions" href="/docs/reference/executions" />
+  <Card title="Memory" href="/docs/reference/memory" />
+  <Card title="Knowledge Bases" href="/docs/reference/knowledge" />
+  <Card title="MCP Servers" href="/docs/reference/mcp" />
+  <Card title="Schedules & Webhooks" href="/docs/reference/triggers" />
+  <Card title="Notifications" href="/docs/reference/notifications" />
+  <Card title="API Keys" href="/docs/reference/api-keys" />
+</Cards>

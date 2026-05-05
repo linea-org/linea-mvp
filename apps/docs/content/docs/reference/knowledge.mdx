@@ -1,0 +1,113 @@
+---
+title: Knowledge Bases
+description: Manage document stores and search entries via vector search.
+---
+
+# Knowledge Bases
+
+All endpoints scoped to: `/v1/workspaces/:workspaceId/knowledge-bases`.
+
+## Knowledge Base Endpoints
+
+### `POST /v1/workspaces/:wId/knowledge-bases`
+
+Create a knowledge base.
+
+**Body** `{ "name": "Product Docs", "description": "..." }`
+
+**Response** `201` — knowledge base object
+
+---
+
+### `GET /v1/workspaces/:wId/knowledge-bases`
+
+List all knowledge bases with entry counts.
+
+**Response** `200`
+```json
+[{ "id": "uuid", "name": "Product Docs", "entryCount": 42 }]
+```
+
+---
+
+### `GET /v1/workspaces/:wId/knowledge-bases/:id`
+
+Get a knowledge base.
+
+**Response** `200`
+
+---
+
+### `PATCH /v1/workspaces/:wId/knowledge-bases/:id`
+
+Update name or description.
+
+**Body** — any subset of `{ name, description }`
+
+**Response** `200`
+
+---
+
+### `DELETE /v1/workspaces/:wId/knowledge-bases/:id`
+
+Delete a knowledge base and all its entries.
+
+**Response** `204`
+
+---
+
+## Entry Endpoints
+
+### `POST /v1/workspaces/:wId/knowledge-bases/:id/entries`
+
+Add an entry. Embeddings are generated asynchronously.
+
+**Body**
+```json
+{
+  "content": "The free plan includes 1000 workflow runs per month.",
+  "metadata": { "source": "pricing-page", "page": 2 }
+}
+```
+
+**Response** `201` — entry object
+
+---
+
+### `GET /v1/workspaces/:wId/knowledge-bases/:id/entries`
+
+List all entries in the knowledge base.
+
+**Response** `200` — array of entry objects
+
+---
+
+### `DELETE /v1/workspaces/:wId/knowledge-bases/:id/entries/:entryId`
+
+Delete a single entry.
+
+**Response** `204`
+
+---
+
+### `POST /v1/workspaces/:wId/knowledge-bases/:id/search`
+
+Search entries. Uses semantic (pgvector) search when embeddings are available, falls back to keyword (`ilike`).
+
+**Body** `{ "query": "how many runs on free plan?" }`
+
+**Response** `200` — array of matching entries ranked by relevance
+
+---
+
+## Objects
+
+**Knowledge Base**
+```json
+{ "id": "uuid", "workspaceId": "uuid", "name": "Product Docs", "description": "...", "createdAt": "..." }
+```
+
+**Entry**
+```json
+{ "id": "uuid", "knowledgeBaseId": "uuid", "content": "...", "metadata": {}, "createdAt": "..." }
+```

@@ -1,0 +1,4 @@
+{
+  "title": "API Reference",
+  "pages": ["index", "intro", "status", "workspaces", "spaces", "workflows", "executions", "memory", "knowledge", "mcp", "triggers", "notifications", "api-keys"]
+}

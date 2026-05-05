@@ -1,0 +1,76 @@
+---
+title: Spaces
+description: Create and manage spaces within a workspace.
+---
+
+# Spaces
+
+A Space is a logical container inside a workspace — think project or environment. Workflows, executions, schedules, and webhooks all live under a space.
+
+## Endpoints
+
+### `POST /v1/workspaces/:workspaceId/spaces`
+
+Create a space. Requires `editor+`.
+
+**Body**
+```json
+{ "name": "Production", "description": "Live workflows" }
+```
+
+A URL-safe `slug` is auto-generated from the name (e.g. `production-a3f2`).
+
+**Response** `201`
+```json
+{ "id": "uuid", "name": "Production", "slug": "production-a3f2", "workspaceId": "..." }
+```
+
+---
+
+### `GET /v1/workspaces/:workspaceId/spaces`
+
+List all spaces in the workspace.
+
+**Response** `200` — array of space objects
+
+---
+
+### `GET /v1/workspaces/:workspaceId/spaces/:spaceId`
+
+Get a single space.
+
+**Response** `200` — space object
+
+---
+
+### `PATCH /v1/workspaces/:workspaceId/spaces/:spaceId`
+
+Update name or description. Requires `editor+`.
+
+**Body** — any subset of `{ name, description }`
+
+**Response** `200`
+
+---
+
+### `DELETE /v1/workspaces/:workspaceId/spaces/:spaceId`
+
+Delete a space and all workflows/executions within it. Requires `admin+`.
+
+**Response** `204`
+
+---
+
+## Space Object
+
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "name": "Production",
+  "slug": "production-a3f2",
+  "description": "Live workflows",
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-01-01T00:00:00Z"
+}
+```

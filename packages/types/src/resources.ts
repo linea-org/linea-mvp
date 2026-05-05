@@ -1,4 +1,4 @@
-import type { ID, Timestamp } from './common';
+import type { ID, Timestamp } from './common.js';
 
 export type PoolType = 'shared' | 'reserved' | 'dedicated' | 'byo';
 

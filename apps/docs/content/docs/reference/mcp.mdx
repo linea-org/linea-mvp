@@ -1,0 +1,157 @@
+---
+title: MCP Servers
+description: Connect and manage Model Context Protocol (MCP) tool servers at the workspace level.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# MCP Servers
+
+MCP (Model Context Protocol) servers expose tools that AI agents can call during workflow execution. Servers are registered at the **workspace level** and their tools are synced and embedded for semantic discovery.
+
+All endpoints scoped to: `/v1/workspaces/:workspaceId/mcp-servers`
+
+## Server Endpoints
+
+### `POST /v1/workspaces/:wId/mcp-servers`
+
+Register a new MCP server.
+
+**Body**
+```json
+{
+  "name": "GitHub Tools",
+  "url": "https://mcp.example.com/github",
+  "authType": "bearer",
+  "accessToken": "ghp_..."
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display name |
+| `url` | string | MCP server base URL |
+| `authType` | `none` \| `api_key` \| `bearer` \| `oauth` | Auth method |
+| `accessToken` | string? | Token / API key (stored encrypted) |
+
+**Response** `201` — MCP server object
+
+---
+
+### `GET /v1/workspaces/:wId/mcp-servers`
+
+List all registered MCP servers for the workspace.
+
+**Response** `200` — array of MCP server objects
+
+---
+
+### `GET /v1/workspaces/:wId/mcp-servers/:id`
+
+Get a single MCP server and its current connection status.
+
+**Response** `200` — MCP server object
+
+---
+
+### `PATCH /v1/workspaces/:wId/mcp-servers/:id`
+
+Update name, URL, or auth configuration.
+
+**Body** — any subset of `{ name, url, authType, accessToken }`
+
+**Response** `200`
+
+---
+
+### `DELETE /v1/workspaces/:wId/mcp-servers/:id`
+
+Remove an MCP server and all its synced tools.
+
+**Response** `204`
+
+---
+
+### `POST /v1/workspaces/:wId/mcp-servers/:id/sync`
+
+Trigger a manual sync — connects to the server, fetches available tools, updates embeddings.
+
+**Response** `200`
+```json
+{ "toolsSynced": 12, "status": "connected" }
+```
+
+<Callout>
+  Sync is also triggered automatically on server creation and on a periodic schedule.
+</Callout>
+
+---
+
+## Tool Endpoints
+
+### `GET /v1/workspaces/:wId/mcp-servers/:id/tools`
+
+List all tools synced from a server.
+
+**Response** `200`
+```json
+[
+  {
+    "id": "uuid",
+    "name": "create_issue",
+    "description": "Create a GitHub issue",
+    "inputSchema": { "type": "object", "properties": { "title": { "type": "string" } } }
+  }
+]
+```
+
+---
+
+### `POST /v1/workspaces/:wId/mcp-servers/tools/search`
+
+Semantic search across all tools in the workspace using vector similarity.
+
+**Body**
+```json
+{ "query": "create a pull request", "limit": 5 }
+```
+
+**Response** `200` — array of tools ranked by relevance
+
+---
+
+## Objects
+
+**MCP Server**
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "name": "GitHub Tools",
+  "url": "https://mcp.example.com/github",
+  "authType": "bearer",
+  "status": "connected",
+  "lastCheckedAt": "2025-01-01T00:00:00Z",
+  "createdAt": "2025-01-01T00:00:00Z"
+}
+```
+
+**MCP Tool**
+```json
+{
+  "id": "uuid",
+  "mcpServerId": "uuid",
+  "name": "create_issue",
+  "description": "Create a GitHub issue in a repository",
+  "inputSchema": {},
+  "createdAt": "2025-01-01T00:00:00Z"
+}
+```
+
+## Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `unknown` | Not yet synced |
+| `connected` | Last sync succeeded |
+| `error` | Last sync failed — check server URL and credentials |

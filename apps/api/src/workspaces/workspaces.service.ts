@@ -1,0 +1,346 @@
+import {
+  Injectable,
+  Inject,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { and, eq, gt, sql } from 'drizzle-orm';
+import { randomBytes } from 'crypto';
+import type { DrizzleDB, WorkspaceMember } from '@linea/db';
+import {
+  workspaces,
+  workspaceMembers,
+  workspaceInvites,
+  users,
+} from '@linea/db';
+import { DB_TOKEN } from '../database/database.module';
+import type { CreateWorkspaceDto } from './dto/create-workspace.dto';
+import type { UpdateWorkspaceDto } from './dto/update-workspace.dto';
+import type { InviteMemberDto } from './dto/invite-member.dto';
+import type { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+
+const ROLE_LEVEL: Record<string, number> = {
+  owner: 4,
+  admin: 3,
+  editor: 2,
+  viewer: 1,
+};
+
+function assertMinRole(
+  membership: WorkspaceMember,
+  minimum: 'owner' | 'admin' | 'editor',
+) {
+  if (ROLE_LEVEL[membership.role] < ROLE_LEVEL[minimum]) {
+    throw new ForbiddenException(
+      `This action requires the '${minimum}' role or higher`,
+    );
+  }
+}
+
+@Injectable()
+export class WorkspacesService {
+  constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
+
+  // ─── Workspaces ────────────────────────────────────────────────────────────
+
+  async create(userId: string, dto: CreateWorkspaceDto) {
+    const slug = dto.slug ?? this.generateSlug(dto.name);
+
+    const existing = await this.db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.slug, slug))
+      .limit(1);
+
+    if (existing.length)
+      throw new ConflictException(`Slug '${slug}' is already taken`);
+
+    const [workspace] = await this.db
+      .insert(workspaces)
+      .values({ name: dto.name, slug })
+      .returning();
+
+    await this.db.insert(workspaceMembers).values({
+      workspaceId: workspace.id,
+      userId,
+      role: 'owner',
+    });
+
+    return workspace;
+  }
+
+  async findAllForUser(userId: string) {
+    return this.db
+      .select({
+        workspace: workspaces,
+        role: workspaceMembers.role,
+        joinedAt: workspaceMembers.joinedAt,
+      })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(eq(workspaceMembers.userId, userId));
+  }
+
+  async findOne(id: string) {
+    const [ws] = await this.db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, id))
+      .limit(1);
+
+    if (!ws) throw new NotFoundException(`Workspace ${id} not found`);
+    return ws;
+  }
+
+  async update(
+    id: string,
+    membership: WorkspaceMember,
+    dto: UpdateWorkspaceDto,
+  ) {
+    assertMinRole(membership, 'admin');
+
+    if (dto.slug) {
+      const conflict = await this.db
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(and(eq(workspaces.slug, dto.slug), sql`id != ${id}`))
+        .limit(1);
+
+      if (conflict.length)
+        throw new ConflictException(`Slug '${dto.slug}' is already taken`);
+    }
+
+    const [updated] = await this.db
+      .update(workspaces)
+      .set({ ...dto, updatedAt: new Date() })
+      .where(eq(workspaces.id, id))
+      .returning();
+
+    if (!updated) throw new NotFoundException(`Workspace ${id} not found`);
+    return updated;
+  }
+
+  async delete(id: string, membership: WorkspaceMember) {
+    assertMinRole(membership, 'owner');
+    await this.db.delete(workspaces).where(eq(workspaces.id, id));
+  }
+
+  // ─── Members ───────────────────────────────────────────────────────────────
+
+  async getMembers(workspaceId: string) {
+    return this.db
+      .select({
+        userId: workspaceMembers.userId,
+        role: workspaceMembers.role,
+        joinedAt: workspaceMembers.joinedAt,
+        user: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          avatarUrl: users.avatarUrl,
+        },
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(users.id, workspaceMembers.userId))
+      .where(eq(workspaceMembers.workspaceId, workspaceId));
+  }
+
+  async removeMember(
+    workspaceId: string,
+    targetUserId: string,
+    actor: WorkspaceMember,
+  ) {
+    assertMinRole(actor, 'admin');
+
+    if (targetUserId === actor.userId && actor.role === 'owner') {
+      throw new BadRequestException('Owner cannot remove themselves');
+    }
+
+    const [target] = await this.db
+      .select()
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, targetUserId),
+        ),
+      )
+      .limit(1);
+
+    if (!target) throw new NotFoundException('Member not found');
+
+    // Admins cannot remove owners
+    if (target.role === 'owner' && actor.role !== 'owner') {
+      throw new ForbiddenException('Only owners can remove other owners');
+    }
+
+    await this.db
+      .delete(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, targetUserId),
+        ),
+      );
+  }
+
+  async updateMemberRole(
+    workspaceId: string,
+    targetUserId: string,
+    actor: WorkspaceMember,
+    dto: UpdateMemberRoleDto,
+  ) {
+    assertMinRole(actor, 'admin');
+
+    const [target] = await this.db
+      .select()
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, targetUserId),
+        ),
+      )
+      .limit(1);
+
+    if (!target) throw new NotFoundException('Member not found');
+
+    // Only owner can promote to admin; admin cannot touch other admins/owners
+    if (
+      (dto.role === 'admin' ||
+        target.role === 'admin' ||
+        target.role === 'owner') &&
+      actor.role !== 'owner'
+    ) {
+      throw new ForbiddenException('Only owners can manage admin roles');
+    }
+
+    const [updated] = await this.db
+      .update(workspaceMembers)
+      .set({ role: dto.role })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, targetUserId),
+        ),
+      )
+      .returning();
+
+    return updated;
+  }
+
+  // ─── Invites ───────────────────────────────────────────────────────────────
+
+  async createInvite(
+    workspaceId: string,
+    actor: WorkspaceMember,
+    dto: InviteMemberDto,
+  ) {
+    assertMinRole(actor, 'admin');
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    const [invite] = await this.db
+      .insert(workspaceInvites)
+      .values({
+        workspaceId,
+        email: dto.email,
+        role: dto.role,
+        token,
+        expiresAt,
+      })
+      .returning();
+
+    return invite;
+  }
+
+  async listInvites(workspaceId: string, actor: WorkspaceMember) {
+    assertMinRole(actor, 'admin');
+
+    return this.db
+      .select()
+      .from(workspaceInvites)
+      .where(
+        and(
+          eq(workspaceInvites.workspaceId, workspaceId),
+          gt(workspaceInvites.expiresAt, new Date()),
+        ),
+      );
+  }
+
+  async revokeInvite(
+    workspaceId: string,
+    inviteId: string,
+    actor: WorkspaceMember,
+  ) {
+    assertMinRole(actor, 'admin');
+
+    const deleted = await this.db
+      .delete(workspaceInvites)
+      .where(
+        and(
+          eq(workspaceInvites.id, inviteId),
+          eq(workspaceInvites.workspaceId, workspaceId),
+        ),
+      )
+      .returning();
+
+    if (!deleted.length) throw new NotFoundException('Invite not found');
+  }
+
+  async acceptInvite(token: string, userId: string) {
+    const [invite] = await this.db
+      .select()
+      .from(workspaceInvites)
+      .where(eq(workspaceInvites.token, token))
+      .limit(1);
+
+    if (!invite)
+      throw new NotFoundException('Invite not found or already used');
+    if (invite.expiresAt < new Date())
+      throw new BadRequestException('Invite has expired');
+
+    const existingMembership = await this.db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, invite.workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+
+    if (existingMembership.length) {
+      throw new ConflictException('You are already a member of this workspace');
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx.insert(workspaceMembers).values({
+        workspaceId: invite.workspaceId,
+        userId,
+        role: invite.role,
+      });
+      await tx
+        .delete(workspaceInvites)
+        .where(eq(workspaceInvites.id, invite.id));
+    });
+
+    return { workspaceId: invite.workspaceId, role: invite.role };
+  }
+
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
+  private generateSlug(name: string): string {
+    const base = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40);
+
+    return `${base}-${randomBytes(3).toString('hex')}`;
+  }
+}

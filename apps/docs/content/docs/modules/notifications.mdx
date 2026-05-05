@@ -1,0 +1,71 @@
+---
+title: Notifications
+description: User-scoped event feed for in-app alerts.
+---
+
+# Notifications
+
+Notifications are **user-scoped** — they belong to an individual user, not a workspace. They surface in the dashboard header as a bell icon with an unread badge.
+
+## Schema
+
+```typescript
+notifications: {
+  id: uuid PK
+  userId: uuid FK → users (cascade delete)
+  type: text          // e.g. "execution.failed", "invite.accepted"
+  title: text
+  body: text | null
+  read: boolean       // default false
+  createdAt: timestamp
+}
+```
+
+## Why User-Scoped, Not Workspace-Scoped?
+
+Notifications represent **personal events** — "your execution failed", "you were invited to a workspace". Multiple workspace members may observe the same event but each should have their own read/dismiss state independently.
+
+## API Endpoints
+
+All endpoints are at the top level (no workspace segment) because they are tied to the authenticated user:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/notifications` | List all for current user |
+| `PATCH` | `/notifications/:id/read` | Mark single notification as read |
+| `PATCH` | `/notifications/read-all` | Mark all notifications as read |
+| `DELETE` | `/notifications/:id` | Dismiss (delete) a notification |
+
+## Creating Notifications
+
+`NotificationsService.create(userId, type, title, body?)` is called internally by other services:
+
+```typescript
+// Execution completed
+await this.notifications.create(userId, 'execution.completed', 'Execution finished', workflowName)
+
+// Workspace invite accepted
+await this.notifications.create(userId, 'invite.accepted', 'Joined workspace', workspaceName)
+```
+
+## Frontend
+
+### Notification Bell
+
+`NotificationBell` (in `layout.tsx`) fetches unread count on mount and renders a badge:
+
+```
+🔔 3
+```
+
+Clicking navigates to `/notifications`.
+
+### Notifications Page
+
+`/notifications` shows the full feed. Unread notifications are visually highlighted. Actions:
+
+- **Mark all read** — appears when `unreadCount > 0`
+- **Read** — individual mark-as-read button
+- **Dismiss** — deletes the notification
+
+Read/dismiss mutations update local state immediately without refetching the list.

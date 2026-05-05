@@ -1,0 +1,106 @@
+---
+title: Database Design
+description: PostgreSQL schema, Drizzle ORM patterns, and pgvector usage.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Database Design
+
+Linea uses **PostgreSQL** with the **pgvector** extension for vector similarity search. The ORM is **Drizzle**, which generates type-safe queries from the schema.
+
+## Schema Packages
+
+The schema lives in `packages/db/src/schema/`. Each file owns one domain:
+
+| File | Tables |
+|------|--------|
+| `users.ts` | `users` |
+| `workspaces.ts` | `workspaces`, `workspace_members`, `workspace_invites`, `audit_logs` |
+| `spaces.ts` | `spaces` |
+| `workflows.ts` | `workflows` |
+| `executions.ts` | `executions`, `execution_steps` |
+| `operations.ts` | `schedules`, `webhooks`, `notifications` |
+| `integrations.ts` | `api_keys`, `secrets`, `linea_api_keys` |
+| `mcp.ts` | `mcp_servers`, `mcp_tools` |
+| `memory.ts` | `memories`, `memory_sessions`, `knowledge_bases`, `knowledge_entries` |
+| `resources.ts` | `resource_pools`, `resource_quotas`, `resource_usage` |
+
+## pgvector
+
+`packages/db/src/schema/_vector.ts` defines a shared custom Drizzle type:
+
+```typescript
+export const vector = customType<{ data: number[]; driverData: string }>({
+  dataType(config) {
+    return `vector(${(config as any)?.dimensions ?? 1536})`;
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(',')}]`;
+  },
+  fromDriver(value: string): number[] {
+    return value.slice(1, -1).split(',').map(Number);
+  },
+})
+```
+
+Used on `memories.embedding` and `knowledge_entries.embedding` (both 1536-dim, matching `text-embedding-3-small`).
+
+### Cosine Similarity Queries
+
+Drizzle doesn't natively support the `<=>` pgvector operator. Use `sql` template tags:
+
+```typescript
+const results = await db.execute<{ id: string; similarity: number }>(
+  sql`
+    SELECT id, 1 - (embedding <=> ${vectorStr}::vector) AS similarity
+    FROM memories
+    WHERE workspace_id = ${workspaceId}
+      AND superseded_by_id IS NULL
+    ORDER BY embedding <=> ${vectorStr}::vector
+    LIMIT 20
+  `
+)
+```
+
+<Callout type="warn">
+  The result of `db.execute()` with the postgres-js driver is a `RowList` which extends `ReadonlyArray`. Iterate it directly — there is no `.rows` property.
+</Callout>
+
+## Drizzle Patterns
+
+### Soft Delete
+
+`workflows.deletedAt` — `null` means active, non-null means trashed. Use `isNull` / `isNotNull` from `drizzle-orm`:
+
+```typescript
+import { isNull, isNotNull } from 'drizzle-orm'
+
+// Active workflows
+.where(and(eq(workflows.spaceId, spaceId), isNull(workflows.deletedAt)))
+
+// Trashed workflows
+.where(and(eq(workflows.spaceId, spaceId), isNotNull(workflows.deletedAt)))
+```
+
+### Conflict Resolution (Memories)
+
+`memories.supersededById` is a self-referential UUID (no FK constraint — avoids Drizzle circular reference issues). When a new memory supersedes an old one, the old row's `supersededById` is set to the new row's ID. All queries exclude superseded rows with `isNull(memories.supersededById)`.
+
+### Relations
+
+Drizzle `relations()` declarations are used for type inference only — they don't affect the runtime SQL. All actual JOINs are written explicitly in service methods.
+
+## Migrations
+
+Schema changes are applied with:
+
+```bash
+pnpm db:push      # Push schema directly (dev — no migration history)
+pnpm db:generate  # Generate migration files (prod)
+pnpm db:migrate   # Apply migrations
+```
+
+<Callout>
+  `db:push` has been used throughout development. Before going to production, switch to `db:generate` + `db:migrate` to maintain a migration history.
+</Callout>

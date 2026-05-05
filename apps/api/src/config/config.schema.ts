@@ -1,0 +1,31 @@
+import { z } from 'zod';
+
+export const configSchema = z.object({
+  NODE_ENV: z
+    .enum(['development', 'staging', 'production'])
+    .default('development'),
+  PORT: z.coerce.number().default(3001),
+
+  DATABASE_URL: z.string().url(),
+
+  REDIS_URL: z.string().url().optional(),
+
+  CLERK_SECRET_KEY: z.string().min(1),
+  CLERK_PUBLISHABLE_KEY: z.string().min(1),
+  CLERK_WEBHOOK_SECRET: z.string().min(1),
+
+  ENCRYPTION_KEY: z
+    .string()
+    .length(64, 'Must be a 32-byte hex string (64 hex chars)'),
+
+  ANTHROPIC_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  GOOGLE_API_KEY: z.string().optional(),
+
+  // Default model IDs (override per-node, fallback to these)
+  DEFAULT_AGENT_MODEL: z.string().default('claude-sonnet-4-6'),
+  SUPERVISOR_MODEL: z.string().default('claude-haiku-4-5'),
+});
+
+export type AppConfig = z.infer<typeof configSchema>;

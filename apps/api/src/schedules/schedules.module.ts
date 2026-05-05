@@ -1,0 +1,13 @@
+import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
+import { SchedulesService } from './schedules.service';
+import { SchedulesController } from './schedules.controller';
+import { SchedulerService } from './scheduler.service';
+import { ExecutionsModule } from '../executions/executions.module';
+
+@Module({
+  imports: [ScheduleModule.forRoot(), ExecutionsModule],
+  providers: [SchedulesService, SchedulerService],
+  controllers: [SchedulesController],
+})
+export class SchedulesModule {}

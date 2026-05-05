@@ -1,0 +1,174 @@
+---
+title: Triggers
+description: Automate workflow execution with cron schedules and inbound webhooks.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Triggers
+
+Linea supports two automated trigger types: **Schedules** (cron-based) and **Webhooks** (HTTP-based). Both are scoped to a space.
+
+---
+
+## Schedules
+
+All schedule endpoints: `/v1/workspaces/:workspaceId/spaces/:spaceId/schedules`
+
+### `POST /v1/workspaces/:wId/spaces/:sId/schedules`
+
+Create a cron schedule for a workflow.
+
+**Body**
+```json
+{
+  "workflowId": "uuid",
+  "cronExpr": "0 8 * * *",
+  "input": { "timezone": "UTC" },
+  "enabled": true
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `workflowId` | uuid | Workflow to execute |
+| `cronExpr` | string | Standard cron expression (5-field) |
+| `input` | object? | Static input passed to each run |
+| `enabled` | boolean? | Defaults to `true` |
+
+**Response** `201` — schedule object
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/schedules`
+
+List all schedules in the space.
+
+**Response** `200` — array of schedule objects
+
+---
+
+### `PATCH /v1/workspaces/:wId/spaces/:sId/schedules/:id`
+
+Update cron expression, input, or enabled state.
+
+**Body** — any subset of `{ cronExpr, input, enabled }`
+
+**Response** `200` — updated schedule object
+
+---
+
+### `DELETE /v1/workspaces/:wId/spaces/:sId/schedules/:id`
+
+Delete a schedule.
+
+**Response** `204`
+
+---
+
+## Schedule Object
+
+```json
+{
+  "id": "uuid",
+  "spaceId": "uuid",
+  "workflowId": "uuid",
+  "cronExpr": "0 8 * * *",
+  "input": {},
+  "enabled": true,
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-01-01T00:00:00Z"
+}
+```
+
+<Callout>
+  Standard 5-field cron syntax: `minute hour day-of-month month day-of-week`. Example: `0 8 * * 1-5` runs at 08:00 UTC on weekdays.
+</Callout>
+
+---
+
+## Webhooks
+
+Management endpoints: `/v1/workspaces/:workspaceId/spaces/:spaceId/webhooks`
+
+Public trigger endpoint: `/v1/webhooks/:id/trigger`
+
+### `POST /v1/workspaces/:wId/spaces/:sId/webhooks`
+
+Create a webhook trigger for a workflow. Returns a `secret` — store it securely, it is shown only once.
+
+**Body**
+```json
+{ "workflowId": "uuid" }
+```
+
+**Response** `201`
+```json
+{
+  "id": "uuid",
+  "spaceId": "uuid",
+  "workflowId": "uuid",
+  "secret": "whsec_...",
+  "createdAt": "2025-01-01T00:00:00Z"
+}
+```
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/webhooks`
+
+List webhooks in the space. The `secret` field is never returned after creation.
+
+**Response** `200` — array of webhook objects (without `secret`)
+
+---
+
+### `DELETE /v1/workspaces/:wId/spaces/:sId/webhooks/:id`
+
+Delete a webhook.
+
+**Response** `204`
+
+---
+
+## `POST /v1/webhooks/:id/trigger` — Public
+
+Trigger a workflow via webhook. This endpoint is **public** (no Bearer token) but requires the `x-webhook-secret` header.
+
+**Headers**
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `x-webhook-secret` | Yes | Secret returned at webhook creation time |
+
+**Body** — arbitrary JSON, passed as `input` to the workflow execution
+
+**Response** `201` — execution object
+
+```js
+fetch('/v1/webhooks/your-webhook-id/trigger', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-webhook-secret': 'whsec_...'
+  },
+  body: JSON.stringify({ event: 'order.created', orderId: '123' })
+});
+```
+
+<Callout type="warn">
+  Rotate your webhook secret by deleting the webhook and creating a new one. There is no secret-rotation endpoint.
+</Callout>
+
+---
+
+## Webhook Object
+
+```json
+{
+  "id": "uuid",
+  "spaceId": "uuid",
+  "workflowId": "uuid",
+  "createdAt": "2025-01-01T00:00:00Z"
+}
+```

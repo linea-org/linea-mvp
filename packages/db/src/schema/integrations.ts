@@ -1,6 +1,7 @@
 import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { workspaces } from './workspaces';
+import { spaces } from './spaces';
 import { users } from './users';
 import { workflows } from './workflows';
 
@@ -41,8 +42,8 @@ export const lineaApiKeys = pgTable('linea_api_keys', {
 
 export const webhooks = pgTable('webhooks', {
   id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id')
-    .references(() => workspaces.id, { onDelete: 'cascade' })
+  spaceId: uuid('space_id')
+    .references(() => spaces.id, { onDelete: 'cascade' })
     .notNull(),
   workflowId: uuid('workflow_id')
     .references(() => workflows.id, { onDelete: 'cascade' })

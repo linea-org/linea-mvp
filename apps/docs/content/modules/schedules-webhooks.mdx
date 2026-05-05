@@ -1,0 +1,107 @@
+---
+title: Schedules & Webhooks
+description: Time-based and event-based workflow triggers.
+---
+
+import { Callout } from 'nextra/components'
+
+# Schedules & Webhooks
+
+Both Schedules and Webhooks are **space-scoped** triggers — they live under a specific space and fire executions for a workflow in that space.
+
+## Schedules
+
+A **Schedule** fires a workflow on a cron expression.
+
+### Schema
+
+```typescript
+schedules: {
+  id: uuid PK
+  spaceId: uuid FK → spaces (cascade delete)
+  workflowId: uuid FK → workflows (set null on delete)
+  name: text
+  cronExpression: text    // e.g. "0 9 * * 1-5"
+  timezone: text          // e.g. "America/New_York"
+  enabled: boolean
+  lastRunAt: timestamp | null
+  nextRunAt: timestamp | null
+  createdAt: timestamp
+  updatedAt: timestamp
+}
+```
+
+### Fire Logic
+
+`SchedulesService.fireDueSchedules()` is called by a NestJS `@Cron` task every minute:
+
+1. Queries schedules where `enabled = true` AND `nextRunAt <= now()`
+2. JOINs `spaces` to get `workspaceId`
+3. Calls `ExecutionsService.createFromTrigger(spaceId, workspaceId, workflowId, 'schedule', {})`
+4. Updates `lastRunAt` and computes the next `nextRunAt` from the cron expression
+
+<Callout>
+  The `workspaceId` JOIN is necessary because schedules only store `spaceId` after the space layer was introduced. The join is done in bulk once per cron tick, not per execution.
+</Callout>
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/workspaces/:wId/spaces/:sId/schedules` | List schedules |
+| `POST` | `/workspaces/:wId/spaces/:sId/schedules` | Create schedule |
+| `PATCH` | `/workspaces/:wId/spaces/:sId/schedules/:id` | Update |
+| `PATCH` | `/workspaces/:wId/spaces/:sId/schedules/:id/toggle` | Enable / disable |
+| `DELETE` | `/workspaces/:wId/spaces/:sId/schedules/:id` | Delete |
+
+---
+
+## Webhooks
+
+A **Webhook** fires a workflow when an HTTP `POST` request is received at its unique URL.
+
+### Schema
+
+```typescript
+webhooks: {
+  id: uuid PK
+  spaceId: uuid FK → spaces (cascade delete)
+  workflowId: uuid FK → workflows (set null on delete)
+  name: text
+  secret: text | null    // HMAC signing secret (optional)
+  enabled: boolean
+  lastTriggeredAt: timestamp | null
+  createdAt: timestamp
+  updatedAt: timestamp
+}
+```
+
+### Trigger URL
+
+Each webhook has a public endpoint:
+
+```
+POST /v1/webhooks/:webhookId/trigger
+```
+
+This endpoint is `@Public()` (bypasses `AuthGuard`). If a `secret` is configured, the `X-Webhook-Signature` header is verified before processing.
+
+### Trigger Logic
+
+`WebhooksService.trigger(webhookId, payload)`:
+
+1. Fetches the webhook row, verifies `enabled = true`
+2. JOINs `spaces` for `workspaceId`
+3. Verifies HMAC signature if `secret` is set
+4. Calls `ExecutionsService.createFromTrigger(spaceId, workspaceId, workflowId, 'webhook', payload)`
+5. Updates `lastTriggeredAt`
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/workspaces/:wId/spaces/:sId/webhooks` | List webhooks |
+| `POST` | `/workspaces/:wId/spaces/:sId/webhooks` | Create webhook |
+| `PATCH` | `/workspaces/:wId/spaces/:sId/webhooks/:id` | Update |
+| `DELETE` | `/workspaces/:wId/spaces/:sId/webhooks/:id` | Delete |
+| `POST` | `/webhooks/:id/trigger` | Public trigger endpoint |

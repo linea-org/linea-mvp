@@ -1,0 +1,138 @@
+---
+title: Executions
+description: Trigger, monitor, and control workflow executions.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Executions
+
+All endpoints scoped to: `/v1/workspaces/:workspaceId/spaces/:spaceId/executions`.
+
+## Endpoints
+
+### `POST /v1/workspaces/:wId/spaces/:sId/executions`
+
+Manually trigger a workflow execution.
+
+**Body**
+```json
+{
+  "workflowId": "uuid",
+  "input": { "key": "value" }
+}
+```
+
+**Response** `201`
+```json
+{ "id": "uuid", "status": "pending", "triggeredBy": "manual" }
+```
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/executions`
+
+List executions.
+
+**Query params**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `workflowId` | uuid | Filter by workflow |
+| `status` | string | `pending` \| `running` \| `completed` \| `failed` \| `cancelled` \| `suspended` |
+
+**Response** `200` — array of execution objects
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/executions/:id`
+
+Get a single execution with full output and error details.
+
+**Response** `200`
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/executions/:id/logs`
+
+Get step-by-step logs for an execution.
+
+**Response** `200` — array of log entries
+
+---
+
+### `GET /v1/workspaces/:wId/spaces/:sId/executions/:id/events` — SSE
+
+Stream live execution events using **Server-Sent Events**. Closes automatically after 10 minutes.
+
+**Example**
+```js
+const es = new EventSource('/v1/workspaces/.../executions/:id/events', {
+  headers: { Authorization: `Bearer ${token}` }
+});
+es.onmessage = (e) => console.log(JSON.parse(e.data));
+```
+
+---
+
+### `PATCH /v1/workspaces/:wId/spaces/:sId/executions/:id/respond`
+
+Respond to a `suspended` execution waiting for human input.
+
+**Body**
+```json
+{ "approved": true, "data": { "comment": "Looks good" } }
+```
+
+**Response** `200`
+
+---
+
+### `PATCH /v1/workspaces/:wId/spaces/:sId/executions/:id/approve`
+
+Shorthand approve — equivalent to `respond` with `{ "approved": true }`.
+
+**Response** `200`
+
+---
+
+### `DELETE /v1/workspaces/:wId/spaces/:sId/executions/:id`
+
+Cancel an execution. Most reliable when `status = pending`.
+
+**Response** `204`
+
+<Callout type="warn">
+  Cancellation is best-effort for `running` executions — the worker may already be mid-step.
+</Callout>
+
+---
+
+## Execution Object
+
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "spaceId": "uuid",
+  "workflowId": "uuid",
+  "status": "completed",
+  "triggeredBy": "manual",
+  "input": {},
+  "output": { "result": "..." },
+  "error": null,
+  "startedAt": "2025-01-01T00:00:00Z",
+  "completedAt": "2025-01-01T00:00:10Z",
+  "createdAt": "2025-01-01T00:00:00Z"
+}
+```
+
+## Status Values
+
+```
+pending → running → completed
+                 → failed
+                 → suspended  (waiting for human approval)
+pending → cancelled
+running → cancelled  (best-effort)
+```

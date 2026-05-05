@@ -1,0 +1,90 @@
+---
+title: MCP Integration
+description: Attaching Model Context Protocol servers as tools to workflows.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# MCP Integration
+
+Linea supports the **Model Context Protocol (MCP)** — a standard for connecting AI models to external tools and data sources. MCP servers are registered at the **workspace level** and can be attached to any workflow within that workspace.
+
+## What Is MCP?
+
+MCP defines a client/server protocol where:
+- An **MCP server** exposes a set of **tools** (functions the model can call)
+- An **MCP client** (Linea's execution engine) discovers those tools and invokes them during workflow execution
+
+This allows workflows to call external APIs, query databases, run scripts, or interact with any service that implements the MCP spec.
+
+## Schema
+
+```typescript
+mcp_servers: {
+  id: uuid PK
+  workspaceId: uuid FK → workspaces (cascade delete)
+  name: text
+  description: text | null
+  url: text                    // MCP server endpoint
+  transport: enum('sse','stdio','streamable-http')
+  authType: enum('none','bearer','basic','custom')
+  authConfig: jsonb            // credentials (encrypted at rest)
+  status: enum('active','inactive','error')
+  lastCheckedAt: timestamp | null
+  embedding: vector(1536)      // semantic search over server descriptions
+  createdAt: timestamp
+  updatedAt: timestamp
+}
+
+mcp_tools: {
+  id: uuid PK
+  serverId: uuid FK → mcp_servers (cascade delete)
+  name: text
+  description: text | null
+  inputSchema: jsonb           // JSON Schema for tool arguments
+  embedding: vector(1536)      // semantic search over tool descriptions
+  createdAt: timestamp
+}
+```
+
+<Callout>
+  Both `mcp_servers` and `mcp_tools` store embeddings to enable semantic tool discovery — "find me tools that can send emails" — without requiring the exact tool name.
+</Callout>
+
+## Transport Types
+
+| Transport | Description |
+|-----------|-------------|
+| `sse` | Server-Sent Events — persistent HTTP stream |
+| `stdio` | Standard I/O — for local process-based servers |
+| `streamable-http` | HTTP with streaming response (MCP 2025 spec) |
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/workspaces/:wId/mcp-servers` | List MCP servers |
+| `POST` | `/workspaces/:wId/mcp-servers` | Register server |
+| `GET` | `/workspaces/:wId/mcp-servers/:id` | Get server |
+| `PATCH` | `/workspaces/:wId/mcp-servers/:id` | Update server |
+| `DELETE` | `/workspaces/:wId/mcp-servers/:id` | Remove server |
+| `POST` | `/workspaces/:wId/mcp-servers/:id/sync` | Discover and sync tools from server |
+| `GET` | `/workspaces/:wId/mcp-servers/:id/tools` | List synced tools |
+| `POST` | `/workspaces/:wId/mcp-servers/search` | Semantic tool search |
+
+## Tool Sync
+
+Calling `POST .../sync` connects to the MCP server, calls `tools/list`, and upserts `mcp_tools` rows. Embeddings are generated for each tool description to enable semantic search.
+
+## Semantic Tool Discovery
+
+During execution, the workflow engine can search for relevant tools by description:
+
+```
+"find tools that can query a SQL database"
+→ embed query
+→ cosine search over mcp_tools.embedding
+→ return top-K tools across all servers
+```
+
+This allows workflows to dynamically discover tools without hardcoding server/tool names.

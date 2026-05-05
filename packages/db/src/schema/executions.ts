@@ -8,6 +8,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { workspaces } from './workspaces';
+import { spaces } from './spaces';
 import { workflows } from './workflows';
 import type { NodeResult } from './types';
 
@@ -35,6 +36,7 @@ export const executions = pgTable('executions', {
   workspaceId: uuid('workspace_id')
     .references(() => workspaces.id, { onDelete: 'cascade' })
     .notNull(),
+  spaceId: uuid('space_id').references(() => spaces.id, { onDelete: 'set null' }),
   status: executionStatusEnum('status').default('queued').notNull(),
   input: jsonb('input').$type<Record<string, unknown>>().default({}).notNull(),
   output: jsonb('output'),
@@ -42,6 +44,7 @@ export const executions = pgTable('executions', {
   nodeResults: jsonb('node_results').$type<Record<string, NodeResult>>().default({}).notNull(),
   variables: jsonb('variables').$type<Record<string, unknown>>().default({}).notNull(),
   checkpoint: jsonb('checkpoint'),
+  threadId: text('thread_id'),
   triggeredBy: executionTriggerEnum('triggered_by').default('manual').notNull(),
   queueJobId: text('queue_job_id'),
   startedAt: timestamp('started_at', { withTimezone: true }),
@@ -69,6 +72,10 @@ export const executionsRelations = relations(executions, ({ one, many }) => ({
   workspace: one(workspaces, {
     fields: [executions.workspaceId],
     references: [workspaces.id],
+  }),
+  space: one(spaces, {
+    fields: [executions.spaceId],
+    references: [spaces.id],
   }),
   logs: many(executionLogs),
 }));

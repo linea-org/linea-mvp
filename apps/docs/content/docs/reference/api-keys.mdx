@@ -1,0 +1,87 @@
+---
+title: API Keys
+description: Create and manage Linea API keys for programmatic workspace access.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# API Keys
+
+Linea API keys grant programmatic access to the API scoped to a workspace. They are passed as `Bearer` tokens in the `Authorization` header, just like session tokens.
+
+All endpoints scoped to: `/v1/workspaces/:workspaceId/api-keys`
+
+## Endpoints
+
+### `POST /v1/workspaces/:wId/api-keys`
+
+Create a new API key. The full key value is returned **once** at creation time and is never retrievable again.
+
+**Body**
+```json
+{ "name": "CI/CD Pipeline" }
+```
+
+**Response** `201`
+```json
+{
+  "id": "uuid",
+  "name": "CI/CD Pipeline",
+  "key": "lnk_live_...",
+  "workspaceId": "uuid",
+  "createdBy": "uuid",
+  "createdAt": "2025-01-01T00:00:00Z"
+}
+```
+
+<Callout type="warn">
+  Copy the `key` value immediately — subsequent `GET` requests will never include it.
+</Callout>
+
+---
+
+### `GET /v1/workspaces/:wId/api-keys`
+
+List all API keys for the workspace. The `key` field is **never** returned.
+
+**Response** `200`
+```json
+[
+  {
+    "id": "uuid",
+    "name": "CI/CD Pipeline",
+    "workspaceId": "uuid",
+    "createdBy": "uuid",
+    "createdAt": "2025-01-01T00:00:00Z"
+  }
+]
+```
+
+---
+
+### `DELETE /v1/workspaces/:wId/api-keys/:id`
+
+Revoke an API key immediately. Any in-flight requests using this key will start failing.
+
+**Response** `204`
+
+---
+
+## Usage
+
+```http
+GET /v1/workspaces/your-workspace-id/spaces HTTP/1.1
+Authorization: Bearer lnk_live_...
+```
+
+## API Key Object
+
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "name": "CI/CD Pipeline",
+  "createdBy": "uuid",
+  "createdAt": "2025-01-01T00:00:00Z"
+}
+```

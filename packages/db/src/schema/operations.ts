@@ -9,6 +9,7 @@ import {
   numeric,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { spaces } from './spaces';
 import { workspaces } from './workspaces';
 import { users } from './users';
 import { workflows } from './workflows';
@@ -22,8 +23,8 @@ export const approvalStatusEnum = pgEnum('approval_status', [
 
 export const schedules = pgTable('schedules', {
   id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id')
-    .references(() => workspaces.id, { onDelete: 'cascade' })
+  spaceId: uuid('space_id')
+    .references(() => spaces.id, { onDelete: 'cascade' })
     .notNull(),
   workflowId: uuid('workflow_id')
     .references(() => workflows.id, { onDelete: 'cascade' })
@@ -81,7 +82,7 @@ export const approvalsRelations = relations(approvals, ({ one }) => ({
 }));
 
 export const schedulesRelations = relations(schedules, ({ one }) => ({
-  workspace: one(workspaces, { fields: [schedules.workspaceId], references: [workspaces.id] }),
+  space: one(spaces, { fields: [schedules.spaceId], references: [spaces.id] }),
   workflow: one(workflows, { fields: [schedules.workflowId], references: [workflows.id] }),
 }));
 
