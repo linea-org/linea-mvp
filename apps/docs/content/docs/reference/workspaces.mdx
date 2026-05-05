@@ -20,7 +20,7 @@ Create a workspace. The caller becomes the `owner`.
 { "name": "Acme Corp", "slug": "acme" }
 ```
 
-**Response** `201` — workspace object
+**Response** `201`: workspace object
 
 ---
 
@@ -28,7 +28,7 @@ Create a workspace. The caller becomes the `owner`.
 
 List all workspaces the current user belongs to.
 
-**Response** `200` — array of workspace objects
+**Response** `200`: array of workspace objects
 
 ---
 
@@ -36,7 +36,7 @@ List all workspaces the current user belongs to.
 
 Get a single workspace. Requires membership.
 
-**Response** `200` — workspace object
+**Response** `200`: workspace object
 
 ---
 
@@ -44,9 +44,9 @@ Get a single workspace. Requires membership.
 
 Update workspace name or slug. Requires `admin+`.
 
-**Body** — any subset of `{ name, slug }`
+**Body:** any subset of `{ name, slug }`
 
-**Response** `200` — updated workspace
+**Response** `200`: updated workspace
 
 ---
 
@@ -100,7 +100,7 @@ Invite a user by email. Requires `admin+`.
 { "email": "user@example.com", "role": "editor" }
 ```
 
-**Response** `201` — invite object with token
+**Response** `201`: invite object with token
 
 ---
 
@@ -108,7 +108,7 @@ Invite a user by email. Requires `admin+`.
 
 List pending invites. Requires `admin+`.
 
-**Response** `200` — array of invite objects
+**Response** `200`: array of invite objects
 
 ---
 

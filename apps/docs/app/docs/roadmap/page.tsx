@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { DocsPage, DocsBody, DocsTitle, DocsDescription } from 'fumadocs-ui/page';
 import { getMilestones, getIssues } from '@/lib/github';
 import { RoadmapView } from '@/components/roadmap-view';
@@ -7,9 +8,10 @@ const GITHUB_REPO = process.env.GITHUB_REPO ?? 'linea';
 
 export const revalidate = 3600;
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Roadmap',
   description: 'Planned features and upcoming milestones for Linea.',
+  robots: { index: false, follow: false },
 };
 
 export default async function RoadmapPage() {

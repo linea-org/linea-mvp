@@ -99,7 +99,7 @@ Store a single memory without extraction (manual insert).
 }
 ```
 
-**Response** `201` — memory object
+**Response** `201`: memory object
 
 ---
 
@@ -115,7 +115,7 @@ List memories with optional filters.
 | `threadId` | string | Filter by thread |
 | `workflowId` | uuid | Filter by workflow |
 
-**Response** `200` — array of memory objects (excludes superseded)
+**Response** `200`: array of memory objects (excludes superseded)
 
 ---
 
@@ -150,5 +150,5 @@ Delete a memory.
 ```
 
 <Callout>
-  Memories with `supersededById != null` are stale — they have been replaced by a newer, semantically equivalent fact. All list/search endpoints exclude them automatically.
+  Memories with `supersededById != null` are stale: they have been replaced by a newer, semantically equivalent fact. All list/search endpoints exclude them automatically.
 </Callout>

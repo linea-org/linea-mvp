@@ -36,7 +36,7 @@ Create a cron schedule for a workflow.
 | `input` | object? | Static input passed to each run |
 | `enabled` | boolean? | Defaults to `true` |
 
-**Response** `201` — schedule object
+**Response** `201`: schedule object
 
 ---
 
@@ -44,7 +44,7 @@ Create a cron schedule for a workflow.
 
 List all schedules in the space.
 
-**Response** `200` — array of schedule objects
+**Response** `200`: array of schedule objects
 
 ---
 
@@ -52,9 +52,9 @@ List all schedules in the space.
 
 Update cron expression, input, or enabled state.
 
-**Body** — any subset of `{ cronExpr, input, enabled }`
+**Body:** any subset of `{ cronExpr, input, enabled }`
 
-**Response** `200` — updated schedule object
+**Response** `200`: updated schedule object
 
 ---
 
@@ -95,7 +95,7 @@ Public trigger endpoint: `/v1/webhooks/:id/trigger`
 
 ### `POST /v1/workspaces/:wId/spaces/:sId/webhooks`
 
-Create a webhook trigger for a workflow. Returns a `secret` — store it securely, it is shown only once.
+Create a webhook trigger for a workflow. Returns a `secret`: store it securely, it is shown only once.
 
 **Body**
 ```json
@@ -119,7 +119,7 @@ Create a webhook trigger for a workflow. Returns a `secret` — store it securel
 
 List webhooks in the space. The `secret` field is never returned after creation.
 
-**Response** `200` — array of webhook objects (without `secret`)
+**Response** `200`: array of webhook objects (without `secret`)
 
 ---
 
@@ -131,7 +131,7 @@ Delete a webhook.
 
 ---
 
-## `POST /v1/webhooks/:id/trigger` — Public
+## `POST /v1/webhooks/:id/trigger` (public)
 
 Trigger a workflow via webhook. This endpoint is **public** (no Bearer token) but requires the `x-webhook-secret` header.
 
@@ -141,9 +141,9 @@ Trigger a workflow via webhook. This endpoint is **public** (no Bearer token) bu
 |--------|----------|-------------|
 | `x-webhook-secret` | Yes | Secret returned at webhook creation time |
 
-**Body** — arbitrary JSON, passed as `input` to the workflow execution
+**Body:** arbitrary JSON, passed as `input` to the workflow execution
 
-**Response** `201` — execution object
+**Response** `201`: execution object
 
 ```js
 fetch('/v1/webhooks/your-webhook-id/trigger', {

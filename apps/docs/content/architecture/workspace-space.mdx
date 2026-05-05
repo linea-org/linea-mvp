@@ -42,7 +42,7 @@ Membership is tracked in `workspace_members` with roles: `owner`, `admin`, `edit
 
 ## Space
 
-A **Space** is a logical grouping of workflows inside a workspace — analogous to a project or environment (e.g., *Production*, *Staging*, *Research*).
+A **Space** is a logical grouping of workflows inside a workspace: analogous to a project or environment (e.g., *Production*, *Staging*, *Research*).
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -54,7 +54,7 @@ A **Space** is a logical grouping of workflows inside a workspace — analogous 
 
 ### Authorization
 
-Spaces **inherit workspace membership** — there are no separate space-level roles. If you are a member of the workspace, you can access all its spaces. The `SpaceGuard` only verifies that the requested `spaceId` belongs to the current `workspaceId`.
+Spaces **inherit workspace membership**: there are no separate space-level roles. If you are a member of the workspace, you can access all its spaces. The `SpaceGuard` only verifies that the requested `spaceId` belongs to the current `workspaceId`.
 
 ## API Route Structure
 
@@ -98,4 +98,4 @@ Request
 - Track resource quotas
 - Look up MCP servers
 
-Without it, every execution job would need an extra JOIN through `spaces` — expensive at high throughput. `spaceId` is nullable and is written when the execution is created via a trigger (schedule, webhook, or manual).
+Without it, every execution job would need an extra JOIN through `spaces` (expensive at high throughput). `spaceId` is nullable and is written when the execution is created via a trigger (schedule, webhook, or manual).

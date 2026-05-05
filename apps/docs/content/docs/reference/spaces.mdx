@@ -5,7 +5,7 @@ description: Create and manage spaces within a workspace.
 
 # Spaces
 
-A Space is a logical container inside a workspace — think project or environment. Workflows, executions, schedules, and webhooks all live under a space.
+A Space is a logical container inside a workspace: think project or environment. Workflows, executions, schedules, and webhooks all live under a space.
 
 ## Endpoints
 
@@ -31,7 +31,7 @@ A URL-safe `slug` is auto-generated from the name (e.g. `production-a3f2`).
 
 List all spaces in the workspace.
 
-**Response** `200` — array of space objects
+**Response** `200`: array of space objects
 
 ---
 
@@ -39,7 +39,7 @@ List all spaces in the workspace.
 
 Get a single space.
 
-**Response** `200` — space object
+**Response** `200`: space object
 
 ---
 
@@ -47,7 +47,7 @@ Get a single space.
 
 Update name or description. Requires `editor+`.
 
-**Body** — any subset of `{ name, description }`
+**Body:** any subset of `{ name, description }`
 
 **Response** `200`
 

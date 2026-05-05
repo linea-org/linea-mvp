@@ -52,7 +52,7 @@ Linea is a multi-tenant workflow automation platform. Its backend is a NestJS mo
 
 - Each NestJS module owns exactly one domain (e.g., `WorkflowsModule` only touches `workflows` table)
 - Cross-module reads go through exported services, never direct table access from another module
-- The `DatabaseModule` is global — all modules receive the Drizzle client via `@Inject(DB_TOKEN)`
+- The `DatabaseModule` is global; all modules receive the Drizzle client via `@Inject(DB_TOKEN)`
 - `SpacesModule` exports `SpacesService` and is imported by `WorkflowsModule`, `ExecutionsModule`, `SchedulesModule`, `WebhooksModule`
 
 ## Error Handling

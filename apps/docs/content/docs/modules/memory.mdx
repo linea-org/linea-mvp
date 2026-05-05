@@ -8,15 +8,15 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 # Memory System
 
-Linea's memory system is inspired by [SuperMemory](https://supermemory.ai) and targets ~45% feature parity. It provides persistent, structured memory for AI agents across workflow runs — enabling agents to remember facts, user preferences, and past events.
+Linea's memory system is inspired by [SuperMemory](https://supermemory.ai) and targets ~45% feature parity. It provides persistent, structured memory for AI agents across workflow runs: enabling agents to remember facts, user preferences, and past events.
 
 ## Design Principles
 
-- **Atomic facts** — raw text is split into the smallest self-contained statements before storing
-- **Semantic deduplication** — new facts semantically equivalent to existing ones supersede them rather than duplicating
-- **Hybrid retrieval** — pgvector cosine similarity + keyword search, merged with score boosting
-- **Temporal grounding** — `eventDate` is separate from `createdAt` so facts can reference when something happened
-- **User profiling** — `scope=user` memories grouped by `factType` form a user's behavioral profile
+- **Atomic facts**: raw text is split into the smallest self-contained statements before storing
+- **Semantic deduplication**: new facts semantically equivalent to existing ones supersede them rather than duplicating
+- **Hybrid retrieval**: pgvector cosine similarity + keyword search, merged with score boosting
+- **Temporal grounding**: `eventDate` is separate from `createdAt` so facts can reference when something happened
+- **User profiling**: `scope=user` memories grouped by `factType` form a user's behavioral profile
 
 ## Schema
 
@@ -158,7 +158,7 @@ Returns `scope=user` memories (excluding superseded) grouped by `factType`:
 
 ### `EmbeddingService`
 
-Wraps OpenAI `text-embedding-3-small`. Zero-vector fallback if `OPENAI_API_KEY` is not set — useful for local dev without AI billing.
+Wraps OpenAI `text-embedding-3-small`. Zero-vector fallback if `OPENAI_API_KEY` is not set: useful for local dev without AI billing.
 
 ### `ExtractionService`
 

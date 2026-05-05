@@ -5,7 +5,7 @@ description: Workspace-scoped document stores with vector search.
 
 # Knowledge Bases
 
-Knowledge Bases are **workspace-scoped** document collections. Unlike memories (which are created from agent interactions), knowledge bases hold static reference material — documentation, policy documents, product specs, etc.
+Knowledge Bases are **workspace-scoped** document collections. Unlike memories (which are created from agent interactions), knowledge bases hold static reference material: documentation, policy documents, product specs, etc.
 
 ## Schema
 
@@ -55,7 +55,7 @@ knowledge_entries: {
 
 ## Search
 
-The search endpoint currently uses `ilike` keyword matching. It is designed to be upgraded to pgvector cosine search once embeddings are generated on entry insert — the `embedding` column is already present in the schema.
+The search endpoint currently uses `ilike` keyword matching. It is designed to be upgraded to pgvector cosine search once embeddings are generated on entry insert: the `embedding` column is already present in the schema.
 
 ```typescript
 // Current implementation
@@ -67,4 +67,4 @@ The search endpoint currently uses `ilike` keyword matching. It is designed to b
 
 ## Frontend
 
-The knowledge UI is at `/knowledge`. It lists all bases in the active workspace. Selecting a base opens an entry list with search. Knowledge bases span all spaces — they are workspace-wide shared resources.
+The knowledge UI is at `/knowledge`. It lists all bases in the active workspace. Selecting a base opens an entry list with search. Knowledge bases span all spaces: they are workspace-wide shared resources.

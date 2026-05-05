@@ -15,7 +15,7 @@ Create a knowledge base.
 
 **Body** `{ "name": "Product Docs", "description": "..." }`
 
-**Response** `201` — knowledge base object
+**Response** `201`: knowledge base object
 
 ---
 
@@ -42,7 +42,7 @@ Get a knowledge base.
 
 Update name or description.
 
-**Body** — any subset of `{ name, description }`
+**Body:** any subset of `{ name, description }`
 
 **Response** `200`
 
@@ -70,7 +70,7 @@ Add an entry. Embeddings are generated asynchronously.
 }
 ```
 
-**Response** `201` — entry object
+**Response** `201`: entry object
 
 ---
 
@@ -78,7 +78,7 @@ Add an entry. Embeddings are generated asynchronously.
 
 List all entries in the knowledge base.
 
-**Response** `200` — array of entry objects
+**Response** `200`: array of entry objects
 
 ---
 
@@ -96,7 +96,7 @@ Search entries. Uses semantic (pgvector) search when embeddings are available, f
 
 **Body** `{ "query": "how many runs on free plan?" }`
 
-**Response** `200` — array of matching entries ranked by relevance
+**Response** `200`: array of matching entries ranked by relevance
 
 ---
 

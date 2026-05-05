@@ -10,8 +10,9 @@ import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { Metadata } from 'next';
 import { PageActions } from '@/components/page-actions';
 import { Mermaid } from '@/components/mermaid';
+import { DEFAULT_DESCRIPTION, SITE_NAME, getSiteUrl } from '@/lib/site';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://docs.linea.xyz';
+const siteUrl = getSiteUrl();
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -54,23 +55,25 @@ export async function generateMetadata(props: {
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
-  const pageUrl = `${BASE_URL}${page.url}`;
+  const pageUrl = `${siteUrl}${page.url}`;
+  const description = page.data.description ?? DEFAULT_DESCRIPTION;
 
   return {
     title: page.data.title,
-    description: page.data.description,
+    description,
     alternates: { canonical: pageUrl },
     openGraph: {
       title: page.data.title,
-      description: page.data.description,
+      description,
       url: pageUrl,
-      siteName: 'Linea Docs',
+      siteName: SITE_NAME,
       type: 'article',
+      locale: 'en',
     },
     twitter: {
-      card: 'summary',
+      card: 'summary_large_image',
       title: page.data.title,
-      description: page.data.description,
+      description,
     },
   };
 }

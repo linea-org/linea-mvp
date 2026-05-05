@@ -34,7 +34,7 @@ Register a new MCP server.
 | `authType` | `none` \| `api_key` \| `bearer` \| `oauth` | Auth method |
 | `accessToken` | string? | Token / API key (stored encrypted) |
 
-**Response** `201` — MCP server object
+**Response** `201`: MCP server object
 
 ---
 
@@ -42,7 +42,7 @@ Register a new MCP server.
 
 List all registered MCP servers for the workspace.
 
-**Response** `200` — array of MCP server objects
+**Response** `200`: array of MCP server objects
 
 ---
 
@@ -50,7 +50,7 @@ List all registered MCP servers for the workspace.
 
 Get a single MCP server and its current connection status.
 
-**Response** `200` — MCP server object
+**Response** `200`: MCP server object
 
 ---
 
@@ -58,7 +58,7 @@ Get a single MCP server and its current connection status.
 
 Update name, URL, or auth configuration.
 
-**Body** — any subset of `{ name, url, authType, accessToken }`
+**Body:** any subset of `{ name, url, authType, accessToken }`
 
 **Response** `200`
 
@@ -74,7 +74,7 @@ Remove an MCP server and all its synced tools.
 
 ### `POST /v1/workspaces/:wId/mcp-servers/:id/sync`
 
-Trigger a manual sync — connects to the server, fetches available tools, updates embeddings.
+Trigger a manual sync: connects to the server, fetches available tools, updates embeddings.
 
 **Response** `200`
 ```json
@@ -116,7 +116,7 @@ Semantic search across all tools in the workspace using vector similarity.
 { "query": "create a pull request", "limit": 5 }
 ```
 
-**Response** `200` — array of tools ranked by relevance
+**Response** `200`: array of tools ranked by relevance
 
 ---
 
@@ -154,4 +154,4 @@ Semantic search across all tools in the workspace using vector similarity.
 |--------|---------|
 | `unknown` | Not yet synced |
 | `connected` | Last sync succeeded |
-| `error` | Last sync failed — check server URL and credentials |
+| `error` | Last sync failed: check server URL and credentials |

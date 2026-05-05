@@ -9,7 +9,7 @@ export function middleware(request: NextRequest) {
 
   const password = process.env.ROADMAP_PASSWORD;
   if (!password) {
-    // No password configured — block access to prevent accidental exposure
+    // No password configured: block access to prevent accidental exposure
     return new NextResponse('Roadmap access requires ROADMAP_PASSWORD to be configured.', {
       status: 401,
       headers: {
@@ -26,7 +26,7 @@ export function middleware(request: NextRequest) {
       const pw = decoded.slice(decoded.indexOf(':') + 1);
       if (pw === password) return NextResponse.next();
     } catch {
-      // invalid base64 — fall through to 401
+      // invalid base64; fall through to 401
     }
   }
 

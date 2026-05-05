@@ -364,7 +364,7 @@ function TableView({ issues }: { issues: GitHubIssue[] }) {
               </a>
             </TableCell>
             <TableCell className="text-muted-foreground">
-              {issue.milestone?.title ?? <span className="opacity-40">—</span>}
+              {issue.milestone?.title ?? <span className="opacity-40">None</span>}
             </TableCell>
             <TableCell>
               <div className="flex flex-wrap gap-1">

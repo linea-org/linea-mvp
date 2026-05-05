@@ -5,7 +5,7 @@ description: User-scoped event feed for in-app alerts.
 
 # Notifications
 
-Notifications are **user-scoped** — they belong to an individual user, not a workspace. They surface in the dashboard header as a bell icon with an unread badge.
+Notifications are **user-scoped**: they belong to an individual user, not a workspace. They surface in the dashboard header as a bell icon with an unread badge.
 
 ## Schema
 
@@ -23,7 +23,7 @@ notifications: {
 
 ## Why User-Scoped, Not Workspace-Scoped?
 
-Notifications represent **personal events** — "your execution failed", "you were invited to a workspace". Multiple workspace members may observe the same event but each should have their own read/dismiss state independently.
+Notifications represent **personal events**: "your execution failed", "you were invited to a workspace". Multiple workspace members may observe the same event but each should have their own read/dismiss state independently.
 
 ## API Endpoints
 
@@ -64,8 +64,8 @@ Clicking navigates to `/notifications`.
 
 `/notifications` shows the full feed. Unread notifications are visually highlighted. Actions:
 
-- **Mark all read** — appears when `unreadCount > 0`
-- **Read** — individual mark-as-read button
-- **Dismiss** — deletes the notification
+- **Mark all read**: appears when `unreadCount > 0`
+- **Read**: individual mark-as-read button
+- **Dismiss**: deletes the notification
 
 Read/dismiss mutations update local state immediately without refetching the list.

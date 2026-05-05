@@ -41,7 +41,7 @@ List executions.
 | `workflowId` | uuid | Filter by workflow |
 | `status` | string | `pending` \| `running` \| `completed` \| `failed` \| `cancelled` \| `suspended` |
 
-**Response** `200` — array of execution objects
+**Response** `200`: array of execution objects
 
 ---
 
@@ -57,11 +57,11 @@ Get a single execution with full output and error details.
 
 Get step-by-step logs for an execution.
 
-**Response** `200` — array of log entries
+**Response** `200`: array of log entries
 
 ---
 
-### `GET /v1/workspaces/:wId/spaces/:sId/executions/:id/events` — SSE
+### `GET /v1/workspaces/:wId/spaces/:sId/executions/:id/events` (SSE)
 
 Stream live execution events using **Server-Sent Events**. Closes automatically after 10 minutes.
 
@@ -90,7 +90,7 @@ Respond to a `suspended` execution waiting for human input.
 
 ### `PATCH /v1/workspaces/:wId/spaces/:sId/executions/:id/approve`
 
-Shorthand approve — equivalent to `respond` with `{ "approved": true }`.
+Shorthand approve: equivalent to `respond` with `{ "approved": true }`.
 
 **Response** `200`
 
@@ -103,7 +103,7 @@ Cancel an execution. Most reliable when `status = pending`.
 **Response** `204`
 
 <Callout type="warn">
-  Cancellation is best-effort for `running` executions — the worker may already be mid-step.
+  Cancellation is best-effort for `running` executions: the worker may already be mid-step.
 </Callout>
 
 ---

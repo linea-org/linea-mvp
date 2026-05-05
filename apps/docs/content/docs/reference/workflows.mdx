@@ -24,7 +24,7 @@ Create a workflow. Requires `editor+`.
 }
 ```
 
-**Response** `201` — workflow object
+**Response** `201`: workflow object
 
 ---
 
@@ -37,9 +37,9 @@ List workflows.
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `trashed` | boolean | `false` | Return trashed workflows instead |
-| `starred` | boolean | — | Filter to starred only |
+| `starred` | boolean | (none) | Filter to starred only |
 
-**Response** `200` — array of workflow objects
+**Response** `200`: array of workflow objects
 
 ---
 
@@ -47,7 +47,7 @@ List workflows.
 
 Get a single workflow.
 
-**Response** `200` — workflow object
+**Response** `200`: workflow object
 
 ---
 
@@ -55,7 +55,7 @@ Get a single workflow.
 
 Update name, description, or definition. Requires `editor+`.
 
-**Body** — any subset of `{ name, description, definition }`
+**Body:** any subset of `{ name, description, definition }`
 
 **Response** `200`
 
@@ -107,7 +107,7 @@ Restore from trash. Requires `editor+`.
 
 List version history for a workflow.
 
-**Response** `200` — array of version snapshots
+**Response** `200`: array of version snapshots
 
 ---
 
@@ -123,7 +123,7 @@ Get a specific version snapshot by version number.
 
 Clone a public template into this space. Requires `editor+`.
 
-**Response** `201` — new workflow object
+**Response** `201`: new workflow object
 
 ---
 
@@ -133,7 +133,7 @@ Clone a public template into this space. Requires `editor+`.
 
 List public workflow templates. No auth required.
 
-**Query** `?search=` — filter by name
+**Query** `?search=`: filter by name
 
 **Response** `200`
 

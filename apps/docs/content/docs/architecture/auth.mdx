@@ -51,8 +51,8 @@ sequenceDiagram
 
 Reads `:workspaceId` from route params, checks `workspace_members`, and attaches:
 
-- `req.workspace` — the `Workspace` row
-- `req.membership` — the `WorkspaceMember` row (includes `role`)
+- `req.workspace`: the `Workspace` row
+- `req.membership`: the `WorkspaceMember` row (includes `role`)
 
 Returns `404` if the workspace doesn't exist, `403` if the user isn't a member.
 
@@ -60,7 +60,7 @@ Returns `404` if the workspace doesn't exist, `403` if the user isn't a member.
 
 Reads `:spaceId` from route params, verifies `spaces.workspaceId = req.workspace.id`, and attaches:
 
-- `req.space` — the `Space` row
+- `req.space`: the `Space` row
 
 Returns `404` if the space doesn't exist or belongs to a different workspace.
 

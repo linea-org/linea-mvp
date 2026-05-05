@@ -7,7 +7,7 @@ import { Callout } from 'nextra/components'
 
 # MCP Integration
 
-Linea supports the **Model Context Protocol (MCP)** — a standard for connecting AI models to external tools and data sources. MCP servers are registered at the **workspace level** and can be attached to any workflow within that workspace.
+Linea supports the **Model Context Protocol (MCP)**: a standard for connecting AI models to external tools and data sources. MCP servers are registered at the **workspace level** and can be attached to any workflow within that workspace.
 
 ## What Is MCP?
 
@@ -48,15 +48,15 @@ mcp_tools: {
 ```
 
 <Callout>
-  Both `mcp_servers` and `mcp_tools` store embeddings to enable semantic tool discovery — "find me tools that can send emails" — without requiring the exact tool name.
+  Both `mcp_servers` and `mcp_tools` store embeddings to enable semantic tool discovery (for example, "find me tools that can send emails") without requiring the exact tool name.
 </Callout>
 
 ## Transport Types
 
 | Transport | Description |
 |-----------|-------------|
-| `sse` | Server-Sent Events — persistent HTTP stream |
-| `stdio` | Standard I/O — for local process-based servers |
+| `sse` | Server-Sent Events, persistent HTTP stream |
+| `stdio` | Standard I/O (local process-based servers) |
 | `streamable-http` | HTTP with streaming response (MCP 2025 spec) |
 
 ## API Endpoints

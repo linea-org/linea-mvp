@@ -64,14 +64,14 @@ const results = await db.execute<{ id: string; similarity: number }>(
 ```
 
 <Callout type="warn">
-  The result of `db.execute()` with the postgres-js driver is a `RowList` which extends `ReadonlyArray`. Iterate it directly — there is no `.rows` property.
+  The result of `db.execute()` with the postgres-js driver is a `RowList` which extends `ReadonlyArray`. Iterate it directly; there is no `.rows` property.
 </Callout>
 
 ## Drizzle Patterns
 
 ### Soft Delete
 
-`workflows.deletedAt` — `null` means active, non-null means trashed. Use `isNull` / `isNotNull` from `drizzle-orm`:
+`workflows.deletedAt`: `null` means active, non-null means trashed. Use `isNull` / `isNotNull` from `drizzle-orm`:
 
 ```typescript
 import { isNull, isNotNull } from 'drizzle-orm'
@@ -85,18 +85,18 @@ import { isNull, isNotNull } from 'drizzle-orm'
 
 ### Conflict Resolution (Memories)
 
-`memories.supersededById` is a self-referential UUID (no FK constraint — avoids Drizzle circular reference issues). When a new memory supersedes an old one, the old row's `supersededById` is set to the new row's ID. All queries exclude superseded rows with `isNull(memories.supersededById)`.
+`memories.supersededById` is a self-referential UUID (no FK constraint; avoids Drizzle circular reference issues). When a new memory supersedes an old one, the old row's `supersededById` is set to the new row's ID. All queries exclude superseded rows with `isNull(memories.supersededById)`.
 
 ### Relations
 
-Drizzle `relations()` declarations are used for type inference only — they don't affect the runtime SQL. All actual JOINs are written explicitly in service methods.
+Drizzle `relations()` declarations are used for type inference only; they don't affect the runtime SQL. All actual JOINs are written explicitly in service methods.
 
 ## Migrations
 
 Schema changes are applied with:
 
 ```bash
-pnpm db:push      # Push schema directly (dev — no migration history)
+pnpm db:push      # Push schema directly (dev; no migration history)
 pnpm db:generate  # Generate migration files (prod)
 pnpm db:migrate   # Apply migrations
 ```

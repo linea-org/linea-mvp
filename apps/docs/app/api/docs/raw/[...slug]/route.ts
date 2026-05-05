@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const { slug } = await params;
 
-  // Roadmap is team-internal — never expose raw source
+  // Roadmap is team-internal: never expose raw source
   if (slug[0] === 'roadmap') {
     return new Response('Not found', { status: 404 });
   }
