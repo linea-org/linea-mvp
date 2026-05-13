@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs"
 
 import "@linea/ui/globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { ReactQueryProvider } from "@/components/providers"
 import { cn } from "@linea/ui/lib/utils";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'})
@@ -25,7 +26,9 @@ export default function RootLayout({
         className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
       >
         <body>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ReactQueryProvider>
+            <ThemeProvider>{children}</ThemeProvider>
+          </ReactQueryProvider>
         </body>
       </html>
     </ClerkProvider>

@@ -27,6 +27,7 @@ export const workspaces = pgTable('workspaces', {
   slug: text('slug').unique().notNull(),
   name: text('name').notNull(),
   plan: workspacePlanEnum('plan').default('free').notNull(),
+  clerkOrgId: text('clerk_org_id').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -51,7 +52,7 @@ export const workspaceInvites = pgTable('workspace_invites', {
     .notNull(),
   email: text('email').notNull(),
   role: workspaceMemberRoleEnum('role').default('editor').notNull(),
-  token: text('token').unique().notNull(),
+  tokenHash: text('token_hash').unique().notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

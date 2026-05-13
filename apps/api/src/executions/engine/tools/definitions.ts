@@ -30,6 +30,45 @@ export interface ToolDefinition {
 }
 
 export const BUILTIN_TOOLS: Record<string, ToolDefinition> = {
+  memory_store: {
+    name: 'memory_store',
+    description:
+      'Store a key-value fact in long-term memory. The fact persists across executions of this workflow and can be retrieved semantically with memory_search. Use this to remember important facts, preferences, or outcomes for future runs.',
+    parameters: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Short descriptive name for this memory (e.g. "user_preference", "last_result")' },
+        value: {
+          type: 'string',
+          description: 'Value to store (plain text or JSON string)',
+        },
+      },
+      required: ['key', 'value'],
+    },
+    approval: 'never',
+  },
+
+  memory_search: {
+    name: 'memory_search',
+    description:
+      'Search long-term memory for facts relevant to the query. Uses semantic similarity — results come from previous executions of this workflow. Returns the most relevant stored facts.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'What you want to recall — described in natural language',
+        },
+        topK: {
+          type: 'number',
+          description: 'Number of results to return (default: 5)',
+        },
+      },
+      required: ['query'],
+    },
+    approval: 'never',
+  },
+
   http_request: {
     name: 'http_request',
     description:

@@ -8,7 +8,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { workspaces } from './workspaces';
-import { spaces } from './spaces';
+import { pods } from './pods';
 import { workflows } from './workflows';
 import type { NodeResult } from './types';
 
@@ -36,7 +36,7 @@ export const executions = pgTable('executions', {
   workspaceId: uuid('workspace_id')
     .references(() => workspaces.id, { onDelete: 'cascade' })
     .notNull(),
-  spaceId: uuid('space_id').references(() => spaces.id, { onDelete: 'set null' }),
+  podId: uuid('pod_id').references(() => pods.id, { onDelete: 'set null' }),
   status: executionStatusEnum('status').default('queued').notNull(),
   input: jsonb('input').$type<Record<string, unknown>>().default({}).notNull(),
   output: jsonb('output'),
@@ -73,9 +73,9 @@ export const executionsRelations = relations(executions, ({ one, many }) => ({
     fields: [executions.workspaceId],
     references: [workspaces.id],
   }),
-  space: one(spaces, {
-    fields: [executions.spaceId],
-    references: [spaces.id],
+  pod: one(pods, {
+    fields: [executions.podId],
+    references: [pods.id],
   }),
   logs: many(executionLogs),
 }));

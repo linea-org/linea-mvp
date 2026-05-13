@@ -1,0 +1,55 @@
+import { createContext, Script } from 'vm';
+import type { WorkflowState } from '../variable-substitution';
+
+export interface LoopNodeData {
+  arrayPath?: string;
+  itemTransform?: string;
+  maxIterations?: number;
+}
+
+function resolveByPath(variables: Record<string, unknown>, path: string): unknown {
+  const clean = path.trim().replace(/^\{\{(.+?)\}\}$/, '$1');
+  return clean.split('.').reduce((cur: unknown, k) => (cur as any)?.[k], variables);
+}
+
+export function executeLoopNode(
+  nodeData: LoopNodeData,
+  state: WorkflowState,
+): { results: unknown[]; total: number; items: unknown[] } {
+  const maxIterations = nodeData.maxIterations ?? 100;
+
+  let items: unknown[] = [];
+  if (nodeData.arrayPath?.trim()) {
+    const resolved = resolveByPath(state.variables, nodeData.arrayPath);
+    if (Array.isArray(resolved)) {
+      items = resolved.slice(0, maxIterations);
+    } else if (resolved !== undefined && resolved !== null) {
+      items = [resolved];
+    }
+  }
+
+  let results: unknown[];
+
+  if (nodeData.itemTransform?.trim()) {
+    const expr = nodeData.itemTransform.trim();
+    results = items.map((item) => {
+      try {
+        const sandbox: Record<string, unknown> = {
+          item,
+          result: undefined,
+          JSON, Math, Object, Array, String, Number, Boolean,
+        };
+        const ctx = createContext(sandbox);
+        const script = new Script(`result = (function() { return (${expr}); })()`);
+        script.runInContext(ctx, { timeout: 1000 });
+        return sandbox['result'];
+      } catch {
+        return item;
+      }
+    });
+  } else {
+    results = items;
+  }
+
+  return { results, total: results.length, items };
+}

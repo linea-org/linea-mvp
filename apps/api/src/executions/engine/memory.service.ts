@@ -1,9 +1,9 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
-import { memories, apiKeys } from '@linea/db';
+import { memories, apiKeys, mcpServers, secrets } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 
 @Injectable()
@@ -15,12 +15,18 @@ export class MemoryService {
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly config: ConfigService,
   ) {
-    // Pad/truncate to exactly 32 bytes for AES-256
-    const raw =
-      this.config.get<string>('ENCRYPTION_KEY') ??
-      'default-dev-key-do-not-use-in-prod';
-    this.encryptionKey = Buffer.alloc(32);
-    Buffer.from(raw, 'utf8').copy(this.encryptionKey);
+    const raw = this.config.get<string>('ENCRYPTION_KEY');
+    if (!raw && process.env['NODE_ENV'] === 'production') {
+      throw new Error('ENCRYPTION_KEY must be set in production');
+    }
+    const keySource = raw ?? 'default-dev-key-do-not-use-in-production!!';
+    // Prefer hex-encoded 64-char key (decodes to 32 bytes); fall back to UTF-8 pad
+    if (keySource.length === 64 && /^[0-9a-fA-F]+$/.test(keySource)) {
+      this.encryptionKey = Buffer.from(keySource, 'hex');
+    } else {
+      this.encryptionKey = Buffer.alloc(32);
+      Buffer.from(keySource, 'utf8').copy(this.encryptionKey);
+    }
   }
 
   // ─── Memory load / save ───────────────────────────────────────────────────
@@ -128,6 +134,211 @@ export class MemoryService {
         `Failed to load API key for provider ${provider} in workspace ${workspaceId}: ${err}`,
       );
       return undefined;
+    }
+  }
+
+  // ─── Secret resolution ────────────────────────────────────────────────────
+
+  async loadSecret(workspaceId: string, name: string): Promise<string | undefined> {
+    try {
+      const [row] = await this.db
+        .select({ valueEncrypted: secrets.valueEncrypted })
+        .from(secrets)
+        .where(and(eq(secrets.workspaceId, workspaceId), eq(secrets.name, name)))
+        .limit(1);
+      if (!row) return undefined;
+      return this.decrypt(row.valueEncrypted);
+    } catch (err) {
+      this.logger.warn(`Failed to load secret ${name} in workspace ${workspaceId}: ${err}`);
+      return undefined;
+    }
+  }
+
+  // ─── MCP server resolution ────────────────────────────────────────────────
+
+  async loadMcpServer(
+    workspaceId: string,
+    mcpServerId: string,
+  ): Promise<{ url: string; accessToken?: string } | undefined> {
+    try {
+      const [row] = await this.db
+        .select({
+          url: mcpServers.url,
+          accessTokenEncrypted: mcpServers.accessTokenEncrypted,
+        })
+        .from(mcpServers)
+        .where(
+          and(
+            eq(mcpServers.workspaceId, workspaceId),
+            eq(mcpServers.id, mcpServerId),
+          ),
+        )
+        .limit(1);
+
+      if (!row) return undefined;
+      return {
+        url: row.url,
+        accessToken: row.accessTokenEncrypted
+          ? this.decrypt(row.accessTokenEncrypted)
+          : undefined,
+      };
+    } catch (err) {
+      this.logger.warn(`Failed to load MCP server ${mcpServerId}: ${err}`);
+      return undefined;
+    }
+  }
+
+  // ─── Long-term memory (vector-backed, cross-execution) ───────────────────
+
+  async generateEmbedding(
+    text: string,
+    openaiKey: string | undefined,
+  ): Promise<number[] | null> {
+    if (!openaiKey) return null;
+    try {
+      const resp = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: 'text-embedding-3-small', input: text }),
+      });
+      const json = (await resp.json()) as {
+        data?: [{ embedding: number[] }];
+        error?: { message: string };
+      };
+      if (!resp.ok || !json.data?.[0]) {
+        this.logger.warn(`Embedding API error: ${json.error?.message ?? resp.status}`);
+        return null;
+      }
+      return json.data[0].embedding;
+    } catch (err) {
+      this.logger.warn(`generateEmbedding failed: ${err}`);
+      return null;
+    }
+  }
+
+  async storeLongTermMemory(
+    workspaceId: string,
+    workflowId: string | undefined,
+    threadId: string,
+    key: string,
+    value: string,
+    openaiKey: string | undefined,
+  ): Promise<void> {
+    try {
+      const content = `${key}: ${value}`;
+      const embedding = await this.generateEmbedding(content, openaiKey);
+
+      // Upsert: delete existing entry for this key+scope, then insert fresh
+      await this.db.delete(memories).where(
+        and(
+          eq(memories.workspaceId, workspaceId),
+          eq(memories.scope, 'workflow'),
+          ...(workflowId ? [eq(memories.workflowId, workflowId)] : []),
+          sql`${memories.metadata}->>'key' = ${key}`,
+        ),
+      );
+
+      await this.db.insert(memories).values({
+        workspaceId,
+        workflowId: workflowId ?? null,
+        threadId,
+        scope: 'workflow',
+        source: 'extracted',
+        content,
+        embedding: embedding ?? undefined,
+        metadata: { key, value },
+      });
+    } catch (err) {
+      this.logger.warn(`storeLongTermMemory failed for key "${key}": ${err}`);
+    }
+  }
+
+  async searchSemantic(
+    workspaceId: string,
+    workflowId: string | undefined,
+    query: string,
+    topK: number,
+    openaiKey: string | undefined,
+  ): Promise<Array<{ key: string; value: unknown; score: number }>> {
+    try {
+      const queryEmbedding = await this.generateEmbedding(query, openaiKey);
+
+      if (queryEmbedding) {
+        // Vector similarity search using pgvector <=> (cosine distance)
+        const embeddingLiteral = `[${queryEmbedding.join(',')}]`;
+        const rows = await this.db.execute(sql`
+          SELECT metadata, 1 - (embedding <=> ${embeddingLiteral}::vector) AS score
+          FROM memories
+          WHERE workspace_id = ${workspaceId}
+            ${workflowId ? sql`AND workflow_id = ${workflowId}` : sql``}
+            AND embedding IS NOT NULL
+          ORDER BY embedding <=> ${embeddingLiteral}::vector
+          LIMIT ${topK}
+        `);
+
+        return Array.from(rows).map((r: any) => ({
+          key: String(r.metadata?.key ?? ''),
+          value: r.metadata?.value,
+          score: Number(r.score),
+        }));
+      }
+
+      // Fallback: text substring match on content
+      const filter = and(
+        eq(memories.workspaceId, workspaceId),
+        ...(workflowId ? [eq(memories.workflowId, workflowId)] : []),
+      );
+      const rows = await this.db
+        .select({ content: memories.content, metadata: memories.metadata })
+        .from(memories)
+        .where(filter)
+        .limit(topK * 4);
+
+      const q = query.toLowerCase();
+      return rows
+        .filter((r) => r.content.toLowerCase().includes(q))
+        .slice(0, topK)
+        .map((r) => ({
+          key: String(r.metadata?.key ?? ''),
+          value: r.metadata?.value,
+          score: 0.5,
+        }));
+    } catch (err) {
+      this.logger.warn(`searchSemantic failed: ${err}`);
+      return [];
+    }
+  }
+
+  async loadRecentForContext(
+    workspaceId: string,
+    workflowId: string | undefined,
+    topK: number,
+    threadId?: string,
+  ): Promise<Array<{ key: string; value: unknown }>> {
+    try {
+      const filter = and(
+        eq(memories.workspaceId, workspaceId),
+        ...(workflowId ? [eq(memories.workflowId, workflowId)] : []),
+        // Scope to the current thread to prevent cross-user memory leakage
+        ...(threadId ? [eq(memories.threadId, threadId)] : []),
+      );
+      const rows = await this.db
+        .select({ metadata: memories.metadata, content: memories.content })
+        .from(memories)
+        .where(filter)
+        .orderBy(sql`${memories.updatedAt} DESC`)
+        .limit(topK);
+
+      return rows.map((r) => ({
+        key: String(r.metadata?.key ?? r.content.split(':')[0] ?? ''),
+        value: r.metadata?.value ?? r.content,
+      }));
+    } catch (err) {
+      this.logger.warn(`loadRecentForContext failed: ${err}`);
+      return [];
     }
   }
 

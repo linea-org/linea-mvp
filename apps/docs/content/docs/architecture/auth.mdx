@@ -15,22 +15,23 @@ Linea uses **Clerk** for authentication. The frontend obtains a short-lived JWT 
 Authorization: Bearer <clerk-jwt>
 ```
 
-### AuthGuard
+### ClerkAuthGuard
 
-Every protected route uses `AuthGuard` (applied globally via `APP_GUARD`). It:
+Every protected route uses `ClerkAuthGuard` (applied globally via `APP_GUARD`). It:
 
-1. Extracts the JWT from the `Authorization` header
-2. Verifies it with Clerk's public key (`@clerk/backend`)
-3. Reads the `sub` claim (Clerk user ID)
-4. Looks up or creates a `users` row keyed by `clerkId`
-5. Attaches the full `User` record to `req.user`
+1. Extracts the `Bearer` token from the `Authorization` header
+2. Checks if the token starts with `lnk_` — if so, it's a Linea API key (see below)
+3. Otherwise, verifies the JWT with Clerk's public key (`@clerk/backend`)
+4. Reads the `sub` claim (Clerk user ID)
+5. Looks up or creates a `users` row keyed by `clerkId`
+6. Attaches the full `User` record to `req.user`
 
-If the token is missing or invalid, `AuthGuard` throws `401 Unauthorized`.
+If the token is missing or invalid, `ClerkAuthGuard` throws `401 Unauthorized`.
 
 ```mermaid
 sequenceDiagram
   participant C as Client
-  participant A as AuthGuard
+  participant A as ClerkAuthGuard
   participant Cl as Clerk
   participant DB as Database
   participant Ctrl as Controller
@@ -56,13 +57,13 @@ Reads `:workspaceId` from route params, checks `workspace_members`, and attaches
 
 Returns `404` if the workspace doesn't exist, `403` if the user isn't a member.
 
-### SpaceGuard
+### PodGuard
 
-Reads `:spaceId` from route params, verifies `spaces.workspaceId = req.workspace.id`, and attaches:
+Reads `:podId` from route params, verifies `pods.workspaceId = req.workspace.id`, and attaches:
 
-- `req.space`: the `Space` row
+- `req.pod`: the `Pod` row
 
-Returns `404` if the space doesn't exist or belongs to a different workspace.
+Returns `404` if the pod doesn't exist or belongs to a different workspace.
 
 ### Role Checks
 
@@ -74,7 +75,7 @@ Some service methods enforce minimum roles:
 | Delete workflow (soft) | `editor` |
 | Restore workflow | `editor` |
 | Update workspace settings | `admin` |
-| Delete space | `admin` |
+| Delete pod | `admin` |
 | Invite members | `admin` |
 | Create API key | `admin` |
 
@@ -82,11 +83,25 @@ Role hierarchy: `viewer < editor < admin < owner`
 
 ## API Keys (Machine Auth)
 
-For programmatic access, Linea supports workspace-scoped **Linea API Keys** (prefixed `lin_`). These bypass Clerk and authenticate via a custom header or bearer token checked by `ApiKeyGuard`.
+For programmatic access, Linea supports workspace-scoped **Linea API Keys** (prefixed `lnk_`). These are passed as a Bearer token and handled by `ClerkAuthGuard` before the Clerk JWT path:
+
+```
+Authorization: Bearer lnk_<key>
+```
 
 <Callout>
   API keys are stored as SHA-256 hashes. The raw key is shown once at creation time and never retrievable again.
 </Callout>
+
+## Clerk Org Sync
+
+When a Clerk organization is created or membership changes, Clerk fires webhook events to `/auth/webhooks/clerk`. The `ClerkWebhookController` handles:
+
+| Event | Action |
+|-------|--------|
+| `organization.created` | `WorkspacesService.upsertFromClerkOrg()` — creates/updates workspace keyed by `clerkOrgId` |
+| `organizationMembership.created` | `WorkspacesService.addMemberFromClerk()` — upserts `workspace_members` |
+| `organizationMembership.deleted` | `WorkspacesService.removeMemberFromClerk()` — deletes `workspace_members` entry |
 
 ## Decorators
 
@@ -94,5 +109,5 @@ For programmatic access, Linea supports workspace-scoped **Linea API Keys** (pre
 |-----------|--------|-------------|
 | `@CurrentUser()` | `current-user.decorator.ts` | Extracts `req.user` |
 | `@CurrentWorkspace()` | `current-workspace.decorator.ts` | Extracts `req.workspace` |
-| `@CurrentMembership()` | `current-membership.decorator.ts` | Extracts `req.membership` |
-| `@Public()` | `public.decorator.ts` | Skips `AuthGuard` |
+| `@WorkspaceMembership()` | `workspace-membership.decorator.ts` | Extracts `req.membership` |
+| `@Public()` | `public.decorator.ts` | Skips `ClerkAuthGuard` |

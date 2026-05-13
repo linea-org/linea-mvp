@@ -2,43 +2,46 @@ import {
   Injectable,
   Inject,
   NotFoundException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { and, eq, ilike, sql, count, desc, isNull, isNotNull } from 'drizzle-orm';
-import type { DrizzleDB, WorkspaceMember, NewWorkflow } from '@linea/db';
+import type { SQL } from 'drizzle-orm';
+import type { DrizzleDB, NewWorkflow } from '@linea/db';
 import { workflows, workflowVersions, templates } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import type { CreateWorkflowDto } from './dto/create-workflow.dto';
 import type { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import type { ListWorkflowsDto } from './dto/list-workflows.dto';
+import type { ListTemplatesDto } from './dto/list-templates.dto';
 
-const ROLE_LEVEL: Record<string, number> = {
-  owner: 4,
-  admin: 3,
-  editor: 2,
-  viewer: 1,
-};
+const SECRET_NODE_FIELDS = ['accessToken', 'apiKey', 'secretToken', 'password'];
 
-function assertMinRole(membership: WorkspaceMember, minimum: 'owner' | 'admin' | 'editor') {
-  if (ROLE_LEVEL[membership.role] < ROLE_LEVEL[minimum]) {
-    throw new ForbiddenException(`This action requires the '${minimum}' role or higher`);
-  }
+function redactNodeSecrets(definition: unknown): unknown {
+  if (!definition || typeof definition !== 'object') return definition;
+  const def = definition as { nodes?: unknown[] };
+  if (!Array.isArray(def.nodes)) return definition;
+  return {
+    ...def,
+    nodes: def.nodes.map((node: any) => {
+      if (!node?.data || typeof node.data !== 'object') return node;
+      const cleanData = { ...node.data };
+      for (const field of SECRET_NODE_FIELDS) delete cleanData[field];
+      return { ...node, data: cleanData };
+    }),
+  };
 }
 
 @Injectable()
 export class WorkflowsService {
   constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
 
-  async create(spaceId: string, userId: string, membership: WorkspaceMember, dto: CreateWorkflowDto) {
-    assertMinRole(membership, 'editor');
-
+  async create(podId: string, userId: string, dto: CreateWorkflowDto) {
     const [workflow] = await this.db
       .insert(workflows)
       .values({
-        spaceId,
+        podId,
         name: dto.name,
         description: dto.description ?? null,
-        definition: (dto.definition ?? { nodes: [], edges: [] }) as NewWorkflow['definition'],
+        definition: redactNodeSecrets(dto.definition ?? { nodes: [], edges: [] }) as NewWorkflow['definition'],
         isTemplate: dto.isTemplate ?? false,
         isPublic: dto.isPublic ?? false,
         createdBy: userId,
@@ -48,8 +51,8 @@ export class WorkflowsService {
     return workflow;
   }
 
-  async findAll(spaceId: string, query: ListWorkflowsDto) {
-    const conditions = [eq(workflows.spaceId, spaceId)];
+  async findAll(podId: string, query: ListWorkflowsDto) {
+    const conditions = [eq(workflows.podId, podId)];
 
     if (query.trashed) {
       conditions.push(isNotNull(workflows.deletedAt));
@@ -77,28 +80,26 @@ export class WorkflowsService {
     return { workflows: rows, meta: { page: query.page, limit: query.limit, total: total ?? 0 } };
   }
 
-  async findOne(spaceId: string, id: string) {
+  async findOne(podId: string, id: string) {
     const [workflow] = await this.db
       .select()
       .from(workflows)
-      .where(and(eq(workflows.id, id), eq(workflows.spaceId, spaceId)))
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .limit(1);
 
     if (!workflow) throw new NotFoundException(`Workflow ${id} not found`);
     return workflow;
   }
 
-  async update(spaceId: string, id: string, membership: WorkspaceMember, dto: UpdateWorkflowDto) {
-    assertMinRole(membership, 'editor');
-
-    const existing = await this.findOne(spaceId, id);
+  async update(podId: string, id: string, userId: string, dto: UpdateWorkflowDto) {
+    const existing = await this.findOne(podId, id);
 
     if (dto.definition) {
       await this.db.insert(workflowVersions).values({
         workflowId: id,
         version: existing.version,
         definition: existing.definition,
-        createdBy: membership.userId,
+        createdBy: userId,
       });
     }
 
@@ -106,79 +107,71 @@ export class WorkflowsService {
       .update(workflows)
       .set({
         ...dto,
-        definition: dto.definition as NewWorkflow['definition'] | undefined,
+        definition: dto.definition ? redactNodeSecrets(dto.definition) as NewWorkflow['definition'] : undefined,
         version: dto.definition ? existing.version + 1 : existing.version,
         updatedAt: new Date(),
       })
-      .where(and(eq(workflows.id, id), eq(workflows.spaceId, spaceId)))
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .returning();
 
     return updated;
   }
 
-  async delete(spaceId: string, id: string, membership: WorkspaceMember) {
-    assertMinRole(membership, 'editor');
-
+  async delete(podId: string, id: string) {
     const deleted = await this.db
       .delete(workflows)
-      .where(and(eq(workflows.id, id), eq(workflows.spaceId, spaceId)))
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .returning();
 
     if (!deleted.length) throw new NotFoundException(`Workflow ${id} not found`);
   }
 
-  async deploy(spaceId: string, id: string, membership: WorkspaceMember) {
-    assertMinRole(membership, 'admin');
-
+  async deploy(podId: string, id: string) {
     const [updated] = await this.db
       .update(workflows)
       .set({ deployedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(workflows.id, id), eq(workflows.spaceId, spaceId)))
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .returning();
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
     return updated;
   }
 
-  async star(spaceId: string, id: string, starred: boolean) {
+  async star(podId: string, id: string, starred: boolean) {
     const [updated] = await this.db
       .update(workflows)
       .set({ starred, updatedAt: new Date() })
-      .where(and(eq(workflows.id, id), eq(workflows.spaceId, spaceId)))
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .returning();
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
     return updated;
   }
 
-  async trash(spaceId: string, id: string, membership: WorkspaceMember) {
-    assertMinRole(membership, 'editor');
-
+  async trash(podId: string, id: string) {
     const [updated] = await this.db
       .update(workflows)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(workflows.id, id), eq(workflows.spaceId, spaceId), isNull(workflows.deletedAt)))
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
       .returning();
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
     return updated;
   }
 
-  async restore(spaceId: string, id: string, membership: WorkspaceMember) {
-    assertMinRole(membership, 'editor');
-
+  async restore(podId: string, id: string) {
     const [updated] = await this.db
       .update(workflows)
       .set({ deletedAt: null, updatedAt: new Date() })
-      .where(and(eq(workflows.id, id), eq(workflows.spaceId, spaceId), isNotNull(workflows.deletedAt)))
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNotNull(workflows.deletedAt)))
       .returning();
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found in trash`);
     return updated;
   }
 
-  async getVersions(spaceId: string, workflowId: string) {
-    await this.findOne(spaceId, workflowId);
+  async getVersions(podId: string, workflowId: string) {
+    await this.findOne(podId, workflowId);
 
     return this.db
       .select({
@@ -192,8 +185,8 @@ export class WorkflowsService {
       .orderBy(desc(workflowVersions.version));
   }
 
-  async getVersion(spaceId: string, workflowId: string, version: number) {
-    await this.findOne(spaceId, workflowId);
+  async getVersion(podId: string, workflowId: string, version: number) {
+    await this.findOne(podId, workflowId);
 
     const [ver] = await this.db
       .select()
@@ -205,9 +198,7 @@ export class WorkflowsService {
     return ver;
   }
 
-  async createFromTemplate(spaceId: string, userId: string, membership: WorkspaceMember, templateId: string) {
-    assertMinRole(membership, 'editor');
-
+  async createFromTemplate(podId: string, userId: string, templateId: string) {
     const [template] = await this.db
       .select()
       .from(templates)
@@ -215,23 +206,33 @@ export class WorkflowsService {
       .limit(1);
 
     if (!template) throw new NotFoundException(`Template ${templateId} not found`);
-    if (!template.workflowId) throw new NotFoundException('Template has no associated workflow');
 
-    const [sourceWorkflow] = await this.db
-      .select()
-      .from(workflows)
-      .where(eq(workflows.id, template.workflowId))
-      .limit(1);
+    let definition: NewWorkflow['definition'];
+    let description: string | null = template.description ?? null;
 
-    if (!sourceWorkflow) throw new NotFoundException('Template workflow not found');
+    if (template.workflowId) {
+      const [sourceWorkflow] = await this.db
+        .select()
+        .from(workflows)
+        .where(eq(workflows.id, template.workflowId))
+        .limit(1);
+
+      if (!sourceWorkflow) throw new NotFoundException('Template workflow not found');
+      definition = sourceWorkflow.definition;
+      description = sourceWorkflow.description ?? description;
+    } else if (template.definition) {
+      definition = template.definition as NewWorkflow['definition'];
+    } else {
+      throw new NotFoundException('Template has no workflow definition');
+    }
 
     const [cloned] = await this.db
       .insert(workflows)
       .values({
-        spaceId,
-        name: `${sourceWorkflow.name} (from template)`,
-        description: sourceWorkflow.description,
-        definition: sourceWorkflow.definition,
+        podId,
+        name: template.name,
+        description,
+        definition,
         isTemplate: false,
         isPublic: false,
         createdBy: userId,
@@ -246,24 +247,28 @@ export class WorkflowsService {
     return cloned;
   }
 
-  async listTemplates(query: ListWorkflowsDto) {
-    const conditions = [eq(workflows.isTemplate, true), eq(workflows.isPublic, true), isNull(workflows.deletedAt)];
-
-    if (query.search) conditions.push(ilike(workflows.name, `%${query.search}%`));
-
-    const [{ total }] = await this.db
-      .select({ total: count() })
-      .from(workflows)
-      .where(and(...conditions));
+  async listTemplates(query: ListTemplatesDto) {
+    const conditions: SQL[] = [];
+    if (query.search) conditions.push(ilike(templates.name, `%${query.search}%`));
+    if (query.category) conditions.push(eq(templates.category, query.category));
+    if (query.featured) conditions.push(eq(templates.featured, true));
 
     const rows = await this.db
-      .select()
-      .from(workflows)
-      .where(and(...conditions))
-      .orderBy(desc(workflows.updatedAt))
-      .limit(query.limit)
-      .offset(query.offset);
+      .select({
+        id: templates.id,
+        name: templates.name,
+        description: templates.description,
+        category: templates.category,
+        featured: templates.featured,
+        downloads: templates.downloads,
+        thumbnailUrl: templates.thumbnailUrl,
+        workflowId: templates.workflowId,
+        createdAt: templates.createdAt,
+      })
+      .from(templates)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(templates.featured), desc(templates.downloads));
 
-    return { workflows: rows, meta: { page: query.page, limit: query.limit, total: total ?? 0 } };
+    return rows;
   }
 }

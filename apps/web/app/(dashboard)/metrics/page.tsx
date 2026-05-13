@@ -1,0 +1,193 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { createApiClient } from '@/lib/api';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { Button } from '@linea/ui/components/button';
+import { Separator } from '@linea/ui/components/separator';
+
+type Period = '24h' | '7d' | '30d';
+
+interface MetricsData {
+  period: Period;
+  executions: {
+    total: number;
+    byStatus: {
+      completed: number;
+      failed: number;
+      running: number;
+      queued: number;
+      suspended: number;
+      cancelled: number;
+    };
+    successRate: number | null;
+  };
+  duration: {
+    avgMs: number | null;
+    p50Ms: number | null;
+    p95Ms: number | null;
+  };
+  topWorkflows: Array<{
+    workflowId: string;
+    name: string;
+    total: number;
+    completed: number;
+    failed: number;
+    successRate: number;
+  }>;
+}
+
+function formatMs(ms: number | null): string {
+  if (ms === null) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className="text-2xl font-semibold tabular-nums">{value}</p>
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+const PERIODS: { label: string; value: Period }[] = [
+  { label: '24h', value: '24h' },
+  { label: '7 days', value: '7d' },
+  { label: '30 days', value: '30d' },
+];
+
+export default function MetricsPage() {
+  const { getToken } = useAuth();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const [period, setPeriod] = useState<Period>('7d');
+  const [data, setData] = useState<MetricsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (wsLoading || !activeWorkspace) return;
+    setLoading(true);
+
+    async function load() {
+      const token = await getToken();
+      if (!token || !activeWorkspace) return;
+      try {
+        const api = createApiClient(token);
+        const result = await api.get<MetricsData>(
+          `/workspaces/${activeWorkspace.id}/metrics?period=${period}`,
+        );
+        setData(result);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void load();
+  }, [activeWorkspace, wsLoading, period, getToken]);
+
+  return (
+    <div className="space-y-6 max-w-5xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">Metrics</h1>
+          <p className="text-sm text-muted-foreground">Execution statistics for this workspace</p>
+        </div>
+        <div className="flex gap-1.5 rounded-lg border p-1">
+          {PERIODS.map(({ label, value }) => (
+            <Button
+              key={value}
+              variant={period === value ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-3 text-xs"
+              onClick={() => setPeriod(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {loading || wsLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-lg" />
+          ))}
+        </div>
+      ) : !data ? (
+        <p className="text-sm text-muted-foreground">Failed to load metrics.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <StatCard label="Total" value={data.executions.total} />
+            <StatCard label="Completed" value={data.executions.byStatus.completed} />
+            <StatCard label="Failed" value={data.executions.byStatus.failed} />
+            <StatCard
+              label="Success rate"
+              value={data.executions.successRate !== null ? `${data.executions.successRate}%` : '—'}
+            />
+            <StatCard
+              label="Running / Queued"
+              value={`${data.executions.byStatus.running} / ${data.executions.byStatus.queued}`}
+            />
+            <StatCard label="Suspended" value={data.executions.byStatus.suspended} />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <StatCard label="Avg duration" value={formatMs(data.duration.avgMs)} />
+            <StatCard label="p50 duration" value={formatMs(data.duration.p50Ms)} />
+            <StatCard label="p95 duration" value={formatMs(data.duration.p95Ms)} />
+          </div>
+
+          {data.topWorkflows.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-sm font-medium mb-3">Top workflows</p>
+                <div className="rounded-md border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Workflow</th>
+                        <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Total</th>
+                        <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Completed</th>
+                        <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Failed</th>
+                        <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Success rate</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {data.topWorkflows.map((wf) => (
+                        <tr key={wf.workflowId} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-2.5 font-medium">{wf.name}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{wf.total}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-green-700">{wf.completed}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-destructive">{wf.failed}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">
+                            <span
+                              className={
+                                wf.successRate >= 90
+                                  ? 'text-green-700'
+                                  : wf.successRate >= 70
+                                    ? 'text-yellow-600'
+                                    : 'text-destructive'
+                              }
+                            >
+                              {wf.successRate}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

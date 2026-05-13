@@ -9,6 +9,7 @@ import {
   UseGuards,
   Headers,
   UnauthorizedException,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,46 +18,52 @@ import {
   ApiParam,
   ApiHeader,
 } from '@nestjs/swagger';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
 import { WebhooksService } from './webhooks.service';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { SpaceGuard } from '../common/guards/space.guard';
+import { PodGuard } from '../common/guards/pod.guard';
+import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 import { Public } from '../common/decorators/public.decorator';
 
 @ApiTags('Webhooks')
 @ApiBearerAuth()
-@UseGuards(WorkspaceGuard, SpaceGuard)
-@Controller('workspaces/:workspaceId/spaces/:spaceId/webhooks')
+@UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
+@Controller('workspaces/:workspaceId/pods/:podId/webhooks')
 export class WebhooksController {
   constructor(private readonly service: WebhooksService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a webhook trigger for a workflow' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Create a webhook trigger for a workflow (editor+)' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   create(
-    @Param('spaceId') spaceId: string,
+    @Param('podId') podId: string,
     @Body() dto: CreateWebhookDto,
   ) {
-    return this.service.create(spaceId, dto);
+    return this.service.create(podId, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List webhooks' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
-  findAll(@Param('spaceId') spaceId: string) {
-    return this.service.findAll(spaceId);
+  @ApiParam({ name: 'podId' })
+  findAll(@Param('podId') podId: string) {
+    return this.service.findAll(podId);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  @ApiOperation({ summary: 'Delete a webhook' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Delete a webhook (editor+)' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  delete(@Param('spaceId') spaceId: string, @Param('id') id: string) {
-    return this.service.delete(spaceId, id);
+  delete(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.delete(podId, id);
   }
 }
 
@@ -67,15 +74,20 @@ export class WebhookTriggerController {
 
   @Post(':id/trigger')
   @Public()
-  @ApiOperation({ summary: 'Trigger a workflow via webhook (public, requires x-webhook-secret)' })
+  @ApiOperation({ summary: 'Trigger a workflow via webhook (public, requires x-linea-signature + x-webhook-timestamp)' })
   @ApiParam({ name: 'id' })
-  @ApiHeader({ name: 'x-webhook-secret', required: true })
+  @ApiHeader({ name: 'x-linea-signature', required: true, description: 'HMAC-SHA256 signature: sha256=<hex>' })
+  @ApiHeader({ name: 'x-webhook-timestamp', required: true, description: 'Unix timestamp in seconds (request must be within 5 minutes of server time)' })
   trigger(
     @Param('id') id: string,
-    @Headers('x-webhook-secret') secret: string,
+    @Headers('x-linea-signature') signature: string,
+    @Headers('x-webhook-timestamp') timestamp: string,
+    @Req() req: RawBodyRequest<Request>,
     @Body() body: Record<string, unknown>,
   ) {
-    if (!secret) throw new UnauthorizedException('Missing x-webhook-secret header');
-    return this.service.trigger(id, secret, body);
+    if (!signature) throw new UnauthorizedException('Missing x-linea-signature header');
+    if (!timestamp) throw new UnauthorizedException('Missing x-webhook-timestamp header');
+    if (!req.rawBody) throw new UnauthorizedException('Raw body unavailable — cannot verify signature');
+    return this.service.trigger(id, signature, timestamp, req.rawBody, body);
   }
 }

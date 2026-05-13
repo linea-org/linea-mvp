@@ -17,14 +17,27 @@ The schema lives in `packages/db/src/schema/`. Each file owns one domain:
 |------|--------|
 | `users.ts` | `users` |
 | `workspaces.ts` | `workspaces`, `workspace_members`, `workspace_invites`, `audit_logs` |
-| `spaces.ts` | `spaces` |
+| `spaces.ts` | `pods` |
 | `workflows.ts` | `workflows` |
-| `executions.ts` | `executions`, `execution_steps` |
+| `executions.ts` | `executions`, `execution_steps`, `execution_logs` |
 | `operations.ts` | `schedules`, `webhooks`, `notifications` |
 | `integrations.ts` | `api_keys`, `secrets`, `linea_api_keys` |
 | `mcp.ts` | `mcp_servers`, `mcp_tools` |
 | `memory.ts` | `memories`, `memory_sessions`, `knowledge_bases`, `knowledge_entries` |
 | `resources.ts` | `resource_pools`, `resource_quotas`, `resource_usage` |
+
+## Two-Level Resource Hierarchy
+
+```
+workspaces
+└── pods (workspaceId FK)
+    ├── workflows (podId FK)
+    ├── executions (podId FK + workspaceId — kept for quota lookups without JOIN)
+    ├── schedules (podId FK)
+    └── webhooks (podId FK)
+```
+
+Workspace-wide tables (no podId): `api_keys`, `secrets`, `linea_api_keys`, `mcp_servers`, `memories`, `knowledge_bases`, `resource_pools`.
 
 ## pgvector
 
@@ -77,10 +90,10 @@ const results = await db.execute<{ id: string; similarity: number }>(
 import { isNull, isNotNull } from 'drizzle-orm'
 
 // Active workflows
-.where(and(eq(workflows.spaceId, spaceId), isNull(workflows.deletedAt)))
+.where(and(eq(workflows.podId, podId), isNull(workflows.deletedAt)))
 
 // Trashed workflows
-.where(and(eq(workflows.spaceId, spaceId), isNotNull(workflows.deletedAt)))
+.where(and(eq(workflows.podId, podId), isNotNull(workflows.deletedAt)))
 ```
 
 ### Conflict Resolution (Memories)

@@ -8,14 +8,14 @@ import {
   integer,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { spaces } from './spaces';
+import { pods } from './pods';
 import { users } from './users';
 import type { WorkflowDefinition } from './types';
 
 export const workflows = pgTable('workflows', {
   id: uuid('id').primaryKey().defaultRandom(),
-  spaceId: uuid('space_id')
-    .references(() => spaces.id, { onDelete: 'cascade' })
+  podId: uuid('pod_id')
+    .references(() => pods.id, { onDelete: 'cascade' })
     .notNull(),
   name: text('name').notNull(),
   description: text('description'),
@@ -48,6 +48,7 @@ export const templates = pgTable('templates', {
   name: text('name').notNull(),
   description: text('description'),
   workflowId: uuid('workflow_id').references(() => workflows.id, { onDelete: 'set null' }),
+  definition: jsonb('definition').$type<WorkflowDefinition>(),
   thumbnailUrl: text('thumbnail_url'),
   downloads: integer('downloads').default(0).notNull(),
   featured: boolean('featured').default(false).notNull(),
@@ -55,9 +56,9 @@ export const templates = pgTable('templates', {
 });
 
 export const workflowsRelations = relations(workflows, ({ one, many }) => ({
-  space: one(spaces, {
-    fields: [workflows.spaceId],
-    references: [spaces.id],
+  pod: one(pods, {
+    fields: [workflows.podId],
+    references: [pods.id],
   }),
   creator: one(users, {
     fields: [workflows.createdBy],

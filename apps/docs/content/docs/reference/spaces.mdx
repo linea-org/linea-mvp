@@ -1,17 +1,17 @@
 ---
-title: Spaces
-description: Create and manage spaces within a workspace.
+title: Pods
+description: Create and manage pods within a workspace.
 ---
 
-# Spaces
+# Pods
 
-A Space is a logical container inside a workspace: think project or environment. Workflows, executions, schedules, and webhooks all live under a space.
+A Pod is a logical container inside a workspace: think project or environment. Workflows, executions, schedules, and webhooks all live under a pod.
 
 ## Endpoints
 
-### `POST /v1/workspaces/:workspaceId/spaces`
+### `POST /v1/workspaces/:workspaceId/pods`
 
-Create a space. Requires `editor+`.
+Create a pod. Requires `editor+`.
 
 **Body**
 ```json
@@ -27,23 +27,23 @@ A URL-safe `slug` is auto-generated from the name (e.g. `production-a3f2`).
 
 ---
 
-### `GET /v1/workspaces/:workspaceId/spaces`
+### `GET /v1/workspaces/:workspaceId/pods`
 
-List all spaces in the workspace.
+List all pods in the workspace.
 
-**Response** `200`: array of space objects
-
----
-
-### `GET /v1/workspaces/:workspaceId/spaces/:spaceId`
-
-Get a single space.
-
-**Response** `200`: space object
+**Response** `200`: array of pod objects
 
 ---
 
-### `PATCH /v1/workspaces/:workspaceId/spaces/:spaceId`
+### `GET /v1/workspaces/:workspaceId/pods/:podId`
+
+Get a single pod.
+
+**Response** `200`: pod object
+
+---
+
+### `PATCH /v1/workspaces/:workspaceId/pods/:podId`
 
 Update name or description. Requires `editor+`.
 
@@ -53,15 +53,15 @@ Update name or description. Requires `editor+`.
 
 ---
 
-### `DELETE /v1/workspaces/:workspaceId/spaces/:spaceId`
+### `DELETE /v1/workspaces/:workspaceId/pods/:podId`
 
-Delete a space and all workflows/executions within it. Requires `admin+`.
+Delete a pod and all workflows/executions within it. Requires `admin+`.
 
 **Response** `204`
 
 ---
 
-## Space Object
+## Pod Object
 
 ```json
 {

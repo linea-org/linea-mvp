@@ -24,12 +24,12 @@ export class ExecutionsService {
     private readonly queue: Queue<ExecutionJobData>,
   ) {}
 
-  async create(spaceId: string, workspaceId: string, _userId: string, dto: CreateExecutionDto) {
-    return this.createFromTrigger(spaceId, workspaceId, dto.workflowId, 'manual', dto.input ?? {});
+  async create(podId: string, workspaceId: string, _userId: string, dto: CreateExecutionDto) {
+    return this.createFromTrigger(podId, workspaceId, dto.workflowId, 'manual', dto.input ?? {});
   }
 
   async createFromTrigger(
-    spaceId: string,
+    podId: string,
     workspaceId: string,
     workflowId: string,
     triggeredBy: 'manual' | 'schedule' | 'webhook' | 'sdk',
@@ -38,7 +38,7 @@ export class ExecutionsService {
     const [wf] = await this.db
       .select({ id: workflows.id })
       .from(workflows)
-      .where(and(eq(workflows.id, workflowId), eq(workflows.spaceId, spaceId)))
+      .where(and(eq(workflows.id, workflowId), eq(workflows.podId, podId)))
       .limit(1);
 
     if (!wf) throw new NotFoundException(`Workflow ${workflowId} not found`);
@@ -50,7 +50,7 @@ export class ExecutionsService {
       .values({
         workflowId,
         workspaceId,
-        spaceId,
+        podId,
         status: 'queued',
         input,
         threadId,
@@ -76,8 +76,8 @@ export class ExecutionsService {
     return execution;
   }
 
-  async findAll(spaceId: string, query: ListExecutionsDto) {
-    const conditions = [eq(executions.spaceId, spaceId)];
+  async findAll(podId: string, query: ListExecutionsDto) {
+    const conditions = [eq(executions.podId, podId)];
     if (query.workflowId) conditions.push(eq(executions.workflowId, query.workflowId));
     if (query.status) conditions.push(eq(executions.status, query.status as any));
 
@@ -100,19 +100,19 @@ export class ExecutionsService {
     };
   }
 
-  async findOne(spaceId: string, id: string) {
+  async findOne(podId: string, id: string) {
     const [execution] = await this.db
       .select()
       .from(executions)
-      .where(and(eq(executions.id, id), eq(executions.spaceId, spaceId)))
+      .where(and(eq(executions.id, id), eq(executions.podId, podId)))
       .limit(1);
 
     if (!execution) throw new NotFoundException(`Execution ${id} not found`);
     return execution;
   }
 
-  async cancel(spaceId: string, id: string) {
-    const execution = await this.findOne(spaceId, id);
+  async cancel(podId: string, id: string) {
+    const execution = await this.findOne(podId, id);
     if (!['queued', 'running', 'suspended'].includes(execution.status)) {
       throw new BadRequestException(
         `Cannot cancel execution in '${execution.status}' state`,
@@ -129,11 +129,11 @@ export class ExecutionsService {
   }
 
   async respond(
-    spaceId: string,
+    podId: string,
     id: string,
     dto: { approved?: boolean; answer?: string; comment?: string },
   ) {
-    const execution = await this.findOne(spaceId, id);
+    const execution = await this.findOne(podId, id);
     if (execution.status !== 'suspended') {
       throw new BadRequestException(`Execution ${id} is not waiting for a response`);
     }
@@ -159,7 +159,7 @@ export class ExecutionsService {
       threadId:
         execution.threadId ??
         (execution.variables as any)?.__threadId ??
-        `thread_${id}`,
+        `thread_exec_${id}`,
       resumeValue,
     };
 
@@ -173,15 +173,94 @@ export class ExecutionsService {
       backoff: { type: 'exponential', delay: 1000 },
     });
 
-    return this.findOne(spaceId, id);
+    return this.findOne(podId, id);
   }
 
-  async approve(spaceId: string, id: string, approved: boolean, comment?: string) {
-    return this.respond(spaceId, id, { approved, comment });
+  async approve(podId: string, id: string, approved: boolean, comment?: string) {
+    return this.respond(podId, id, { approved, comment });
   }
 
-  async getLogs(spaceId: string, id: string) {
-    await this.findOne(spaceId, id);
+  async replay(podId: string, id: string, fromNodeId?: string) {
+    const original = await this.findOne(podId, id);
+
+    if (!original.workflowId) {
+      throw new BadRequestException('Cannot replay an execution with no workflow');
+    }
+    if (!['completed', 'failed', 'cancelled'].includes(original.status)) {
+      throw new BadRequestException(
+        `Can only replay completed, failed, or cancelled executions (current: ${original.status})`,
+      );
+    }
+
+    const threadId = `thread_${randomBytes(8).toString('hex')}`;
+    const input = original.input as Record<string, any>;
+
+    // Build preloaded state: variables from original + nodeResults marked __preloaded
+    // for all nodes that completed before fromNodeId
+    let preloadedState: ExecutionJobData['preloadedState'] | undefined;
+
+    if (fromNodeId) {
+      const origNodeResults = (original.nodeResults ?? {}) as Record<string, any>;
+      const origVariables = (original.variables ?? {}) as Record<string, any>;
+
+      // Load workflow definition to determine topology order
+      const [wf] = await this.db
+        .select({ definition: workflows.definition })
+        .from(workflows)
+        .where(eq(workflows.id, original.workflowId))
+        .limit(1);
+
+      // Nodes that completed before fromNodeId (by wall-clock completedAt order)
+      const completedBefore = Object.entries(origNodeResults)
+        .filter(([nodeId, r]: [string, any]) => nodeId !== fromNodeId && r?.status === 'completed')
+        .reduce<Record<string, any>>((acc, [nodeId, r]) => {
+          acc[nodeId] = { ...r, __preloaded: true };
+          return acc;
+        }, {});
+
+      preloadedState = {
+        variables: { ...origVariables, input },
+        nodeResults: completedBefore,
+      };
+
+      void wf; // loaded but not used for ordering (completedAt order is sufficient)
+    }
+
+    const [newExecution] = await this.db
+      .insert(executions)
+      .values({
+        workflowId: original.workflowId,
+        workspaceId: original.workspaceId,
+        podId: original.podId!,
+        status: 'queued',
+        input,
+        threadId,
+        triggeredBy: 'manual',
+        checkpoint: { replayOf: id, fromNodeId: fromNodeId ?? null },
+      })
+      .returning();
+
+    const jobData: ExecutionJobData = {
+      executionId: newExecution.id,
+      workflowId: original.workflowId,
+      workspaceId: original.workspaceId,
+      input,
+      threadId,
+      preloadedState,
+    };
+
+    await this.queue.add('run', jobData, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+      removeOnComplete: 100,
+      removeOnFail: 50,
+    });
+
+    return newExecution;
+  }
+
+  async getLogs(podId: string, id: string) {
+    await this.findOne(podId, id);
     return this.db
       .select()
       .from(executionLogs)

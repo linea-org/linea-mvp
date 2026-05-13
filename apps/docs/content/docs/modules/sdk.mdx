@@ -1,0 +1,157 @@
+---
+title: TypeScript SDK
+description: "@linea/sdk — trigger workflows, poll executions, and stream SSE events."
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# TypeScript SDK
+
+`@linea/sdk` is a zero-dependency TypeScript client for Linea. It handles authentication, execution triggering, result polling, and real-time SSE streaming.
+
+## Installation
+
+```bash
+pnpm add @linea/sdk
+# or
+npm install @linea/sdk
+```
+
+<Callout>
+  The SDK uses the built-in `fetch` API (Node.js 18+ / all modern browsers). No additional dependencies are required.
+</Callout>
+
+## Quick Start
+
+```typescript
+import { LineaClient } from '@linea/sdk';
+
+const client = new LineaClient({ apiKey: 'lnk_your_key_here' });
+
+// Trigger and wait for completion
+const execution = await client.run({
+  workspaceId: 'ws_...',
+  podId: 'pod_...',
+  workflowId: 'wf_...',
+  input: { prompt: 'Summarise the latest news' },
+});
+
+console.log(execution.output);
+```
+
+## Authentication
+
+All requests use the `x-api-key` header. Generate a Linea API key (`lnk_…`) from the workspace settings page.
+
+```typescript
+const client = new LineaClient({
+  apiKey: 'lnk_your_key_here',
+  baseUrl: 'http://localhost:3001/v1', // optional, defaults to https://api.linea.io/v1
+});
+```
+
+## API Reference
+
+### `client.trigger(options)`
+
+Starts a workflow execution and returns immediately.
+
+```typescript
+const execution = await client.trigger({
+  workspaceId: string,
+  podId: string,
+  workflowId: string,
+  input?: Record<string, unknown>,   // passed to the Start node
+});
+// execution.status === 'queued' | 'running'
+```
+
+### `client.getExecution(workspaceId, podId, executionId)`
+
+Fetches the current state of an execution.
+
+### `client.waitForCompletion(workspaceId, podId, executionId, options?)`
+
+Polls until the execution reaches a terminal status.
+
+```typescript
+const done = await client.waitForCompletion(wsId, podId, execId, {
+  pollInterval: 2_000,   // ms between polls (default: 2000)
+  timeout: 300_000,      // total wait budget in ms (default: 300 000 = 5 min)
+});
+```
+
+Throws `LineaExecutionError` if the execution fails, or `LineaTimeoutError` if the budget is exceeded.
+
+### `client.run(options, waitOptions?)`
+
+Convenience wrapper — `trigger` + `waitForCompletion` in one call.
+
+```typescript
+const execution = await client.run(
+  { workspaceId, podId, workflowId, input },
+  { timeout: 60_000 },
+);
+```
+
+### `client.streamEvents(workspaceId, podId, executionId, onEvent, onError?)`
+
+Opens an SSE stream for a running execution. Returns a cleanup function.
+
+```typescript
+const stop = client.streamEvents(wsId, podId, execId, (event) => {
+  switch (event.type) {
+    case 'node_update':
+      console.log(`Node ${event.nodeId}: ${event.status}`);
+      break;
+    case 'execution_complete':
+      console.log('Done:', event.output);
+      break;
+    case 'execution_failed':
+      console.error('Failed:', event.error);
+      break;
+  }
+});
+
+// Cancel the stream at any time:
+stop();
+```
+
+## Error Classes
+
+| Class | When thrown |
+|---|---|
+| `LineaApiError` | HTTP error from the API (`statusCode` property) |
+| `LineaExecutionError` | Execution reached `failed` status (`execution` property) |
+| `LineaTimeoutError` | `waitForCompletion` exceeded its budget |
+
+## Types
+
+```typescript
+type ExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'suspended';
+
+interface Execution {
+  id: string;
+  workflowId: string | null;
+  podId: string;
+  workspaceId: string;
+  status: ExecutionStatus;
+  triggeredBy: string;
+  input: Record<string, unknown>;
+  output: unknown | null;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+}
+
+type SSEEvent =
+  | { type: 'node_update'; nodeId: string; status: string; output?: unknown; error?: string }
+  | { type: 'execution_suspended'; interrupt: unknown }
+  | { type: 'execution_complete'; status: string; output: unknown }
+  | { type: 'execution_failed'; error: string };
+```
+
+## Package Location
+
+The SDK lives at `packages/sdk/` in the monorepo and is published as `@linea/sdk`. It has no runtime dependencies and targets ES2020 / Node 18+.

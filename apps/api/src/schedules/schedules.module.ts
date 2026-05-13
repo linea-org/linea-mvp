@@ -4,9 +4,10 @@ import { SchedulesService } from './schedules.service';
 import { SchedulesController } from './schedules.controller';
 import { SchedulerService } from './scheduler.service';
 import { ExecutionsModule } from '../executions/executions.module';
+import { PodsModule } from '../pods/pods.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), ExecutionsModule],
+  imports: [ScheduleModule.forRoot(), ExecutionsModule, PodsModule],
   providers: [SchedulesService, SchedulerService],
   controllers: [SchedulesController],
 })

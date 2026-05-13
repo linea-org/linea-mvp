@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useClerk, useUser, useAuth } from '@clerk/nextjs';
 import { WorkspaceProvider, useWorkspace } from '@/contexts/workspace-context';
-import { SpaceProvider, useSpace } from '@/contexts/space-context';
+import { PodProvider, usePod } from '@/contexts/space-context';
 import { createApiClient } from '@/lib/api';
 import {
   SidebarProvider,
@@ -27,6 +27,16 @@ import {
   DropdownMenuTrigger,
 } from '@linea/ui/components/dropdown-menu';
 import { Skeleton } from '@linea/ui/components/skeleton';
+import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
+import { Button } from '@linea/ui/components/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@linea/ui/components/dialog';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   WorkflowSquare01Icon,
@@ -37,22 +47,90 @@ import {
   LayoutLeftIcon,
   Database01Icon,
   Notification01Icon,
+  Calendar01Icon,
+  LinkSquare01Icon,
+  Add01Icon,
+  Analytics02Icon,
+  GridViewIcon,
 } from '@hugeicons/core-free-icons';
+
+function PodSwitcher() {
+  const { pods, activePod, setActivePod, loading } = usePod();
+
+  if (loading) return <div className="h-7 w-32 animate-pulse rounded bg-muted" />;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors max-w-48">
+          <HugeiconsIcon icon={LayoutLeftIcon} className="size-3.5 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground text-xs">/</span>
+          <span className="truncate font-medium">
+            {activePod?.name ?? 'Select pod'}
+          </span>
+          <HugeiconsIcon icon={ArrowDown01Icon} className="size-3.5 text-muted-foreground shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        {pods.length === 0 ? (
+          <DropdownMenuItem disabled>No pods yet</DropdownMenuItem>
+        ) : (
+          pods.map((pod) => (
+            <DropdownMenuItem key={pod.id} onClick={() => setActivePod(pod)}>
+              {pod.name}
+            </DropdownMenuItem>
+          ))
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/pods">Manage pods</Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 function DashboardSidebar() {
   const pathname = usePathname();
-  const { workspaces, activeWorkspace, setActiveWorkspace, loading: wsLoading } = useWorkspace();
-  const { spaces, activeSpace, setActiveSpace, loading: spaceLoading } = useSpace();
+  const { workspaces, activeWorkspace, setActiveWorkspace, addWorkspace, loading: wsLoading } = useWorkspace();
+  const { activePod } = usePod();
   const { user } = useUser();
   const { signOut } = useClerk();
+  const { getToken } = useAuth();
+  const [wsDialogOpen, setWsDialogOpen] = useState(false);
+  const [wsName, setWsName] = useState('');
+  const [creatingWs, setCreatingWs] = useState(false);
 
-  const spaceBase = activeSpace ? `/spaces/${activeSpace.id}` : null;
+  async function handleCreateWorkspace() {
+    if (!wsName.trim()) return;
+    setCreatingWs(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      const ws = await api.post<{ id: string; name: string; slug: string; plan: string }>(
+        '/workspaces',
+        { name: wsName.trim() },
+      );
+      addWorkspace(ws);
+      setWsDialogOpen(false);
+      setWsName('');
+    } finally {
+      setCreatingWs(false);
+    }
+  }
+
+  const podBase = activePod ? `/pods/${activePod.id}` : null;
 
   const navItems = [
-    { href: spaceBase ? `${spaceBase}/workflows` : '/spaces', label: 'Workflows', icon: WorkflowSquare01Icon, disabled: !spaceBase },
-    { href: spaceBase ? `${spaceBase}/executions` : '/spaces', label: 'Executions', icon: FlowCircleIcon, disabled: !spaceBase },
-    { href: '/knowledge', label: 'Knowledge', icon: Database01Icon, disabled: false },
-    { href: '/settings', label: 'Settings', icon: Settings01Icon, disabled: false },
+    { href: podBase ? `${podBase}/workflows`  : '/pods', label: 'Workflows',  icon: WorkflowSquare01Icon, disabled: !podBase },
+    { href: podBase ? `${podBase}/executions` : '/pods', label: 'Executions', icon: FlowCircleIcon,        disabled: !podBase },
+    { href: podBase ? `${podBase}/schedules`  : '/pods', label: 'Schedules',  icon: Calendar01Icon,        disabled: !podBase },
+    { href: podBase ? `${podBase}/webhooks`   : '/pods', label: 'Webhooks',   icon: LinkSquare01Icon,      disabled: !podBase },
+    { href: '/knowledge',  label: 'Knowledge',  icon: Database01Icon,  disabled: false },
+    { href: '/templates',  label: 'Templates',  icon: GridViewIcon,    disabled: false },
+    { href: '/metrics',    label: 'Metrics',    icon: Analytics02Icon, disabled: false },
+    { href: '/settings',   label: 'Settings',   icon: Settings01Icon,  disabled: false },
   ];
 
   return (
@@ -64,54 +142,61 @@ function DashboardSidebar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium hover:bg-sidebar-accent">
-                <span className="flex-1 truncate text-left">
-                  {activeWorkspace?.name ?? 'No workspace'}
+                <span
+                  className={`flex-1 truncate text-left ${activeWorkspace ? '' : 'font-normal text-muted-foreground'}`}
+                >
+                  {activeWorkspace?.name ?? 'No active workspaces'}
                 </span>
                 <HugeiconsIcon icon={ArrowDown01Icon} className="size-4 shrink-0 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              {workspaces.map((ws) => (
-                <DropdownMenuItem key={ws.id} onClick={() => setActiveWorkspace(ws)}>
-                  {ws.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
-        {spaceLoading ? (
-          <Skeleton className="h-7 w-full" />
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-sidebar-accent text-muted-foreground">
-                <HugeiconsIcon icon={LayoutLeftIcon} className="size-3.5 shrink-0" />
-                <span className="flex-1 truncate text-left">
-                  {activeSpace?.name ?? 'No space'}
-                </span>
-                <HugeiconsIcon icon={ArrowDown01Icon} className="size-3.5 shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              {spaces.length === 0 ? (
-                <DropdownMenuItem disabled>
-                  <Link href="/spaces" className="w-full text-xs">Create a space</Link>
-                </DropdownMenuItem>
+              {workspaces.length === 0 ? (
+                <DropdownMenuItem disabled>No active workspaces</DropdownMenuItem>
               ) : (
-                spaces.map((sp) => (
-                  <DropdownMenuItem key={sp.id} onClick={() => setActiveSpace(sp)}>
-                    {sp.name}
+                workspaces.map((ws) => (
+                  <DropdownMenuItem key={ws.id} onClick={() => setActiveWorkspace(ws)}>
+                    {ws.name}
                   </DropdownMenuItem>
                 ))
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/spaces" className="text-xs">Manage spaces</Link>
+              <DropdownMenuItem onClick={() => setWsDialogOpen(true)}>
+                <HugeiconsIcon icon={Add01Icon} className="mr-2 size-3.5" />
+                Create workspace
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+
+        <Dialog open={wsDialogOpen} onOpenChange={setWsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create workspace</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-1.5 py-2">
+              <Label htmlFor="sidebar-ws-name">Workspace name</Label>
+              <Input
+                id="sidebar-ws-name"
+                placeholder="My company"
+                value={wsName}
+                onChange={(e) => setWsName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateWorkspace(); }}
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setWsDialogOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => void handleCreateWorkspace()}
+                disabled={!wsName.trim() || creatingWs}
+              >
+                {creatingWs ? 'Creating…' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
       </SidebarHeader>
 
       <SidebarContent className="px-2 py-2">
@@ -141,26 +226,22 @@ function DashboardSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t px-3 py-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-sidebar-accent">
-              <Avatar className="size-6">
-                <AvatarImage src={user?.imageUrl} />
-                <AvatarFallback>{user?.firstName?.[0] ?? '?'}</AvatarFallback>
-              </Avatar>
-              <span className="flex-1 truncate text-left">
-                {user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? 'Account'}
-              </span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut()}>
-              <HugeiconsIcon icon={Logout03Icon} className="mr-2 size-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          <Avatar className="size-7 shrink-0">
+            <AvatarImage src={user?.imageUrl} />
+            <AvatarFallback className="text-xs">{user?.firstName?.[0] ?? '?'}</AvatarFallback>
+          </Avatar>
+          <span className="flex-1 truncate text-xs text-muted-foreground">
+            {user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? 'Account'}
+          </span>
+          <button
+            onClick={() => signOut()}
+            title="Sign out"
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+          >
+            <HugeiconsIcon icon={Logout03Icon} className="size-4" />
+          </button>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
@@ -200,18 +281,20 @@ function NotificationBell() {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <WorkspaceProvider>
-      <SpaceProvider>
+      <PodProvider>
         <SidebarProvider>
           <DashboardSidebar />
           <main className="flex flex-1 flex-col">
-            <header className="flex h-12 items-center justify-between border-b px-4">
+            <header className="flex h-12 items-center gap-3 border-b px-4">
               <SidebarTrigger />
+              <PodSwitcher />
+              <div className="flex-1" />
               <NotificationBell />
             </header>
             <div className="flex-1 p-6">{children}</div>
           </main>
         </SidebarProvider>
-      </SpaceProvider>
+      </PodProvider>
     </WorkspaceProvider>
   );
 }

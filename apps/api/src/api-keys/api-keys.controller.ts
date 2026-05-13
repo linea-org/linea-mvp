@@ -17,12 +17,15 @@ import {
 import { ApiKeysService } from './api-keys.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
+import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
 
 @ApiTags('API Keys')
 @ApiBearerAuth()
-@UseGuards(WorkspaceGuard)
+@RequireRole('admin')
+@UseGuards(WorkspaceGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/api-keys')
 export class ApiKeysController {
   constructor(private readonly service: ApiKeysService) {}

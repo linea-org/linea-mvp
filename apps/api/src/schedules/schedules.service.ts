@@ -1,7 +1,7 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { eq, and, lte } from 'drizzle-orm';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { eq, and, lte, count } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
-import { schedules, spaces, workflows } from '@linea/db';
+import { schedules, pods, workflows } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { ExecutionsService } from '../executions/executions.service';
 import type { CreateScheduleDto } from './dto/create-schedule.dto';
@@ -19,21 +19,30 @@ export class SchedulesService {
     return CronExpressionParser.parse(cronExpr).next().toDate();
   }
 
-  async create(spaceId: string, dto: CreateScheduleDto) {
+  async create(podId: string, dto: CreateScheduleDto) {
     const [wf] = await this.db
       .select({ id: workflows.id })
       .from(workflows)
-      .where(and(eq(workflows.id, dto.workflowId), eq(workflows.spaceId, spaceId)))
+      .where(and(eq(workflows.id, dto.workflowId), eq(workflows.podId, podId)))
       .limit(1);
 
     if (!wf) throw new NotFoundException(`Workflow ${dto.workflowId} not found`);
+
+    const MAX_SCHEDULES_PER_POD = 100;
+    const [{ value: scheduleCount }] = await this.db
+      .select({ value: count() })
+      .from(schedules)
+      .where(eq(schedules.podId, podId));
+    if (scheduleCount >= MAX_SCHEDULES_PER_POD) {
+      throw new BadRequestException(`Pod has reached the maximum of ${MAX_SCHEDULES_PER_POD} schedules`);
+    }
 
     const nextRunAt = this.nextRunDate(dto.cronExpr);
 
     const [record] = await this.db
       .insert(schedules)
       .values({
-        spaceId,
+        podId,
         workflowId: dto.workflowId,
         cronExpr: dto.cronExpr,
         input: dto.input ?? {},
@@ -45,15 +54,15 @@ export class SchedulesService {
     return record;
   }
 
-  async findAll(spaceId: string) {
-    return this.db.select().from(schedules).where(eq(schedules.spaceId, spaceId));
+  async findAll(podId: string) {
+    return this.db.select().from(schedules).where(eq(schedules.podId, podId));
   }
 
-  async update(spaceId: string, id: string, dto: UpdateScheduleDto) {
+  async update(podId: string, id: string, dto: UpdateScheduleDto) {
     const [existing] = await this.db
       .select()
       .from(schedules)
-      .where(and(eq(schedules.id, id), eq(schedules.spaceId, spaceId)))
+      .where(and(eq(schedules.id, id), eq(schedules.podId, podId)))
       .limit(1);
 
     if (!existing) throw new NotFoundException(`Schedule ${id} not found`);
@@ -75,11 +84,11 @@ export class SchedulesService {
     return updated;
   }
 
-  async delete(spaceId: string, id: string) {
+  async delete(podId: string, id: string) {
     const [row] = await this.db
       .select({ id: schedules.id })
       .from(schedules)
-      .where(and(eq(schedules.id, id), eq(schedules.spaceId, spaceId)))
+      .where(and(eq(schedules.id, id), eq(schedules.podId, podId)))
       .limit(1);
 
     if (!row) throw new NotFoundException(`Schedule ${id} not found`);
@@ -93,20 +102,20 @@ export class SchedulesService {
     const due = await this.db
       .select({
         id: schedules.id,
-        spaceId: schedules.spaceId,
-        workspaceId: spaces.workspaceId,
+        podId: schedules.podId,
+        workspaceId: pods.workspaceId,
         workflowId: schedules.workflowId,
         cronExpr: schedules.cronExpr,
         input: schedules.input,
       })
       .from(schedules)
-      .innerJoin(spaces, eq(spaces.id, schedules.spaceId))
+      .innerJoin(pods, eq(pods.id, schedules.podId))
       .where(and(eq(schedules.enabled, true), lte(schedules.nextRunAt, now)));
 
     for (const schedule of due) {
       try {
         await this.executionsService.createFromTrigger(
-          schedule.spaceId,
+          schedule.podId,
           schedule.workspaceId,
           schedule.workflowId,
           'schedule',

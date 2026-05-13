@@ -1,24 +1,24 @@
 ---
-title: Workspace & Space Model
+title: Workspace & Pod Model
 description: The two-level hierarchy that organises all resources in Linea.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Workspace & Space Model
+# Workspace & Pod Model
 
 Linea uses a **two-level hierarchy** to organise resources:
 
 ```
 Workspace (org / team)
-└── Space (project / environment)
+└── Pod (project / environment)
     ├── Workflows
     ├── Executions
     ├── Schedules
     └── Webhooks
 ```
 
-Resources that are **workspace-wide** (shared across all spaces):
+Resources that are **workspace-wide** (shared across all pods):
 
 - API Keys & Secrets
 - MCP Servers
@@ -36,13 +36,14 @@ A **Workspace** maps to an organisation or team. It is the billing and membershi
 | `name` | text | Display name |
 | `slug` | text | URL-safe unique identifier |
 | `plan` | enum | `free \| pro \| enterprise` |
+| `clerkOrgId` | text | Clerk organisation ID (unique) — used to sync org membership events |
 | `createdAt` | timestamp | |
 
 Membership is tracked in `workspace_members` with roles: `owner`, `admin`, `editor`, `viewer`.
 
-## Space
+## Pod
 
-A **Space** is a logical grouping of workflows inside a workspace: analogous to a project or environment (e.g., *Production*, *Staging*, *Research*).
+A **Pod** is a logical grouping of workflows inside a workspace: analogous to a project or environment (e.g., *Production*, *Staging*, *Research*).
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -54,23 +55,33 @@ A **Space** is a logical grouping of workflows inside a workspace: analogous to 
 
 ### Authorization
 
-Spaces **inherit workspace membership**: there are no separate space-level roles. If you are a member of the workspace, you can access all its spaces. The `SpaceGuard` only verifies that the requested `spaceId` belongs to the current `workspaceId`.
+Pods **inherit workspace membership**: there are no separate pod-level roles. If you are a member of the workspace, you can access all its pods. The `PodGuard` only verifies that the requested `podId` belongs to the current `workspaceId`.
 
 ## API Route Structure
 
-All space-scoped endpoints follow this pattern:
+All pod-scoped endpoints follow this pattern:
 
 ```
-/v1/workspaces/:workspaceId/spaces/:spaceId/workflows
-/v1/workspaces/:workspaceId/spaces/:spaceId/executions
-/v1/workspaces/:workspaceId/spaces/:spaceId/schedules
-/v1/workspaces/:workspaceId/spaces/:spaceId/webhooks
+/v1/workspaces/:workspaceId/pods/:podId/workflows
+/v1/workspaces/:workspaceId/pods/:podId/executions
+/v1/workspaces/:workspaceId/pods/:podId/schedules
+/v1/workspaces/:workspaceId/pods/:podId/webhooks
 ```
 
-Workspace-level endpoints omit the space segment:
+Pod management endpoints:
 
 ```
-/v1/workspaces/:workspaceId/memories
+POST   /v1/workspaces/:workspaceId/pods
+GET    /v1/workspaces/:workspaceId/pods
+GET    /v1/workspaces/:workspaceId/pods/:podId
+PATCH  /v1/workspaces/:workspaceId/pods/:podId
+DELETE /v1/workspaces/:workspaceId/pods/:podId
+```
+
+Workspace-level endpoints omit the pod segment:
+
+```
+/v1/workspaces/:workspaceId/secrets
 /v1/workspaces/:workspaceId/knowledge
 /v1/workspaces/:workspaceId/mcp-servers
 /v1/workspaces/:workspaceId/api-keys
@@ -80,25 +91,25 @@ Workspace-level endpoints omit the space segment:
 
 ```mermaid
 flowchart LR
-  Req([Request]) --> AG["AuthGuard\nvalidates JWT\nresolves User"]
+  Req([Request]) --> AG["ClerkAuthGuard\nvalidates JWT or lnk_ key\nresolves User"]
   AG -->|401 if invalid| E1([Error])
   AG --> WG["WorkspaceGuard\nchecks membership\nattaches req.workspace"]
   WG -->|404 / 403| E2([Error])
-  WG --> SG["SpaceGuard\nverifies space belongs to workspace\nattaches req.space"]
-  SG -->|404| E3([Error])
-  SG --> Ctrl([Controller])
+  WG --> PG["PodGuard\nverifies pod belongs to workspace\nattaches req.pod"]
+  PG -->|404| E3([Error])
+  PG --> Ctrl([Controller])
 ```
 
 <Callout type="warn">
-  `SpaceGuard` must always run after `WorkspaceGuard` because it reads `req.workspace` to scope the space lookup.
+  `PodGuard` must always run after `WorkspaceGuard` because it reads `workspaceId` from route params to scope the pod lookup.
 </Callout>
 
 ## Executions: Why They Keep `workspaceId`
 
-`executions` has **both** `spaceId` and `workspaceId`. The execution engine needs `workspaceId` directly to:
+`executions` has **both** `podId` and `workspaceId`. The execution engine needs `workspaceId` directly to:
 
 - Resolve API keys for outbound calls
 - Track resource quotas
 - Look up MCP servers
 
-Without it, every execution job would need an extra JOIN through `spaces` (expensive at high throughput). `spaceId` is nullable and is written when the execution is created via a trigger (schedule, webhook, or manual).
+Without it, every execution job would need an extra JOIN through `pods` (expensive at high throughput). `podId` is set when the execution is created via any trigger (schedule, webhook, or manual).

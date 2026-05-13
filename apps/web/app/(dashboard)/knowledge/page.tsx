@@ -51,7 +51,9 @@ export default function KnowledgePage() {
   }
 
   useEffect(() => {
-    if (!wsLoading && activeWorkspace) void load();
+    if (wsLoading) return;
+    if (!activeWorkspace) { setLoading(false); return; }
+    void load();
   }, [activeWorkspace, wsLoading]);
 
   async function handleCreate() {

@@ -16,16 +16,19 @@ import { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { SearchEntriesDto } from './dto/search-entries.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
+import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 
 @ApiTags('Knowledge')
 @ApiBearerAuth()
-@UseGuards(WorkspaceGuard)
+@UseGuards(WorkspaceGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/knowledge-bases')
 export class KnowledgeController {
   constructor(private readonly service: KnowledgeService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a knowledge base' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Create a knowledge base (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   create(@Param('workspaceId') workspaceId: string, @Body() dto: CreateKnowledgeBaseDto) {
     return this.service.createBase(workspaceId, dto);
@@ -47,7 +50,8 @@ export class KnowledgeController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a knowledge base' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Update a knowledge base (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
   update(
@@ -60,7 +64,8 @@ export class KnowledgeController {
 
   @Delete(':id')
   @HttpCode(204)
-  @ApiOperation({ summary: 'Delete a knowledge base and all its entries' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Delete a knowledge base and all its entries (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
   delete(@Param('workspaceId') workspaceId: string, @Param('id') id: string) {
@@ -70,7 +75,8 @@ export class KnowledgeController {
   // ─── Entries ────────────────────────────────────────────────────────────────
 
   @Post(':id/entries')
-  @ApiOperation({ summary: 'Add an entry to a knowledge base' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Add an entry to a knowledge base (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
   addEntry(
@@ -91,7 +97,8 @@ export class KnowledgeController {
 
   @Delete(':id/entries/:entryId')
   @HttpCode(204)
-  @ApiOperation({ summary: 'Delete an entry' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Delete an entry (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
   @ApiParam({ name: 'entryId' })

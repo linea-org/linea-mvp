@@ -22,12 +22,16 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
   if (!res.ok) {
     let message = res.statusText;
     try {
-      const body = await res.json() as { message?: string };
-      message = body?.message ?? message;
+      const body = await res.json() as { message?: string; error?: { message?: string } };
+      message = body?.error?.message ?? body?.message ?? message;
     } catch {
       // use statusText if body is not JSON
     }
     throw new ApiError(res.status, message);
+  }
+
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T;
   }
 
   const json = await res.json();

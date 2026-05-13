@@ -1,0 +1,266 @@
+---
+title: Getting Started
+description: Set up Linea locally and build your first AI workflow in under 10 minutes.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+
+# Getting Started
+
+This guide walks you through running Linea locally and triggering your first workflow execution.
+
+## Prerequisites
+
+- **Node.js** ≥ 20
+- **pnpm** ≥ 9 (`npm install -g pnpm`)
+- **Docker** (for PostgreSQL + Redis) or existing instances
+- A **Clerk** account (free) for authentication
+- An **Anthropic** or **OpenAI** API key (for agent nodes)
+
+## Installation
+
+<Steps>
+
+<Step>
+
+### Clone and install dependencies
+
+```bash
+git clone https://github.com/your-org/linea.git
+cd linea
+pnpm install
+```
+
+</Step>
+
+<Step>
+
+### Start infrastructure
+
+```bash
+docker compose up -d
+```
+
+This starts PostgreSQL (port 5432) and Redis (port 6379).
+
+</Step>
+
+<Step>
+
+### Configure environment
+
+Copy and fill in the environment files:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
+```
+
+**`apps/api/.env` — required variables:**
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection string |
+| `CLERK_SECRET_KEY` | From Clerk dashboard → API Keys |
+| `CLERK_WEBHOOK_SECRET` | From Clerk → Webhooks (create an endpoint) |
+| `ENCRYPTION_KEY` | 32-byte hex string for secrets encryption |
+
+**`apps/web/.env.local` — required variables:**
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | From Clerk dashboard |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:3001` |
+
+</Step>
+
+<Step>
+
+### Push the database schema
+
+```bash
+pnpm db:push
+```
+
+This runs `drizzle-kit push` against your PostgreSQL instance and creates all tables.
+
+</Step>
+
+<Step>
+
+### Start the development servers
+
+```bash
+pnpm dev
+```
+
+Turborepo starts all apps in parallel:
+
+| App | URL |
+|---|---|
+| **Web** (Next.js) | `http://localhost:3000` |
+| **API** (NestJS) | `http://localhost:3001` |
+| **Docs** (Fumadocs) | `http://localhost:3002` |
+
+</Step>
+
+</Steps>
+
+## Create your first workspace
+
+<Steps>
+
+<Step>
+
+### Sign in
+
+Open `http://localhost:3000` and sign in with Clerk. On first sign-in Linea automatically creates a user record.
+
+</Step>
+
+<Step>
+
+### Create a workspace
+
+Click the workspace switcher in the top-left sidebar and select **Create workspace**. Give it a name (e.g. "My Workspace").
+
+</Step>
+
+<Step>
+
+### Create a pod
+
+Navigate to **Pods** in the sidebar. A pod is a logical namespace for workflows, executions, schedules, and webhooks. Click **Create pod** and give it a name (e.g. "Experiments").
+
+</Step>
+
+</Steps>
+
+## Build your first workflow
+
+<Steps>
+
+<Step>
+
+### Open the workflow builder
+
+In the pod page, click **New workflow**. Give it a name and click **Create**. The visual builder opens.
+
+</Step>
+
+<Step>
+
+### Add nodes
+
+Drag nodes from the **Library** panel on the left:
+
+1. **Start** — already on the canvas
+2. **Agent** — from the AI category
+3. **End** — from the Core category
+
+Connect them: Start → Agent → End.
+
+</Step>
+
+<Step>
+
+### Configure the Agent node
+
+Click the Agent node to open its panel on the right:
+
+```
+Model:         claude-sonnet-4-6
+System prompt: You are a helpful assistant.
+User prompt:   {{input.message}}
+```
+
+The `{{input.message}}` substitution reads the `message` field from the execution's trigger input.
+
+</Step>
+
+<Step>
+
+### Save the workflow
+
+Click **Save** in the top toolbar. The workflow is now ready to run.
+
+</Step>
+
+</Steps>
+
+## Trigger an execution
+
+<Tabs items={['Dashboard UI', 'API', 'SDK']}>
+
+<Tab value="Dashboard UI">
+
+1. Open the **Executions** page for your pod.
+2. Click **New execution**.
+3. Select your workflow and provide input JSON:
+   ```json
+   { "message": "Explain how LangGraph works in 3 sentences." }
+   ```
+4. Click **Run**.
+5. Watch the execution stream live — node statuses update in real time.
+
+</Tab>
+
+<Tab value="API">
+
+First, create an API key under **Settings → API Keys**.
+
+```bash
+curl -X POST http://localhost:3001/v1/workspaces/<wsId>/pods/<podId>/executions \
+  -H "x-api-key: lnk_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflowId": "<wfId>",
+    "input": { "message": "Explain how LangGraph works in 3 sentences." }
+  }'
+```
+
+</Tab>
+
+<Tab value="SDK">
+
+```typescript
+import { LineaClient } from '@linea/sdk';
+
+const linea = new LineaClient({
+  apiKey: 'lnk_your_key',
+  baseUrl: 'http://localhost:3001',
+});
+
+const result = await linea.run(
+  '<workspaceId>',
+  '<podId>',
+  '<workflowId>',
+  { message: 'Explain how LangGraph works in 3 sentences.' },
+  { waitForCompletion: true },
+);
+
+console.log(result.output);
+```
+
+</Tab>
+
+</Tabs>
+
+## View results
+
+Open **Executions** in the sidebar. Click your execution to see:
+
+- **Status badge** (queued → running → completed)
+- **Input / Output** panels
+- **Logs** — per-node timeline with timestamps
+
+## Next steps
+
+- [Node reference](/docs/modules/nodes) — full config for every node type
+- [Memory system](/docs/modules/memory) — persist facts across executions
+- [Schedules & Webhooks](/docs/modules/schedules-webhooks) — automate triggers
+- [SDK reference](/docs/modules/sdk) — stream events and integrate programmatically
+- [Template gallery](/docs/modules/workflows#templates) — start from a pre-built workflow

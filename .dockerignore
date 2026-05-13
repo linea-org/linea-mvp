@@ -1,0 +1,12 @@
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+.git
+.idea
+.cursor
+coverage
+**/coverage
+.env
+**/.env
+**/*.local

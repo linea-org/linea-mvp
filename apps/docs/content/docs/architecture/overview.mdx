@@ -17,7 +17,7 @@ graph TD
     direction LR
     AM[AuthModule]
     WS[WorkspacesModule]
-    SP[SpacesModule]
+    PM[PodsModule]
     WF[WorkflowsModule]
     EX[ExecutionsModule]
     SC[SchedulesModule]
@@ -27,13 +27,14 @@ graph TD
     MC[McpModule]
     NT[NotificationsModule]
     AK[ApiKeysModule]
+    SK[SecretsModule]
   end
 
   DB[("PostgreSQL + pgvector")]
   MQ["Redis + BullMQ"]
   AI["External AI (Claude, OpenAI)"]
 
-  FE -->|"REST API / Clerk JWT"| API
+  FE -->|"REST API / Clerk JWT or lnk_ key"| API
   API --> DB
   API --> MQ
   API --> AI
@@ -41,19 +42,19 @@ graph TD
 
 ## Request Lifecycle
 
-1. **Frontend** calls the API with a Clerk JWT
-2. **AuthGuard** validates the token and resolves the `User` record via `clerkId`
+1. **Frontend** calls the API with a `Bearer` token (Clerk JWT or `lnk_` API key)
+2. **ClerkAuthGuard** validates the token and resolves the `User` record via `clerkId`
 3. **WorkspaceGuard** checks `workspace_members` and attaches `req.workspace` + `req.membership`
-4. **SpaceGuard** (for space-scoped routes) verifies the space belongs to the workspace and attaches `req.space`
+4. **PodGuard** (for pod-scoped routes) verifies the pod belongs to the workspace and attaches `req.pod`
 5. **Controller** delegates to a **Service** which queries via Drizzle ORM
-6. For workflow execution: the service enqueues a BullMQ job; a **Worker** picks it up and processes it asynchronously
+6. For workflow execution: the service enqueues a BullMQ job; a **Worker** picks it up and processes it asynchronously via LangGraph
 
 ## Module Boundary Rules
 
 - Each NestJS module owns exactly one domain (e.g., `WorkflowsModule` only touches `workflows` table)
 - Cross-module reads go through exported services, never direct table access from another module
 - The `DatabaseModule` is global; all modules receive the Drizzle client via `@Inject(DB_TOKEN)`
-- `SpacesModule` exports `SpacesService` and is imported by `WorkflowsModule`, `ExecutionsModule`, `SchedulesModule`, `WebhooksModule`
+- `PodsModule` exports `PodsService` and `PodGuard`; it is imported by `WorkflowsModule`, `ExecutionsModule`, `SchedulesModule`, `WebhooksModule`
 
 ## Error Handling
 

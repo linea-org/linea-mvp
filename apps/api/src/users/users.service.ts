@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import type { DrizzleDB, User } from '@linea/db';
@@ -16,6 +16,8 @@ interface ClerkUserPayload {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
 
   async findOrCreateFromClerk(clerkId: string): Promise<User> {
@@ -83,11 +85,11 @@ export class UsersService {
 
     if (!row) return null;
 
-    // Update last used timestamp without blocking the response
-    void this.db
+    this.db
       .update(lineaApiKeys)
       .set({ lastUsedAt: new Date() })
-      .where(eq(lineaApiKeys.keyHash, keyHash));
+      .where(eq(lineaApiKeys.keyHash, keyHash))
+      .catch((err) => this.logger.warn('Failed to update API key lastUsedAt', err));
 
     return row.user;
   }

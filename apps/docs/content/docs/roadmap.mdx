@@ -2,3 +2,47 @@
 title: Roadmap
 description: Planned features and upcoming milestones for Linea.
 ---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Roadmap
+
+## Shipped
+
+| Feature | Description |
+|---|---|
+| Workspace & Space hierarchy | Two-level org model: Workspace → Space → Workflow |
+| Visual workflow builder | Drag-and-drop canvas with 20+ node types |
+| Execution engine | LangGraph-backed runtime with BullMQ queue |
+| PostgreSQL checkpointer | Durable execution state via `@langchain/langgraph-checkpoint-postgres` |
+| Agent nodes | Multi-provider LLM support (Anthropic, OpenAI, Groq, Google) |
+| Structured output | Force any agent node to return typed JSON via schema injection |
+| Loop node | Iterate over array variables with optional item transform |
+| Sub-workflow node | Invoke another workflow inline and capture its output |
+| Built-in integrations | Slack, GitHub, Notion, Gmail nodes with secret-based auth |
+| TypeScript SDK | `@linea/sdk` — trigger, poll, and stream executions |
+| Memory system | Thread- and workflow-scoped fact storage with pgvector hybrid search |
+| Knowledge bases | Workspace document stores with vector similarity search |
+| MCP tools | Attach Model Context Protocol servers to agent nodes |
+| Schedules & Webhooks | Cron triggers and inbound HTTP event hooks |
+| API keys | `lnk_` workspace keys with SHA-256 hashing |
+| RBAC | Role-based access: owner / admin / editor / viewer per workspace |
+| SSE streaming | Real-time node update events for running executions |
+| Swagger UI | Interactive API docs at `/docs` |
+
+## In Progress / Upcoming
+
+<Callout type="info">
+  Items below are tracked as GitHub issues. Status may have changed — check the issue tracker for the latest.
+</Callout>
+
+| # | Feature | Notes |
+|---|---|---|
+| #24 | Observability | Structured logging, distributed tracing, execution metrics dashboard |
+| #29 | Agent memory | Persist conversation history and summaries across executions |
+| #21 | Execution replay | Re-run from a specific node with preserved checkpoint state |
+| #27 | Rate limiting | Per-workspace request and execution quotas with a billing layer |
+| #28 | AI-assisted builder | Generate a workflow graph from a natural language description |
+| #26 | Template gallery | Start from a pre-built workflow template |
+| #19 | Test suite | Vitest unit + e2e tests for the execution engine |
+| #25 | Docs expansion | Getting started guide, node-by-node reference, tutorials |

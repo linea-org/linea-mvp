@@ -36,11 +36,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
       code = HTTP_STATUS_TO_CODE[status] ?? 'http_error';
     } else if (exception instanceof Error) {
-      message = exception.message;
+      // Log full details server-side; never forward internal error messages to clients
       this.logger.error(exception.message, exception.stack, {
         path: request.url,
         method: request.method,
       });
+      // message stays as the generic 'An unexpected error occurred'
     }
 
     response.status(status).json({

@@ -100,6 +100,25 @@ pending → running → completed
   Cancellation only works reliably for executions in `pending` status. Once a worker has started processing (`running`), cancellation is a best-effort signal.
 </Callout>
 
+## SSE Event Streaming
+
+Running executions emit Server-Sent Events on:
+
+```
+GET /workspaces/:wId/spaces/:sId/executions/:id/events
+```
+
+Events are JSON objects with the following shapes:
+
+```typescript
+{ type: 'node_update'; nodeId: string; status: 'running'|'completed'|'failed'|'suspended'; output?: unknown; error?: string }
+{ type: 'execution_complete'; status: string; output: unknown }
+{ type: 'execution_failed'; error: string }
+{ type: 'execution_suspended'; interrupt: unknown }
+```
+
+Use the TypeScript SDK to consume this stream — see [TypeScript SDK](/docs/modules/sdk).
+
 ## Frontend
 
-The executions page lives at `/spaces/[spaceId]/executions`. It displays a table with live status badges and links to individual execution detail pages at `/spaces/[spaceId]/executions/[id]`.
+The executions page lives at `/spaces/[spaceId]/executions`. It displays a table with live status badges and links to individual execution detail pages at `/spaces/[spaceId]/executions/[id]`. The detail page includes an "Open in builder" button that navigates directly to the workflow builder.

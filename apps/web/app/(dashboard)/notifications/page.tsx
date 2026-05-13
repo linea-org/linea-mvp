@@ -28,6 +28,8 @@ export default function NotificationsPage() {
       const api = createApiClient(token);
       const data = await api.get<Notification[]>('/notifications');
       setNotifications(data);
+    } catch {
+      // endpoint not yet available — show empty state
     } finally {
       setLoading(false);
     }
@@ -36,27 +38,33 @@ export default function NotificationsPage() {
   useEffect(() => { void load(); }, []);
 
   async function markAllRead() {
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
-    await api.patch('/notifications/read-all');
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await api.patch('/notifications/read-all');
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch { /* ignore */ }
   }
 
   async function markRead(id: string) {
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
-    await api.patch(`/notifications/${id}/read`);
-    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await api.patch(`/notifications/${id}/read`);
+      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    } catch { /* ignore */ }
   }
 
   async function deleteNotif(id: string) {
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
-    await api.delete(`/notifications/${id}`);
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await api.delete(`/notifications/${id}`);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch { /* ignore */ }
   }
 
   const unreadCount = notifications.filter((n) => !n.read).length;

@@ -7,6 +7,9 @@ const tabs = [
   { href: '/settings/general', label: 'General' },
   { href: '/settings/members', label: 'Members' },
   { href: '/settings/api-keys', label: 'API Keys' },
+  { href: '/settings/credentials', label: 'Secrets' },
+  { href: '/settings/connections', label: 'Connections' },
+  { href: '/settings/billing', label: 'Billing' },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

@@ -5,15 +5,21 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:api": "pnpm --filter=@linea/api dev",
+    "dev:web": "pnpm --filter=@linea/web dev",
+    "dev:docs": "pnpm --filter=@linea/docs dev",
+    "dev:infra": "docker compose up postgres redis -d",
     "lint": "turbo lint",
     "format": "turbo format",
     "typecheck": "turbo typecheck",
+    "test": "turbo test",
     "db:push": "turbo db:push --filter=@linea/db",
     "db:generate": "turbo db:generate --filter=@linea/db",
     "db:studio": "turbo db:studio --filter=@linea/db",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
-    "infra:reset": "docker compose down -v && docker compose up -d"
+    "infra:reset": "docker compose down -v && docker compose up -d",
+    "infra:logs": "docker compose logs -f"
   },
   "devDependencies": {
     "@linea/eslint-config": "workspace:*",
@@ -22,6 +28,11 @@
     "prettier-plugin-tailwindcss": "^0.7.2",
     "turbo": "^2.8.17",
     "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": ["pg", "@types/pg"]
+    }
   },
   "packageManager": "pnpm@9.15.9",
   "engines": {

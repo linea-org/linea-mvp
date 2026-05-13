@@ -10,8 +10,10 @@ import type { WorkflowState } from '../variable-substitution';
 import { substituteVariables } from '../variable-substitution';
 import { getEnabledTools, toolNeedsApproval } from '../tools/definitions';
 import { executeTool } from '../tools/tool-executor';
+import type { ToolExecutorContext } from '../tools/tool-executor';
 
 const DEFAULT_MAX_STEPS = 10;
+const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 export interface AgentResult {
   __agentValue: string;
@@ -22,6 +24,7 @@ export interface AgentResult {
   };
   __chatHistoryUpdates: Array<{ role: string; content: string }>;
   __variableUpdates: Record<string, unknown>;
+  __memoryUpdates: Record<string, unknown>;
   __toolCallLog: Array<{
     step: number;
     name: string;
@@ -32,10 +35,20 @@ export interface AgentResult {
   __provider: string;
 }
 
+export interface LongTermMemoryContext {
+  workspaceId: string;
+  workflowId: string | undefined;
+  threadId: string;
+  store: (key: string, value: string) => Promise<void>;
+  search: (query: string, topK: number) => Promise<Array<{ key: string; value: unknown; score: number }>>;
+  loadRecent: (topK: number) => Promise<Array<{ key: string; value: unknown }>>;
+}
+
 export async function executeAgentNode(
   nodeData: Record<string, any>,
   state: WorkflowState,
   apiKeys: ModelApiKeys,
+  ltmCtx?: LongTermMemoryContext,
 ): Promise<AgentResult> {
   const modelDef = getModelOrDefault(nodeData.model, 'balanced');
   const client = createModelClient(modelDef.id, modelDef.provider, apiKeys);
@@ -53,9 +66,30 @@ export async function executeAgentNode(
     state,
   );
   const lastOutput = state.variables?.lastOutput;
+
+  // ── Long-term memory: load recent facts and inject into context ─────────
+  let longTermMemoryCtx = '';
+  if (ltmCtx && (nodeData.enableLongTermMemory ?? false)) {
+    try {
+      const recentMemories = await ltmCtx.loadRecent(8);
+      if (recentMemories.length > 0) {
+        longTermMemoryCtx =
+          '\n\nLong-term memory from previous executions:\n' +
+          recentMemories
+            .map(
+              ({ key, value }) =>
+                `- ${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`,
+            )
+            .join('\n');
+      }
+    } catch {
+      // Non-fatal — proceed without long-term context
+    }
+  }
+
   const memoryCtx =
     state.memory && Object.keys(state.memory).length > 0
-      ? '\n\nMemory:\n' +
+      ? '\n\nSession memory:\n' +
         Object.entries(state.memory)
           .map(
             ([k, v]) =>
@@ -66,6 +100,7 @@ export async function executeAgentNode(
 
   const userContent =
     instructions +
+    longTermMemoryCtx +
     memoryCtx +
     (lastOutput != null
       ? `\n\nPrevious step output:\n${
@@ -90,13 +125,41 @@ export async function executeAgentNode(
     }
   }
 
-  messages.push({ role: 'user', content: userContent });
+  // If the node requests structured output, inject schema into the user message
+  let structuredSchema: unknown = null;
+  if (nodeData.outputSchema) {
+    try {
+      structuredSchema = JSON.parse(nodeData.outputSchema as string);
+    } catch {
+      // ignore invalid JSON schema
+    }
+    if (structuredSchema) {
+      messages.push({
+        role: 'user',
+        content:
+          `${userContent}\n\nYou MUST respond with ONLY a valid JSON object that strictly conforms to this JSON Schema. Output no text before or after the JSON object:\n${JSON.stringify(structuredSchema, null, 2)}`,
+      });
+    } else {
+      messages.push({ role: 'user', content: userContent });
+    }
+  } else {
+    messages.push({ role: 'user', content: userContent });
+  }
 
   // ─── Agentic loop ──────────────────────────────────────────────────────────
 
   const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
   const toolCallLog: AgentResult['__toolCallLog'] = [];
   const variableUpdates: Record<string, unknown> = {};
+  const memoryUpdates: Record<string, unknown> = {};
+
+  // Build tool executor context for DB-backed memory operations
+  const toolCtx: ToolExecutorContext | undefined = ltmCtx
+    ? {
+        memoryStore: (key, value) => ltmCtx.store(key, value),
+        memorySearch: (query, topK) => ltmCtx.search(query, topK),
+      }
+    : undefined;
 
   const budgetPct: number = nodeData.contextBudgetPct ?? 0.8;
 
@@ -128,8 +191,11 @@ export async function executeAgentNode(
         totalUsage,
         messages,
         variableUpdates,
+        memoryUpdates,
         toolCallLog,
         modelDef,
+        false,
+        structuredSchema,
       );
     }
 
@@ -201,7 +267,7 @@ export async function executeAgentNode(
       }
 
       // ── Execute the tool ──────────────────────────────────────────────────
-      const toolResult = await executeTool(toolCall, state);
+      const toolResult = await executeTool(toolCall, state, toolCtx);
 
       // Capture variable writes
       if (
@@ -210,7 +276,23 @@ export async function executeAgentNode(
         '__writeVariable' in (toolResult.output as any)
       ) {
         const { name, value } = (toolResult.output as any).__writeVariable;
-        variableUpdates[name] = value;
+        if (name && !FORBIDDEN_KEYS.has(String(name))) {
+          variableUpdates[name] = value;
+        }
+      }
+
+      // Capture memory writes — also update state.memory so memory_search sees them immediately
+      if (
+        toolResult.output &&
+        typeof toolResult.output === 'object' &&
+        '__memoryWrite' in (toolResult.output as any)
+      ) {
+        const { key, value } = (toolResult.output as any).__memoryWrite;
+        if (key && !FORBIDDEN_KEYS.has(String(key))) {
+          memoryUpdates[key] = value;
+          if (!state.memory) state.memory = {};
+          state.memory[key] = value;
+        }
       }
 
       const resultContent = toolResult.error
@@ -240,9 +322,11 @@ export async function executeAgentNode(
     totalUsage,
     messages,
     variableUpdates,
+    memoryUpdates,
     toolCallLog,
     modelDef,
     true,
+    structuredSchema,
   );
 }
 
@@ -253,21 +337,40 @@ function buildResult(
   usage: { input_tokens: number; output_tokens: number; total_tokens: number },
   messages: ChatMessage[],
   variableUpdates: Record<string, unknown>,
+  memoryUpdates: Record<string, unknown>,
   toolCallLog: AgentResult['__toolCallLog'],
   modelDef: { id: string; provider: string },
   hitMaxSteps = false,
+  structuredSchema: unknown = null,
 ): AgentResult {
   const chatUpdates = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }));
 
+  let finalValue: string | unknown = hitMaxSteps
+    ? `${text}\n\n[Note: reached maximum steps limit]`
+    : text;
+
+  // Parse structured output if a schema was requested
+  if (structuredSchema && typeof finalValue === 'string') {
+    try {
+      // Strip markdown code fences if present
+      const cleaned = (finalValue as string)
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/, '')
+        .trim();
+      finalValue = JSON.parse(cleaned);
+    } catch {
+      // Leave as text if parsing fails
+    }
+  }
+
   return {
-    __agentValue: hitMaxSteps
-      ? `${text}\n\n[Note: reached maximum steps limit]`
-      : text,
+    __agentValue: finalValue as string,
     __usage: usage,
     __chatHistoryUpdates: chatUpdates,
     __variableUpdates: variableUpdates,
+    __memoryUpdates: memoryUpdates,
     __toolCallLog: toolCallLog,
     __modelId: modelDef.id,
     __provider: modelDef.provider,

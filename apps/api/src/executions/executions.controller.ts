@@ -18,21 +18,25 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Observable, map, takeUntil, timer } from 'rxjs';
 import { ExecutionsService } from './executions.service';
 import { ExecutionEventsService } from './execution-events.service';
 import { CreateExecutionDto } from './dto/create-execution.dto';
 import { ListExecutionsDto } from './dto/list-executions.dto';
 import { ApproveExecutionDto } from './dto/approve-execution.dto';
+import { ReplayExecutionDto } from './dto/replay-execution.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { SpaceGuard } from '../common/guards/space.guard';
+import { PodGuard } from '../common/guards/pod.guard';
+import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
 
 @ApiTags('Executions')
 @ApiBearerAuth()
-@UseGuards(WorkspaceGuard, SpaceGuard)
-@Controller('workspaces/:workspaceId/spaces/:spaceId/executions')
+@UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
+@Controller('workspaces/:workspaceId/pods/:podId/executions')
 export class ExecutionsController {
   constructor(
     private readonly service: ExecutionsService,
@@ -40,53 +44,58 @@ export class ExecutionsController {
   ) {}
 
   @Post()
-  @ApiOperation({ summary: 'Trigger a workflow execution' })
+  @RequireRole('editor')
+  @Throttle({ execution: { limit: 60, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Trigger a workflow execution (editor+)' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   create(
     @Param('workspaceId') workspaceId: string,
-    @Param('spaceId') spaceId: string,
+    @Param('podId') podId: string,
     @CurrentUser() user: User,
     @Body() dto: CreateExecutionDto,
   ) {
-    return this.service.create(spaceId, workspaceId, user.id, dto);
+    return this.service.create(podId, workspaceId, user.id, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List executions' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   findAll(
-    @Param('spaceId') spaceId: string,
+    @Param('podId') podId: string,
     @Query() query: ListExecutionsDto,
   ) {
-    return this.service.findAll(spaceId, query);
+    return this.service.findAll(podId, query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get an execution' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  findOne(@Param('spaceId') spaceId: string, @Param('id') id: string) {
-    return this.service.findOne(spaceId, id);
+  findOne(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.findOne(podId, id);
   }
 
   @Get(':id/logs')
   @ApiOperation({ summary: 'Get execution logs' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  getLogs(@Param('spaceId') spaceId: string, @Param('id') id: string) {
-    return this.service.getLogs(spaceId, id);
+  getLogs(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.getLogs(podId, id);
   }
 
   @Sse(':id/events')
+  @SkipThrottle()
   @ApiOperation({ summary: 'Stream execution events via SSE' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  stream(@Param('id') id: string): Observable<MessageEvent> {
+  async stream(@Param('podId') podId: string, @Param('id') id: string): Promise<Observable<MessageEvent>> {
+    // Verify the execution belongs to this pod before subscribing — prevents IDOR
+    await this.service.findOne(podId, id);
     return this.events.forExecution(id).pipe(
       map((event) => ({ data: event }) as MessageEvent),
       takeUntil(timer(10 * 60 * 1000)),
@@ -94,38 +103,55 @@ export class ExecutionsController {
   }
 
   @Patch(':id/respond')
-  @ApiOperation({ summary: 'Respond to a suspended execution' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Respond to a suspended execution (editor+)' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
   respond(
-    @Param('spaceId') spaceId: string,
+    @Param('podId') podId: string,
     @Param('id') id: string,
     @Body() dto: ApproveExecutionDto,
   ) {
-    return this.service.respond(spaceId, id, dto);
+    return this.service.respond(podId, id, dto);
   }
 
   @Patch(':id/approve')
-  @ApiOperation({ summary: 'Approve a suspended execution' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Approve a suspended execution (editor+)' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
   approve(
-    @Param('spaceId') spaceId: string,
+    @Param('podId') podId: string,
     @Param('id') id: string,
     @Body() dto: ApproveExecutionDto,
   ) {
-    return this.service.respond(spaceId, id, dto);
+    return this.service.respond(podId, id, dto);
+  }
+
+  @Post(':id/replay')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Replay an execution, optionally from a specific node (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  replay(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @Body() dto: ReplayExecutionDto,
+  ) {
+    return this.service.replay(podId, id, dto.fromNodeId);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  @ApiOperation({ summary: 'Cancel an execution' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Cancel an execution (editor+)' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'spaceId' })
+  @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  cancel(@Param('spaceId') spaceId: string, @Param('id') id: string) {
-    return this.service.cancel(spaceId, id);
+  cancel(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.cancel(podId, id);
   }
 }

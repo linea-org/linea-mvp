@@ -1,4 +1,20 @@
+import { Parser } from 'expr-eval';
 import type { WorkflowState } from '../variable-substitution';
+
+const parser = new Parser({ operators: { assignment: false } });
+
+function evalCondition(condition: string, state: WorkflowState): boolean {
+  const context = {
+    input: state.variables?.input,
+    lastOutput: state.variables?.lastOutput,
+    variables: state.variables ?? {},
+  };
+  try {
+    return Boolean(parser.evaluate(condition, context));
+  } catch {
+    return false;
+  }
+}
 
 export function executeLogicNode(
   nodeData: Record<string, any>,
@@ -8,34 +24,16 @@ export function executeLogicNode(
 
   if (nodeType === 'if-else' || nodeType === 'if / else') {
     const condition = nodeData.condition || 'false';
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const fn = new Function(
-      'input',
-      'state',
-      'lastOutput',
-      `return !!(${condition})`,
-    );
-    const result = fn(state.variables.input, state, state.variables.lastOutput);
-    return { condition: Boolean(result), branch: result ? 'if' : 'else' };
+    const result = evalCondition(condition, state);
+    return { condition: result, branch: result ? 'if' : 'else' };
   }
 
   if (nodeType === 'router') {
     const routes: Array<{ id: string; label: string; condition: string }> =
       nodeData.routes || [];
     for (const route of routes) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-implied-eval
-        const fn = new Function(
-          'input',
-          'state',
-          'lastOutput',
-          `return !!(${route.condition})`,
-        );
-        if (fn(state.variables.input, state, state.variables.lastOutput)) {
-          return { branch: route.id, label: route.label };
-        }
-      } catch {
-        // continue to next route
+      if (evalCondition(route.condition, state)) {
+        return { branch: route.id, label: route.label };
       }
     }
     return { branch: 'none' };

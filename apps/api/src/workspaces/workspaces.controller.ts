@@ -21,6 +21,8 @@ import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
+import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { WorkspaceMembership } from '../common/decorators/workspace-membership.decorator';
 import type { User, WorkspaceMember } from '@linea/db';
@@ -54,7 +56,8 @@ export class WorkspacesController {
   }
 
   @Patch(':id')
-  @UseGuards(WorkspaceGuard)
+  @RequireRole('admin')
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @ApiOperation({ summary: 'Update workspace name or slug (admin+)' })
   update(
     @Param('id') id: string,
@@ -65,7 +68,8 @@ export class WorkspacesController {
   }
 
   @Delete(':id')
-  @UseGuards(WorkspaceGuard)
+  @RequireRole('owner')
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @HttpCode(204)
   @ApiOperation({ summary: 'Delete a workspace (owner only)' })
   delete(
@@ -85,7 +89,8 @@ export class WorkspacesController {
   }
 
   @Patch(':id/members/:userId')
-  @UseGuards(WorkspaceGuard)
+  @RequireRole('admin')
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @ApiOperation({ summary: 'Change a member role (admin+)' })
   updateMemberRole(
     @Param('id') id: string,
@@ -97,7 +102,8 @@ export class WorkspacesController {
   }
 
   @Delete(':id/members/:userId')
-  @UseGuards(WorkspaceGuard)
+  @RequireRole('admin')
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @HttpCode(204)
   @ApiOperation({ summary: 'Remove a member (admin+)' })
   removeMember(
@@ -111,7 +117,8 @@ export class WorkspacesController {
   // ─── Invites ───────────────────────────────────────────────────────────────
 
   @Post(':id/invites')
-  @UseGuards(WorkspaceGuard)
+  @RequireRole('admin')
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @ApiOperation({ summary: 'Create an invite (admin+)' })
   createInvite(
     @Param('id') id: string,
@@ -122,7 +129,8 @@ export class WorkspacesController {
   }
 
   @Get(':id/invites')
-  @UseGuards(WorkspaceGuard)
+  @RequireRole('admin')
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @ApiOperation({ summary: 'List pending invites (admin+)' })
   listInvites(
     @Param('id') id: string,
@@ -132,7 +140,8 @@ export class WorkspacesController {
   }
 
   @Delete(':id/invites/:inviteId')
-  @UseGuards(WorkspaceGuard)
+  @RequireRole('admin')
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @HttpCode(204)
   @ApiOperation({ summary: 'Revoke an invite (admin+)' })
   revokeInvite(

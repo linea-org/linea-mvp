@@ -1,6 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, Inject } from '@nestjs/common';
-import { MemorySaver } from '@langchain/langgraph';
 import type { Job } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
@@ -10,12 +9,9 @@ import { LangGraphService } from '../engine/langgraph.service';
 import type { WorkflowDefinition } from '../engine/langgraph.service';
 import { ExecutionEventsService } from '../execution-events.service';
 import { MemoryService } from '../engine/memory.service';
+import { CheckpointerService } from '../engine/checkpointer.service';
 import { EXECUTION_QUEUE } from './execution.queue';
 import type { ExecutionJobData } from './execution.queue';
-
-// Shared in-memory checkpointers per execution thread.
-// In production, replace with a PostgreSQL-backed checkpointer.
-const checkpointers = new Map<string, MemorySaver>();
 
 @Processor(EXECUTION_QUEUE)
 export class ExecutionProcessor extends WorkerHost {
@@ -26,6 +22,7 @@ export class ExecutionProcessor extends WorkerHost {
     private readonly langGraph: LangGraphService,
     private readonly events: ExecutionEventsService,
     private readonly memoryService: MemoryService,
+    private readonly checkpointerService: CheckpointerService,
   ) {
     super();
   }
@@ -38,6 +35,7 @@ export class ExecutionProcessor extends WorkerHost {
       input,
       threadId,
       resumeValue,
+      preloadedState,
     } = job.data;
     const isResume = resumeValue !== undefined;
 
@@ -64,10 +62,7 @@ export class ExecutionProcessor extends WorkerHost {
 
       const definition = wf.definition as unknown as WorkflowDefinition;
 
-      // Reuse checkpointer across resume cycles so LangGraph can restore state
-      if (!checkpointers.has(threadId))
-        checkpointers.set(threadId, new MemorySaver());
-      const checkpointer = checkpointers.get(threadId)!;
+      const checkpointer = this.checkpointerService.checkpointer;
 
       const onNodeUpdate = async (
         nodeId: string,
@@ -102,6 +97,7 @@ export class ExecutionProcessor extends WorkerHost {
           onNodeUpdate,
           workspaceId,
           checkpointer,
+          workflowId,
         );
         for await (const state of stream) finalState = state;
       } else {
@@ -119,6 +115,8 @@ export class ExecutionProcessor extends WorkerHost {
           workspaceId,
           checkpointer,
           initialMemory,
+          workflowId,
+          preloadedState,
         );
         for await (const state of stream) finalState = state;
       }
@@ -127,6 +125,14 @@ export class ExecutionProcessor extends WorkerHost {
       const finalOutput = finalState?.variables?.lastOutput ?? null;
 
       if (isSuspended) {
+        // Persist memory accumulated before the interrupt so it's not lost
+        await this.memoryService.saveFromExecution(
+          workspaceId,
+          workflowId,
+          threadId,
+          finalState?.memory ?? {},
+        );
+
         const existingVars = (finalState?.variables ?? {}) as Record<
           string,
           any
@@ -156,7 +162,6 @@ export class ExecutionProcessor extends WorkerHost {
           finalState?.memory ?? {},
         );
 
-        checkpointers.delete(threadId);
 
         await this.db
           .update(executions)
@@ -178,8 +183,6 @@ export class ExecutionProcessor extends WorkerHost {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.logger.error(`Execution ${executionId} failed: ${msg}`);
-      checkpointers.delete(threadId);
-
       await this.db
         .update(executions)
         .set({ status: 'failed', error: msg, finishedAt: new Date() })

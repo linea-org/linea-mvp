@@ -6,24 +6,18 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { createClerkClient } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import type { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
 import { UsersService } from '../../users/users.service';
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
-  private readonly clerk;
-
   constructor(
     private readonly reflector: Reflector,
     private readonly config: ConfigService,
     private readonly usersService: UsersService,
-  ) {
-    this.clerk = createClerkClient({
-      secretKey: this.config.getOrThrow<string>('CLERK_SECRET_KEY'),
-    });
-  }
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -49,7 +43,14 @@ export class ClerkAuthGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.clerk.verifyToken(token);
+      const secretKey = this.config.getOrThrow<string>('CLERK_SECRET_KEY');
+      const authorizedParties = this.config
+        .get<string>('ALLOWED_ORIGINS', 'http://localhost:3000')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const payload = await verifyToken(token, { secretKey, authorizedParties });
       const user = await this.usersService.findOrCreateFromClerk(payload.sub);
       request.user = user;
       return true;

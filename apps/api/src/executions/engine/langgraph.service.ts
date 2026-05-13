@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import {
   StateGraph,
   Annotation,
@@ -9,6 +10,11 @@ import {
   interrupt,
   isGraphInterrupt,
 } from '@langchain/langgraph';
+import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
+import { eq } from 'drizzle-orm';
+import type { DrizzleDB } from '@linea/db';
+import { workflows } from '@linea/db';
+import { DB_TOKEN } from '../../database/database.module';
 import { NodeExecutorService } from './node-executor.service';
 import type { WorkflowState } from './variable-substitution';
 
@@ -86,13 +92,18 @@ export const WorkflowStateAnnotation = Annotation.Root({
 export class LangGraphService {
   private readonly logger = new Logger(LangGraphService.name);
 
-  constructor(private readonly nodeExecutor: NodeExecutorService) {}
+  constructor(
+    private readonly nodeExecutor: NodeExecutorService,
+    @Inject(DB_TOKEN) private readonly db: DrizzleDB,
+  ) {}
 
   buildGraph(
     definition: WorkflowDefinition,
     onNodeUpdate: NodeUpdateCallback,
     workspaceId: string,
-    checkpointer?: MemorySaver,
+    checkpointer?: BaseCheckpointSaver,
+    workflowId?: string,
+    threadId?: string,
   ) {
     const saver = checkpointer ?? new MemorySaver();
     const builder = new StateGraph(WorkflowStateAnnotation);
@@ -112,7 +123,7 @@ export class LangGraphService {
       if (nodeType === 'note') continue;
       builder.addNode(
         node.id,
-        this.createNodeFn(node, onNodeUpdate, workspaceId),
+        this.createNodeFn(node, onNodeUpdate, workspaceId, checkpointer, workflowId, threadId),
       );
     }
 
@@ -167,9 +178,79 @@ export class LangGraphService {
     node: WorkflowNode,
     onNodeUpdate: NodeUpdateCallback,
     workspaceId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _checkpointer?: BaseCheckpointSaver,
+    workflowId?: string,
+    threadId?: string,
   ) {
+    const nodeType = node.data?.nodeType || node.type;
+
+    // Subworkflow is handled here to avoid a circular dep between
+    // LangGraphService ↔ NodeExecutorService.
+    if (nodeType === 'subworkflow') {
+      return async (state: typeof WorkflowStateAnnotation.State) => {
+        const workflowId = node.data?.workflowId as string | undefined;
+        if (!workflowId) throw new Error('Subworkflow node is missing workflowId');
+
+        const [wf] = await this.db
+          .select()
+          .from(workflows)
+          .where(eq(workflows.id, workflowId))
+          .limit(1);
+        if (!wf) throw new Error(`Subworkflow ${workflowId} not found`);
+
+        const subDef = wf.definition as unknown as WorkflowDefinition;
+        const subThreadId = `sub:${workflowId}:${randomBytes(8).toString('hex')}`;
+
+        onNodeUpdate(node.id, 'running');
+
+        let subOutput: unknown = null;
+        const gen = this.stream(
+          subDef,
+          state.variables as Record<string, unknown>,
+          () => {},
+          subThreadId,
+          workspaceId,
+          new MemorySaver(),
+        );
+        for await (const s of gen) {
+          subOutput = (s as any)?.variables?.lastOutput ?? null;
+        }
+
+        const nodeKey = (node.data?.nodeName as string) || (node.data?.name as string) || node.id;
+        onNodeUpdate(node.id, 'completed', subOutput);
+
+        return {
+          variables: { lastOutput: subOutput, [nodeKey]: subOutput, [node.id]: subOutput },
+          chatHistory: [],
+          memory: {},
+          currentNodeId: node.id,
+          nodeResults: {
+            [node.id]: { nodeId: node.id, status: 'completed', output: subOutput, completedAt: new Date().toISOString() },
+          },
+          pendingAuth: null,
+          cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+        };
+      };
+    }
+
     return async (state: typeof WorkflowStateAnnotation.State) => {
-      const nodeType = node.data?.nodeType || node.type;
+      // Fast-forward: if this node was pre-loaded from a replay, skip re-execution
+      const preloaded = state.nodeResults?.[node.id];
+      if (preloaded?.__preloaded) {
+        onNodeUpdate(node.id, 'completed', preloaded.output);
+        const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+        return {
+          variables: { lastOutput: preloaded.output, [nodeKey]: preloaded.output, [node.id]: preloaded.output },
+          chatHistory: [],
+          memory: {},
+          currentNodeId: node.id,
+          nodeResults: { [node.id]: preloaded },
+          pendingAuth: null,
+          cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+        };
+      }
+
       onNodeUpdate(node.id, 'running');
 
       const workflowState: WorkflowState = {
@@ -192,6 +273,8 @@ export class LangGraphService {
           nodeData,
           state: workflowState,
           workspaceId,
+          workflowId,
+          threadId,
         });
 
         // Approval gate node (non-agent)
@@ -211,6 +294,7 @@ export class LangGraphService {
         let actualOutput = result;
         let chatUpdates: any[] = [];
         let variableUpdates: Record<string, any> = {};
+        let memoryUpdates: Record<string, any> = {};
         let usageUpdate = {
           input_tokens: 0,
           output_tokens: 0,
@@ -222,6 +306,7 @@ export class LangGraphService {
           actualOutput = result.__agentValue;
           chatUpdates = result.__chatHistoryUpdates || [];
           variableUpdates = result.__variableUpdates || {};
+          memoryUpdates = result.__memoryUpdates || {};
           toolCallLog = result.__toolCallLog || [];
           if (result.__usage) usageUpdate = result.__usage;
         }
@@ -237,6 +322,7 @@ export class LangGraphService {
             ...variableUpdates,
           },
           chatHistory: chatUpdates,
+          memory: memoryUpdates,
           currentNodeId: node.id,
           nodeResults: {
             [node.id]: {
@@ -292,22 +378,26 @@ export class LangGraphService {
     onNodeUpdate: NodeUpdateCallback,
     threadId: string,
     workspaceId: string,
-    checkpointer?: MemorySaver,
+    checkpointer?: BaseCheckpointSaver,
     initialMemory?: Record<string, any>,
+    workflowId?: string,
+    preloadedState?: { variables: Record<string, any>; nodeResults: Record<string, any> },
   ): AsyncGenerator<typeof WorkflowStateAnnotation.State> {
     const graph = this.buildGraph(
       definition,
       onNodeUpdate,
       workspaceId,
       checkpointer,
+      workflowId,
+      threadId,
     );
     const config = { configurable: { thread_id: threadId } };
 
     const initialState = {
-      variables: { input, lastOutput: '' },
+      variables: preloadedState?.variables ?? { input, lastOutput: '' },
       chatHistory: [],
       currentNodeId: '',
-      nodeResults: {},
+      nodeResults: preloadedState?.nodeResults ?? {},
       pendingAuth: null,
       memory: initialMemory ?? {},
     };
@@ -343,7 +433,8 @@ export class LangGraphService {
     resumeValue: any,
     onNodeUpdate: NodeUpdateCallback,
     workspaceId: string,
-    checkpointer: MemorySaver,
+    checkpointer: BaseCheckpointSaver,
+    workflowId?: string,
   ) {
     return this.resumeStream(
       definition,
@@ -352,6 +443,7 @@ export class LangGraphService {
       onNodeUpdate,
       workspaceId,
       checkpointer,
+      workflowId,
     );
   }
 
@@ -361,13 +453,16 @@ export class LangGraphService {
     resumeValue: any,
     onNodeUpdate: NodeUpdateCallback,
     workspaceId: string,
-    checkpointer: MemorySaver,
+    checkpointer: BaseCheckpointSaver,
+    workflowId?: string,
   ): AsyncGenerator<typeof WorkflowStateAnnotation.State> {
     const graph = this.buildGraph(
       definition,
       onNodeUpdate,
       workspaceId,
       checkpointer,
+      workflowId,
+      threadId,
     );
     const config = { configurable: { thread_id: threadId } };
     const command = new Command({ resume: resumeValue });

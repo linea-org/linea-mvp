@@ -1,0 +1,25 @@
+import { CustomNode, NoteNode, StartNode, EndNode } from './custom-node';
+
+export const nodeTypes = {
+  start: StartNode,
+  end: EndNode,
+  agent: CustomNode,
+  http: CustomNode,
+  transform: CustomNode,
+  'if-else': CustomNode,
+  router: CustomNode,
+  approval: CustomNode,
+  mcp: CustomNode,
+  memory: CustomNode,
+  extract: CustomNode,
+  retriever: CustomNode,
+  guardrails: CustomNode,
+  code: CustomNode,
+  loop: CustomNode,
+  subworkflow: CustomNode,
+  slack: CustomNode,
+  github: CustomNode,
+  notion: CustomNode,
+  gmail: CustomNode,
+  note: NoteNode,
+} as const;

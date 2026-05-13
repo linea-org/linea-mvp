@@ -120,18 +120,20 @@ export class MemoryService {
     const vec = await this.embedding.embed(dto.query);
     const vecStr = this.embedding.toVectorString(vec);
 
-    const conditions: string[] = [`m.workspace_id = '${workspaceId}'`, `m.superseded_by_id IS NULL`];
-    if (dto.scope) conditions.push(`m.scope = '${dto.scope}'`);
-    if (dto.userId) conditions.push(`m.user_id = '${dto.userId}'`);
-    if (dto.threadId) conditions.push(`m.thread_id = '${dto.threadId}'`);
-
-    const whereClause = conditions.join(' AND ');
+    // Build parameterized WHERE clause — never interpolate user values into sql.raw
+    const scopeFilter = dto.scope ? sql`AND m.scope = ${dto.scope}` : sql``;
+    const userFilter = dto.userId ? sql`AND m.user_id = ${dto.userId}` : sql``;
+    const threadFilter = dto.threadId ? sql`AND m.thread_id = ${dto.threadId}` : sql``;
+    // Cap query length to prevent expensive ILIKE scans
+    const safeQuery = String(dto.query ?? '').slice(0, 200);
 
     const vectorResults = (await this.db.execute<{ id: string; similarity: number }>(
       sql`
         SELECT id, 1 - (embedding <=> ${vecStr}::vector) AS similarity
         FROM memories m
-        WHERE ${sql.raw(whereClause)}
+        WHERE m.workspace_id = ${workspaceId}
+          AND m.superseded_by_id IS NULL
+          ${scopeFilter} ${userFilter} ${threadFilter}
         ORDER BY embedding <=> ${vecStr}::vector
         LIMIT ${CANDIDATE_POOL}
       `,
@@ -140,8 +142,10 @@ export class MemoryService {
     const keywordResults = (await this.db.execute<{ id: string }>(
       sql`
         SELECT id FROM memories m
-        WHERE ${sql.raw(whereClause)}
-          AND content ILIKE ${'%' + dto.query + '%'}
+        WHERE m.workspace_id = ${workspaceId}
+          AND m.superseded_by_id IS NULL
+          ${scopeFilter} ${userFilter} ${threadFilter}
+          AND content ILIKE ${'%' + safeQuery + '%'}
         LIMIT ${CANDIDATE_POOL}
       `,
     )) as unknown as { id: string }[];

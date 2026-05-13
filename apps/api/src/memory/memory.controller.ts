@@ -16,18 +16,21 @@ import { ListMemoriesDto } from './dto/list-memories.dto';
 import { IngestMemoryDto } from './dto/ingest-memory.dto';
 import { SearchMemoryDto } from './dto/search-memory.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
+import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
 
 @ApiTags('Memory')
 @ApiBearerAuth()
-@UseGuards(WorkspaceGuard)
+@UseGuards(WorkspaceGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/memories')
 export class MemoryController {
   constructor(private readonly service: MemoryService) {}
 
   @Post('ingest')
-  @ApiOperation({ summary: 'Ingest text — extracts atomic facts with embeddings and conflict resolution' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Ingest text — extracts atomic facts with embeddings and conflict resolution (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   ingest(
     @Param('workspaceId') workspaceId: string,
@@ -58,7 +61,8 @@ export class MemoryController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Store a memory manually (no extraction)' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Store a memory manually (no extraction) (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   create(
     @Param('workspaceId') workspaceId: string,
@@ -77,7 +81,8 @@ export class MemoryController {
 
   @Delete(':id')
   @HttpCode(204)
-  @ApiOperation({ summary: 'Delete a memory' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Delete a memory (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
   delete(@Param('workspaceId') workspaceId: string, @Param('id') id: string) {

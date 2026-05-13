@@ -48,7 +48,9 @@ export default function ApiKeysPage() {
   }
 
   useEffect(() => {
-    if (!wsLoading && activeWorkspace) void loadKeys();
+    if (wsLoading) return;
+    if (!activeWorkspace) { setLoading(false); return; }
+    void loadKeys();
   }, [activeWorkspace, wsLoading]);
 
   async function handleCreate() {

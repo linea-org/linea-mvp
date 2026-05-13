@@ -9,12 +9,15 @@ import { LangGraphService } from './engine/langgraph.service';
 import { NodeExecutorService } from './engine/node-executor.service';
 import { ExecutionSupervisor } from './engine/supervisor';
 import { MemoryService } from './engine/memory.service';
+import { CheckpointerService } from './engine/checkpointer.service';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { PodsModule } from '../pods/pods.module';
 import { EXECUTION_QUEUE } from './queue/execution.queue';
 
 @Module({
   imports: [
     WorkspacesModule,
+    PodsModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => {
@@ -36,6 +39,7 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
     NodeExecutorService,
     ExecutionSupervisor,
     MemoryService,
+    CheckpointerService,
   ],
   controllers: [ExecutionsController],
   exports: [ExecutionsService],

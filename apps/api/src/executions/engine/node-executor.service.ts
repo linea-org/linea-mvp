@@ -2,10 +2,23 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isGraphInterrupt } from '@langchain/langgraph';
 import type { WorkflowState } from './variable-substitution';
+import { substituteInValue } from './variable-substitution';
 import { executeAgentNode } from './executors/agent.executor';
+import type { LongTermMemoryContext } from './executors/agent.executor';
 import { executeHTTPNode } from './executors/http.executor';
 import { executeTransformNode } from './executors/transform.executor';
 import { executeLogicNode } from './executors/logic.executor';
+import { executeMcpNode } from './executors/mcp.executor';
+import { executeMemoryNode } from './executors/memory.executor';
+import { executeGuardrailsNode } from './executors/guardrails.executor';
+import { executeExtractNode } from './executors/extract.executor';
+import { executeRetrieverNode } from './executors/retriever.executor';
+import { executeCodeNode } from './executors/code.executor';
+import { executeLoopNode } from './executors/loop.executor';
+import { executeSlackNode } from './executors/slack.executor';
+import { executeGitHubNode } from './executors/github.executor';
+import { executeNotionNode } from './executors/notion.executor';
+import { executeGmailNode } from './executors/gmail.executor';
 import { ExecutionSupervisor } from './supervisor';
 import { MemoryService } from './memory.service';
 import type { ModelApiKeys } from './models/client.factory';
@@ -16,6 +29,8 @@ export interface NodeInput {
   nodeData: Record<string, any>;
   state: WorkflowState;
   workspaceId: string;
+  workflowId?: string;
+  threadId?: string;
 }
 
 export interface NodeOutput {
@@ -25,14 +40,26 @@ export interface NodeOutput {
 
 // Default timeouts per node type (ms). Override per-node via nodeData.timeoutMs.
 const DEFAULT_TIMEOUTS: Record<string, number> = {
-  agent: 120_000, // 2 min — LLM calls can be slow
-  http: 30_000, // 30s
-  transform: 5_000, // 5s — should be instant
+  agent: 120_000,
+  http: 30_000,
+  transform: 5_000,
   'if-else': 1_000,
   router: 1_000,
   start: 2_000,
   end: 1_000,
-  approval: 0, // 0 = no timeout (waits indefinitely for human)
+  approval: 0,
+  mcp: 30_000,
+  memory: 5_000,
+  guardrails: 5_000,
+  extract: 60_000,
+  retriever: 15_000,
+  code: 10_000,
+  loop: 30_000,
+  subworkflow: 120_000,
+  slack: 15_000,
+  github: 15_000,
+  notion: 15_000,
+  gmail: 15_000,
   default: 60_000,
 };
 
@@ -140,10 +167,13 @@ export class NodeExecutorService {
   private async dispatch({
     nodeId,
     nodeType,
-    nodeData,
+    nodeData: rawNodeData,
     state,
     workspaceId,
+    workflowId,
+    threadId,
   }: NodeInput): Promise<NodeOutput> {
+    const nodeData = substituteInValue(rawNodeData, state) as Record<string, any>;
     switch (nodeType) {
       case 'start': {
         let parsed = state.variables.input;
@@ -177,7 +207,24 @@ export class NodeExecutorService {
         const data = { ...nodeData };
         if (!data.model) data.model = this.defaultAgentModel;
         const resolvedKeys = await this.resolveApiKeys(workspaceId);
-        const raw = await executeAgentNode(data, state, resolvedKeys);
+
+        let ltmCtx: LongTermMemoryContext | undefined;
+        if (threadId) {
+          const openaiKey = resolvedKeys.OPENAI_API_KEY;
+          ltmCtx = {
+            workspaceId,
+            workflowId,
+            threadId,
+            store: (key, value) =>
+              this.memoryService.storeLongTermMemory(workspaceId, workflowId, threadId, key, value, openaiKey),
+            search: (query, topK) =>
+              this.memoryService.searchSemantic(workspaceId, workflowId, query, topK, openaiKey),
+            loadRecent: (topK) =>
+              this.memoryService.loadRecentForContext(workspaceId, workflowId, topK, threadId),
+          };
+        }
+
+        const raw = await executeAgentNode(data, state, resolvedKeys, ltmCtx);
         return { result: raw, isAgentOutput: true };
       }
 
@@ -211,6 +258,78 @@ export class NodeExecutorService {
 
       case 'note':
         return { result: { skipped: true }, isAgentOutput: false };
+
+      case 'mcp': {
+        const mcpServerId = nodeData.mcpServerId as string | undefined;
+        let serverUrl = nodeData.serverUrl as string | undefined;
+        let accessToken: string | undefined;
+        if (mcpServerId) {
+          // Always load credentials from the encrypted mcp_servers store — never from node data
+          const server = await this.memoryService.loadMcpServer(workspaceId, mcpServerId);
+          serverUrl = server?.url ?? serverUrl;
+          accessToken = server?.accessToken;
+        } else if (!serverUrl) {
+          throw new Error('MCP node requires either mcpServerId or serverUrl');
+        }
+        // Never read accessToken from nodeData — it would be stored plaintext in the workflow definition
+        const r = await executeMcpNode(nodeData, state, serverUrl, accessToken);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'memory': {
+        const r = executeMemoryNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'guardrails': {
+        const r = executeGuardrailsNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'extract': {
+        const firecrawlKey = this.config.get<string>('FIRECRAWL_API_KEY');
+        const r = await executeExtractNode(nodeData, state, firecrawlKey);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'retriever': {
+        const r = await executeRetrieverNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'code': {
+        const r = executeCodeNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'loop': {
+        const r = executeLoopNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'slack': {
+        const slackToken = await this.memoryService.loadSecret(workspaceId, 'SLACK_TOKEN');
+        const r = await executeSlackNode(nodeData, state, slackToken);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'github': {
+        const ghToken = await this.memoryService.loadSecret(workspaceId, 'GITHUB_TOKEN');
+        const r = await executeGitHubNode(nodeData, state, ghToken);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'notion': {
+        const notionToken = await this.memoryService.loadSecret(workspaceId, 'NOTION_TOKEN');
+        const r = await executeNotionNode(nodeData, state, notionToken);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'gmail': {
+        const gmailToken = await this.memoryService.loadSecret(workspaceId, 'GMAIL_TOKEN');
+        const r = await executeGmailNode(nodeData, state, gmailToken);
+        return { result: r, isAgentOutput: false };
+      }
 
       default:
         return {

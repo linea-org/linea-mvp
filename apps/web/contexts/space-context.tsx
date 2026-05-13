@@ -5,34 +5,34 @@ import { useAuth } from '@clerk/nextjs';
 import { createApiClient } from '@/lib/api';
 import { useWorkspace } from '@/contexts/workspace-context';
 
-interface Space {
+interface Pod {
   id: string;
   name: string;
   slug: string;
   description: string | null;
 }
 
-interface SpaceContextValue {
-  spaces: Space[];
-  activeSpace: Space | null;
-  setActiveSpace: (space: Space) => void;
+interface PodContextValue {
+  pods: Pod[];
+  activePod: Pod | null;
+  setActivePod: (pod: Pod) => void;
   loading: boolean;
   reload: () => void;
 }
 
-const SpaceContext = createContext<SpaceContextValue>({
-  spaces: [],
-  activeSpace: null,
-  setActiveSpace: () => {},
+const PodContext = createContext<PodContextValue>({
+  pods: [],
+  activePod: null,
+  setActivePod: () => {},
   loading: true,
   reload: () => {},
 });
 
-export function SpaceProvider({ children }: { children: React.ReactNode }) {
+export function PodProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const [spaces, setSpaces] = useState<Space[]>([]);
-  const [activeSpace, setActiveSpaceState] = useState<Space | null>(null);
+  const [pods, setPods] = useState<Pod[]>([]);
+  const [activePod, setActivePodState] = useState<Pod | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
@@ -49,15 +49,15 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
         const token = await getToken();
         if (!token) return;
         const api = createApiClient(token);
-        const data = await api.get<Space[]>(`/workspaces/${activeWorkspace!.id}/spaces`);
-        setSpaces(data);
+        const data = await api.get<Pod[]>(`/workspaces/${activeWorkspace!.id}/pods`);
+        setPods(data);
 
-        const storedId = localStorage.getItem(`activeSpaceId_${activeWorkspace!.id}`);
-        const active = data.find((s) => s.id === storedId) ?? data[0] ?? null;
-        setActiveSpaceState(active);
+        const storedId = localStorage.getItem(`activePodId_${activeWorkspace!.id}`);
+        const active = data.find((p) => p.id === storedId) ?? data[0] ?? null;
+        setActivePodState(active);
       } catch {
-        setSpaces([]);
-        setActiveSpaceState(null);
+        setPods([]);
+        setActivePodState(null);
       } finally {
         setLoading(false);
       }
@@ -66,10 +66,10 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
     void load();
   }, [activeWorkspace, wsLoading, getToken, tick]);
 
-  function setActiveSpace(space: Space) {
-    setActiveSpaceState(space);
+  function setActivePod(pod: Pod) {
+    setActivePodState(pod);
     if (activeWorkspace) {
-      localStorage.setItem(`activeSpaceId_${activeWorkspace.id}`, space.id);
+      localStorage.setItem(`activePodId_${activeWorkspace.id}`, pod.id);
     }
   }
 
@@ -78,12 +78,12 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SpaceContext.Provider value={{ spaces, activeSpace, loading, setActiveSpace, reload }}>
+    <PodContext.Provider value={{ pods, activePod, loading, setActivePod, reload }}>
       {children}
-    </SpaceContext.Provider>
+    </PodContext.Provider>
   );
 }
 
-export function useSpace() {
-  return useContext(SpaceContext);
+export function usePod() {
+  return useContext(PodContext);
 }

@@ -1,4 +1,4 @@
-import { Controller, Post, Param } from '@nestjs/common';
+import { Controller, Get, Post, Param, HttpCode } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -15,7 +15,15 @@ import type { User } from '@linea/db';
 export class InvitesController {
   constructor(private readonly service: WorkspacesService) {}
 
+  @Get(':token')
+  @ApiOperation({ summary: 'Preview invite details by token' })
+  @ApiParam({ name: 'token' })
+  preview(@Param('token') token: string) {
+    return this.service.getInviteDetails(token);
+  }
+
   @Post(':token/accept')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Accept a workspace invite' })
   @ApiParam({ name: 'token', description: 'Invite token from the invite URL' })
   accept(@Param('token') token: string, @CurrentUser() user: User) {
