@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Subject, ReplaySubject, Observable } from 'rxjs';
-import { filter, share } from 'rxjs/operators';
+import { Subject, Observable } from 'rxjs';
+import { filter } from 'rxjs/operators';
 
 export interface ExecutionEvent {
   type: string;

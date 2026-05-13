@@ -15,7 +15,8 @@ export async function executeNotionNode(
   _state: WorkflowState,
   token: string | undefined,
 ): Promise<unknown> {
-  if (!token) throw new Error('Notion token not configured (secret name: NOTION_TOKEN)');
+  if (!token)
+    throw new Error('Notion token not configured (secret name: NOTION_TOKEN)');
 
   const action = nodeData.action ?? 'create_page';
   const headers = {
@@ -33,14 +34,17 @@ export async function executeNotionNode(
     const json = (await resp.json()) as unknown;
     if (!resp.ok) {
       const err = json as { message?: string };
-      throw new Error(`Notion API error: ${err.message ?? `HTTP ${resp.status}`}`);
+      throw new Error(
+        `Notion API error: ${err.message ?? `HTTP ${resp.status}`}`,
+      );
     }
     return json;
   }
 
   switch (action) {
     case 'create_page': {
-      if (!nodeData.databaseId) throw new Error('Notion: databaseId is required to create a page');
+      if (!nodeData.databaseId)
+        throw new Error('Notion: databaseId is required to create a page');
       const body: Record<string, unknown> = {
         parent: { database_id: nodeData.databaseId },
         properties: {},
@@ -55,23 +59,36 @@ export async function executeNotionNode(
           {
             object: 'block',
             type: 'paragraph',
-            paragraph: { rich_text: [{ type: 'text', text: { content: nodeData.content } }] },
+            paragraph: {
+              rich_text: [
+                { type: 'text', text: { content: nodeData.content } },
+              ],
+            },
           },
         ];
       }
-      const page = (await notionFetch('/pages', 'POST', body)) as { id: string; url: string };
+      const page = (await notionFetch('/pages', 'POST', body)) as {
+        id: string;
+        url: string;
+      };
       return { id: page.id, url: page.url };
     }
 
     case 'append_block': {
-      if (!nodeData.pageId) throw new Error('Notion: pageId is required to append blocks');
-      if (!nodeData.content) throw new Error('Notion: content is required to append blocks');
+      if (!nodeData.pageId)
+        throw new Error('Notion: pageId is required to append blocks');
+      if (!nodeData.content)
+        throw new Error('Notion: content is required to append blocks');
       await notionFetch(`/blocks/${nodeData.pageId}/children`, 'PATCH', {
         children: [
           {
             object: 'block',
             type: 'paragraph',
-            paragraph: { rich_text: [{ type: 'text', text: { content: nodeData.content } }] },
+            paragraph: {
+              rich_text: [
+                { type: 'text', text: { content: nodeData.content } },
+              ],
+            },
           },
         ],
       });
@@ -79,20 +96,30 @@ export async function executeNotionNode(
     }
 
     case 'query_database': {
-      if (!nodeData.databaseId) throw new Error('Notion: databaseId is required to query');
+      if (!nodeData.databaseId)
+        throw new Error('Notion: databaseId is required to query');
       let filter: unknown = undefined;
       if (nodeData.filter) {
-        try { filter = JSON.parse(nodeData.filter); } catch { /* ignore */ }
+        try {
+          filter = JSON.parse(nodeData.filter);
+        } catch {
+          /* ignore */
+        }
       }
-      const result = (await notionFetch(`/databases/${nodeData.databaseId}/query`, 'POST', {
-        ...(filter ? { filter } : {}),
-        page_size: 50,
-      })) as { results: { id: string; url: string }[] };
+      const result = (await notionFetch(
+        `/databases/${nodeData.databaseId}/query`,
+        'POST',
+        {
+          ...(filter ? { filter } : {}),
+          page_size: 50,
+        },
+      )) as { results: { id: string; url: string }[] };
       return { pages: result.results.map((p) => ({ id: p.id, url: p.url })) };
     }
 
     case 'get_page': {
-      if (!nodeData.pageId) throw new Error('Notion: pageId is required to get page');
+      if (!nodeData.pageId)
+        throw new Error('Notion: pageId is required to get page');
       const page = (await notionFetch(`/pages/${nodeData.pageId}`, 'GET')) as {
         id: string;
         url: string;
@@ -102,6 +129,6 @@ export async function executeNotionNode(
     }
 
     default:
-      throw new Error(`Notion: unknown action "${action}"`);
+      throw new Error(`Notion: unknown action "${String(action)}"`);
   }
 }

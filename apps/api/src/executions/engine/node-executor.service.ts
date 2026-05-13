@@ -158,14 +158,11 @@ export class NodeExecutorService {
       }
     }
 
-    throw (
-      lastError ??
-      new Error(`Node ${nodeId} failed after ${maxRetries} retries`)
-    );
+    if (lastError instanceof Error) throw lastError;
+    throw new Error(`Node ${nodeId} failed after ${maxRetries} retries`);
   }
 
   private async dispatch({
-    nodeId,
     nodeType,
     nodeData: rawNodeData,
     state,
@@ -173,7 +170,10 @@ export class NodeExecutorService {
     workflowId,
     threadId,
   }: NodeInput): Promise<NodeOutput> {
-    const nodeData = substituteInValue(rawNodeData, state) as Record<string, any>;
+    const nodeData = substituteInValue(rawNodeData, state) as Record<
+      string,
+      any
+    >;
     switch (nodeType) {
       case 'start': {
         let parsed = state.variables.input;
@@ -216,11 +216,29 @@ export class NodeExecutorService {
             workflowId,
             threadId,
             store: (key, value) =>
-              this.memoryService.storeLongTermMemory(workspaceId, workflowId, threadId, key, value, openaiKey),
+              this.memoryService.storeLongTermMemory(
+                workspaceId,
+                workflowId,
+                threadId,
+                key,
+                value,
+                openaiKey,
+              ),
             search: (query, topK) =>
-              this.memoryService.searchSemantic(workspaceId, workflowId, query, topK, openaiKey),
+              this.memoryService.searchSemantic(
+                workspaceId,
+                workflowId,
+                query,
+                topK,
+                openaiKey,
+              ),
             loadRecent: (topK) =>
-              this.memoryService.loadRecentForContext(workspaceId, workflowId, topK, threadId),
+              this.memoryService.loadRecentForContext(
+                workspaceId,
+                workflowId,
+                topK,
+                threadId,
+              ),
           };
         }
 
@@ -265,7 +283,10 @@ export class NodeExecutorService {
         let accessToken: string | undefined;
         if (mcpServerId) {
           // Always load credentials from the encrypted mcp_servers store — never from node data
-          const server = await this.memoryService.loadMcpServer(workspaceId, mcpServerId);
+          const server = await this.memoryService.loadMcpServer(
+            workspaceId,
+            mcpServerId,
+          );
           serverUrl = server?.url ?? serverUrl;
           accessToken = server?.accessToken;
         } else if (!serverUrl) {
@@ -308,25 +329,37 @@ export class NodeExecutorService {
       }
 
       case 'slack': {
-        const slackToken = await this.memoryService.loadSecret(workspaceId, 'SLACK_TOKEN');
+        const slackToken = await this.memoryService.loadSecret(
+          workspaceId,
+          'SLACK_TOKEN',
+        );
         const r = await executeSlackNode(nodeData, state, slackToken);
         return { result: r, isAgentOutput: false };
       }
 
       case 'github': {
-        const ghToken = await this.memoryService.loadSecret(workspaceId, 'GITHUB_TOKEN');
+        const ghToken = await this.memoryService.loadSecret(
+          workspaceId,
+          'GITHUB_TOKEN',
+        );
         const r = await executeGitHubNode(nodeData, state, ghToken);
         return { result: r, isAgentOutput: false };
       }
 
       case 'notion': {
-        const notionToken = await this.memoryService.loadSecret(workspaceId, 'NOTION_TOKEN');
+        const notionToken = await this.memoryService.loadSecret(
+          workspaceId,
+          'NOTION_TOKEN',
+        );
         const r = await executeNotionNode(nodeData, state, notionToken);
         return { result: r, isAgentOutput: false };
       }
 
       case 'gmail': {
-        const gmailToken = await this.memoryService.loadSecret(workspaceId, 'GMAIL_TOKEN');
+        const gmailToken = await this.memoryService.loadSecret(
+          workspaceId,
+          'GMAIL_TOKEN',
+        );
         const r = await executeGmailNode(nodeData, state, gmailToken);
         return { result: r, isAgentOutput: false };
       }
@@ -385,9 +418,9 @@ export class NodeExecutorService {
           clearTimeout(timer);
           resolve(val);
         },
-        (err) => {
+        (err: unknown) => {
           clearTimeout(timer);
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         },
       );
     });

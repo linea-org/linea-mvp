@@ -22,7 +22,9 @@ function toBase64Url(str: string): string {
 
 function sanitizeHeaderValue(value: string, field: string): string {
   if (/[\r\n]/.test(value)) {
-    throw new Error(`Gmail: "${field}" contains invalid characters (CR/LF not allowed in headers)`);
+    throw new Error(
+      `Gmail: "${field}" contains invalid characters (CR/LF not allowed in headers)`,
+    );
   }
   return value;
 }
@@ -45,7 +47,8 @@ export async function executeGmailNode(
   _state: WorkflowState,
   token: string | undefined,
 ): Promise<unknown> {
-  if (!token) throw new Error('Gmail token not configured (secret name: GMAIL_TOKEN)');
+  if (!token)
+    throw new Error('Gmail token not configured (secret name: GMAIL_TOKEN)');
 
   const action = nodeData.action ?? 'send_email';
   const headers = {
@@ -54,15 +57,20 @@ export async function executeGmailNode(
   };
 
   async function gmailFetch(path: string, method: string, body?: unknown) {
-    const resp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    const resp = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me${path}`,
+      {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      },
+    );
     const json = (await resp.json()) as unknown;
     if (!resp.ok) {
       const err = (json as { error?: { message?: string } })?.error;
-      throw new Error(`Gmail API error: ${err?.message ?? `HTTP ${resp.status}`}`);
+      throw new Error(
+        `Gmail API error: ${err?.message ?? `HTTP ${resp.status}`}`,
+      );
     }
     return json;
   }
@@ -90,7 +98,10 @@ export async function executeGmailNode(
 
     case 'get_email': {
       if (!nodeData.messageId) throw new Error('Gmail: messageId is required');
-      const msg = (await gmailFetch(`/messages/${nodeData.messageId}?format=metadata`, 'GET')) as {
+      const msg = (await gmailFetch(
+        `/messages/${nodeData.messageId}?format=metadata`,
+        'GET',
+      )) as {
         id: string;
         threadId: string;
         payload?: { headers?: { name: string; value: string }[] };
@@ -100,10 +111,17 @@ export async function executeGmailNode(
       const subject = headers2.find((h) => h.name === 'Subject')?.value;
       const from = headers2.find((h) => h.name === 'From')?.value;
       const date = headers2.find((h) => h.name === 'Date')?.value;
-      return { id: msg.id, threadId: msg.threadId, subject, from, date, snippet: msg.snippet };
+      return {
+        id: msg.id,
+        threadId: msg.threadId,
+        subject,
+        from,
+        date,
+        snippet: msg.snippet,
+      };
     }
 
     default:
-      throw new Error(`Gmail: unknown action "${action}"`);
+      throw new Error(`Gmail: unknown action "${String(action)}"`);
   }
 }

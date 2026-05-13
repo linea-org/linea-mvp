@@ -19,7 +19,10 @@ export interface ToolExecutorContext {
   /** Persist a memory entry to the long-term store with embedding. */
   memoryStore?: (key: string, value: string) => Promise<void>;
   /** Semantic search across long-term memories. */
-  memorySearch?: (query: string, topK: number) => Promise<Array<{ key: string; value: unknown; score: number }>>;
+  memorySearch?: (
+    query: string,
+    topK: number,
+  ) => Promise<Array<{ key: string; value: unknown; score: number }>>;
 }
 
 const HTTP_TIMEOUT_MS = 30_000;
@@ -52,7 +55,7 @@ async function dispatch(
     case 'run_javascript':
       throw new Error(
         'run_javascript is disabled. Arbitrary code execution requires a dedicated Pod VM. ' +
-        'Use the transform node for data reshaping or the agent node for logic.',
+          'Use the transform node for data reshaping or the agent node for logic.',
       );
 
     case 'read_variable':
@@ -116,7 +119,7 @@ const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 
 async function readBodyWithLimit(res: Response): Promise<string> {
   const reader = res.body?.getReader();
-  if (!reader) return '';
+  if (!reader) return res.text();
   const chunks: Uint8Array[] = [];
   let total = 0;
   while (true) {
@@ -125,7 +128,10 @@ async function readBodyWithLimit(res: Response): Promise<string> {
     total += value.byteLength;
     if (total > MAX_RESPONSE_BYTES) {
       reader.cancel().catch(() => {});
-      return Buffer.concat(chunks).toString('utf-8') + '\n[response truncated at 2 MB]';
+      return (
+        Buffer.concat(chunks).toString('utf-8') +
+        '\n[response truncated at 2 MB]'
+      );
     }
     chunks.push(value);
   }
@@ -164,4 +170,3 @@ async function httpRequest(args: Record<string, any>): Promise<unknown> {
     clearTimeout(timer);
   }
 }
-

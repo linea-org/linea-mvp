@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { getModelOrDefault, cheapestModelWith } from './models/registry';
+import { getModelOrDefault } from './models/registry';
 import { createModelClient } from './models/client.factory';
 import type { ModelApiKeys } from './models/client.factory';
 import type { WorkflowState } from './variable-substitution';

@@ -61,7 +61,7 @@ export function createModelClient(
     case 'google':
       return createGoogleClient(modelId, apiKeys.GOOGLE_API_KEY);
     default:
-      throw new Error(`Unsupported provider: ${provider}`);
+      throw new Error(`Unsupported provider: ${String(provider)}`);
   }
 }
 

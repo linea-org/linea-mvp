@@ -1,5 +1,5 @@
 import { interrupt } from '@langchain/langgraph';
-import { getModelOrDefault, getModel } from '../models/registry';
+import { getModelOrDefault } from '../models/registry';
 import { createModelClient } from '../models/client.factory';
 import type {
   ChatMessage,
@@ -40,7 +40,10 @@ export interface LongTermMemoryContext {
   workflowId: string | undefined;
   threadId: string;
   store: (key: string, value: string) => Promise<void>;
-  search: (query: string, topK: number) => Promise<Array<{ key: string; value: unknown; score: number }>>;
+  search: (
+    query: string,
+    topK: number,
+  ) => Promise<Array<{ key: string; value: unknown; score: number }>>;
   loadRecent: (topK: number) => Promise<Array<{ key: string; value: unknown }>>;
 }
 
@@ -78,7 +81,7 @@ export async function executeAgentNode(
           recentMemories
             .map(
               ({ key, value }) =>
-                `- ${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`,
+                `- ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value ?? '')}`,
             )
             .join('\n');
       }
@@ -136,8 +139,7 @@ export async function executeAgentNode(
     if (structuredSchema) {
       messages.push({
         role: 'user',
-        content:
-          `${userContent}\n\nYou MUST respond with ONLY a valid JSON object that strictly conforms to this JSON Schema. Output no text before or after the JSON object:\n${JSON.stringify(structuredSchema, null, 2)}`,
+        content: `${userContent}\n\nYou MUST respond with ONLY a valid JSON object that strictly conforms to this JSON Schema. Output no text before or after the JSON object:\n${JSON.stringify(structuredSchema, null, 2)}`,
       });
     } else {
       messages.push({ role: 'user', content: userContent });
@@ -355,7 +357,7 @@ function buildResult(
   if (structuredSchema && typeof finalValue === 'string') {
     try {
       // Strip markdown code fences if present
-      const cleaned = (finalValue as string)
+      const cleaned = finalValue
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/\s*```$/, '')
         .trim();

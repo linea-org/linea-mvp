@@ -20,7 +20,9 @@ async function bootstrap() {
   // Security headers — disable CSP for SSE compatibility
   app.use(helmet({ contentSecurityPolicy: false }));
 
-  const allowedOrigins = (process.env['ALLOWED_ORIGINS'] ?? 'http://localhost:3000')
+  const allowedOrigins = (
+    process.env['ALLOWED_ORIGINS'] ?? 'http://localhost:3000'
+  )
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
@@ -70,4 +72,4 @@ async function bootstrap() {
   app.get(Logger).log(`API running on http://localhost:${port}`);
 }
 
-bootstrap();
+void bootstrap();

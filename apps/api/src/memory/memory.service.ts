@@ -1,5 +1,5 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { and, eq, ilike, desc, isNull, sql } from 'drizzle-orm';
+import { and, eq, desc, isNull, sql } from 'drizzle-orm';
 import type { DrizzleDB, NewMemory } from '@linea/db';
 import { memories, memorySessions } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
@@ -30,7 +30,10 @@ export class MemoryService {
       const vec = await this.embedding.embed(fact.content);
       const vecStr = this.embedding.toVectorString(vec);
 
-      const neighbor = await this.db.execute<{ id: string; similarity: number }>(
+      const neighbor = await this.db.execute<{
+        id: string;
+        similarity: number;
+      }>(
         sql`
           SELECT id, 1 - (embedding <=> ${vecStr}::vector) AS similarity
           FROM memories
@@ -41,7 +44,9 @@ export class MemoryService {
         `,
       );
 
-      const top = (neighbor as unknown as { id: string; similarity: number }[])[0];
+      const top = (
+        neighbor as unknown as { id: string; similarity: number }[]
+      )[0];
 
       if (top && top.similarity >= SUPERSEDE_THRESHOLD) {
         const [inserted] = await this.db
@@ -105,7 +110,12 @@ export class MemoryService {
     const inserted = await this.db
       .select()
       .from(memories)
-      .where(and(eq(memories.workspaceId, workspaceId), sql`${memories.id} = ANY(${createdIds})`));
+      .where(
+        and(
+          eq(memories.workspaceId, workspaceId),
+          sql`${memories.id} = ANY(${createdIds})`,
+        ),
+      );
 
     return {
       memoriesCreated: createdIds.length,
@@ -123,11 +133,16 @@ export class MemoryService {
     // Build parameterized WHERE clause — never interpolate user values into sql.raw
     const scopeFilter = dto.scope ? sql`AND m.scope = ${dto.scope}` : sql``;
     const userFilter = dto.userId ? sql`AND m.user_id = ${dto.userId}` : sql``;
-    const threadFilter = dto.threadId ? sql`AND m.thread_id = ${dto.threadId}` : sql``;
+    const threadFilter = dto.threadId
+      ? sql`AND m.thread_id = ${dto.threadId}`
+      : sql``;
     // Cap query length to prevent expensive ILIKE scans
     const safeQuery = String(dto.query ?? '').slice(0, 200);
 
-    const vectorResults = (await this.db.execute<{ id: string; similarity: number }>(
+    const vectorResults = (await this.db.execute<{
+      id: string;
+      similarity: number;
+    }>(
       sql`
         SELECT id, 1 - (embedding <=> ${vecStr}::vector) AS similarity
         FROM memories m
@@ -165,13 +180,20 @@ export class MemoryService {
       }
     }
 
-    const allIds = [...new Set([...vectorResults.map((r) => r.id), ...keywordIds])];
+    const allIds = [
+      ...new Set([...vectorResults.map((r) => r.id), ...keywordIds]),
+    ];
     if (allIds.length === 0) return [];
 
     const rows = await this.db
       .select()
       .from(memories)
-      .where(and(eq(memories.workspaceId, workspaceId), sql`${memories.id} = ANY(${allIds})`));
+      .where(
+        and(
+          eq(memories.workspaceId, workspaceId),
+          sql`${memories.id} = ANY(${allIds})`,
+        ),
+      );
 
     return rows
       .map((m) => ({ ...m, score: scoreMap.get(m.id) ?? 0 }))
@@ -204,12 +226,18 @@ export class MemoryService {
 
     for (const row of rows) {
       const key = row.factType ?? 'uncategorized';
-      const bucket = key === 'fact' ? 'facts'
-        : key === 'preference' ? 'preferences'
-        : key === 'event' ? 'events'
-        : key === 'profile' ? 'profile'
-        : key === 'system' ? 'system'
-        : 'uncategorized';
+      const bucket =
+        key === 'fact'
+          ? 'facts'
+          : key === 'preference'
+            ? 'preferences'
+            : key === 'event'
+              ? 'events'
+              : key === 'profile'
+                ? 'profile'
+                : key === 'system'
+                  ? 'system'
+                  : 'uncategorized';
       grouped[bucket].push(row);
     }
 
@@ -234,10 +262,14 @@ export class MemoryService {
   }
 
   async findAll(workspaceId: string, query: ListMemoriesDto) {
-    const conditions = [eq(memories.workspaceId, workspaceId), isNull(memories.supersededById)];
+    const conditions = [
+      eq(memories.workspaceId, workspaceId),
+      isNull(memories.supersededById),
+    ];
     if (query.scope) conditions.push(eq(memories.scope, query.scope));
     if (query.threadId) conditions.push(eq(memories.threadId, query.threadId));
-    if (query.workflowId) conditions.push(eq(memories.workflowId, query.workflowId));
+    if (query.workflowId)
+      conditions.push(eq(memories.workflowId, query.workflowId));
 
     return this.db
       .select()

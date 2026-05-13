@@ -123,7 +123,14 @@ export class LangGraphService {
       if (nodeType === 'note') continue;
       builder.addNode(
         node.id,
-        this.createNodeFn(node, onNodeUpdate, workspaceId, checkpointer, workflowId, threadId),
+        this.createNodeFn(
+          node,
+          onNodeUpdate,
+          workspaceId,
+          checkpointer,
+          workflowId,
+          threadId,
+        ),
       );
     }
 
@@ -178,7 +185,7 @@ export class LangGraphService {
     node: WorkflowNode,
     onNodeUpdate: NodeUpdateCallback,
     workspaceId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _checkpointer?: BaseCheckpointSaver,
     workflowId?: string,
     threadId?: string,
@@ -190,7 +197,8 @@ export class LangGraphService {
     if (nodeType === 'subworkflow') {
       return async (state: typeof WorkflowStateAnnotation.State) => {
         const workflowId = node.data?.workflowId as string | undefined;
-        if (!workflowId) throw new Error('Subworkflow node is missing workflowId');
+        if (!workflowId)
+          throw new Error('Subworkflow node is missing workflowId');
 
         const [wf] = await this.db
           .select()
@@ -217,19 +225,35 @@ export class LangGraphService {
           subOutput = (s as any)?.variables?.lastOutput ?? null;
         }
 
-        const nodeKey = (node.data?.nodeName as string) || (node.data?.name as string) || node.id;
+        const nodeKey =
+          (node.data?.nodeName as string) ||
+          (node.data?.name as string) ||
+          node.id;
         onNodeUpdate(node.id, 'completed', subOutput);
 
         return {
-          variables: { lastOutput: subOutput, [nodeKey]: subOutput, [node.id]: subOutput },
+          variables: {
+            lastOutput: subOutput,
+            [nodeKey]: subOutput,
+            [node.id]: subOutput,
+          },
           chatHistory: [],
           memory: {},
           currentNodeId: node.id,
           nodeResults: {
-            [node.id]: { nodeId: node.id, status: 'completed', output: subOutput, completedAt: new Date().toISOString() },
+            [node.id]: {
+              nodeId: node.id,
+              status: 'completed',
+              output: subOutput,
+              completedAt: new Date().toISOString(),
+            },
           },
           pendingAuth: null,
-          cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+          cumulativeUsage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+          },
         };
       };
     }
@@ -241,13 +265,21 @@ export class LangGraphService {
         onNodeUpdate(node.id, 'completed', preloaded.output);
         const nodeKey = node.data?.nodeName || node.data?.name || node.id;
         return {
-          variables: { lastOutput: preloaded.output, [nodeKey]: preloaded.output, [node.id]: preloaded.output },
+          variables: {
+            lastOutput: preloaded.output,
+            [nodeKey]: preloaded.output,
+            [node.id]: preloaded.output,
+          },
           chatHistory: [],
           memory: {},
           currentNodeId: node.id,
           nodeResults: { [node.id]: preloaded },
           pendingAuth: null,
-          cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+          cumulativeUsage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+          },
         };
       }
 
@@ -355,14 +387,6 @@ export class LangGraphService {
       const node = definition.nodes.find((n) => n.id === nodeId);
       if (!node) return 'default';
 
-      const wfState: WorkflowState = {
-        variables: state.variables,
-        chatHistory: state.chatHistory,
-        nodeResults: state.nodeResults,
-        pendingAuth: state.pendingAuth,
-        loopResults: state.loopResults || [],
-      };
-
       const result = state.nodeResults?.[nodeId];
       if (!result) return 'else';
 
@@ -381,7 +405,10 @@ export class LangGraphService {
     checkpointer?: BaseCheckpointSaver,
     initialMemory?: Record<string, any>,
     workflowId?: string,
-    preloadedState?: { variables: Record<string, any>; nodeResults: Record<string, any> },
+    preloadedState?: {
+      variables: Record<string, any>;
+      nodeResults: Record<string, any>;
+    },
   ): AsyncGenerator<typeof WorkflowStateAnnotation.State> {
     const graph = this.buildGraph(
       definition,

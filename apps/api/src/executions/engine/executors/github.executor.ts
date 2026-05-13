@@ -6,7 +6,7 @@ export interface GitHubNodeData {
   repo?: string;
   title?: string;
   body?: string;
-  labels?: string;  // comma-separated
+  labels?: string; // comma-separated
   issueNumber?: number | string;
   head?: string;
   base?: string;
@@ -17,7 +17,8 @@ export async function executeGitHubNode(
   _state: WorkflowState,
   token: string | undefined,
 ): Promise<unknown> {
-  if (!token) throw new Error('GitHub token not configured (secret name: GITHUB_TOKEN)');
+  if (!token)
+    throw new Error('GitHub token not configured (secret name: GITHUB_TOKEN)');
   if (!nodeData.owner) throw new Error('GitHub: owner is required');
   if (!nodeData.repo) throw new Error('GitHub: repo is required');
 
@@ -38,7 +39,8 @@ export async function executeGitHubNode(
     });
     const json = (await resp.json()) as unknown;
     if (!resp.ok) {
-      const msg = (json as { message?: string })?.message ?? `HTTP ${resp.status}`;
+      const msg =
+        (json as { message?: string })?.message ?? `HTTP ${resp.status}`;
       throw new Error(`GitHub API error: ${msg}`);
     }
     return json;
@@ -46,9 +48,13 @@ export async function executeGitHubNode(
 
   switch (action) {
     case 'create_issue': {
-      if (!nodeData.title) throw new Error('GitHub: title is required to create an issue');
+      if (!nodeData.title)
+        throw new Error('GitHub: title is required to create an issue');
       const labels = nodeData.labels
-        ? nodeData.labels.split(',').map((l) => l.trim()).filter(Boolean)
+        ? nodeData.labels
+            .split(',')
+            .map((l) => l.trim())
+            .filter(Boolean)
         : undefined;
       const issue = (await ghFetch('/issues', 'POST', {
         title: nodeData.title,
@@ -59,16 +65,25 @@ export async function executeGitHubNode(
     }
 
     case 'comment_issue': {
-      if (!nodeData.issueNumber) throw new Error('GitHub: issueNumber is required to comment');
-      if (!nodeData.body) throw new Error('GitHub: body is required for a comment');
-      const comment = (await ghFetch(`/issues/${nodeData.issueNumber}/comments`, 'POST', {
-        body: nodeData.body,
-      })) as { id: number; html_url: string };
+      if (!nodeData.issueNumber)
+        throw new Error('GitHub: issueNumber is required to comment');
+      if (!nodeData.body)
+        throw new Error('GitHub: body is required for a comment');
+      const comment = (await ghFetch(
+        `/issues/${nodeData.issueNumber}/comments`,
+        'POST',
+        {
+          body: nodeData.body,
+        },
+      )) as { id: number; html_url: string };
       return { id: comment.id, url: comment.html_url };
     }
 
     case 'list_issues': {
-      const issues = (await ghFetch('/issues?state=open&per_page=50', 'GET')) as {
+      const issues = (await ghFetch(
+        '/issues?state=open&per_page=50',
+        'GET',
+      )) as {
         number: number;
         title: string;
         state: string;
@@ -85,7 +100,8 @@ export async function executeGitHubNode(
     }
 
     case 'create_pr': {
-      if (!nodeData.title) throw new Error('GitHub: title is required to create a PR');
+      if (!nodeData.title)
+        throw new Error('GitHub: title is required to create a PR');
       if (!nodeData.head) throw new Error('GitHub: head branch is required');
       if (!nodeData.base) throw new Error('GitHub: base branch is required');
       const pr = (await ghFetch('/pulls', 'POST', {
@@ -98,6 +114,6 @@ export async function executeGitHubNode(
     }
 
     default:
-      throw new Error(`GitHub: unknown action "${action}"`);
+      throw new Error(`GitHub: unknown action "${String(action)}"`);
   }
 }

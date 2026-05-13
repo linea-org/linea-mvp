@@ -139,17 +139,24 @@ export class MemoryService {
 
   // ─── Secret resolution ────────────────────────────────────────────────────
 
-  async loadSecret(workspaceId: string, name: string): Promise<string | undefined> {
+  async loadSecret(
+    workspaceId: string,
+    name: string,
+  ): Promise<string | undefined> {
     try {
       const [row] = await this.db
         .select({ valueEncrypted: secrets.valueEncrypted })
         .from(secrets)
-        .where(and(eq(secrets.workspaceId, workspaceId), eq(secrets.name, name)))
+        .where(
+          and(eq(secrets.workspaceId, workspaceId), eq(secrets.name, name)),
+        )
         .limit(1);
       if (!row) return undefined;
       return this.decrypt(row.valueEncrypted);
     } catch (err) {
-      this.logger.warn(`Failed to load secret ${name} in workspace ${workspaceId}: ${err}`);
+      this.logger.warn(
+        `Failed to load secret ${name} in workspace ${workspaceId}: ${err}`,
+      );
       return undefined;
     }
   }
@@ -209,7 +216,9 @@ export class MemoryService {
         error?: { message: string };
       };
       if (!resp.ok || !json.data?.[0]) {
-        this.logger.warn(`Embedding API error: ${json.error?.message ?? resp.status}`);
+        this.logger.warn(
+          `Embedding API error: ${json.error?.message ?? resp.status}`,
+        );
         return null;
       }
       return json.data[0].embedding;
@@ -232,14 +241,16 @@ export class MemoryService {
       const embedding = await this.generateEmbedding(content, openaiKey);
 
       // Upsert: delete existing entry for this key+scope, then insert fresh
-      await this.db.delete(memories).where(
-        and(
-          eq(memories.workspaceId, workspaceId),
-          eq(memories.scope, 'workflow'),
-          ...(workflowId ? [eq(memories.workflowId, workflowId)] : []),
-          sql`${memories.metadata}->>'key' = ${key}`,
-        ),
-      );
+      await this.db
+        .delete(memories)
+        .where(
+          and(
+            eq(memories.workspaceId, workspaceId),
+            eq(memories.scope, 'workflow'),
+            ...(workflowId ? [eq(memories.workflowId, workflowId)] : []),
+            sql`${memories.metadata}->>'key' = ${key}`,
+          ),
+        );
 
       await this.db.insert(memories).values({
         workspaceId,
@@ -302,7 +313,9 @@ export class MemoryService {
         .filter((r) => r.content.toLowerCase().includes(q))
         .slice(0, topK)
         .map((r) => ({
-          key: String(r.metadata?.key ?? ''),
+          key: String(
+            (r.metadata as Record<string, unknown> | null)?.key ?? '',
+          ),
           value: r.metadata?.value,
           score: 0.5,
         }));
@@ -333,7 +346,11 @@ export class MemoryService {
         .limit(topK);
 
       return rows.map((r) => ({
-        key: String(r.metadata?.key ?? r.content.split(':')[0] ?? ''),
+        key: String(
+          (r.metadata as Record<string, unknown> | null)?.key ??
+            r.content.split(':')[0] ??
+            '',
+        ),
         value: r.metadata?.value ?? r.content,
       }));
     } catch (err) {
