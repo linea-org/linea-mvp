@@ -135,6 +135,7 @@ export default function WorkflowsPage() {
         `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows`,
         { name: newName.trim(), description: newDesc.trim() || undefined },
       );
+      localStorage.setItem('linea_gs_workflow', 'true');
       setCreateOpen(false);
       setNewName('');
       setNewDesc('');

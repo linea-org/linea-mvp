@@ -334,6 +334,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         `/workspaces/${workspaceId}/pods/${podId}/executions`,
         { workflowId, input: testInput },
       );
+      localStorage.setItem('linea_gs_run', 'true');
       setRunStatus({ id: ex.id, status: ex.status ?? 'queued' });
       showToast('Execution started');
 
