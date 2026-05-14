@@ -29,9 +29,12 @@ import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import { ListWorkflowsDto } from './dto/list-workflows.dto';
 import { ListTemplatesDto } from './dto/list-templates.dto';
 import { GenerateWorkflowDto } from './dto/generate-workflow.dto';
+import { PublishTemplateDto, UpdateTemplateDto } from './dto/publish-template.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
+import { GlobalAdminGuard } from '../common/guards/global-admin.guard';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
@@ -169,6 +172,47 @@ export class WorkflowsController {
     return this.service.restore(podId, id);
   }
 
+  @Delete(':id/permanent')
+  @HttpCode(204)
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Permanently delete a trashed workflow (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  hardDelete(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.hardDelete(podId, id);
+  }
+
+  @Patch(':id/template')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Mark or unmark a workflow as a pod template (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  setTemplate(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @Body() body: { isTemplate: boolean },
+  ) {
+    return this.service.setTemplate(podId, id, body.isTemplate);
+  }
+
+  @Post(':id/publish')
+  @UseGuards(GlobalAdminGuard)
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Publish a workflow to the public gallery (platform admin only)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  publishToGallery(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Body() dto: PublishTemplateDto,
+  ) {
+    return this.service.publishToGallery(podId, id, user.id, dto);
+  }
+
   @Post('from-template/:templateId')
   @RequireRole('editor')
   @ApiOperation({ summary: 'Clone a template into this pod (editor+)' })
@@ -186,7 +230,9 @@ export class WorkflowsController {
   @Post(':id/generate')
   @SkipThrottle()
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Generate workflow from natural language (SSE stream, editor+)' })
+  @ApiOperation({
+    summary: 'Generate workflow from natural language (SSE stream, editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
@@ -238,5 +284,54 @@ export class TemplatesController {
   @ApiQuery({ name: 'featured', required: false })
   listTemplates(@Query() query: ListTemplatesDto) {
     return this.service.listTemplates(query);
+  }
+
+  @Get('me/favorites')
+  @UseGuards(ClerkAuthGuard)
+  @ApiOperation({ summary: 'Get current user favorite template IDs' })
+  getFavoriteIds(@CurrentUser() user: User) {
+    return this.service.getFavoriteIds(user.id);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single template (for preview)' })
+  @ApiParam({ name: 'id' })
+  getTemplate(@Param('id') id: string) {
+    return this.service.getTemplate(id);
+  }
+
+  @Post(':id/favorite')
+  @HttpCode(204)
+  @UseGuards(ClerkAuthGuard)
+  @ApiOperation({ summary: 'Add a template to favorites' })
+  @ApiParam({ name: 'id' })
+  favoriteTemplate(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.favoriteTemplate(user.id, id);
+  }
+
+  @Delete(':id/favorite')
+  @HttpCode(204)
+  @UseGuards(ClerkAuthGuard)
+  @ApiOperation({ summary: 'Remove a template from favorites' })
+  @ApiParam({ name: 'id' })
+  unfavoriteTemplate(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.unfavoriteTemplate(user.id, id);
+  }
+
+  @Patch(':id')
+  @UseGuards(ClerkAuthGuard, GlobalAdminGuard)
+  @ApiOperation({ summary: 'Update a gallery template (platform admin only)' })
+  @ApiParam({ name: 'id' })
+  updateTemplate(@Param('id') id: string, @Body() dto: UpdateTemplateDto) {
+    return this.service.updateGalleryTemplate(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(ClerkAuthGuard, GlobalAdminGuard)
+  @ApiOperation({ summary: 'Delete a gallery template (platform admin only)' })
+  @ApiParam({ name: 'id' })
+  deleteTemplate(@Param('id') id: string) {
+    return this.service.deleteGalleryTemplate(id);
   }
 }

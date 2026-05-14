@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@linea/ui/components/dialog';
 import {
   Table,
@@ -33,6 +34,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@linea/ui/components/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@linea/ui/components/select';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   MoreVerticalIcon,
@@ -41,6 +49,8 @@ import {
   Undo02Icon,
   WorkflowSquare01Icon,
   Delete02Icon,
+  GridViewIcon,
+  ArrowUp01Icon,
 } from '@hugeicons/core-free-icons';
 
 interface Workflow {
@@ -49,18 +59,22 @@ interface Workflow {
   description: string | null;
   deployedAt: string | null;
   starred: boolean;
+  isTemplate: boolean;
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-type ViewMode = 'active' | 'starred' | 'trash';
+type ViewMode = 'active' | 'starred' | 'pod-templates' | 'trash';
+
+const CATEGORIES = ['Productivity', 'Communication', 'Data', 'DevOps', 'Automation', 'Marketing'];
 
 export default function WorkflowsPage() {
   const { podId } = useParams<{ podId: string }>();
   const { getToken } = useAuth();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const router = useRouter();
+
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewMode>('active');
@@ -68,6 +82,19 @@ export default function WorkflowsPage() {
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Publish to gallery state
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishTarget, setPublishTarget] = useState<Workflow | null>(null);
+  const [publishName, setPublishName] = useState('');
+  const [publishDesc, setPublishDesc] = useState('');
+  const [publishCategory, setPublishCategory] = useState('');
+  const [publishFeatured, setPublishFeatured] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+
+  // Permanent delete confirm state
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<Workflow | null>(null);
+  const [hardDeleting, setHardDeleting] = useState(false);
 
   async function load(mode: ViewMode = view) {
     if (!activeWorkspace) return;
@@ -79,6 +106,7 @@ export default function WorkflowsPage() {
       const params = new URLSearchParams();
       if (mode === 'trash') params.set('trashed', 'true');
       if (mode === 'starred') params.set('starred', 'true');
+      if (mode === 'pod-templates') params.set('isTemplate', 'true');
       const data = await api.get<{ workflows: Workflow[] }>(
         `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows?${params}`,
       );
@@ -101,8 +129,25 @@ export default function WorkflowsPage() {
       starred: !wf.starred,
     });
     setWorkflows((prev) =>
-      prev.map((w) => w.id === wf.id ? { ...w, starred: !wf.starred } : w)
+      prev
+        .map((w) => (w.id === wf.id ? { ...w, starred: !wf.starred } : w))
         .filter((w) => view !== 'starred' || w.starred),
+    );
+  }
+
+  async function toggleTemplate(wf: Workflow) {
+    if (!activeWorkspace) return;
+    const token = await getToken();
+    if (!token) return;
+    const api = createApiClient(token);
+    const updated = await api.patch<Workflow>(
+      `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${wf.id}/template`,
+      { isTemplate: !wf.isTemplate },
+    );
+    setWorkflows((prev) =>
+      prev
+        .map((w) => (w.id === wf.id ? updated : w))
+        .filter((w) => view !== 'pod-templates' || w.isTemplate),
     );
   }
 
@@ -122,6 +167,54 @@ export default function WorkflowsPage() {
     const api = createApiClient(token);
     await api.patch(`/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${id}/restore`);
     setWorkflows((prev) => prev.filter((w) => w.id !== id));
+  }
+
+  async function hardDeleteWorkflow() {
+    if (!activeWorkspace || !hardDeleteTarget) return;
+    setHardDeleting(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await api.delete(
+        `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${hardDeleteTarget.id}/permanent`,
+      );
+      setWorkflows((prev) => prev.filter((w) => w.id !== hardDeleteTarget.id));
+      setHardDeleteTarget(null);
+    } finally {
+      setHardDeleting(false);
+    }
+  }
+
+  function openPublishDialog(wf: Workflow) {
+    setPublishTarget(wf);
+    setPublishName(wf.name);
+    setPublishDesc(wf.description ?? '');
+    setPublishCategory('');
+    setPublishFeatured(false);
+    setPublishOpen(true);
+  }
+
+  async function handlePublish() {
+    if (!activeWorkspace || !publishTarget || !publishCategory) return;
+    setPublishing(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await api.post(
+        `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${publishTarget.id}/publish`,
+        {
+          name: publishName || undefined,
+          description: publishDesc || undefined,
+          category: publishCategory,
+          featured: publishFeatured,
+        },
+      );
+      setPublishOpen(false);
+    } finally {
+      setPublishing(false);
+    }
   }
 
   async function handleCreate() {
@@ -148,8 +241,16 @@ export default function WorkflowsPage() {
   const viewTabs: { key: ViewMode; label: string }[] = [
     { key: 'active', label: 'All' },
     { key: 'starred', label: 'Starred' },
+    { key: 'pod-templates', label: 'Pod templates' },
     { key: 'trash', label: 'Trash' },
   ];
+
+  const emptyMessages: Record<ViewMode, { title: string; sub: string }> = {
+    active: { title: 'No workflows yet', sub: 'Create your first workflow to start automating with AI nodes.' },
+    starred: { title: 'No starred workflows', sub: 'Star workflows to find them quickly here.' },
+    'pod-templates': { title: 'No pod templates', sub: 'Mark a workflow as a pod template so it appears here for easy cloning.' },
+    trash: { title: 'Trash is empty', sub: 'Workflows you delete will appear here before permanent removal.' },
+  };
 
   return (
     <div className="space-y-4">
@@ -181,20 +282,20 @@ export default function WorkflowsPage() {
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
             <HugeiconsIcon
-              icon={view === 'trash' ? Delete02Icon : view === 'starred' ? StarIcon : WorkflowSquare01Icon}
+              icon={
+                view === 'trash'
+                  ? Delete02Icon
+                  : view === 'starred'
+                    ? StarIcon
+                    : view === 'pod-templates'
+                      ? GridViewIcon
+                      : WorkflowSquare01Icon
+              }
               className="size-6 text-muted-foreground"
             />
           </div>
-          <p className="text-sm font-medium">
-            {view === 'trash' ? 'Trash is empty' : view === 'starred' ? 'No starred workflows' : 'No workflows yet'}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground max-w-xs">
-            {view === 'trash'
-              ? 'Workflows you delete will appear here.'
-              : view === 'starred'
-              ? 'Star workflows to find them quickly here.'
-              : 'Create your first workflow to start automating with AI nodes.'}
-          </p>
+          <p className="text-sm font-medium">{emptyMessages[view].title}</p>
+          <p className="mt-1 text-xs text-muted-foreground max-w-xs">{emptyMessages[view].sub}</p>
           {view === 'active' && (
             <Button size="sm" className="mt-5" onClick={() => setCreateOpen(true)}>
               New workflow
@@ -216,17 +317,26 @@ export default function WorkflowsPage() {
               <TableRow key={wf.id}>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    {wf.starred && <HugeiconsIcon icon={StarIcon} className="size-3.5 text-yellow-500 fill-yellow-500 shrink-0" />}
+                    {wf.starred && (
+                      <HugeiconsIcon icon={StarIcon} className="size-3.5 text-yellow-500 fill-yellow-500 shrink-0" />
+                    )}
                     <div>
                       <p className="font-medium">{wf.name}</p>
-                      {wf.description && <p className="text-xs text-muted-foreground">{wf.description}</p>}
+                      {wf.description && (
+                        <p className="text-xs text-muted-foreground">{wf.description}</p>
+                      )}
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={wf.deployedAt ? 'default' : 'secondary'}>
-                    {wf.deletedAt ? 'trashed' : wf.deployedAt ? 'deployed' : 'draft'}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant={wf.deployedAt ? 'default' : 'secondary'}>
+                      {wf.deletedAt ? 'trashed' : wf.deployedAt ? 'deployed' : 'draft'}
+                    </Badge>
+                    {wf.isTemplate && !wf.deletedAt && (
+                      <Badge variant="outline" className="text-[10px]">template</Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   {new Date(wf.updatedAt).toLocaleDateString()}
@@ -235,9 +345,7 @@ export default function WorkflowsPage() {
                   <div className="flex items-center gap-1 justify-end">
                     {view !== 'trash' && (
                       <Button size="sm" variant="outline" asChild>
-                        <Link href={`/pods/${podId}/workflows/${wf.id}`}>
-                          Open builder
-                        </Link>
+                        <Link href={`/pods/${podId}/workflows/${wf.id}`}>Open builder</Link>
                       </Button>
                     )}
                     <DropdownMenu>
@@ -248,13 +356,19 @@ export default function WorkflowsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {view !== 'trash' && (
-                          <DropdownMenuItem onClick={() => void toggleStar(wf)}>
-                            <HugeiconsIcon icon={StarIcon} className="mr-2 size-4" />
-                            {wf.starred ? 'Unstar' : 'Star'}
-                          </DropdownMenuItem>
-                        )}
-                        {view !== 'trash' && (
                           <>
+                            <DropdownMenuItem onClick={() => void toggleStar(wf)}>
+                              <HugeiconsIcon icon={StarIcon} className="mr-2 size-4" />
+                              {wf.starred ? 'Unstar' : 'Star'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void toggleTemplate(wf)}>
+                              <HugeiconsIcon icon={GridViewIcon} className="mr-2 size-4" />
+                              {wf.isTemplate ? 'Remove pod template' : 'Mark as pod template'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openPublishDialog(wf)}>
+                              <HugeiconsIcon icon={ArrowUp01Icon} className="mr-2 size-4" />
+                              Publish to gallery
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
@@ -266,10 +380,20 @@ export default function WorkflowsPage() {
                           </>
                         )}
                         {view === 'trash' && (
-                          <DropdownMenuItem onClick={() => void restoreWorkflow(wf.id)}>
-                            <HugeiconsIcon icon={Undo02Icon} className="mr-2 size-4" />
-                            Restore
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem onClick={() => void restoreWorkflow(wf.id)}>
+                              <HugeiconsIcon icon={Undo02Icon} className="mr-2 size-4" />
+                              Restore
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setHardDeleteTarget(wf)}
+                            >
+                              <HugeiconsIcon icon={Delete02Icon} className="mr-2 size-4" />
+                              Delete permanently
+                            </DropdownMenuItem>
+                          </>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -281,6 +405,7 @@ export default function WorkflowsPage() {
         </Table>
       )}
 
+      {/* Create workflow dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
@@ -310,6 +435,89 @@ export default function WorkflowsPage() {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button onClick={() => void handleCreate()} disabled={!newName.trim() || creating}>
               {creating ? 'Creating…' : 'Create & open builder'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Publish to gallery dialog */}
+      <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Publish to gallery</DialogTitle>
+            <DialogDescription>
+              This workflow will be added to the public template gallery and available to all users.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={publishName}
+                onChange={(e) => setPublishName(e.target.value)}
+                placeholder="Template name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description</Label>
+              <Input
+                value={publishDesc}
+                onChange={(e) => setPublishDesc(e.target.value)}
+                placeholder="Describe what this template does"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Select value={publishCategory} onValueChange={setPublishCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={publishFeatured}
+                onChange={(e) => setPublishFeatured(e.target.checked)}
+                className="rounded"
+              />
+              Mark as featured
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPublishOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!publishName.trim() || !publishCategory || publishing}
+              onClick={() => void handlePublish()}
+            >
+              {publishing ? 'Publishing…' : 'Publish'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permanent delete confirm */}
+      <Dialog open={!!hardDeleteTarget} onOpenChange={(o) => { if (!o) setHardDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete permanently?</DialogTitle>
+            <DialogDescription>
+              <strong>{hardDeleteTarget?.name}</strong> will be permanently deleted and cannot be recovered. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHardDeleteTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={hardDeleting}
+              onClick={() => void hardDeleteWorkflow()}
+            >
+              {hardDeleting ? 'Deleting…' : 'Delete permanently'}
             </Button>
           </DialogFooter>
         </DialogContent>
