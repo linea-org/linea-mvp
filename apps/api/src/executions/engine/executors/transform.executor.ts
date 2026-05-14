@@ -1,7 +1,5 @@
-import { Parser } from 'expr-eval';
+import jexl from 'jexl';
 import type { WorkflowState } from '../variable-substitution';
-
-const parser = new Parser({ operators: { assignment: false } });
 
 export function executeTransformNode(
   nodeData: Record<string, any>,
@@ -17,12 +15,12 @@ export function executeTransformNode(
   };
 
   try {
-    return parser.evaluate(expression, context);
+    return jexl.evalSync(expression, context);
   } catch (err) {
     throw new Error(
       `Transform expression error: ${err instanceof Error ? err.message : String(err)}. ` +
-      `Use simple expressions (e.g. "input.name", "lastOutput.count + 1"). ` +
-      `Full code execution requires a Pod VM (coming soon).`,
+        `Use simple expressions (e.g. "input.name", "lastOutput.count + 1"). ` +
+        `Full code execution requires a Pod VM (coming soon).`,
     );
   }
 }
