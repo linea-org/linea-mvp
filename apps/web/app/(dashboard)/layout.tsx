@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import { useClerk, useUser, useAuth } from '@clerk/nextjs';
 import { WorkspaceProvider, useWorkspace } from '@/contexts/workspace-context';
 import { PodProvider, usePod } from '@/contexts/space-context';
+import { WelcomeModal } from '@/components/onboarding/welcome-modal';
+import { GettingStarted } from '@/components/onboarding/getting-started';
 import { createApiClient } from '@/lib/api';
 import {
   SidebarProvider,
@@ -225,6 +227,7 @@ function DashboardSidebar() {
         </SidebarMenu>
       </SidebarContent>
 
+      <GettingStarted />
       <SidebarFooter className="border-t px-3 py-3">
         <div className="flex items-center gap-2">
           <Avatar className="size-7 shrink-0">
@@ -293,6 +296,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </header>
             <div className="flex-1 p-6">{children}</div>
           </main>
+          <WelcomeModal />
         </SidebarProvider>
       </PodProvider>
     </WorkspaceProvider>
