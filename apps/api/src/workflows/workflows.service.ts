@@ -9,6 +9,7 @@ import {
   isNull,
   isNotNull,
 } from 'drizzle-orm';
+import { randomBytes } from 'crypto';
 import type { SQL } from 'drizzle-orm';
 import type { DrizzleDB, NewWorkflow } from '@linea/db';
 import {
@@ -17,6 +18,7 @@ import {
   templates,
   workflowFavorites,
   templateUpvotes,
+  webhooks,
 } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { SchedulesService } from '../schedules/schedules.service';
@@ -166,7 +168,10 @@ export class WorkflowsService {
       .returning();
 
     if (dto.definition) {
-      await this.schedulesService.syncWorkflowSchedule(podId, id, dto.definition);
+      await Promise.all([
+        this.schedulesService.syncWorkflowSchedule(podId, id, dto.definition),
+        this.syncWorkflowWebhook(podId, id, dto.definition),
+      ]);
     }
 
     return updated;
@@ -191,6 +196,29 @@ export class WorkflowsService {
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
     return updated;
+  }
+
+  private async syncWorkflowWebhook(
+    podId: string,
+    workflowId: string,
+    definition: unknown,
+  ): Promise<void> {
+    const nodes: any[] = (definition as any)?.nodes ?? [];
+    const startNode = nodes.find((n: any) => n.type === 'start');
+    const triggerType = startNode?.data?.triggerType as string | undefined;
+
+    if (triggerType === 'webhook') {
+      const [existing] = await this.db
+        .select({ id: webhooks.id })
+        .from(webhooks)
+        .where(eq(webhooks.workflowId, workflowId))
+        .limit(1);
+
+      if (!existing) {
+        const secretToken = randomBytes(24).toString('hex');
+        await this.db.insert(webhooks).values({ podId, workflowId, secretToken });
+      }
+    }
   }
 
   async star(podId: string, id: string, starred: boolean) {
