@@ -11,7 +11,13 @@ import {
 } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { DrizzleDB, NewWorkflow } from '@linea/db';
-import { workflows, workflowVersions, templates, templateFavorites } from '@linea/db';
+import {
+  workflows,
+  workflowVersions,
+  templates,
+  workflowFavorites,
+  templateUpvotes,
+} from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import type { CreateWorkflowDto } from './dto/create-workflow.dto';
 import type { UpdateWorkflowDto } from './dto/update-workflow.dto';
@@ -59,7 +65,7 @@ export class WorkflowsService {
     return workflow;
   }
 
-  async findAll(podId: string, query: ListWorkflowsDto) {
+  async findAll(podId: string, query: ListWorkflowsDto, userId: string) {
     const conditions = [eq(workflows.podId, podId)];
 
     if (query.trashed) {
@@ -73,6 +79,26 @@ export class WorkflowsService {
     if (query.starred) conditions.push(eq(workflows.starred, true));
     if (query.search)
       conditions.push(ilike(workflows.name, `%${query.search}%`));
+
+    if (query.favorited) {
+      const favIds = await this.db
+        .select({ workflowId: workflowFavorites.workflowId })
+        .from(workflowFavorites)
+        .where(
+          and(
+            eq(workflowFavorites.userId, userId),
+            eq(workflows.podId, podId),
+          ),
+        )
+        .innerJoin(workflows, eq(workflowFavorites.workflowId, workflows.id));
+
+      const ids = favIds.map((r) => r.workflowId);
+      if (ids.length === 0) {
+        return { workflows: [], meta: { page: query.page, limit: query.limit, total: 0 } };
+      }
+      const { inArray } = await import('drizzle-orm');
+      conditions.push(inArray(workflows.id, ids));
+    }
 
     const [{ total }] = await this.db
       .select({ total: count() })
@@ -340,7 +366,7 @@ export class WorkflowsService {
     return template;
   }
 
-  async getTemplate(id: string) {
+  async getTemplate(id: string, incrementView = false) {
     const [template] = await this.db
       .select()
       .from(templates)
@@ -348,6 +374,11 @@ export class WorkflowsService {
       .limit(1);
 
     if (!template) throw new NotFoundException(`Template ${id} not found`);
+
+    if (incrementView) {
+      this.incrementTemplateViews(id);
+    }
+
     return template;
   }
 
@@ -371,31 +402,88 @@ export class WorkflowsService {
     if (!deleted.length) throw new NotFoundException(`Template ${id} not found`);
   }
 
-  async favoriteTemplate(userId: string, templateId: string): Promise<void> {
-    // Verify template exists
-    await this.getTemplate(templateId);
+  // ─── Workflow favorites (per-user bookmarks) ─────────────────────────────
+
+  async favoriteWorkflow(userId: string, workflowId: string): Promise<void> {
     await this.db
-      .insert(templateFavorites)
-      .values({ userId, templateId })
+      .insert(workflowFavorites)
+      .values({ userId, workflowId })
       .onConflictDoNothing();
   }
 
-  async unfavoriteTemplate(userId: string, templateId: string): Promise<void> {
+  async unfavoriteWorkflow(userId: string, workflowId: string): Promise<void> {
     await this.db
-      .delete(templateFavorites)
+      .delete(workflowFavorites)
       .where(
         and(
-          eq(templateFavorites.userId, userId),
-          eq(templateFavorites.templateId, templateId),
+          eq(workflowFavorites.userId, userId),
+          eq(workflowFavorites.workflowId, workflowId),
         ),
       );
   }
 
-  async getFavoriteIds(userId: string): Promise<string[]> {
+  async getWorkflowFavoriteIds(userId: string, podId: string): Promise<string[]> {
     const rows = await this.db
-      .select({ templateId: templateFavorites.templateId })
-      .from(templateFavorites)
-      .where(eq(templateFavorites.userId, userId));
+      .select({ workflowId: workflowFavorites.workflowId })
+      .from(workflowFavorites)
+      .innerJoin(workflows, eq(workflowFavorites.workflowId, workflows.id))
+      .where(
+        and(eq(workflowFavorites.userId, userId), eq(workflows.podId, podId)),
+      );
+
+    return rows.map((r) => r.workflowId);
+  }
+
+  // ─── Template upvotes + views ─────────────────────────────────────────────
+
+  incrementTemplateViews(id: string): void {
+    void this.db
+      .update(templates)
+      .set({ views: sql`views + 1` })
+      .where(eq(templates.id, id));
+  }
+
+  async toggleTemplateUpvote(
+    userId: string,
+    templateId: string,
+  ): Promise<{ upvoted: boolean; upvotes: number }> {
+    const [existing] = await this.db
+      .select()
+      .from(templateUpvotes)
+      .where(
+        and(
+          eq(templateUpvotes.userId, userId),
+          eq(templateUpvotes.templateId, templateId),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      await this.db
+        .delete(templateUpvotes)
+        .where(eq(templateUpvotes.id, existing.id));
+      const [t] = await this.db
+        .update(templates)
+        .set({ upvotes: sql`GREATEST(upvotes - 1, 0)`, updatedAt: new Date() })
+        .where(eq(templates.id, templateId))
+        .returning({ upvotes: templates.upvotes });
+      return { upvoted: false, upvotes: t?.upvotes ?? 0 };
+    } else {
+      await this.db.insert(templateUpvotes).values({ userId, templateId });
+      const [t] = await this.db
+        .update(templates)
+        .set({ upvotes: sql`upvotes + 1`, updatedAt: new Date() })
+        .where(eq(templates.id, templateId))
+        .returning({ upvotes: templates.upvotes });
+      return { upvoted: true, upvotes: t?.upvotes ?? 0 };
+    }
+  }
+
+  async getUserUpvotedTemplateIds(userId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ templateId: templateUpvotes.templateId })
+      .from(templateUpvotes)
+      .where(eq(templateUpvotes.userId, userId));
 
     return rows.map((r) => r.templateId);
   }

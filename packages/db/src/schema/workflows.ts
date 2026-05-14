@@ -52,14 +52,29 @@ export const templates = pgTable('templates', {
   definition: jsonb('definition').$type<WorkflowDefinition>(),
   thumbnailUrl: text('thumbnail_url'),
   downloads: integer('downloads').default(0).notNull(),
+  views: integer('views').default(0).notNull(),
+  upvotes: integer('upvotes').default(0).notNull(),
   featured: boolean('featured').default(false).notNull(),
   publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const templateFavorites = pgTable(
-  'template_favorites',
+// Per-user workflow bookmarks (replaces the team-wide starred boolean for personal saves)
+export const workflowFavorites = pgTable(
+  'workflow_favorites',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    workflowId: uuid('workflow_id').references(() => workflows.id, { onDelete: 'cascade' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ uniq: unique().on(t.userId, t.workflowId) }),
+);
+
+// Template upvotes — one per user per template, toggleable
+export const templateUpvotes = pgTable(
+  'template_upvotes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
@@ -85,4 +100,5 @@ export type Workflow = typeof workflows.$inferSelect;
 export type NewWorkflow = typeof workflows.$inferInsert;
 export type WorkflowVersion = typeof workflowVersions.$inferSelect;
 export type Template = typeof templates.$inferSelect;
-export type TemplateFavorite = typeof templateFavorites.$inferSelect;
+export type WorkflowFavorite = typeof workflowFavorites.$inferSelect;
+export type TemplateUpvote = typeof templateUpvotes.$inferSelect;

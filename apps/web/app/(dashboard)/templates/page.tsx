@@ -28,7 +28,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   WorkflowSquare01Icon,
   Search01Icon,
-  FavouriteIcon,
+  ArrowUp01Icon,
   ArrowRight01Icon,
 } from '@hugeicons/core-free-icons';
 
@@ -45,6 +45,8 @@ interface Template {
   category: string;
   featured: boolean;
   downloads: number;
+  views: number;
+  upvotes: number;
   thumbnailUrl: string | null;
   workflowId: string | null;
   definition?: { nodes: TemplateNode[]; edges: unknown[] } | null;
@@ -77,8 +79,6 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   'approval-gate': 'Approval Gate',
 };
 
-type ViewTab = 'all' | 'favorites';
-
 export default function TemplatesPage() {
   const { getToken } = useAuth();
   const { activeWorkspace } = useWorkspace();
@@ -86,9 +86,8 @@ export default function TemplatesPage() {
   const router = useRouter();
 
   const [allTemplates, setAllTemplates] = useState<Template[]>([]);
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<ViewTab>('all');
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
@@ -106,12 +105,12 @@ export default function TemplatesPage() {
       const token = await getToken();
       if (!token) return;
       const api = createApiClient(token);
-      const [rows, favIds] = await Promise.all([
+      const [rows, upvoted] = await Promise.all([
         api.get<Template[]>('/templates'),
-        api.get<string[]>('/templates/me/favorites').catch(() => [] as string[]),
+        api.get<string[]>('/templates/me/upvoted').catch(() => [] as string[]),
       ]);
       setAllTemplates(rows);
-      setFavoriteIds(new Set(favIds));
+      setUpvotedIds(new Set(upvoted));
     } finally {
       setLoading(false);
     }
@@ -160,42 +159,60 @@ export default function TemplatesPage() {
     }
   }
 
-  async function toggleFavorite(tpl: Template, e: React.MouseEvent) {
+  async function toggleUpvote(tpl: Template, e: React.MouseEvent) {
     e.stopPropagation();
     const token = await getToken();
     if (!token) return;
     const api = createApiClient(token);
-    const isFav = favoriteIds.has(tpl.id);
+    const isUpvoted = upvotedIds.has(tpl.id);
 
-    setFavoriteIds((prev) => {
+    // Optimistic update
+    setUpvotedIds((prev) => {
       const next = new Set(prev);
-      if (isFav) next.delete(tpl.id); else next.add(tpl.id);
+      if (isUpvoted) next.delete(tpl.id); else next.add(tpl.id);
       return next;
     });
+    setAllTemplates((prev) =>
+      prev.map((t) =>
+        t.id === tpl.id ? { ...t, upvotes: t.upvotes + (isUpvoted ? -1 : 1) } : t,
+      ),
+    );
 
     try {
-      if (isFav) {
-        await api.delete(`/templates/${tpl.id}/favorite`);
-      } else {
-        await api.post(`/templates/${tpl.id}/favorite`, {});
-      }
-    } catch {
-      // revert on failure
-      setFavoriteIds((prev) => {
+      const result = await api.post<{ upvoted: boolean; upvotes: number }>(
+        `/templates/${tpl.id}/upvote`,
+        {},
+      );
+      // Sync with server truth
+      setUpvotedIds((prev) => {
         const next = new Set(prev);
-        if (isFav) next.add(tpl.id); else next.delete(tpl.id);
+        if (result.upvoted) next.add(tpl.id); else next.delete(tpl.id);
         return next;
       });
+      setAllTemplates((prev) =>
+        prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: result.upvotes } : t)),
+      );
+    } catch {
+      // Revert on failure
+      setUpvotedIds((prev) => {
+        const next = new Set(prev);
+        if (isUpvoted) next.add(tpl.id); else next.delete(tpl.id);
+        return next;
+      });
+      setAllTemplates((prev) =>
+        prev.map((t) =>
+          t.id === tpl.id ? { ...t, upvotes: t.upvotes + (isUpvoted ? 1 : -1) } : t,
+        ),
+      );
     }
   }
 
-  const searched = allTemplates.filter((t) => {
+  const filtered = allTemplates.filter((t) => {
     if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (activeCategory && t.category !== activeCategory) return false;
     return true;
   });
 
-  const filtered = tab === 'favorites' ? searched.filter((t) => favoriteIds.has(t.id)) : searched;
   const categories = Array.from(new Set(allTemplates.map((t) => t.category))).sort();
   const featured = filtered.filter((t) => t.featured);
   const rest = filtered.filter((t) => !t.featured);
@@ -205,24 +222,6 @@ export default function TemplatesPage() {
       <div>
         <h1 className="text-lg font-semibold">Template gallery</h1>
         <p className="text-sm text-muted-foreground">Start with a pre-built workflow and customise it.</p>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-4 border-b">
-        {(['all', 'favorites'] as ViewTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={[
-              'pb-2 text-sm capitalize transition-colors border-b-2 -mb-px',
-              tab === t
-                ? 'border-foreground font-medium text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            ].join(' ')}
-          >
-            {t === 'favorites' ? 'Saved' : 'All templates'}
-          </button>
-        ))}
       </div>
 
       {/* Filters */}
@@ -267,71 +266,51 @@ export default function TemplatesPage() {
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-muted mb-4">
             <HugeiconsIcon
-              icon={tab === 'favorites' ? FavouriteIcon : search ? Search01Icon : WorkflowSquare01Icon}
+              icon={search ? Search01Icon : WorkflowSquare01Icon}
               className="size-7 text-muted-foreground"
             />
           </div>
           <h2 className="text-base font-semibold">
-            {tab === 'favorites'
-              ? 'No saved templates'
-              : search
-                ? 'No templates match your search'
-                : 'No templates yet'}
+            {search ? 'No templates match your search' : 'No templates yet'}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground max-w-xs">
-            {tab === 'favorites'
-              ? 'Save templates by clicking the bookmark icon on any card.'
-              : search
-                ? 'Try a different keyword or clear the search to browse all templates.'
-                : 'Templates will appear here once they are published to the gallery.'}
+            {search
+              ? 'Try a different keyword or clear the search to browse all templates.'
+              : 'Templates will appear here once they are published to the gallery.'}
           </p>
-          {(search || tab === 'favorites') && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={() => { setSearch(''); setTab('all'); }}
-            >
-              Browse all templates
+          {search && (
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => setSearch('')}>
+              Clear search
             </Button>
           )}
         </div>
       ) : (
         <>
-          {featured.length > 0 && tab === 'all' && (
+          {featured.length > 0 && (
             <section>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Featured</p>
               <TemplateGrid
                 templates={featured}
-                favoriteIds={favoriteIds}
+                upvotedIds={upvotedIds}
                 onPreview={openPreview}
                 onUse={openUseDialog}
-                onToggleFavorite={toggleFavorite}
+                onToggleUpvote={toggleUpvote}
               />
             </section>
           )}
           {rest.length > 0 && (
             <section>
-              {featured.length > 0 && tab === 'all' && (
+              {featured.length > 0 && (
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">More templates</p>
               )}
               <TemplateGrid
                 templates={rest}
-                favoriteIds={favoriteIds}
+                upvotedIds={upvotedIds}
                 onPreview={openPreview}
                 onUse={openUseDialog}
-                onToggleFavorite={toggleFavorite}
+                onToggleUpvote={toggleUpvote}
               />
             </section>
-          )}
-          {tab === 'favorites' && (
-            <TemplateGrid
-              templates={filtered}
-              favoriteIds={favoriteIds}
-              onPreview={openPreview}
-              onUse={openUseDialog}
-              onToggleFavorite={toggleFavorite}
-            />
           )}
         </>
       )}
@@ -390,11 +369,24 @@ export default function TemplatesPage() {
           </div>
 
           <DialogFooter className="gap-2">
-            <p className="flex-1 text-[11px] text-muted-foreground self-center">
-              {previewTemplate && previewTemplate.downloads > 0
-                ? `${previewTemplate.downloads.toLocaleString()} uses`
-                : 'New'}
-            </p>
+            <div className="flex-1 flex items-center gap-3 self-center">
+              {previewTemplate && (
+                <>
+                  <span className="text-[11px] text-muted-foreground">
+                    {previewTemplate.downloads > 0 ? `${previewTemplate.downloads.toLocaleString()} uses` : 'New'}
+                  </span>
+                  {previewTemplate.views > 0 && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {previewTemplate.views.toLocaleString()} views
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <HugeiconsIcon icon={ArrowUp01Icon} className="size-3" />
+                    {previewTemplate.upvotes}
+                  </span>
+                </>
+              )}
+            </div>
             <Button variant="outline" onClick={() => setPreviewTemplate(null)}>Close</Button>
             <Button
               onClick={() => {
@@ -457,16 +449,16 @@ export default function TemplatesPage() {
 
 function TemplateGrid({
   templates,
-  favoriteIds,
+  upvotedIds,
   onPreview,
   onUse,
-  onToggleFavorite,
+  onToggleUpvote,
 }: {
   templates: Template[];
-  favoriteIds: Set<string>;
+  upvotedIds: Set<string>;
   onPreview: (t: Template) => void;
   onUse: (t: Template) => void;
-  onToggleFavorite: (t: Template, e: React.MouseEvent) => void;
+  onToggleUpvote: (t: Template, e: React.MouseEvent) => void;
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -474,10 +466,10 @@ function TemplateGrid({
         <TemplateCard
           key={tpl.id}
           template={tpl}
-          isFavorited={favoriteIds.has(tpl.id)}
+          isUpvoted={upvotedIds.has(tpl.id)}
           onPreview={onPreview}
           onUse={onUse}
-          onToggleFavorite={onToggleFavorite}
+          onToggleUpvote={onToggleUpvote}
         />
       ))}
     </div>
@@ -486,16 +478,16 @@ function TemplateGrid({
 
 function TemplateCard({
   template,
-  isFavorited,
+  isUpvoted,
   onPreview,
   onUse,
-  onToggleFavorite,
+  onToggleUpvote,
 }: {
   template: Template;
-  isFavorited: boolean;
+  isUpvoted: boolean;
   onPreview: (t: Template) => void;
   onUse: (t: Template) => void;
-  onToggleFavorite: (t: Template, e: React.MouseEvent) => void;
+  onToggleUpvote: (t: Template, e: React.MouseEvent) => void;
 }) {
   const colorClass =
     CATEGORY_COLORS[template.category] ?? 'bg-gray-100 text-gray-700';
@@ -507,34 +499,26 @@ function TemplateCard({
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-medium text-sm leading-snug">{template.name}</p>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={(e) => onToggleFavorite(template, e)}
-            className={`rounded-md p-1 transition-colors ${
-              isFavorited
-                ? 'text-yellow-500'
-                : 'text-muted-foreground/40 hover:text-muted-foreground opacity-0 group-hover:opacity-100'
-            }`}
-            title={isFavorited ? 'Remove from saved' : 'Save template'}
-          >
-            <HugeiconsIcon
-              icon={FavouriteIcon}
-              className="size-3.5"
-              style={{ fill: isFavorited ? 'currentColor' : 'none' }}
-            />
-          </button>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${colorClass}`}>
-            {template.category}
-          </span>
-        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${colorClass}`}>
+          {template.category}
+        </span>
       </div>
       {template.description && (
         <p className="text-xs text-muted-foreground line-clamp-2">{template.description}</p>
       )}
       <div className="mt-auto flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground">
-          {template.downloads > 0 ? `${template.downloads.toLocaleString()} uses` : 'New'}
-        </span>
+        <button
+          onClick={(e) => onToggleUpvote(template, e)}
+          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors ${
+            isUpvoted
+              ? 'bg-primary/10 text-primary font-medium'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+          title={isUpvoted ? 'Remove upvote' : 'Upvote'}
+        >
+          <HugeiconsIcon icon={ArrowUp01Icon} className="size-3" />
+          {template.upvotes}
+        </button>
         <Button
           size="sm"
           variant="outline"

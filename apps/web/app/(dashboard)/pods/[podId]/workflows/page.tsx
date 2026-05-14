@@ -44,7 +44,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   MoreVerticalIcon,
-  StarIcon,
+  FavouriteIcon,
   Delete01Icon,
   Undo02Icon,
   WorkflowSquare01Icon,
@@ -58,14 +58,13 @@ interface Workflow {
   name: string;
   description: string | null;
   deployedAt: string | null;
-  starred: boolean;
   isTemplate: boolean;
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-type ViewMode = 'active' | 'starred' | 'pod-templates' | 'trash';
+type ViewMode = 'active' | 'favorites' | 'pod-templates' | 'trash';
 
 const CATEGORIES = ['Productivity', 'Communication', 'Data', 'DevOps', 'Automation', 'Marketing'];
 
@@ -76,6 +75,7 @@ export default function WorkflowsPage() {
   const router = useRouter();
 
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewMode>('active');
   const [createOpen, setCreateOpen] = useState(false);
@@ -105,12 +105,18 @@ export default function WorkflowsPage() {
       const api = createApiClient(token);
       const params = new URLSearchParams();
       if (mode === 'trash') params.set('trashed', 'true');
-      if (mode === 'starred') params.set('starred', 'true');
+      if (mode === 'favorites') params.set('favorited', 'true');
       if (mode === 'pod-templates') params.set('isTemplate', 'true');
-      const data = await api.get<{ workflows: Workflow[] }>(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows?${params}`,
-      );
+      const [data, favIds] = await Promise.all([
+        api.get<{ workflows: Workflow[] }>(
+          `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows?${params}`,
+        ),
+        api.get<string[]>(
+          `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/me/favorites`,
+        ).catch(() => [] as string[]),
+      ]);
       setWorkflows(data.workflows);
+      setFavoriteIds(new Set(favIds));
     } finally {
       setLoading(false);
     }
@@ -120,19 +126,35 @@ export default function WorkflowsPage() {
     if (!wsLoading && activeWorkspace) void load(view);
   }, [activeWorkspace, wsLoading, podId, view]);
 
-  async function toggleStar(wf: Workflow) {
+  async function toggleFavorite(wfId: string) {
     if (!activeWorkspace) return;
     const token = await getToken();
     if (!token) return;
     const api = createApiClient(token);
-    await api.patch(`/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${wf.id}/star`, {
-      starred: !wf.starred,
+    const isFav = favoriteIds.has(wfId);
+
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (isFav) next.delete(wfId); else next.add(wfId);
+      return next;
     });
-    setWorkflows((prev) =>
-      prev
-        .map((w) => (w.id === wf.id ? { ...w, starred: !wf.starred } : w))
-        .filter((w) => view !== 'starred' || w.starred),
-    );
+
+    try {
+      if (isFav) {
+        await api.delete(`/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${wfId}/favorite`);
+      } else {
+        await api.post(`/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${wfId}/favorite`, {});
+      }
+      if (view === 'favorites') {
+        setWorkflows((prev) => (isFav ? prev.filter((w) => w.id !== wfId) : prev));
+      }
+    } catch {
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (isFav) next.add(wfId); else next.delete(wfId);
+        return next;
+      });
+    }
   }
 
   async function toggleTemplate(wf: Workflow) {
@@ -240,14 +262,14 @@ export default function WorkflowsPage() {
 
   const viewTabs: { key: ViewMode; label: string }[] = [
     { key: 'active', label: 'All' },
-    { key: 'starred', label: 'Starred' },
+    { key: 'favorites', label: 'Favorites' },
     { key: 'pod-templates', label: 'Pod templates' },
     { key: 'trash', label: 'Trash' },
   ];
 
   const emptyMessages: Record<ViewMode, { title: string; sub: string }> = {
     active: { title: 'No workflows yet', sub: 'Create your first workflow to start automating with AI nodes.' },
-    starred: { title: 'No starred workflows', sub: 'Star workflows to find them quickly here.' },
+    favorites: { title: 'No favorites yet', sub: 'Favorite workflows to find them quickly here — favorites are personal to you.' },
     'pod-templates': { title: 'No pod templates', sub: 'Mark a workflow as a pod template so it appears here for easy cloning.' },
     trash: { title: 'Trash is empty', sub: 'Workflows you delete will appear here before permanent removal.' },
   };
@@ -285,8 +307,8 @@ export default function WorkflowsPage() {
               icon={
                 view === 'trash'
                   ? Delete02Icon
-                  : view === 'starred'
-                    ? StarIcon
+                  : view === 'favorites'
+                    ? FavouriteIcon
                     : view === 'pod-templates'
                       ? GridViewIcon
                       : WorkflowSquare01Icon
@@ -317,8 +339,8 @@ export default function WorkflowsPage() {
               <TableRow key={wf.id}>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    {wf.starred && (
-                      <HugeiconsIcon icon={StarIcon} className="size-3.5 text-yellow-500 fill-yellow-500 shrink-0" />
+                    {favoriteIds.has(wf.id) && (
+                      <HugeiconsIcon icon={FavouriteIcon} className="size-3.5 text-yellow-500 shrink-0" style={{ fill: 'currentColor' }} />
                     )}
                     <div>
                       <p className="font-medium">{wf.name}</p>
@@ -357,9 +379,9 @@ export default function WorkflowsPage() {
                       <DropdownMenuContent align="end">
                         {view !== 'trash' && (
                           <>
-                            <DropdownMenuItem onClick={() => void toggleStar(wf)}>
-                              <HugeiconsIcon icon={StarIcon} className="mr-2 size-4" />
-                              {wf.starred ? 'Unstar' : 'Star'}
+                            <DropdownMenuItem onClick={() => void toggleFavorite(wf.id)}>
+                              <HugeiconsIcon icon={FavouriteIcon} className="mr-2 size-4" />
+                              {favoriteIds.has(wf.id) ? 'Remove from favorites' : 'Add to favorites'}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => void toggleTemplate(wf)}>
                               <HugeiconsIcon icon={GridViewIcon} className="mr-2 size-4" />

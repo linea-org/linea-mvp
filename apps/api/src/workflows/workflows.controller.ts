@@ -66,8 +66,12 @@ export class WorkflowsController {
   @ApiOperation({ summary: 'List workflows' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  findAll(@Param('podId') podId: string, @Query() query: ListWorkflowsDto) {
-    return this.service.findAll(podId, query);
+  findAll(
+    @Param('podId') podId: string,
+    @Query() query: ListWorkflowsDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.service.findAll(podId, query, user.id);
   }
 
   @Get(':id')
@@ -197,10 +201,43 @@ export class WorkflowsController {
     return this.service.setTemplate(podId, id, body.isTemplate);
   }
 
+  @Post(':id/favorite')
+  @HttpCode(204)
+  @RequireRole('viewer')
+  @ApiOperation({ summary: 'Add a workflow to personal favorites' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  favoriteWorkflow(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.favoriteWorkflow(user.id, id);
+  }
+
+  @Delete(':id/favorite')
+  @HttpCode(204)
+  @RequireRole('viewer')
+  @ApiOperation({ summary: 'Remove a workflow from personal favorites' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  unfavoriteWorkflow(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.unfavoriteWorkflow(user.id, id);
+  }
+
+  @Get('me/favorites')
+  @RequireRole('viewer')
+  @ApiOperation({ summary: 'Get IDs of workflows favorited by current user in this pod' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  getWorkflowFavoriteIds(
+    @Param('podId') podId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.service.getWorkflowFavoriteIds(user.id, podId);
+  }
+
   @Post(':id/publish')
-  @UseGuards(GlobalAdminGuard)
-  @RequireRole('editor')
-  @ApiOperation({ summary: 'Publish a workflow to the public gallery (platform admin only)' })
+  @RequireRole('admin')
+  @ApiOperation({ summary: 'Publish a workflow to the public gallery (workspace admin+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
@@ -286,36 +323,26 @@ export class TemplatesController {
     return this.service.listTemplates(query);
   }
 
-  @Get('me/favorites')
+  @Get('me/upvoted')
   @UseGuards(ClerkAuthGuard)
-  @ApiOperation({ summary: 'Get current user favorite template IDs' })
-  getFavoriteIds(@CurrentUser() user: User) {
-    return this.service.getFavoriteIds(user.id);
+  @ApiOperation({ summary: 'Get template IDs the current user has upvoted' })
+  getUserUpvotedIds(@CurrentUser() user: User) {
+    return this.service.getUserUpvotedTemplateIds(user.id);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a single template (for preview)' })
+  @ApiOperation({ summary: 'Get a single template (increments view count)' })
   @ApiParam({ name: 'id' })
   getTemplate(@Param('id') id: string) {
-    return this.service.getTemplate(id);
+    return this.service.getTemplate(id, true);
   }
 
-  @Post(':id/favorite')
-  @HttpCode(204)
+  @Post(':id/upvote')
   @UseGuards(ClerkAuthGuard)
-  @ApiOperation({ summary: 'Add a template to favorites' })
+  @ApiOperation({ summary: 'Toggle upvote on a template' })
   @ApiParam({ name: 'id' })
-  favoriteTemplate(@Param('id') id: string, @CurrentUser() user: User) {
-    return this.service.favoriteTemplate(user.id, id);
-  }
-
-  @Delete(':id/favorite')
-  @HttpCode(204)
-  @UseGuards(ClerkAuthGuard)
-  @ApiOperation({ summary: 'Remove a template from favorites' })
-  @ApiParam({ name: 'id' })
-  unfavoriteTemplate(@Param('id') id: string, @CurrentUser() user: User) {
-    return this.service.unfavoriteTemplate(user.id, id);
+  toggleUpvote(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.toggleTemplateUpvote(user.id, id);
   }
 
   @Patch(':id')
