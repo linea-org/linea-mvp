@@ -19,11 +19,13 @@ import {
   templateUpvotes,
 } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
+import { SchedulesService } from '../schedules/schedules.service';
 import type { CreateWorkflowDto } from './dto/create-workflow.dto';
 import type { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import type { ListWorkflowsDto } from './dto/list-workflows.dto';
 import type { ListTemplatesDto } from './dto/list-templates.dto';
 import type { PublishTemplateDto, UpdateTemplateDto } from './dto/publish-template.dto';
+import type { UpdateLogSettingsDto } from './dto/log-settings.dto';
 
 const SECRET_NODE_FIELDS = ['accessToken', 'apiKey', 'secretToken', 'password'];
 
@@ -44,7 +46,10 @@ function redactNodeSecrets(definition: unknown): unknown {
 
 @Injectable()
 export class WorkflowsService {
-  constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DB_TOKEN) private readonly db: DrizzleDB,
+    private readonly schedulesService: SchedulesService,
+  ) {}
 
   async create(podId: string, userId: string, dto: CreateWorkflowDto) {
     const [workflow] = await this.db
@@ -160,6 +165,10 @@ export class WorkflowsService {
       .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .returning();
 
+    if (dto.definition) {
+      await this.schedulesService.syncWorkflowSchedule(podId, id, dto.definition);
+    }
+
     return updated;
   }
 
@@ -193,6 +202,30 @@ export class WorkflowsService {
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
     return updated;
+  }
+
+  async duplicate(podId: string, id: string, userId: string) {
+    const [original] = await this.db
+      .select()
+      .from(workflows)
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
+      .limit(1);
+    if (!original) throw new NotFoundException(`Workflow ${id} not found`);
+
+    const [copy] = await this.db
+      .insert(workflows)
+      .values({
+        podId,
+        name: `Copy of ${original.name}`,
+        description: original.description,
+        definition: original.definition as NewWorkflow['definition'],
+        isTemplate: false,
+        isPublic: false,
+        createdBy: userId,
+      } satisfies Partial<NewWorkflow> as NewWorkflow)
+      .returning();
+
+    return copy;
   }
 
   async trash(podId: string, id: string) {
@@ -479,13 +512,36 @@ export class WorkflowsService {
     }
   }
 
-  async getUserUpvotedTemplateIds(userId: string): Promise<string[]> {
-    const rows = await this.db
-      .select({ templateId: templateUpvotes.templateId })
-      .from(templateUpvotes)
-      .where(eq(templateUpvotes.userId, userId));
+  async updateLogSettings(
+    podId: string,
+    id: string,
+    dto: UpdateLogSettingsDto,
+  ) {
+    const [updated] = await this.db
+      .update(workflows)
+      .set({
+        logLevel: dto.logLevel,
+        logRetentionDays: dto.logRetentionDays ?? null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
+      .returning();
 
-    return rows.map((r) => r.templateId);
+    if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
+    return updated;
+  }
+
+  async getUserUpvotedTemplateIds(userId: string): Promise<string[]> {
+    try {
+      const rows = await this.db
+        .select({ templateId: templateUpvotes.templateId })
+        .from(templateUpvotes)
+        .where(eq(templateUpvotes.userId, userId));
+
+      return rows.map((r) => r.templateId);
+    } catch {
+      return [];
+    }
   }
 
   async listTemplates(query: ListTemplatesDto) {
@@ -503,8 +559,11 @@ export class WorkflowsService {
         category: templates.category,
         featured: templates.featured,
         downloads: templates.downloads,
+        views: templates.views,
+        upvotes: templates.upvotes,
         thumbnailUrl: templates.thumbnailUrl,
         workflowId: templates.workflowId,
+        publishedBy: templates.publishedBy,
         createdAt: templates.createdAt,
       })
       .from(templates)

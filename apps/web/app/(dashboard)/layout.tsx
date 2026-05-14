@@ -48,7 +48,6 @@ import {
   Settings01Icon,
   ArrowDown01Icon,
   Logout03Icon,
-  LayoutLeftIcon,
   Database01Icon,
   Notification01Icon,
   Calendar01Icon,
@@ -56,6 +55,7 @@ import {
   Add01Icon,
   Analytics02Icon,
   GridViewIcon,
+  Search01Icon,
 } from '@hugeicons/core-free-icons';
 
 function PodSwitcher() {
@@ -67,9 +67,7 @@ function PodSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors max-w-48">
-          <HugeiconsIcon icon={LayoutLeftIcon} className="size-3.5 text-muted-foreground shrink-0" />
-          <span className="text-muted-foreground text-xs">/</span>
-          <span className="truncate font-medium">
+          <span className="truncate font-medium text-sm">
             {activePod?.name ?? 'Select pod'}
           </span>
           <HugeiconsIcon icon={ArrowDown01Icon} className="size-3.5 text-muted-foreground shrink-0" />
@@ -269,6 +267,8 @@ function NotificationBell() {
       }
     }
     void load();
+    const interval = setInterval(() => void load(), 30_000);
+    return () => clearInterval(interval);
   }, [getToken]);
 
   return (
@@ -287,6 +287,12 @@ function ShortcutsProvider({ children }: { children: React.ReactNode }) {
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const { activePod } = usePod();
   const router = useRouter();
+
+  useEffect(() => {
+    const handler = () => setCmdkOpen(true);
+    window.addEventListener('linea:open-cmdk', handler);
+    return () => window.removeEventListener('linea:open-cmdk', handler);
+  }, []);
 
   useEffect(() => {
     let gPressed = false;
@@ -368,7 +374,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <main className="flex flex-1 flex-col">
               <header className="flex h-12 items-center gap-3 border-b px-4">
                 <SidebarTrigger />
+                <div className="h-4 w-px bg-border" />
                 <PodSwitcher />
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('linea:open-cmdk'))}
+                  className="flex flex-1 items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors max-w-xs mx-2"
+                >
+                  <HugeiconsIcon icon={Search01Icon} className="size-3.5 shrink-0" />
+                  <span className="flex-1 text-left">Search or jump to…</span>
+                  <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘K</kbd>
+                </button>
                 <div className="flex-1" />
                 <NotificationBell />
               </header>

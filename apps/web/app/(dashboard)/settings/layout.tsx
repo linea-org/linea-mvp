@@ -3,13 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+const BILLING_ENABLED = process.env['NEXT_PUBLIC_BILLING_ENABLED'] === 'true';
+
 const tabs = [
   { href: '/settings/general', label: 'General' },
   { href: '/settings/members', label: 'Members' },
   { href: '/settings/api-keys', label: 'API Keys' },
   { href: '/settings/credentials', label: 'Secrets' },
+  { href: '/settings/model-keys', label: 'Model Keys' },
   { href: '/settings/connections', label: 'Connections' },
-  { href: '/settings/billing', label: 'Billing' },
+  ...(BILLING_ENABLED ? [{ href: '/settings/billing', label: 'Billing' }] : []),
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

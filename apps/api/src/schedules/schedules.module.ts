@@ -10,5 +10,6 @@ import { PodsModule } from '../pods/pods.module';
   imports: [ScheduleModule.forRoot(), ExecutionsModule, PodsModule],
   providers: [SchedulesService, SchedulerService],
   controllers: [SchedulesController],
+  exports: [SchedulesService],
 })
 export class SchedulesModule {}

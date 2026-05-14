@@ -1,4 +1,9 @@
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { eq, and, lte, count } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { schedules, pods, workflows } from '@linea/db';
@@ -26,7 +31,8 @@ export class SchedulesService {
       .where(and(eq(workflows.id, dto.workflowId), eq(workflows.podId, podId)))
       .limit(1);
 
-    if (!wf) throw new NotFoundException(`Workflow ${dto.workflowId} not found`);
+    if (!wf)
+      throw new NotFoundException(`Workflow ${dto.workflowId} not found`);
 
     const MAX_SCHEDULES_PER_POD = 100;
     const [{ value: scheduleCount }] = await this.db
@@ -34,7 +40,9 @@ export class SchedulesService {
       .from(schedules)
       .where(eq(schedules.podId, podId));
     if (scheduleCount >= MAX_SCHEDULES_PER_POD) {
-      throw new BadRequestException(`Pod has reached the maximum of ${MAX_SCHEDULES_PER_POD} schedules`);
+      throw new BadRequestException(
+        `Pod has reached the maximum of ${MAX_SCHEDULES_PER_POD} schedules`,
+      );
     }
 
     const nextRunAt = this.nextRunDate(dto.cronExpr);
@@ -68,7 +76,9 @@ export class SchedulesService {
     if (!existing) throw new NotFoundException(`Schedule ${id} not found`);
 
     const cronExpr = dto.cronExpr ?? existing.cronExpr;
-    const nextRunAt = dto.cronExpr ? this.nextRunDate(cronExpr) : existing.nextRunAt;
+    const nextRunAt = dto.cronExpr
+      ? this.nextRunDate(cronExpr)
+      : existing.nextRunAt;
 
     const [updated] = await this.db
       .update(schedules)
@@ -94,6 +104,40 @@ export class SchedulesService {
     if (!row) throw new NotFoundException(`Schedule ${id} not found`);
 
     await this.db.delete(schedules).where(eq(schedules.id, id));
+  }
+
+  async syncWorkflowSchedule(
+    podId: string,
+    workflowId: string,
+    definition: unknown,
+  ): Promise<void> {
+    const nodes: any[] = (definition as any)?.nodes ?? [];
+    const startNode = nodes.find((n: any) => n.type === 'start');
+    const triggerType = startNode?.data?.triggerType as string | undefined;
+    const cronExpr = startNode?.data?.cronExpression as string | undefined;
+
+    if (triggerType === 'schedule' && cronExpr) {
+      try {
+        const fields = cronExpr.trim().split(/\s+/);
+        if (fields.length !== 5) return;
+        CronExpressionParser.parse(cronExpr);
+      } catch {
+        return; // invalid cron — skip silently
+      }
+
+      const nextRunAt = this.nextRunDate(cronExpr);
+      await this.db.delete(schedules).where(eq(schedules.workflowId, workflowId));
+      await this.db.insert(schedules).values({
+        podId,
+        workflowId,
+        cronExpr,
+        input: {},
+        enabled: true,
+        nextRunAt,
+      });
+    } else {
+      await this.db.delete(schedules).where(eq(schedules.workflowId, workflowId));
+    }
   }
 
   async fireDueSchedules() {
