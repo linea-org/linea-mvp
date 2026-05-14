@@ -1,7 +1,5 @@
-import { Parser } from 'expr-eval';
+import jexl from 'jexl';
 import type { WorkflowState } from '../variable-substitution';
-
-const parser = new Parser({ operators: { assignment: false } });
 
 function evalCondition(condition: string, state: WorkflowState): boolean {
   const context = {
@@ -10,7 +8,7 @@ function evalCondition(condition: string, state: WorkflowState): boolean {
     variables: state.variables ?? {},
   };
   try {
-    return Boolean(parser.evaluate(condition, context));
+    return Boolean(jexl.evalSync(condition, context));
   } catch {
     return false;
   }
