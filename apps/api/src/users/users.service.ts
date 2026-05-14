@@ -89,7 +89,9 @@ export class UsersService {
       .update(lineaApiKeys)
       .set({ lastUsedAt: new Date() })
       .where(eq(lineaApiKeys.keyHash, keyHash))
-      .catch((err) => this.logger.warn('Failed to update API key lastUsedAt', err));
+      .catch((err) =>
+        this.logger.warn('Failed to update API key lastUsedAt', err),
+      );
 
     return row.user;
   }
@@ -102,6 +104,16 @@ export class UsersService {
       .limit(1);
     if (!user) throw new NotFoundException(`User ${id} not found`);
     return user;
+  }
+
+  async completeOnboarding(id: string): Promise<User> {
+    const [updated] = await this.db
+      .update(users)
+      .set({ onboardedAt: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    if (!updated) throw new NotFoundException(`User ${id} not found`);
+    return updated;
   }
 
   async updateProfile(

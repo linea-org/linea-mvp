@@ -6,10 +6,14 @@ import { useAuth } from '@clerk/nextjs';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { usePod } from '@/contexts/space-context';
 import { createApiClient } from '@/lib/api';
-import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Skeleton } from '@linea/ui/components/skeleton';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  WorkflowSquare01Icon,
+  Search01Icon,
+} from '@hugeicons/core-free-icons';
 import {
   Dialog,
   DialogContent,
@@ -158,7 +162,32 @@ export default function TemplatesPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No templates found.</p>
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted mb-4">
+            <HugeiconsIcon
+              icon={search ? Search01Icon : WorkflowSquare01Icon}
+              className="size-7 text-muted-foreground"
+            />
+          </div>
+          <h2 className="text-base font-semibold">
+            {search ? 'No templates match your search' : 'No templates yet'}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground max-w-xs">
+            {search
+              ? 'Try a different keyword or clear the search to browse all templates.'
+              : 'Templates will appear here once they are published to the gallery.'}
+          </p>
+          {search && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => setSearch('')}
+            >
+              Clear search
+            </Button>
+          )}
+        </div>
       ) : (
         <>
           {featured.length > 0 && (

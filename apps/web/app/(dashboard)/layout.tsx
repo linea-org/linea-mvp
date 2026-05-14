@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useClerk, useUser, useAuth } from '@clerk/nextjs';
 import { WorkspaceProvider, useWorkspace } from '@/contexts/workspace-context';
 import { PodProvider, usePod } from '@/contexts/space-context';
 import { WelcomeModal } from '@/components/onboarding/welcome-modal';
 import { GettingStarted } from '@/components/onboarding/getting-started';
+import { CommandPalette } from '@/components/command-palette';
+import { KeyboardShortcutsDialog } from '@/components/keyboard-shortcuts-dialog';
 import { createApiClient } from '@/lib/api';
 import {
   SidebarProvider,
@@ -281,22 +283,99 @@ function NotificationBell() {
   );
 }
 
+function ShortcutsProvider({ children }: { children: React.ReactNode }) {
+  const [cmdkOpen, setCmdkOpen] = useState(false);
+  const { activePod } = usePod();
+  const router = useRouter();
+
+  useEffect(() => {
+    let gPressed = false;
+    let gTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const podBase = activePod ? `/pods/${activePod.id}` : null;
+
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable;
+
+      // Cmd+K / Ctrl+K → command palette
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCmdkOpen((o) => !o);
+        return;
+      }
+
+      if (inInput) return;
+
+      // ? → shortcuts dialog
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
+        window.dispatchEvent(new CustomEvent('linea:open-shortcuts'));
+        return;
+      }
+
+      // g → start sequence
+      if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
+        gPressed = true;
+        if (gTimer) clearTimeout(gTimer);
+        gTimer = setTimeout(() => { gPressed = false; }, 1500);
+        return;
+      }
+
+      if (gPressed) {
+        gPressed = false;
+        if (gTimer) clearTimeout(gTimer);
+
+        const map: Record<string, string | null> = {
+          w: podBase ? `${podBase}/workflows` : null,
+          e: podBase ? `${podBase}/executions` : null,
+          s: podBase ? `${podBase}/schedules` : null,
+          k: '/knowledge',
+          t: '/templates',
+          m: '/metrics',
+        };
+
+        const dest = map[e.key];
+        if (dest) {
+          e.preventDefault();
+          router.push(dest);
+        }
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      if (gTimer) clearTimeout(gTimer);
+    };
+  }, [activePod, router]);
+
+  return (
+    <>
+      {children}
+      <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />
+      <KeyboardShortcutsDialog />
+    </>
+  );
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <WorkspaceProvider>
       <PodProvider>
         <SidebarProvider>
-          <DashboardSidebar />
-          <main className="flex flex-1 flex-col">
-            <header className="flex h-12 items-center gap-3 border-b px-4">
-              <SidebarTrigger />
-              <PodSwitcher />
-              <div className="flex-1" />
-              <NotificationBell />
-            </header>
-            <div className="flex-1 p-6">{children}</div>
-          </main>
-          <WelcomeModal />
+          <ShortcutsProvider>
+            <DashboardSidebar />
+            <main className="flex flex-1 flex-col">
+              <header className="flex h-12 items-center gap-3 border-b px-4">
+                <SidebarTrigger />
+                <PodSwitcher />
+                <div className="flex-1" />
+                <NotificationBell />
+              </header>
+              <div className="flex-1 p-6">{children}</div>
+            </main>
+            <WelcomeModal />
+          </ShortcutsProvider>
         </SidebarProvider>
       </PodProvider>
     </WorkspaceProvider>

@@ -19,8 +19,6 @@ import {
   CheckmarkCircle01Icon,
 } from '@hugeicons/core-free-icons';
 
-const STORAGE_KEY = 'linea_onboarded';
-
 type Step = 'welcome' | 'pod' | 'ready';
 
 export function WelcomeModal() {
@@ -37,14 +35,28 @@ export function WelcomeModal() {
 
   useEffect(() => {
     if (wsLoading || podLoading) return;
-    if (localStorage.getItem(STORAGE_KEY)) return;
-    if (activeWorkspace && pods.length === 0) {
-      setOpen(true);
+    if (!activeWorkspace || pods.length > 0) return;
+
+    async function checkOnboarded() {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      const me = await api.get<{ onboardedAt: string | null }>('/users/me');
+      if (!me.onboardedAt) setOpen(true);
     }
-  }, [wsLoading, podLoading, pods.length, activeWorkspace]);
+
+    void checkOnboarded();
+  }, [wsLoading, podLoading, pods.length, activeWorkspace, getToken]);
+
+  async function markOnboarded() {
+    const token = await getToken();
+    if (!token) return;
+    const api = createApiClient(token);
+    await api.post('/users/me/complete-onboarding', {});
+  }
 
   function dismiss() {
-    localStorage.setItem(STORAGE_KEY, 'true');
+    void markOnboarded();
     setOpen(false);
   }
 
@@ -61,7 +73,7 @@ export function WelcomeModal() {
       );
       setCreatedPodId(pod.id);
       void reloadPods();
-      localStorage.setItem(STORAGE_KEY, 'true');
+      void markOnboarded();
       localStorage.setItem('linea_gs_pod', 'true');
       setStep('ready');
     } finally {

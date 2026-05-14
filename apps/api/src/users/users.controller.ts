@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Delete,
   Body,
@@ -35,6 +36,13 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile' })
   getMe(@CurrentUser() user: User) {
     return user;
+  }
+
+  @Post('me/complete-onboarding')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Mark onboarding as complete' })
+  completeOnboarding(@CurrentUser() user: User) {
+    return this.usersService.completeOnboarding(user.id);
   }
 
   @Patch('me')
