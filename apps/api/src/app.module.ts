@@ -32,6 +32,7 @@ import { PublicRunModule } from './public-run/public-run.module';
 import { AgentChatModule } from './agent-chat/agent-chat.module';
 import { CommentsModule } from './comments/comments.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { BillingModule } from './billing/billing.module';
 import { ClerkAuthGuard } from './auth/guards/clerk-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -94,6 +95,7 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
     AgentChatModule,
     CommentsModule,
     UploadsModule,
+    BillingModule,
   ],
   controllers: [ClerkWebhookController],
   providers: [

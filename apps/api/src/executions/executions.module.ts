@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ExecutionsService } from './executions.service';
 import { ExecutionsController } from './executions.controller';
+import { NodesController } from './nodes.controller';
 import { ExecutionEventsService } from './execution-events.service';
 import { ExecutionProcessor } from './queue/execution.processor';
 import { LangGraphService } from './engine/langgraph.service';
@@ -45,7 +46,7 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
     MemoryService,
     CheckpointerService,
   ],
-  controllers: [ExecutionsController],
-  exports: [ExecutionsService],
+  controllers: [ExecutionsController, NodesController],
+  exports: [ExecutionsService, NodeExecutorService],
 })
 export class ExecutionsModule {}
