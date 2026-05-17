@@ -1,12 +1,12 @@
 import type { WorkflowState } from '../variable-substitution';
 
 export interface ExtractNodeData {
-  scrapeUrl?: string;        // URL to scrape (supports {{variable}})
-  batchUrls?: string;        // comma-separated URLs for batch mode
-  scrapeFormats?: string[];  // 'markdown' | 'html' | 'text' (default: ['markdown'])
-  mapUrl?: string;           // URL to map (discover links)
-  searchQuery?: string;      // text to search (uses fetch + parse)
-  outputField?: string;      // 'markdown' | 'html' | 'text' | 'full'
+  scrapeUrl?: string; // URL to scrape (supports {{variable}})
+  batchUrls?: string; // comma-separated URLs for batch mode
+  scrapeFormats?: string[]; // 'markdown' | 'html' | 'text' (default: ['markdown'])
+  mapUrl?: string; // URL to map (discover links)
+  searchQuery?: string; // text to search (uses fetch + parse)
+  outputField?: string; // 'markdown' | 'html' | 'text' | 'full'
 }
 
 const HTTP_TIMEOUT_MS = 30_000;
@@ -34,56 +34,59 @@ async function executeWithFirecrawl(
 ): Promise<unknown> {
   const baseUrl = 'https://api.firecrawl.dev/v1';
   const headers = {
-    'Authorization': `Bearer ${apiKey}`,
+    Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   };
 
   if (nodeData.scrapeUrl) {
     const formats = nodeData.scrapeFormats ?? ['markdown'];
-    const res = await fetchWithTimeout(
-      `${baseUrl}/scrape`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ url: nodeData.scrapeUrl, formats }),
-      },
-    );
-    const json = await res.json() as { data?: Record<string, unknown>; success?: boolean };
+    const res = await fetchWithTimeout(`${baseUrl}/scrape`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ url: nodeData.scrapeUrl, formats }),
+    });
+    const json = (await res.json()) as {
+      data?: Record<string, unknown>;
+      success?: boolean;
+    };
     const data = json.data ?? {};
     return pickField(data, nodeData.outputField ?? 'markdown');
   }
 
   if (nodeData.mapUrl) {
-    const res = await fetchWithTimeout(
-      `${baseUrl}/map`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ url: nodeData.mapUrl }),
-      },
-    );
-    const json = await res.json() as { links?: string[] };
+    const res = await fetchWithTimeout(`${baseUrl}/map`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ url: nodeData.mapUrl }),
+    });
+    const json = (await res.json()) as { links?: string[] };
     return { links: json.links ?? [], count: (json.links ?? []).length };
   }
 
   if (nodeData.batchUrls) {
-    const urls = nodeData.batchUrls.split(',').map((u) => u.trim()).filter(Boolean);
-    const res = await fetchWithTimeout(
-      `${baseUrl}/batch/scrape`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ urls, formats: nodeData.scrapeFormats ?? ['markdown'] }),
-      },
-    );
-    const json = await res.json() as { data?: unknown[] };
+    const urls = nodeData.batchUrls
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean);
+    const res = await fetchWithTimeout(`${baseUrl}/batch/scrape`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        urls,
+        formats: nodeData.scrapeFormats ?? ['markdown'],
+      }),
+    });
+    const json = (await res.json()) as { data?: unknown[] };
     return { results: json.data ?? [], count: (json.data ?? []).length };
   }
 
   throw new Error('Extract node: no URL configured');
 }
 
-async function executeNativeFetch(url: string, outputField: string): Promise<unknown> {
+async function executeNativeFetch(
+  url: string,
+  outputField: string,
+): Promise<unknown> {
   const res = await fetchWithTimeout(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LineaBot/1.0)' },
   });
@@ -115,7 +118,10 @@ function pickField(data: Record<string, unknown>, field: string): unknown {
   return data[field] ?? data['markdown'] ?? data['text'] ?? data;
 }
 
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
   try {

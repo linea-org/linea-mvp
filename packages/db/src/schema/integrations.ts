@@ -5,6 +5,32 @@ import { pods } from './pods';
 import { users } from './users';
 import { workflows } from './workflows';
 
+export const oauthConnections = pgTable('oauth_connections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id')
+    .references(() => workspaces.id, { onDelete: 'cascade' })
+    .notNull(),
+  provider: text('provider').notNull(), // google, slack, github, notion
+  accessTokenEncrypted: text('access_token_encrypted').notNull(),
+  refreshTokenEncrypted: text('refresh_token_encrypted'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  scope: text('scope'),
+  providerUserId: text('provider_user_id'),
+  providerEmail: text('provider_email'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const oauthConnectionsRelations = relations(oauthConnections, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [oauthConnections.workspaceId],
+    references: [workspaces.id],
+  }),
+}));
+
+export type OAuthConnection = typeof oauthConnections.$inferSelect;
+export type NewOAuthConnection = typeof oauthConnections.$inferInsert;
+
 export const apiKeys = pgTable('api_keys', {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id')

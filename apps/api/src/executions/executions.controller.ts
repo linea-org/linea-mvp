@@ -62,10 +62,7 @@ export class ExecutionsController {
   @ApiOperation({ summary: 'List executions' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  findAll(
-    @Param('podId') podId: string,
-    @Query() query: ListExecutionsDto,
-  ) {
+  findAll(@Param('podId') podId: string, @Query() query: ListExecutionsDto) {
     return this.service.findAll(podId, query);
   }
 
@@ -93,7 +90,10 @@ export class ExecutionsController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  async stream(@Param('podId') podId: string, @Param('id') id: string): Promise<Observable<MessageEvent>> {
+  async stream(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+  ): Promise<Observable<MessageEvent>> {
     // Verify the execution belongs to this pod before subscribing — prevents IDOR
     await this.service.findOne(podId, id);
     return this.events.forExecution(id).pipe(
@@ -132,7 +132,9 @@ export class ExecutionsController {
 
   @Post(':id/replay')
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Replay an execution, optionally from a specific node (editor+)' })
+  @ApiOperation({
+    summary: 'Replay an execution, optionally from a specific node (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })

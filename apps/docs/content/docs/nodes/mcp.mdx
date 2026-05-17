@@ -1,0 +1,66 @@
+---
+title: MCP Node
+description: Invoke a tool on an attached Model Context Protocol server via JSON-RPC 2.0.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# MCP Node
+
+The `mcp` node calls a tool exposed by an MCP-compatible server using the JSON-RPC 2.0 `tools/call` method.
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `mcpServerId` | string | — | ID of a pre-configured MCP server in workspace settings (used to resolve the URL and token) |
+| `mcpServerUrl` | string | — | Direct URL of the MCP server (used if `mcpServerId` is not set) |
+| `mcpAction` | string | — | Tool name to call (maps to `params.name` in the JSON-RPC request) |
+| `mcpParams` | object \| string | `{}` | Arguments passed to the tool. Can be a JSON string or an object. |
+| `outputField` | `full` \| `text` \| `json` \| `markdown` | `full` | How to extract the result from the server response |
+| `accessToken` | string | — | Bearer token sent as `Authorization` header (overridden by server config) |
+
+## Wire Protocol
+
+The node sends a standard MCP `tools/call` request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "<mcpAction>",
+    "arguments": { ...mcpParams }
+  }
+}
+```
+
+Timeout: **30 seconds**.
+
+## Output Extraction
+
+| `outputField` | Returns |
+|---|---|
+| `full` | The entire `result` from the JSON-RPC response |
+| `text` | First `text`-type content block, or `JSON.stringify(result)` |
+| `markdown` | `result.markdown`, falling back to `text` extraction |
+| `json` | `result.json` or `result.data`, falling back to `result` |
+
+<Callout type="info">
+  MCP servers must be registered under **Settings → Integrations → MCP Servers** in your workspace before they can be referenced by `mcpServerId`. The server URL and token are stored there and resolved at execution time.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "mcpServerId": "my-firecrawl-server",
+  "mcpAction": "scrape",
+  "mcpParams": {
+    "url": "{{input.targetUrl}}",
+    "formats": ["markdown"]
+  },
+  "outputField": "text"
+}
+```

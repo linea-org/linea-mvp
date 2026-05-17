@@ -8,7 +8,9 @@ export class ListTemplatesDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by category slug (e.g. productivity)' })
+  @ApiPropertyOptional({
+    description: 'Filter by category slug (e.g. productivity)',
+  })
   @IsOptional()
   @IsString()
   category?: string;

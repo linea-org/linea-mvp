@@ -1,0 +1,95 @@
+---
+title: Guardrails Node
+description: Inspect content for PII, jailbreak attempts, or harmful content, with configurable block/redact/warn actions.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Guardrails Node
+
+The `guardrails` node scans a text value for policy violations using regex-based detectors. Violations can block execution, redact the offending content, or flag it while allowing the workflow to continue.
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `guardrailType` | `pii` \| `moderation` \| `jailbreak` \| `all` | — | Shorthand to enable a check category |
+| `piiEnabled` | boolean | `false` | Enable PII detection (overrides `guardrailType`) |
+| `moderationEnabled` | boolean | `false` | Enable harmful content detection |
+| `jailbreakEnabled` | boolean | `false` | Enable prompt injection / jailbreak detection |
+| `actionOnViolation` | `block` \| `redact` \| `warn` | `block` | What to do when a violation is found |
+| `inputField` | string | `lastOutput` | Variable name to inspect |
+
+`guardrailType: 'all'` enables all three check categories simultaneously.
+
+## Detectors
+
+### PII
+
+Regex patterns for:
+- Email addresses
+- US phone numbers
+- Social Security Numbers (`\b\d{3}-\d{2}-\d{4}\b`)
+- Credit card numbers (16-digit)
+- IPv4 addresses
+
+### Jailbreak
+
+Phrase-based detection for common prompt injection patterns including: `"ignore previous instructions"`, `"act as if"`, `"jailbreak"`, `"dan mode"`, and similar.
+
+### Moderation
+
+Keyword patterns for violent or harmful content (hate speech, threats, etc.).
+
+## Actions
+
+| Action | Behavior |
+|---|---|
+| `block` | Throws an error — the node fails and the execution is marked `failed` |
+| `redact` | Replaces detected patterns with `[TYPE_REDACTED]` and passes the cleaned text downstream |
+| `warn` | Passes through unchanged but adds a `violations` array to the output |
+
+## Output
+
+When `passed: true`:
+
+```json
+{ "passed": true, "violations": [] }
+```
+
+When violations are found with `action: 'warn'`:
+
+```json
+{
+  "passed": false,
+  "violations": [
+    { "type": "pii", "detail": "Detected email: 1 instance(s)" }
+  ]
+}
+```
+
+When violations are found with `action: 'redact'`:
+
+```json
+{
+  "passed": false,
+  "violations": [...],
+  "redactedText": "Contact [EMAIL_REDACTED] for support.",
+  "originalText": "Contact alice@example.com for support."
+}
+```
+
+<Callout type="warn">
+  These are **regex-based detectors** — they produce false positives (IPv4 patterns may match version numbers) and false negatives (novel jailbreak phrasing not in the list). Do not rely on this node as a sole security control for untrusted user input.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "piiEnabled": true,
+  "jailbreakEnabled": true,
+  "actionOnViolation": "redact",
+  "inputField": "lastOutput"
+}
+```

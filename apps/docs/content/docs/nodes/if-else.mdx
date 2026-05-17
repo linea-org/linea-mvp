@@ -1,0 +1,64 @@
+---
+title: If-Else Node
+description: Branch execution based on a boolean Jexl expression evaluated against the current workflow state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# If-Else Node
+
+The `if-else` node evaluates a boolean expression and routes execution to one of two branches.
+
+## Configuration Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `condition` | string | Jexl expression that resolves to a boolean |
+
+## Expression Context
+
+The condition is evaluated with [Jexl](https://github.com/TomFrost/Jexl) (not raw JavaScript) with these context variables:
+
+| Variable | Value |
+|---|---|
+| `input` | `variables.input` — the original trigger payload |
+| `lastOutput` | `variables.lastOutput` — output of the previous node |
+| `variables` | The full LangGraph state variables dictionary |
+
+## Output
+
+```json
+{ "condition": true, "branch": "if" }
+```
+
+or
+
+```json
+{ "condition": false, "branch": "else" }
+```
+
+## Wiring
+
+Connect the outgoing edge from the **`if`** source handle to the node that runs when the condition is `true`. Connect the **`else`** handle to the alternative path. Both handles must be connected for the graph to be valid.
+
+## Expression Examples
+
+```
+lastOutput.score > 0.8
+input.status == "approved"
+variables.retryCount < 3
+lastOutput.items.length > 0
+input.role == "admin" && lastOutput.verified == true
+```
+
+<Callout type="warn">
+  Jexl uses `==` and `!=` for equality (not `===`). It does not support `typeof`, template literals, or destructuring. For complex logic, use a **Transform** node first to reshape the data, then pass the result into the if-else condition.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "condition": "lastOutput.confidence > 0.75"
+}
+```

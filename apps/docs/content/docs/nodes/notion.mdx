@@ -1,0 +1,73 @@
+---
+title: Notion Node
+description: Create pages, append content blocks, query databases, or retrieve pages via the Notion API.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Notion Node
+
+The `notion` node interacts with Notion workspaces via the Notion API (version `2022-06-28`) using an Internal Integration Token.
+
+## Credential Setup
+
+Store your Internal Integration Token in workspace secrets under the name **`NOTION_TOKEN`**.
+
+In your Notion workspace, share the relevant databases and pages with the integration before using this node.
+
+## Configuration Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `action` | `create_page` \| `append_block` \| `query_database` \| `get_page` | Operation to perform |
+| `databaseId` | string | Target database ID (for `create_page`, `query_database`) |
+| `pageId` | string | Target page ID (for `append_block`, `get_page`) |
+| `title` | string | Page title for `create_page` (sets the `Name` property) |
+| `content` | string | Text content — creates a paragraph block for `create_page` and `append_block` |
+| `filter` | string | JSON string of a Notion filter object for `query_database` |
+
+## Actions
+
+### `create_page`
+
+Creates a new page in a database. `databaseId` is required.
+
+- `title` → sets the `Name` property (title column)
+- `content` → appended as a paragraph block
+
+Output: `{ "id": "<page-id>", "url": "https://notion.so/..." }`
+
+### `append_block`
+
+Appends a paragraph block containing `content` to an existing page. `pageId` and `content` are required.
+
+Output: `{ "ok": true, "pageId": "<page-id>" }`
+
+### `query_database`
+
+Queries a database with an optional Notion filter. Returns up to 50 pages.
+
+Output: `{ "pages": [{ "id": "...", "url": "..." }, ...] }`
+
+`filter` must be a valid JSON string matching the [Notion filter spec](https://developers.notion.com/reference/post-database-query-filter).
+
+### `get_page`
+
+Fetches page metadata and properties. `pageId` is required.
+
+Output: `{ "id": "...", "url": "...", "properties": { ... } }`
+
+<Callout type="info">
+  Database and page IDs can be extracted from Notion URLs. For `https://notion.so/myworkspace/My-Database-abc123`, the ID is `abc123` (with hyphens: `abc-123`).
+</Callout>
+
+## Example Config
+
+```json
+{
+  "action": "create_page",
+  "databaseId": "abc123def456",
+  "title": "{{lastOutput.reportTitle}}",
+  "content": "{{lastOutput.summary}}"
+}
+```

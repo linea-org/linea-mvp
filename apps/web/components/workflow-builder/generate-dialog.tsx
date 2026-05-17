@@ -1,15 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  SparklesIcon,
-  Cancel01Icon,
-  Tick02Icon,
-  Loading03Icon,
+  AiMagicIcon, Cancel01Icon, Loading03Icon, PlaneIcon,
+  Tick02Icon, Alert02Icon, WorkflowSquare01Icon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@linea/ui/components/button';
-import { Textarea } from '@linea/ui/components/textarea';
+import type { Node, Edge } from '@xyflow/react';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -30,43 +28,71 @@ interface GenerateDialogProps {
   podId: string;
   workflowId: string;
   token: string;
+  nodes: Node[];
+  edges: Edge[];
   onEvent: (event: GenerateEvent) => void;
   onClose: () => void;
 }
 
-type Phase = 'idle' | 'generating' | 'done' | 'error';
+type Turn =
+  | { kind: 'user'; text: string }
+  | { kind: 'assistant'; progress: string[]; nodeCount: number; done: boolean; error?: string };
 
 const EXAMPLES = [
-  'Fetch Hacker News top stories, summarize them with Claude, and post to a Slack channel',
-  'When a GitHub issue is created, triage its priority with AI and add the right labels',
-  'Take a URL as input, scrape the page content, and return a 3-bullet summary',
-  'Process a customer support ticket, classify urgency, and draft a reply for human approval',
+  'Fetch Hacker News top stories, summarize with Claude, post to Slack',
+  'When a GitHub issue is created, triage priority with AI and add labels',
+  'Scrape a URL, extract key info, return a 3-bullet summary',
+  'Add a Slack notification step after the last node',
+  'Replace the current workflow with a customer support triage pipeline',
 ];
 
 export function GenerateDialog({
-  workspaceId,
-  podId,
-  workflowId,
-  token,
-  onEvent,
-  onClose,
+  workspaceId, podId, workflowId, token, nodes, edges, onEvent, onClose,
 }: GenerateDialogProps) {
-  const [prompt, setPrompt] = useState('');
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [messages, setMessages] = useState<string[]>([]);
-  const [nodeCount, setNodeCount] = useState(0);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  function addMessage(msg: string) {
-    setMessages((prev) => [...prev, msg]);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [turns]);
+
+  function buildCanvasContext() {
+    if (nodes.length === 0) return undefined;
+    return {
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      nodeTypes: [...new Set(nodes.map((n) => n.type ?? 'unknown'))],
+      nodeLabels: nodes.map((n) => (n.data?.label as string | undefined) ?? n.id).slice(0, 10),
+    };
   }
 
-  async function handleGenerate() {
-    if (!prompt.trim() || phase === 'generating') return;
+  function buildHistory(): Array<{ role: 'user' | 'assistant'; content: string }> {
+    const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    for (const turn of turns) {
+      if (turn.kind === 'user') {
+        history.push({ role: 'user', content: turn.text });
+      } else if (turn.done && !turn.error) {
+        const summary = turn.progress[turn.progress.length - 1] ?? 'Workflow generated.';
+        history.push({ role: 'assistant', content: summary });
+      }
+    }
+    return history;
+  }
 
-    setPhase('generating');
-    setMessages([]);
-    setNodeCount(0);
+  async function handleSend() {
+    const text = input.trim();
+    if (!text || busy) return;
+
+    setInput('');
+    setBusy(true);
+
+    const userTurn: Turn = { kind: 'user', text };
+    const assistantTurn: Turn = { kind: 'assistant', progress: [], nodeCount: 0, done: false };
+    setTurns((prev) => [...prev, userTurn, assistantTurn]);
 
     abortRef.current?.abort();
     const ac = new AbortController();
@@ -77,18 +103,17 @@ export function GenerateDialog({
         `${API_BASE}/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/generate`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ prompt: prompt.trim() }),
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: text,
+            canvasContext: buildCanvasContext(),
+            history: buildHistory(),
+          }),
           signal: ac.signal,
         },
       );
 
-      if (!resp.ok || !resp.body) {
-        throw new Error(`Server error: ${resp.status}`);
-      }
+      if (!resp.ok || !resp.body) throw new Error(`Server error: ${resp.status}`);
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
@@ -107,138 +132,186 @@ export function GenerateDialog({
             const event: GenerateEvent = JSON.parse(line.slice(6));
             onEvent(event);
 
-            if (event.type === 'progress' && event.message) {
-              addMessage(event.message);
-            } else if (event.type === 'node_added') {
-              setNodeCount((n) => n + 1);
-            } else if (event.type === 'complete') {
-              addMessage(`Done — ${event.definition?.nodes.length ?? 0} nodes, ${event.definition?.edges.length ?? 0} edges`);
-              setPhase('done');
-            } else if (event.type === 'error') {
-              addMessage(`Error: ${event.message}`);
-              setPhase('error');
-            }
-          } catch {
-            // malformed chunk
-          }
+            setTurns((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (!last || last.kind !== 'assistant') return prev;
+
+              if (event.type === 'progress' && event.message) {
+                return [...next.slice(0, -1), { ...last, progress: [...last.progress, event.message] }];
+              }
+              if (event.type === 'node_added') {
+                return [...next.slice(0, -1), { ...last, nodeCount: last.nodeCount + 1 }];
+              }
+              if (event.type === 'complete') {
+                const summary = `Built ${event.definition?.nodes.length ?? 0} nodes, ${event.definition?.edges.length ?? 0} edges`;
+                return [...next.slice(0, -1), { ...last, progress: [...last.progress, summary], done: true }];
+              }
+              if (event.type === 'error') {
+                return [...next.slice(0, -1), { ...last, progress: [...last.progress, event.message ?? 'Unknown error'], done: true, error: event.message }];
+              }
+              return prev;
+            });
+          } catch { /* malformed chunk */ }
         }
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        addMessage(`Failed: ${err instanceof Error ? err.message : String(err)}`);
-        setPhase('error');
+        const msg = err instanceof Error ? err.message : String(err);
+        setTurns((prev) => {
+          const last = prev[prev.length - 1];
+          if (!last || last.kind !== 'assistant') return prev;
+          return [...prev.slice(0, -1), { ...last, done: true, error: msg, progress: [...last.progress, msg] }];
+        });
       }
+    } finally {
+      setBusy(false);
+      setTimeout(() => textareaRef.current?.focus(), 50);
     }
   }
 
-  function handleCancel() {
-    abortRef.current?.abort();
-    setPhase('idle');
-    setMessages([]);
-    setNodeCount(0);
-  }
-
-  const isGenerating = phase === 'generating';
-  const isDone = phase === 'done';
+  const isEmpty = turns.length === 0;
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
+    <div className="flex h-full flex-col bg-background">
+      {/* Header — matches Linea Agent top bar */}
+      <div className="flex items-center justify-between border-b border-border px-3 py-2 shrink-0">
         <div className="flex items-center gap-2">
-          <HugeiconsIcon icon={SparklesIcon} className="size-4 text-violet-500" />
-          <span className="text-sm font-semibold">Generate with AI</span>
+          <div className="flex size-5 items-center justify-center rounded-md bg-gradient-to-br from-violet-500 to-indigo-600">
+            <HugeiconsIcon icon={AiMagicIcon} className="size-3 text-white" />
+          </div>
+          <span className="text-sm font-semibold">AI Generate</span>
+          {nodes.length > 0 && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+              {nodes.length} node{nodes.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
-        <button
-          onClick={onClose}
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} className="size-4" />
-        </button>
+        <Button size="icon-sm" variant="ghost" onClick={onClose}>
+          <HugeiconsIcon icon={Cancel01Icon} className="size-3.5" />
+        </Button>
       </div>
 
-      {/* Body */}
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            Describe what you want to automate
-          </label>
-          <Textarea
-            rows={5}
-            placeholder="e.g. Fetch the top 5 Hacker News stories, summarize each with Claude, and post a digest to Slack every morning"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            disabled={isGenerating || isDone}
-            className="resize-none text-sm"
-          />
-        </div>
-
-        {/* Example prompts */}
-        {phase === 'idle' && (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Examples
-            </p>
-            {EXAMPLES.map((ex) => (
-              <button
-                key={ex}
-                className="block w-full rounded-md border border-dashed px-3 py-2 text-left text-xs text-muted-foreground hover:border-violet-300 hover:bg-violet-50/50 hover:text-foreground transition-colors dark:hover:bg-violet-950/20"
-                onClick={() => setPrompt(ex)}
-              >
-                {ex}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Progress log */}
-        {messages.length > 0 && (
-          <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5">
-            {messages.map((msg, i) => (
-              <div key={i} className="flex items-start gap-2 text-xs">
-                {i === messages.length - 1 && isGenerating ? (
-                  <HugeiconsIcon icon={Loading03Icon} className="mt-0.5 size-3 shrink-0 animate-spin text-violet-500" />
-                ) : (
-                  <HugeiconsIcon icon={Tick02Icon} className="mt-0.5 size-3 shrink-0 text-green-500" />
-                )}
-                <span className="text-muted-foreground">{msg}</span>
+      {/* Chat area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+        {isEmpty ? (
+          /* Empty state — centered like Linea Agent */
+          <div className="flex flex-col items-center justify-center h-full text-center gap-5 py-8">
+            <div>
+              <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-md">
+                <HugeiconsIcon icon={AiMagicIcon} className="size-5" />
               </div>
-            ))}
-            {isGenerating && nodeCount > 0 && (
-              <p className="pl-5 text-[11px] text-violet-500 font-medium">
-                {nodeCount} node{nodeCount !== 1 ? 's' : ''} placed on canvas…
+              <p className="text-sm font-semibold">What should we build?</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">
+                Describe a workflow or ask to modify the canvas.
               </p>
-            )}
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              {EXAMPLES.map((ex) => (
+                <button
+                  key={ex}
+                  onClick={() => { setInput(ex); setTimeout(() => textareaRef.current?.focus(), 50); }}
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted/50 transition-all text-left"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
           </div>
+        ) : (
+          turns.map((turn, i) =>
+            turn.kind === 'user' ? (
+              /* User bubble — bg-muted, right-aligned */
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-muted px-3 py-2 text-sm text-foreground leading-relaxed">
+                  {turn.text}
+                </div>
+              </div>
+            ) : (
+              /* Assistant turn — gradient avatar, left-aligned */
+              <div key={i} className="flex gap-2.5">
+                <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 mt-1">
+                  <HugeiconsIcon icon={AiMagicIcon} className="size-3 text-white" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  {/* Thinking spinner before first message */}
+                  {turn.progress.length === 0 && !turn.done && (
+                    <div className="flex gap-1 py-1">
+                      {[0, 150, 300].map((d) => (
+                        <span
+                          key={d}
+                          className="size-1.5 rounded-full bg-muted-foreground/40 animate-bounce"
+                          style={{ animationDelay: `${d}ms` }}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Progress messages */}
+                  {turn.progress.map((msg, j) => {
+                    const isLast = j === turn.progress.length - 1;
+                    const isError = !!turn.error && isLast;
+                    return (
+                      <div key={j} className="flex items-start gap-1.5">
+                        <span className="mt-[3px] shrink-0">
+                          {isError ? (
+                            <HugeiconsIcon icon={Alert02Icon} className="size-3 text-destructive" />
+                          ) : isLast && !turn.done ? (
+                            <HugeiconsIcon icon={Loading03Icon} className="size-3 animate-spin text-violet-500" />
+                          ) : (
+                            <HugeiconsIcon icon={Tick02Icon} className="size-3 text-green-500" />
+                          )}
+                        </span>
+                        <span className={`text-xs leading-relaxed ${isError ? 'text-destructive' : 'text-muted-foreground'}`}>
+                          {msg}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Node count pill */}
+                  {turn.nodeCount > 0 && (
+                    <div className="inline-flex items-center gap-1 rounded-full bg-violet-100 dark:bg-violet-950 px-2.5 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">
+                      <HugeiconsIcon icon={WorkflowSquare01Icon} className="size-3" />
+                      {turn.nodeCount} node{turn.nodeCount !== 1 ? 's' : ''} placed
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          )
         )}
       </div>
 
-      {/* Footer */}
-      <div className="border-t px-4 py-3 flex gap-2 justify-end">
-        {isDone ? (
-          <Button size="sm" onClick={onClose}>
-            Start editing
-          </Button>
-        ) : isGenerating ? (
-          <Button size="sm" variant="outline" onClick={handleCancel}>
-            Cancel
-          </Button>
-        ) : (
-          <>
-            <Button size="sm" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              disabled={prompt.trim().length < 10}
-              onClick={() => void handleGenerate()}
-              className="bg-violet-600 hover:bg-violet-700 text-white"
+      {/* Input — styled like Linea Agent compose box */}
+      <div className="shrink-0 px-3 pb-3 pt-2">
+        <div className="rounded-2xl border border-border bg-background focus-within:ring-2 focus-within:ring-ring/50 focus-within:border-ring/50 transition-all overflow-hidden">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend(); }
+            }}
+            placeholder={isEmpty ? 'Describe a workflow to build…' : 'Follow up or ask to modify…'}
+            className="w-full resize-none bg-transparent text-sm text-foreground outline-none px-4 pt-3 pb-2 min-h-[52px] max-h-40 leading-relaxed placeholder:text-muted-foreground/50"
+            rows={2}
+            disabled={busy}
+          />
+          <div className="flex items-center justify-between px-3 pb-2.5">
+            <p className="text-[10px] text-muted-foreground/40">Shift+Enter for newline · Ctrl+G to close</p>
+            <button
+              onClick={() => void handleSend()}
+              disabled={!input.trim() || busy}
+              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-background hover:opacity-80 disabled:opacity-30 transition-opacity"
             >
-              <HugeiconsIcon icon={SparklesIcon} className="size-3.5" />
-              Generate
-            </Button>
-          </>
-        )}
+              <HugeiconsIcon
+                icon={busy ? Loading03Icon : PlaneIcon}
+                className={`size-3.5 ${busy ? 'animate-spin' : ''}`}
+              />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

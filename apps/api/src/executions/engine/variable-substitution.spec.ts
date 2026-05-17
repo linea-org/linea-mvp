@@ -1,4 +1,7 @@
-import { substituteVariables, substituteInValue } from './variable-substitution';
+import {
+  substituteVariables,
+  substituteInValue,
+} from './variable-substitution';
 import type { WorkflowState } from './variable-substitution';
 
 function makeState(variables: Record<string, any>): WorkflowState {
@@ -18,7 +21,9 @@ describe('substituteVariables', () => {
 
   it('leaves unknown variable references untouched', () => {
     const state = makeState({});
-    expect(substituteVariables('value: {{missing}}', state)).toBe('value: {{missing}}');
+    expect(substituteVariables('value: {{missing}}', state)).toBe(
+      'value: {{missing}}',
+    );
   });
 
   it('returns empty string unchanged', () => {

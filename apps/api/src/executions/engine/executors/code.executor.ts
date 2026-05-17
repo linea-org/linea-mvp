@@ -17,8 +17,8 @@ export function executeCodeNode(
 ): never {
   throw new Error(
     'Code node execution is currently disabled. ' +
-    'Arbitrary code execution requires a dedicated Pod VM for safe sandboxing. ' +
-    'This feature will be re-enabled once Pod VM infrastructure is available. ' +
-    'Use the "agent" node for logic-heavy steps in the meantime.',
+      'Arbitrary code execution requires a dedicated Pod VM for safe sandboxing. ' +
+      'This feature will be re-enabled once Pod VM infrastructure is available. ' +
+      'Use the "agent" node for logic-heavy steps in the meantime.',
   );
 }

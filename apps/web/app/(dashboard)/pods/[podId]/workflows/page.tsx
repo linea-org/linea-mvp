@@ -51,6 +51,7 @@ import {
   Delete02Icon,
   GridViewIcon,
   ArrowUp01Icon,
+  Copy01Icon,
 } from '@hugeicons/core-free-icons';
 
 interface Workflow {
@@ -173,6 +174,18 @@ export default function WorkflowsPage() {
     );
   }
 
+  async function duplicateWorkflow(id: string) {
+    if (!activeWorkspace) return;
+    const token = await getToken();
+    if (!token) return;
+    const api = createApiClient(token);
+    const copy = await api.post<Workflow>(
+      `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${id}/duplicate`,
+      {},
+    );
+    setWorkflows((prev) => [copy, ...prev]);
+  }
+
   async function trashWorkflow(id: string) {
     if (!activeWorkspace) return;
     const token = await getToken();
@@ -278,7 +291,7 @@ export default function WorkflowsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Workflows</h1>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>New workflow</Button>
+        <Button onClick={() => setCreateOpen(true)}>New workflow</Button>
       </div>
 
       <div className="flex gap-1">
@@ -386,6 +399,10 @@ export default function WorkflowsPage() {
                             <DropdownMenuItem onClick={() => void toggleTemplate(wf)}>
                               <HugeiconsIcon icon={GridViewIcon} className="mr-2 size-4" />
                               {wf.isTemplate ? 'Remove pod template' : 'Mark as pod template'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void duplicateWorkflow(wf.id)}>
+                              <HugeiconsIcon icon={Copy01Icon} className="mr-2 size-4" />
+                              Duplicate
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openPublishDialog(wf)}>
                               <HugeiconsIcon icon={ArrowUp01Icon} className="mr-2 size-4" />

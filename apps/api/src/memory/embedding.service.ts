@@ -11,7 +11,9 @@ export class EmbeddingService {
   constructor(private readonly config: ConfigService) {
     this.apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (!this.apiKey) {
-      this.logger.warn('OPENAI_API_KEY not set — using zero-vector fallback for embeddings');
+      this.logger.warn(
+        'OPENAI_API_KEY not set — using zero-vector fallback for embeddings',
+      );
     }
   }
 

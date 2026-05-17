@@ -35,6 +35,7 @@ export type ModelApiKeys = {
   OPENAI_API_KEY?: string;
   GROQ_API_KEY?: string;
   GOOGLE_API_KEY?: string;
+  OLLAMA_BASE_URL?: string;
 };
 
 export type ModelClient = (
@@ -60,6 +61,13 @@ export function createModelClient(
       );
     case 'google':
       return createGoogleClient(modelId, apiKeys.GOOGLE_API_KEY);
+    case 'ollama':
+      // Ollama uses the OpenAI-compatible API; no key required, 'ollama' satisfies the client check
+      return createOpenAIClient(
+        modelId,
+        'ollama',
+        apiKeys.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1',
+      );
     default:
       throw new Error(`Unsupported provider: ${String(provider)}`);
   }

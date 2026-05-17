@@ -12,13 +12,13 @@ interface LogicPanelProps {
   onUpdate: (data: Record<string, unknown>) => void;
 }
 
-interface Route { label: string; condition: string }
+interface Route { id: string; label: string; condition: string }
 
 export function LogicPanel({ data, nodeType, onUpdate }: LogicPanelProps) {
   const isRouter = nodeType === 'router';
   const routes: Route[] = (data.routes as Route[]) ?? [];
 
-  function updateRoute(index: number, field: keyof Route, value: string) {
+  function updateRoute(index: number, field: 'label' | 'condition', value: string) {
     onUpdate({ routes: routes.map((r, i) => (i === index ? { ...r, [field]: value } : r)) });
   }
 
@@ -65,7 +65,7 @@ export function LogicPanel({ data, nodeType, onUpdate }: LogicPanelProps) {
             <Button
               size="xs"
               variant="ghost"
-              onClick={() => onUpdate({ routes: [...routes, { label: '', condition: '' }] })}
+              onClick={() => onUpdate({ routes: [...routes, { id: Math.random().toString(36).slice(2, 9), label: '', condition: '' }] })}
             >
               <HugeiconsIcon icon={Add01Icon} />
               Add

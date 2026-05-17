@@ -5,7 +5,10 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { REQUIRE_ROLE_KEY, type RoleName } from '../decorators/require-role.decorator';
+import {
+  REQUIRE_ROLE_KEY,
+  type RoleName,
+} from '../decorators/require-role.decorator';
 
 const ROLE_LEVEL: Record<string, number> = {
   owner: 4,
@@ -26,7 +29,9 @@ export class RoleGuard implements CanActivate {
 
     if (!required) return true;
 
-    const req = context.switchToHttp().getRequest<{ workspace?: { role: string } }>();
+    const req = context
+      .switchToHttp()
+      .getRequest<{ workspace?: { role: string } }>();
     const role = req.workspace?.role;
 
     const level = role ? (ROLE_LEVEL[role] ?? 0) : 0;

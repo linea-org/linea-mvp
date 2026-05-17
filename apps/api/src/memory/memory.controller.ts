@@ -9,7 +9,12 @@ import {
   HttpCode,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { MemoryService } from './memory.service';
 import { CreateMemoryDto } from './dto/create-memory.dto';
 import { ListMemoriesDto } from './dto/list-memories.dto';
@@ -30,7 +35,10 @@ export class MemoryController {
 
   @Post('ingest')
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Ingest text — extracts atomic facts with embeddings and conflict resolution (editor+)' })
+  @ApiOperation({
+    summary:
+      'Ingest text — extracts atomic facts with embeddings and conflict resolution (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   ingest(
     @Param('workspaceId') workspaceId: string,
@@ -41,7 +49,9 @@ export class MemoryController {
   }
 
   @Post('search')
-  @ApiOperation({ summary: 'Hybrid search: pgvector cosine + keyword, merged score' })
+  @ApiOperation({
+    summary: 'Hybrid search: pgvector cosine + keyword, merged score',
+  })
   @ApiParam({ name: 'workspaceId' })
   search(
     @Param('workspaceId') workspaceId: string,
@@ -62,7 +72,9 @@ export class MemoryController {
 
   @Post()
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Store a memory manually (no extraction) (editor+)' })
+  @ApiOperation({
+    summary: 'Store a memory manually (no extraction) (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   create(
     @Param('workspaceId') workspaceId: string,
@@ -73,9 +85,14 @@ export class MemoryController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List memories (filterable by scope, threadId, workflowId)' })
+  @ApiOperation({
+    summary: 'List memories (filterable by scope, threadId, workflowId)',
+  })
   @ApiParam({ name: 'workspaceId' })
-  findAll(@Param('workspaceId') workspaceId: string, @Query() query: ListMemoriesDto) {
+  findAll(
+    @Param('workspaceId') workspaceId: string,
+    @Query() query: ListMemoriesDto,
+  ) {
     return this.service.findAll(workspaceId, query);
   }
 

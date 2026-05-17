@@ -9,7 +9,12 @@ import {
   HttpCode,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { KnowledgeService } from './knowledge.service';
 import { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
 import { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto';
@@ -30,7 +35,10 @@ export class KnowledgeController {
   @RequireRole('editor')
   @ApiOperation({ summary: 'Create a knowledge base (editor+)' })
   @ApiParam({ name: 'workspaceId' })
-  create(@Param('workspaceId') workspaceId: string, @Body() dto: CreateKnowledgeBaseDto) {
+  create(
+    @Param('workspaceId') workspaceId: string,
+    @Body() dto: CreateKnowledgeBaseDto,
+  ) {
     return this.service.createBase(workspaceId, dto);
   }
 
@@ -65,7 +73,9 @@ export class KnowledgeController {
   @Delete(':id')
   @HttpCode(204)
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Delete a knowledge base and all its entries (editor+)' })
+  @ApiOperation({
+    summary: 'Delete a knowledge base and all its entries (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
   delete(@Param('workspaceId') workspaceId: string, @Param('id') id: string) {
@@ -91,7 +101,10 @@ export class KnowledgeController {
   @ApiOperation({ summary: 'List entries in a knowledge base' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
-  listEntries(@Param('workspaceId') workspaceId: string, @Param('id') kbId: string) {
+  listEntries(
+    @Param('workspaceId') workspaceId: string,
+    @Param('id') kbId: string,
+  ) {
     return this.service.listEntries(workspaceId, kbId);
   }
 
@@ -111,7 +124,10 @@ export class KnowledgeController {
   }
 
   @Post(':id/search')
-  @ApiOperation({ summary: 'Search entries by text (semantic search when embeddings available)' })
+  @ApiOperation({
+    summary:
+      'Search entries by text (semantic search when embeddings available)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
   search(

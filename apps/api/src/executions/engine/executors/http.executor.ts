@@ -15,7 +15,10 @@ async function readBodyWithLimit(res: Response): Promise<string> {
     total += value.byteLength;
     if (total > MAX_RESPONSE_BYTES) {
       reader.cancel().catch(() => {});
-      return Buffer.concat(chunks).toString('utf-8') + '\n[response truncated at 2 MB]';
+      return (
+        Buffer.concat(chunks).toString('utf-8') +
+        '\n[response truncated at 2 MB]'
+      );
     }
     chunks.push(value);
   }
@@ -26,8 +29,9 @@ export async function executeHTTPNode(
   nodeData: Record<string, any>,
   state: WorkflowState,
 ): Promise<any> {
-  const url = substituteVariables(nodeData.httpUrl || '', state);
-  const method: string = nodeData.httpMethod || 'GET';
+  // Support both panel field names (url/method/body/headers) and legacy http-prefixed names
+  const url = substituteVariables(nodeData.url || nodeData.httpUrl || '', state);
+  const method: string = nodeData.method || nodeData.httpMethod || 'GET';
 
   if (!url) throw new Error('HTTP node: URL is required');
 
@@ -37,22 +41,36 @@ export async function executeHTTPNode(
     'Content-Type': 'application/json',
   };
 
-  if (Array.isArray(nodeData.httpHeaders)) {
-    for (const h of nodeData.httpHeaders) {
+  // Panel stores headers as a JSON string object {"Key": "Value"}
+  const rawHeaders = nodeData.headers || nodeData.httpHeaders;
+  if (typeof rawHeaders === 'string' && rawHeaders.trim()) {
+    try {
+      const parsed = JSON.parse(rawHeaders) as Record<string, string>;
+      for (const [k, v] of Object.entries(parsed)) {
+        if (k && v) headers[k] = substituteVariables(String(v), state);
+      }
+    } catch {
+      // ignore invalid JSON
+    }
+  } else if (Array.isArray(rawHeaders)) {
+    for (const h of rawHeaders) {
       if (h.key && h.value)
         headers[h.key] = substituteVariables(h.value, state);
     }
   }
 
-  if (nodeData.httpAuthType === 'bearer' && nodeData.httpAuthToken) {
-    headers['Authorization'] = `Bearer ${nodeData.httpAuthToken}`;
-  } else if (nodeData.httpAuthType === 'api-key' && nodeData.httpAuthToken) {
-    headers['X-API-Key'] = nodeData.httpAuthToken;
+  const authType = nodeData.authType || nodeData.httpAuthType;
+  const authToken = nodeData.authToken || nodeData.httpAuthToken;
+  if (authType === 'bearer' && authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  } else if (authType === 'api-key' && authToken) {
+    headers['X-API-Key'] = authToken;
   }
 
+  const requestBody = nodeData.body || nodeData.httpBody;
   let body: string | undefined;
-  if (['POST', 'PUT', 'PATCH'].includes(method) && nodeData.httpBody) {
-    body = substituteVariables(nodeData.httpBody, state);
+  if (['POST', 'PUT', 'PATCH'].includes(method) && requestBody) {
+    body = substituteVariables(requestBody, state);
   }
 
   const response = await fetch(url, { method, headers, body });

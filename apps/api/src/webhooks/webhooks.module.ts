@@ -16,7 +16,9 @@ import { PodsModule } from '../pods/pods.module';
       provide: WEBHOOK_REDIS,
       useFactory: (config: ConfigService) => {
         const redisUrl = config.get<string>('REDIS_URL');
-        return redisUrl ? new Redis(redisUrl) : new Redis({ host: 'localhost', port: 6379 });
+        return redisUrl
+          ? new Redis(redisUrl)
+          : new Redis({ host: 'localhost', port: 6379 });
       },
       inject: [ConfigService],
     },

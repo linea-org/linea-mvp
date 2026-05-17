@@ -1,0 +1,66 @@
+---
+title: Slack Node
+description: Send messages, direct messages, or list channels using the Slack Web API.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Slack Node
+
+The `slack` node interacts with Slack via the Web API using a Bot User OAuth Token.
+
+## Credential Setup
+
+Store your Bot User OAuth Token in workspace secrets under the name **`SLACK_TOKEN`**.
+
+Required OAuth scopes:
+- `chat:write` — for `send_message` and `send_dm`
+- `channels:read` + `conversations:read` — for `list_channels`
+- `im:write` — for `send_dm`
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `action` | `send_message` \| `send_dm` \| `list_channels` | `send_message` | Operation to perform |
+| `channel` | string | — | Channel ID or name (for `send_message`) |
+| `userId` | string | — | Slack user ID (for `send_dm`) |
+| `message` | string | — | Message text (supports `{{}}`, Slack mrkdwn format) |
+| `username` | string | — | Override bot display name |
+| `iconEmoji` | string | — | Override bot icon (e.g. `:robot_face:`) |
+
+## Actions
+
+### `send_message`
+
+Posts a message to a channel. `channel` and `message` are required.
+
+Output: `{ "ok": true, "ts": "<message timestamp>", "channel": "<channel>" }`
+
+### `send_dm`
+
+Opens a DM channel with the user and sends the message. `userId` and `message` are required.
+
+Output: `{ "ok": true, "ts": "<message timestamp>", "userId": "<userId>" }`
+
+### `list_channels`
+
+Lists up to 200 non-archived channels the bot has access to.
+
+Output: `{ "channels": [{ "id": "C123", "name": "general" }, ...] }`
+
+<Callout type="info">
+  Use channel IDs (e.g. `C012AB3CD`) rather than names when possible — they are stable and avoid issues if channels are renamed.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "action": "send_message",
+  "channel": "C012AB3CD",
+  "message": "Workflow completed. Result: {{lastOutput.summary}}",
+  "username": "Linea Bot",
+  "iconEmoji": ":linea:"
+}
+```

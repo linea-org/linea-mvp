@@ -15,7 +15,10 @@ export class NotificationsService {
       .where(
         and(
           eq(notifications.userId, userId),
-          or(eq(notifications.workspaceId, workspaceId), isNull(notifications.workspaceId)),
+          or(
+            eq(notifications.workspaceId, workspaceId),
+            isNull(notifications.workspaceId),
+          ),
         ),
       )
       .orderBy(desc(notifications.createdAt));
@@ -29,7 +32,10 @@ export class NotificationsService {
         and(
           eq(notifications.id, id),
           eq(notifications.userId, userId),
-          or(eq(notifications.workspaceId, workspaceId), isNull(notifications.workspaceId)),
+          or(
+            eq(notifications.workspaceId, workspaceId),
+            isNull(notifications.workspaceId),
+          ),
         ),
       )
       .returning();
@@ -46,7 +52,10 @@ export class NotificationsService {
         and(
           eq(notifications.userId, userId),
           eq(notifications.read, false),
-          or(eq(notifications.workspaceId, workspaceId), isNull(notifications.workspaceId)),
+          or(
+            eq(notifications.workspaceId, workspaceId),
+            isNull(notifications.workspaceId),
+          ),
         ),
       );
   }
@@ -58,18 +67,36 @@ export class NotificationsService {
         and(
           eq(notifications.id, id),
           eq(notifications.userId, userId),
-          or(eq(notifications.workspaceId, workspaceId), isNull(notifications.workspaceId)),
+          or(
+            eq(notifications.workspaceId, workspaceId),
+            isNull(notifications.workspaceId),
+          ),
         ),
       )
       .returning();
 
-    if (!deleted.length) throw new NotFoundException(`Notification ${id} not found`);
+    if (!deleted.length)
+      throw new NotFoundException(`Notification ${id} not found`);
   }
 
-  async create(userId: string, type: string, title: string, body?: string, workspaceId?: string) {
+  async create(
+    userId: string,
+    type: string,
+    title: string,
+    body?: string,
+    workspaceId?: string,
+    resourceUrl?: string,
+  ) {
     const [notif] = await this.db
       .insert(notifications)
-      .values({ userId, workspaceId: workspaceId ?? null, type, title, body: body ?? null })
+      .values({
+        userId,
+        workspaceId: workspaceId ?? null,
+        type,
+        title,
+        body: body ?? null,
+        resourceUrl: resourceUrl ?? null,
+      })
       .returning();
     return notif;
   }

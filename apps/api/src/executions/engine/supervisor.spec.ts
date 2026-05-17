@@ -3,10 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import type { SupervisorContext } from './supervisor';
 
 function makeConfig(overrides: Record<string, string> = {}): ConfigService {
-  return { get: (key: string) => overrides[key] ?? undefined } as unknown as ConfigService;
+  return {
+    get: (key: string) => overrides[key] ?? undefined,
+  } as unknown as ConfigService;
 }
 
-function makeCtx(overrides: Partial<SupervisorContext> = {}): SupervisorContext {
+function makeCtx(
+  overrides: Partial<SupervisorContext> = {},
+): SupervisorContext {
   return {
     nodeId: 'node-1',
     nodeType: 'agent',
@@ -27,7 +31,9 @@ describe('ExecutionSupervisor — hard rules', () => {
   });
 
   it('aborts when retries are exhausted', async () => {
-    const decision = await supervisor.assess(makeCtx({ retryCount: 2, maxRetries: 2 }));
+    const decision = await supervisor.assess(
+      makeCtx({ retryCount: 2, maxRetries: 2 }),
+    );
     expect(decision.action).toBe('abort');
     expect(decision.reason).toMatch(/exhausted/i);
   });
@@ -48,12 +54,16 @@ describe('ExecutionSupervisor — hard rules', () => {
   });
 
   it('aborts on "401" in error message', async () => {
-    const decision = await supervisor.assess(makeCtx({ error: 'HTTP 401 Unauthorized' }));
+    const decision = await supervisor.assess(
+      makeCtx({ error: 'HTTP 401 Unauthorized' }),
+    );
     expect(decision.action).toBe('abort');
   });
 
   it('aborts deterministic transform nodes', async () => {
-    const decision = await supervisor.assess(makeCtx({ nodeType: 'transform' }));
+    const decision = await supervisor.assess(
+      makeCtx({ nodeType: 'transform' }),
+    );
     expect(decision.action).toBe('abort');
     expect(decision.reason).toMatch(/deterministic/i);
   });

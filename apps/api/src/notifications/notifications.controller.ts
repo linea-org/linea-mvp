@@ -8,7 +8,12 @@ import {
   HttpCode,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { NotificationsService } from './notifications.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -23,9 +28,14 @@ export class NotificationsController {
   constructor(private readonly service: NotificationsService) {}
 
   @Get()
-  @ApiOperation({ summary: "List current user's notifications for this workspace" })
+  @ApiOperation({
+    summary: "List current user's notifications for this workspace",
+  })
   @ApiParam({ name: 'workspaceId' })
-  findAll(@CurrentUser() user: User, @Param('workspaceId') workspaceId: string) {
+  findAll(
+    @CurrentUser() user: User,
+    @Param('workspaceId') workspaceId: string,
+  ) {
     return this.service.findAll(user.id, workspaceId);
   }
 
@@ -33,7 +43,10 @@ export class NotificationsController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Mark all notifications as read' })
   @ApiParam({ name: 'workspaceId' })
-  markAllRead(@CurrentUser() user: User, @Param('workspaceId') workspaceId: string) {
+  markAllRead(
+    @CurrentUser() user: User,
+    @Param('workspaceId') workspaceId: string,
+  ) {
     return this.service.markAllRead(user.id, workspaceId);
   }
 

@@ -16,7 +16,7 @@ export async function executeNotionNode(
   token: string | undefined,
 ): Promise<unknown> {
   if (!token)
-    throw new Error('Notion token not configured (secret name: NOTION_TOKEN)');
+    throw new Error('Notion token not found. Connect Notion in Settings → Connections or add a NOTION_TOKEN secret.');
 
   const action = nodeData.action ?? 'create_page';
   const headers = {

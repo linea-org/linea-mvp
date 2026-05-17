@@ -1,0 +1,78 @@
+---
+title: Gmail Node
+description: Send emails, list messages, or retrieve message metadata via the Gmail API.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Gmail Node
+
+The `gmail` node interacts with Gmail via the Gmail REST API using an OAuth2 access token.
+
+## Credential Setup
+
+Store your OAuth2 access token in workspace secrets under the name **`GMAIL_TOKEN`**.
+
+Required OAuth2 scopes:
+- `https://www.googleapis.com/auth/gmail.send` — for `send_email`
+- `https://www.googleapis.com/auth/gmail.readonly` — for `list_emails` and `get_email`
+
+<Callout type="warn">
+  Gmail OAuth2 access tokens expire after 1 hour. For production use, implement a token refresh mechanism and update the `GMAIL_TOKEN` secret before expiry, or use a service account with domain-wide delegation.
+</Callout>
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `action` | `send_email` \| `list_emails` \| `get_email` | `send_email` | Operation to perform |
+| `to` | string | — | Recipient address (for `send_email`, supports `{{}}`) |
+| `subject` | string | `"(no subject)"` | Email subject (supports `{{}}`) |
+| `body` | string | — | Email body — plain text (supports `{{}}`) |
+| `cc` | string | — | CC address |
+| `bcc` | string | — | BCC address |
+| `maxResults` | number | `10` | Max messages to return (for `list_emails`) |
+| `query` | string | `"in:inbox"` | Gmail search query (for `list_emails`) |
+| `messageId` | string | — | Gmail message ID (for `get_email`) |
+
+## Actions
+
+### `send_email`
+
+Sends an email. `to` is required. The message is encoded as RFC 2822 and sent via the Gmail API.
+
+Output: `{ "messageId": "...", "threadId": "..." }`
+
+### `list_emails`
+
+Lists messages matching a Gmail search query. Uses standard Gmail search syntax (`from:`, `subject:`, `after:`, etc.).
+
+Output: `{ "messages": [{ "id": "...", "threadId": "..." }, ...] }`
+
+### `get_email`
+
+Retrieves metadata for a specific message. Returns headers (Subject, From, Date) and a snippet.
+
+Output:
+
+```json
+{
+  "id": "abc123",
+  "threadId": "xyz789",
+  "subject": "Meeting tomorrow",
+  "from": "alice@example.com",
+  "date": "Thu, 14 May 2026 10:00:00 -0700",
+  "snippet": "Hi, just confirming..."
+}
+```
+
+## Example Config
+
+```json
+{
+  "action": "send_email",
+  "to": "{{input.recipientEmail}}",
+  "subject": "Workflow Report: {{input.reportName}}",
+  "body": "{{lastOutput.reportText}}"
+}
+```

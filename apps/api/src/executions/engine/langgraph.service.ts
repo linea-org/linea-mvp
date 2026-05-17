@@ -43,7 +43,8 @@ export type NodeUpdateCallback = (
   status: 'running' | 'completed' | 'failed' | 'suspended',
   output?: any,
   error?: string,
-) => void;
+  durationMs?: number,
+) => void | Promise<void>;
 
 export const WorkflowStateAnnotation = Annotation.Root({
   variables: Annotation<Record<string, any>>({
@@ -211,6 +212,7 @@ export class LangGraphService {
         const subThreadId = `sub:${workflowId}:${randomBytes(8).toString('hex')}`;
 
         onNodeUpdate(node.id, 'running');
+        const subStart = Date.now();
 
         let subOutput: unknown = null;
         const gen = this.stream(
@@ -225,11 +227,12 @@ export class LangGraphService {
           subOutput = (s as any)?.variables?.lastOutput ?? null;
         }
 
+        const subDurationMs = Date.now() - subStart;
         const nodeKey =
           (node.data?.nodeName as string) ||
           (node.data?.name as string) ||
           node.id;
-        onNodeUpdate(node.id, 'completed', subOutput);
+        onNodeUpdate(node.id, 'completed', subOutput, undefined, subDurationMs);
 
         return {
           variables: {
@@ -262,7 +265,7 @@ export class LangGraphService {
       // Fast-forward: if this node was pre-loaded from a replay, skip re-execution
       const preloaded = state.nodeResults?.[node.id];
       if (preloaded?.__preloaded) {
-        onNodeUpdate(node.id, 'completed', preloaded.output);
+        onNodeUpdate(node.id, 'completed', preloaded.output, undefined, 0);
         const nodeKey = node.data?.nodeName || node.data?.name || node.id;
         return {
           variables: {
@@ -284,6 +287,7 @@ export class LangGraphService {
       }
 
       onNodeUpdate(node.id, 'running');
+      const nodeStart = Date.now();
 
       const workflowState: WorkflowState = {
         variables: state.variables,
@@ -309,13 +313,15 @@ export class LangGraphService {
           threadId,
         });
 
+        const durationMs = Date.now() - nodeStart;
+
         // Approval gate node (non-agent)
         if (
           result &&
           typeof result === 'object' &&
           '__pendingApproval' in result
         ) {
-          onNodeUpdate(node.id, 'suspended', result);
+          onNodeUpdate(node.id, 'suspended', result, undefined, durationMs);
           interrupt({
             type: 'approval',
             nodeId: node.id,
@@ -344,7 +350,7 @@ export class LangGraphService {
         }
 
         const nodeKey = node.data?.nodeName || node.data?.name || node.id;
-        onNodeUpdate(node.id, 'completed', actualOutput);
+        onNodeUpdate(node.id, 'completed', actualOutput, undefined, durationMs);
 
         return {
           variables: {
@@ -363,6 +369,7 @@ export class LangGraphService {
               output: actualOutput,
               toolCallLog,
               completedAt: new Date().toISOString(),
+              durationMs,
             },
           },
           pendingAuth: null,
@@ -371,8 +378,9 @@ export class LangGraphService {
       } catch (error) {
         // Let LangGraph's runner handle interrupts — don't log them as failures
         if (isGraphInterrupt(error)) throw error;
+        const durationMs = Date.now() - nodeStart;
         const msg = error instanceof Error ? error.message : String(error);
-        onNodeUpdate(node.id, 'failed', undefined, msg);
+        onNodeUpdate(node.id, 'failed', undefined, msg, durationMs);
         throw error;
       }
     };

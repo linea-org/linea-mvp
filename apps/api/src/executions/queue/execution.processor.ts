@@ -10,6 +10,8 @@ import type { WorkflowDefinition } from '../engine/langgraph.service';
 import { ExecutionEventsService } from '../execution-events.service';
 import { MemoryService } from '../engine/memory.service';
 import { CheckpointerService } from '../engine/checkpointer.service';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { QuotasService } from '../../quotas/quotas.service';
 import { EXECUTION_QUEUE } from './execution.queue';
 import type { ExecutionJobData } from './execution.queue';
 
@@ -23,6 +25,8 @@ export class ExecutionProcessor extends WorkerHost {
     private readonly events: ExecutionEventsService,
     private readonly memoryService: MemoryService,
     private readonly checkpointerService: CheckpointerService,
+    private readonly notifications: NotificationsService,
+    private readonly quotas: QuotasService,
   ) {
     super();
   }
@@ -34,6 +38,7 @@ export class ExecutionProcessor extends WorkerHost {
       workspaceId,
       input,
       threadId,
+      userId,
       resumeValue,
       preloadedState,
     } = job.data;
@@ -61,6 +66,7 @@ export class ExecutionProcessor extends WorkerHost {
       if (!wf) throw new Error(`Workflow ${workflowId} not found`);
 
       const definition = wf.definition as unknown as WorkflowDefinition;
+      const logLevel = (wf as any).logLevel ?? 'info';
 
       const checkpointer = this.checkpointerService.checkpointer;
 
@@ -69,14 +75,27 @@ export class ExecutionProcessor extends WorkerHost {
         status: 'running' | 'completed' | 'failed' | 'suspended',
         output?: any,
         error?: string,
+        durationMs?: number,
       ) => {
-        await this.db.insert(executionLogs).values({
-          executionId,
-          nodeId,
-          level: status === 'failed' ? 'error' : 'info',
-          message: `Node ${nodeId} ${status}`,
-          data: output !== undefined ? { output } : error ? { error } : null,
-        });
+        const level = status === 'failed' ? 'error' : 'info';
+
+        // Determine whether to persist this log entry based on workflow log settings
+        const shouldPersist =
+          logLevel !== 'none' &&
+          !(logLevel === 'errors' && level !== 'error') &&
+          !(logLevel === 'info' && status === 'running') &&
+          !(logLevel === 'info' && status === 'suspended');
+
+        if (shouldPersist) {
+          await this.db.insert(executionLogs).values({
+            executionId,
+            nodeId,
+            level,
+            message: `Node ${nodeId} ${status}`,
+            data: output !== undefined ? { output } : error ? { error } : null,
+            durationMs: durationMs ?? null,
+          });
+        }
 
         this.events.emit(executionId, {
           type: 'node_update',
@@ -84,6 +103,7 @@ export class ExecutionProcessor extends WorkerHost {
           status,
           output,
           error,
+          durationMs,
         });
       };
 
@@ -162,7 +182,7 @@ export class ExecutionProcessor extends WorkerHost {
           finalState?.memory ?? {},
         );
 
-
+        const usage = finalState?.cumulativeUsage;
         await this.db
           .update(executions)
           .set({
@@ -171,6 +191,15 @@ export class ExecutionProcessor extends WorkerHost {
             nodeResults: finalState?.nodeResults ?? {},
             variables: finalState?.variables ?? {},
             finishedAt: new Date(),
+            ...(usage && (usage.input_tokens > 0 || usage.output_tokens > 0)
+              ? {
+                  tokenUsage: {
+                    input: usage.input_tokens,
+                    output: usage.output_tokens,
+                    total: usage.total_tokens,
+                  },
+                }
+              : {}),
           })
           .where(eq(executions.id, executionId));
 
@@ -179,6 +208,18 @@ export class ExecutionProcessor extends WorkerHost {
           status: 'completed',
           output: finalOutput,
         });
+
+        void this.quotas.incrementUsed(workspaceId);
+
+        if (userId) {
+          void this.notifications.create(
+            userId,
+            'execution_complete',
+            'Execution completed',
+            `Execution ${executionId} finished successfully.`,
+            workspaceId,
+          );
+        }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -189,6 +230,17 @@ export class ExecutionProcessor extends WorkerHost {
         .where(eq(executions.id, executionId));
 
       this.events.emit(executionId, { type: 'execution_failed', error: msg });
+
+      if (userId) {
+        void this.notifications.create(
+          userId,
+          'execution_failed',
+          'Execution failed',
+          msg,
+          workspaceId,
+        );
+      }
+
       throw error;
     }
   }

@@ -1,0 +1,75 @@
+---
+title: Extract Node
+description: Scrape and extract content from web pages using Firecrawl or a native fetch fallback.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Extract Node
+
+The `extract` node fetches and parses web content from one or more URLs. It uses the [Firecrawl](https://firecrawl.dev) API when a `FIRECRAWL_API_KEY` is configured in workspace secrets, and falls back to native fetch + HTML stripping otherwise.
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `scrapeUrl` | string | — | Single URL to scrape (supports `{{}}`) |
+| `batchUrls` | string | — | Comma-separated list of URLs for batch mode |
+| `mapUrl` | string | — | URL to map — discovers all internal links |
+| `scrapeFormats` | string[] | `['markdown']` | Output formats: `markdown`, `html`, `text` |
+| `outputField` | `markdown` \| `html` \| `text` \| `full` | `markdown` | Which field to return as `lastOutput` |
+
+Only one of `scrapeUrl`, `batchUrls`, or `mapUrl` should be set per node.
+
+## Modes
+
+### Single Scrape (`scrapeUrl`)
+
+Fetches one URL and returns content in the requested format.
+
+**With Firecrawl:** Returns cleaned markdown, HTML, or text from the Firecrawl `/scrape` endpoint.
+
+**Without Firecrawl (native fallback):** Strips `<script>`, `<style>`, and all HTML tags, extracting the title and plain text.
+
+### Batch Scrape (`batchUrls`)
+
+Sends multiple URLs to the Firecrawl `/batch/scrape` endpoint in one call.
+
+```json
+{ "results": [...], "count": 3 }
+```
+
+<Callout type="info">
+  Batch mode requires Firecrawl. The native fallback only handles single URLs.
+</Callout>
+
+### Map (`mapUrl`)
+
+Discovers all links on the page using Firecrawl's `/map` endpoint.
+
+```json
+{ "links": ["https://example.com/page1", "..."], "count": 42 }
+```
+
+## Output
+
+| `outputField` | Content |
+|---|---|
+| `markdown` | Cleaned markdown representation |
+| `html` | Raw HTML |
+| `text` | Plain text (scripts/styles stripped) |
+| `full` | Object with all fields: `{ url, title, html, text, markdown }` |
+
+## Example Config
+
+```json
+{
+  "scrapeUrl": "{{input.articleUrl}}",
+  "scrapeFormats": ["markdown"],
+  "outputField": "markdown"
+}
+```
+
+<Callout type="warn">
+  Timeout is 30 seconds per request. Very large pages may be truncated by Firecrawl. SSRF protection is not applied to this node — ensure URLs come from trusted sources.
+</Callout>

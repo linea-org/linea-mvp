@@ -1,0 +1,105 @@
+---
+title: Agent Node
+description: LLM node with tool use, structured output, long-term memory, and multi-step agentic loops.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Agent Node
+
+The `agent` node is the primary AI node in Linea. It runs an LLM call with an agentic loop: the model can invoke built-in tools repeatedly until it produces a final answer or reaches `maxSteps`.
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model` | string | `claude-sonnet-4-6` | Model ID — e.g. `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `gpt-4o` |
+| `systemPrompt` | string | — | Static instructions prepended as the system message (supports `{{}}`) |
+| `instructions` | string | `"Process the input"` | The user-turn message (supports `{{}}`) |
+| `tools` | string[] | `[]` | Built-in tool names to enable (see table below) |
+| `toolApprovals` | object | `{}` | Per-tool approval override: `{ toolName: 'never' \| 'always' \| 'on_mutation' }` |
+| `outputSchema` | string (JSON) | — | JSON Schema string — forces structured JSON output |
+| `enableLongTermMemory` | boolean | `false` | Prepend recent cross-execution memories before inference |
+| `includeChatHistory` | boolean | `false` | Inject prior `chatHistory` turns as conversation context |
+| `maxSteps` | number | `10` | Maximum agentic loop iterations |
+| `maxTokens` | number | `4096` | Max output tokens per LLM call |
+| `temperature` | number | `0.7` | Sampling temperature (ignored when tools are enabled — fixed at `0` for deterministic re-execution) |
+| `contextBudgetPct` | number | `0.8` | Fraction of the model's context window to use before truncating history |
+
+## Built-in Tools
+
+Enable any subset of these in the `tools` array:
+
+| Tool name | What it does | Approval |
+|---|---|---|
+| `memory_store` | Store a key-value fact in long-term memory | Never |
+| `memory_search` | Semantic search of stored memories | Never |
+| `http_request` | Make an HTTP request to any URL | `on_mutation` (GET auto-approved; POST/PUT/PATCH/DELETE require human) |
+| `run_javascript` | Execute a JavaScript snippet | Always |
+| `ask_human` | Pause and ask the user a question | Always |
+| `read_variable` | Read a workflow variable by name | Never |
+| `write_variable` | Write a value to a workflow variable | Never |
+
+<Callout type="warn">
+  When `ask_human` or a mutation-triggering tool fires, the execution is suspended. The workflow resumes via `PATCH /executions/:id/respond` with the human's answer.
+</Callout>
+
+## Structured Output
+
+Set `outputSchema` to a JSON Schema string. The agent is instructed to return only a JSON object matching the schema. The executor strips markdown code fences and parses the result automatically.
+
+**Example:**
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "systemPrompt": "Classify the sentiment of the input text.",
+  "instructions": "{{input.text}}",
+  "outputSchema": "{\"type\":\"object\",\"properties\":{\"sentiment\":{\"type\":\"string\",\"enum\":[\"positive\",\"neutral\",\"negative\"]},\"confidence\":{\"type\":\"number\"}},\"required\":[\"sentiment\",\"confidence\"]}"
+}
+```
+
+Output: `{ "sentiment": "positive", "confidence": 0.92 }`
+
+## Long-term Memory
+
+When `enableLongTermMemory: true`, the agent loads the 8 most recent memories from the workspace memory store and injects them into the user message before inference. The agent can also write new memories mid-run using the `memory_store` tool.
+
+<Callout type="info">
+  Long-term memory requires the `memory_store` and `memory_search` tools to be enabled. The `enableLongTermMemory` flag only controls whether recent memories are prepended — the tools control whether the agent can actively store/retrieve during a run.
+</Callout>
+
+## Agent Output Shape
+
+The node output stored in `nodeResults` and forwarded as `lastOutput`:
+
+```typescript
+{
+  __agentValue: string | object   // final answer (object if outputSchema used)
+  __usage: { input_tokens, output_tokens, total_tokens }
+  __toolCallLog: Array<{ step, name, args, result }>
+  __modelId: string
+  __provider: string
+}
+```
+
+## Context Compaction
+
+When conversation history exceeds `contextBudgetPct` of the model's context window:
+
+1. Tool result messages are capped at 8 000 characters each
+2. Oldest non-system messages are dropped until within budget
+3. System messages are always preserved
+
+## Example Config
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "systemPrompt": "You are a helpful assistant. Be concise.",
+  "instructions": "Summarize the following article: {{input.articleText}}",
+  "tools": ["memory_store", "memory_search"],
+  "enableLongTermMemory": true,
+  "maxSteps": 5
+}
+```

@@ -1,0 +1,44 @@
+---
+title: Start Node
+description: Entry point of every workflow. Receives the trigger input and initializes the workflow state.
+---
+
+# Start Node
+
+The `start` node is the mandatory entry point for every workflow. It is automatically executed first, regardless of the trigger type (manual, schedule, webhook, SDK call).
+
+## What It Does
+
+The start node receives the trigger `input` payload and spreads its fields into `variables`, making them accessible to all downstream nodes via `{{input.*}}` substitution.
+
+**No configuration required.** There is exactly one start node per workflow.
+
+## Behavior
+
+| | Details |
+|---|---|
+| **Node type** | `start` |
+| **Configuration** | None |
+| **Output** | Passes the trigger `input` object into `variables.input` and `variables.lastOutput` |
+
+## Variable Access
+
+After the start node runs, downstream nodes can reference trigger fields:
+
+```
+{{input.userId}}       → top-level field from the trigger payload
+{{input.data.name}}    → nested field
+{{lastOutput}}         → the full input object
+```
+
+## Example Trigger Payload
+
+```json
+{
+  "userId": "usr_123",
+  "action": "summarize",
+  "text": "The quick brown fox..."
+}
+```
+
+With this payload, `{{input.userId}}` resolves to `"usr_123"` in any downstream node.

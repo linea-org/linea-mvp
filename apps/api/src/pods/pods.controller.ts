@@ -9,7 +9,12 @@ import {
   HttpCode,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { PodsService } from './pods.service';
 import { CreatePodDto } from './dto/create-pod.dto';
 import { UpdatePodDto } from './dto/update-pod.dto';
@@ -49,7 +54,10 @@ export class PodsController {
   @ApiOperation({ summary: 'Get a pod' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  findOne(@Param('workspaceId') workspaceId: string, @Param('podId') podId: string) {
+  findOne(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+  ) {
     return this.service.findOne(workspaceId, podId);
   }
 

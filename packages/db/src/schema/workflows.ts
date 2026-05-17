@@ -7,11 +7,24 @@ import {
   boolean,
   integer,
   unique,
+  pgEnum,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { pods } from './pods';
 import { users } from './users';
 import type { WorkflowDefinition } from './types';
+
+export const workflowLogLevelEnum = pgEnum('workflow_log_level', [
+  'none',
+  'errors',
+  'info',
+  'debug',
+]);
+
+export const workflowApiVisibilityEnum = pgEnum('workflow_api_visibility', [
+  'api_key',
+  'public',
+]);
 
 export const workflows = pgTable('workflows', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -27,6 +40,11 @@ export const workflows = pgTable('workflows', {
   deployedAt: timestamp('deployed_at', { withTimezone: true }),
   starred: boolean('starred').default(false).notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  logLevel: workflowLogLevelEnum('log_level').default('info').notNull(),
+  logRetentionDays: integer('log_retention_days'),
+  apiEnabled: boolean('api_enabled').default(false).notNull(),
+  apiVisibility: workflowApiVisibilityEnum('api_visibility').default('api_key').notNull(),
+  apiKey: text('api_key'),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

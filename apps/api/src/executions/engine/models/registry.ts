@@ -15,7 +15,7 @@
 //   costPer1mTokens - approximate USD cost (helps the supervisor pick cheap models)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ModelProvider = 'anthropic' | 'openai' | 'groq' | 'google';
+export type ModelProvider = 'anthropic' | 'openai' | 'groq' | 'google' | 'ollama';
 export type ModelTier = 'fast' | 'balanced' | 'powerful' | 'reasoning';
 export type ModelUseCase =
   | 'general'
@@ -316,11 +316,82 @@ const GOOGLE: ModelDefinition[] = [
   },
 ];
 
+// ─── Ollama (local, OpenAI-compatible) ───────────────────────────────────────
+
+const OLLAMA: ModelDefinition[] = [
+  {
+    id: 'llama3.2',
+    name: 'Llama 3.2 (Ollama)',
+    provider: 'ollama',
+    contextWindow: 128_000,
+    maxOutputTokens: 4_096,
+    tier: 'fast',
+    useCases: ['general', 'fast-response', 'conversation'],
+    capabilities: { vision: false, functionCalling: true, streaming: true },
+    costPer1mTokens: { input: 0, output: 0 },
+  },
+  {
+    id: 'llama3.1',
+    name: 'Llama 3.1 8B (Ollama)',
+    provider: 'ollama',
+    contextWindow: 128_000,
+    maxOutputTokens: 4_096,
+    tier: 'fast',
+    useCases: ['general', 'fast-response'],
+    capabilities: { vision: false, functionCalling: true, streaming: true },
+    costPer1mTokens: { input: 0, output: 0 },
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral 7B (Ollama)',
+    provider: 'ollama',
+    contextWindow: 8_192,
+    maxOutputTokens: 4_096,
+    tier: 'fast',
+    useCases: ['general', 'conversation'],
+    capabilities: { vision: false, functionCalling: true, streaming: true },
+    costPer1mTokens: { input: 0, output: 0 },
+  },
+  {
+    id: 'qwen2.5',
+    name: 'Qwen 2.5 (Ollama)',
+    provider: 'ollama',
+    contextWindow: 128_000,
+    maxOutputTokens: 4_096,
+    tier: 'balanced',
+    useCases: ['general', 'coding'],
+    capabilities: { vision: false, functionCalling: true, streaming: true },
+    costPer1mTokens: { input: 0, output: 0 },
+  },
+  {
+    id: 'phi3',
+    name: 'Phi-3 Mini (Ollama)',
+    provider: 'ollama',
+    contextWindow: 128_000,
+    maxOutputTokens: 4_096,
+    tier: 'fast',
+    useCases: ['fast-response', 'conversation'],
+    capabilities: { vision: false, functionCalling: false, streaming: true },
+    costPer1mTokens: { input: 0, output: 0 },
+  },
+  {
+    id: 'deepseek-r1',
+    name: 'DeepSeek R1 (Ollama)',
+    provider: 'ollama',
+    contextWindow: 64_000,
+    maxOutputTokens: 8_192,
+    tier: 'reasoning',
+    useCases: ['reasoning', 'coding'],
+    capabilities: { vision: false, functionCalling: false, streaming: true },
+    costPer1mTokens: { input: 0, output: 0 },
+  },
+];
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 export const MODEL_REGISTRY: Record<string, ModelDefinition> =
   Object.fromEntries(
-    [...ANTHROPIC, ...OPENAI, ...GROQ, ...GOOGLE].map((m) => [m.id, m]),
+    [...ANTHROPIC, ...OPENAI, ...GROQ, ...GOOGLE, ...OLLAMA].map((m) => [m.id, m]),
   );
 
 export function getModel(id: string): ModelDefinition {
@@ -379,7 +450,8 @@ function hasKeyFor(
   provider: ModelProvider,
   keys: Record<string, string | undefined>,
 ): boolean {
-  const map: Record<ModelProvider, string> = {
+  if (provider === 'ollama') return true; // local, no API key required
+  const map: Record<Exclude<ModelProvider, 'ollama'>, string> = {
     anthropic: 'ANTHROPIC_API_KEY',
     openai: 'OPENAI_API_KEY',
     groq: 'GROQ_API_KEY',

@@ -20,7 +20,7 @@ import {
   DialogFooter,
 } from '@linea/ui/components/dialog';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, Delete01Icon, Calendar01Icon } from '@hugeicons/core-free-icons';
+import { Add01Icon, Delete01Icon, Calendar01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
 
 interface Schedule {
   id: string;
@@ -37,13 +37,14 @@ interface Workflow {
   name: string;
 }
 
+interface InputPair { key: string; value: string }
+
 interface FormState {
   workflowId: string;
   cronExpr: string;
-  input: string;
 }
 
-const BLANK: FormState = { workflowId: '', cronExpr: '0 * * * *', input: '{}' };
+const BLANK: FormState = { workflowId: '', cronExpr: '0 * * * *' };
 
 const CRON_PRESETS = [
   { label: 'Every hour',    value: '0 * * * *' },
@@ -61,6 +62,7 @@ export default function SchedulesPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<FormState>(BLANK);
+  const [inputPairs, setInputPairs] = useState<InputPair[]>([]);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -97,8 +99,9 @@ export default function SchedulesPage() {
       const token = await getToken();
       if (!token) return;
       const api = createApiClient(token);
-      let input: Record<string, unknown> = {};
-      try { input = JSON.parse(form.input); } catch { /* ignore */ }
+      const input = Object.fromEntries(
+        inputPairs.filter((p) => p.key.trim()).map((p) => [p.key.trim(), p.value]),
+      );
       const created = await api.post<Schedule>(
         `/workspaces/${activeWorkspace.id}/pods/${podId}/schedules`,
         { workflowId: form.workflowId, cronExpr: form.cronExpr.trim(), input, enabled: true },
@@ -106,6 +109,7 @@ export default function SchedulesPage() {
       setSchedules((prev) => [created, ...prev]);
       setDialogOpen(false);
       setForm(BLANK);
+      setInputPairs([]);
     } finally {
       setSaving(false);
     }
@@ -147,13 +151,13 @@ export default function SchedulesPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Schedules</h1>
           <p className="text-sm text-muted-foreground">Cron-based triggers for your workflows.</p>
         </div>
-        <Button size="sm" onClick={() => { setForm(BLANK); setDialogOpen(true); }}>
+        <Button size="sm" onClick={() => { setForm(BLANK); setInputPairs([]); setDialogOpen(true); }}>
           <HugeiconsIcon icon={Add01Icon} />
           Add schedule
         </Button>
@@ -172,7 +176,7 @@ export default function SchedulesPage() {
           <p className="mt-1 text-xs text-muted-foreground">
             Automate workflows with cron expressions.
           </p>
-          <Button size="sm" className="mt-4" onClick={() => { setForm(BLANK); setDialogOpen(true); }}>
+          <Button size="sm" className="mt-4" onClick={() => { setForm(BLANK); setInputPairs([]); setDialogOpen(true); }}>
             Add schedule
           </Button>
         </div>
@@ -257,13 +261,56 @@ export default function SchedulesPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Input JSON (optional)</Label>
-              <Input
-                value={form.input}
-                onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))}
-                placeholder="{}"
-                className="font-mono"
-              />
+              <div className="flex items-center justify-between">
+                <Label>Input fields (optional)</Label>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  type="button"
+                  onClick={() => setInputPairs((p) => [...p, { key: '', value: '' }])}
+                >
+                  <HugeiconsIcon icon={Add01Icon} className="size-3" />
+                  Add field
+                </Button>
+              </div>
+              {inputPairs.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  No input fields — the workflow will receive an empty input.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Key</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Value</span>
+                    <span />
+                  </div>
+                  {inputPairs.map((pair, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-center gap-1">
+                      <Input
+                        value={pair.key}
+                        onChange={(e) => setInputPairs((p) => p.map((r, j) => j === i ? { ...r, key: e.target.value } : r))}
+                        placeholder="key"
+                        className="font-mono text-xs h-8"
+                      />
+                      <Input
+                        value={pair.value}
+                        onChange={(e) => setInputPairs((p) => p.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
+                        placeholder="value"
+                        className="text-xs h-8"
+                      />
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        type="button"
+                        onClick={() => setInputPairs((p) => p.filter((_, j) => j !== i))}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <HugeiconsIcon icon={Cancel01Icon} className="size-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

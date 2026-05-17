@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isGraphInterrupt } from '@langchain/langgraph';
+import { ilike, and, eq } from 'drizzle-orm';
 import type { WorkflowState } from './variable-substitution';
 import { substituteInValue } from './variable-substitution';
 import { executeAgentNode } from './executors/agent.executor';
@@ -10,6 +11,7 @@ import { executeTransformNode } from './executors/transform.executor';
 import { executeLogicNode } from './executors/logic.executor';
 import { executeMcpNode } from './executors/mcp.executor';
 import { executeMemoryNode } from './executors/memory.executor';
+import type { MemoryExecutorContext } from './executors/memory.executor';
 import { executeGuardrailsNode } from './executors/guardrails.executor';
 import { executeExtractNode } from './executors/extract.executor';
 import { executeRetrieverNode } from './executors/retriever.executor';
@@ -19,9 +21,20 @@ import { executeSlackNode } from './executors/slack.executor';
 import { executeGitHubNode } from './executors/github.executor';
 import { executeNotionNode } from './executors/notion.executor';
 import { executeGmailNode } from './executors/gmail.executor';
+import { buildParallelResults } from './executors/parallel.executor';
+import type { ParallelBranch } from './executors/parallel.executor';
+import { executeWaitNode } from './executors/wait.executor';
+import { executeVariablesNode } from './executors/variables.executor';
+import { executeEvaluatorNode } from './executors/evaluator.executor';
+import { executeFilterNode } from './executors/filter.executor';
+import { executeMergeNode } from './executors/merge.executor';
+import { executeDatetimeNode } from './executors/datetime.executor';
 import { ExecutionSupervisor } from './supervisor';
 import { MemoryService } from './memory.service';
 import type { ModelApiKeys } from './models/client.factory';
+import type { DrizzleDB } from '@linea/db';
+import { knowledgeEntries } from '@linea/db';
+import { DB_TOKEN } from '../../database/database.module';
 
 export interface NodeInput {
   nodeId: string;
@@ -55,11 +68,18 @@ const DEFAULT_TIMEOUTS: Record<string, number> = {
   retriever: 15_000,
   code: 10_000,
   loop: 30_000,
+  parallel: 300_000,
+  wait: 310_000,
+  variables: 1_000,
+  evaluator: 30_000,
   subworkflow: 120_000,
   slack: 15_000,
   github: 15_000,
   notion: 15_000,
   gmail: 15_000,
+  filter: 5_000,
+  merge: 5_000,
+  datetime: 1_000,
   default: 60_000,
 };
 
@@ -75,12 +95,14 @@ export class NodeExecutorService {
     private readonly config: ConfigService,
     private readonly supervisor: ExecutionSupervisor,
     private readonly memoryService: MemoryService,
+    @Inject(DB_TOKEN) private readonly db: DrizzleDB,
   ) {
     this.envApiKeys = {
       ANTHROPIC_API_KEY: config.get('ANTHROPIC_API_KEY'),
       OPENAI_API_KEY: config.get('OPENAI_API_KEY'),
       GROQ_API_KEY: config.get('GROQ_API_KEY'),
       GOOGLE_API_KEY: config.get('GOOGLE_API_KEY'),
+      OLLAMA_BASE_URL: config.get('OLLAMA_BASE_URL'),
     };
     this.defaultAgentModel =
       config.get('DEFAULT_AGENT_MODEL') ?? 'claude-sonnet-4-6';
@@ -158,11 +180,21 @@ export class NodeExecutorService {
       }
     }
 
+    if (nodeData.continueOnFail) {
+      const errorMsg = lastError instanceof Error ? lastError.message : String(lastError);
+      this.logger.log(`Node ${nodeId} (${nodeType}) continuing on fail: ${errorMsg}`);
+      return {
+        result: { error: errorMsg, continued: true, continueOnFail: true },
+        isAgentOutput: false,
+      };
+    }
+
     if (lastError instanceof Error) throw lastError;
     throw new Error(`Node ${nodeId} failed after ${maxRetries} retries`);
   }
 
   private async dispatch({
+    nodeId,
     nodeType,
     nodeData: rawNodeData,
     state,
@@ -298,7 +330,10 @@ export class NodeExecutorService {
       }
 
       case 'memory': {
-        const r = executeMemoryNode(nodeData, state);
+        const memCtx: MemoryExecutorContext | undefined = workspaceId
+          ? { workspaceId, workflowId, threadId: threadId ?? '', service: this.memoryService }
+          : undefined;
+        const r = await executeMemoryNode(nodeData, state, memCtx);
         return { result: r, isAgentOutput: false };
       }
 
@@ -314,7 +349,24 @@ export class NodeExecutorService {
       }
 
       case 'retriever': {
-        const r = await executeRetrieverNode(nodeData, state);
+        const r = await executeRetrieverNode(nodeData, state, {
+          query: async (q, kbId, topK) => {
+            const rows = await this.db
+              .select({
+                content: knowledgeEntries.content,
+                metadata: knowledgeEntries.metadata,
+              })
+              .from(knowledgeEntries)
+              .where(
+                and(
+                  eq(knowledgeEntries.knowledgeBaseId, kbId),
+                  ilike(knowledgeEntries.content, `%${q}%`),
+                ),
+              )
+              .limit(topK);
+            return rows;
+          },
+        });
         return { result: r, isAgentOutput: false };
       }
 
@@ -328,39 +380,93 @@ export class NodeExecutorService {
         return { result: r, isAgentOutput: false };
       }
 
+      case 'parallel': {
+        const branches = (nodeData.branches ?? []) as ParallelBranch[];
+        const failFast = Boolean(nodeData.failFast);
+        if (branches.length === 0) {
+          return { result: { results: [], count: 0, failed: 0 }, isAgentOutput: false };
+        }
+        const settled = await Promise.allSettled(
+          branches.map((branch) =>
+            this.dispatch({
+              nodeId: `${nodeId}__${branch.id}`,
+              nodeType: branch.type,
+              nodeData: branch.config ?? {},
+              state,
+              workspaceId,
+              workflowId,
+              threadId,
+            }),
+          ),
+        );
+        if (failFast) {
+          const firstFailure = settled.find((s) => s.status === 'rejected');
+          if (firstFailure) throw (firstFailure as PromiseRejectedResult).reason;
+        }
+        const r = buildParallelResults(branches, settled);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'wait': {
+        const r = await executeWaitNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'variables': {
+        const r = executeVariablesNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'evaluator': {
+        const anthropicKey = this.config.get<string>('ANTHROPIC_API_KEY');
+        const r = await executeEvaluatorNode(nodeData, state, anthropicKey);
+        return { result: r, isAgentOutput: false };
+      }
+
       case 'slack': {
-        const slackToken = await this.memoryService.loadSecret(
-          workspaceId,
-          'SLACK_TOKEN',
+        const slackToken = await this.memoryService.resolveIntegrationToken(
+          workspaceId, 'slack', 'SLACK_TOKEN',
         );
         const r = await executeSlackNode(nodeData, state, slackToken);
         return { result: r, isAgentOutput: false };
       }
 
       case 'github': {
-        const ghToken = await this.memoryService.loadSecret(
-          workspaceId,
-          'GITHUB_TOKEN',
+        const ghToken = await this.memoryService.resolveIntegrationToken(
+          workspaceId, 'github', 'GITHUB_TOKEN',
         );
         const r = await executeGitHubNode(nodeData, state, ghToken);
         return { result: r, isAgentOutput: false };
       }
 
       case 'notion': {
-        const notionToken = await this.memoryService.loadSecret(
-          workspaceId,
-          'NOTION_TOKEN',
+        const notionToken = await this.memoryService.resolveIntegrationToken(
+          workspaceId, 'notion', 'NOTION_TOKEN',
         );
         const r = await executeNotionNode(nodeData, state, notionToken);
         return { result: r, isAgentOutput: false };
       }
 
       case 'gmail': {
-        const gmailToken = await this.memoryService.loadSecret(
-          workspaceId,
-          'GMAIL_TOKEN',
+        const gmailToken = await this.memoryService.resolveIntegrationToken(
+          workspaceId, 'google', 'GMAIL_TOKEN',
         );
         const r = await executeGmailNode(nodeData, state, gmailToken);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'filter': {
+        const r = executeFilterNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'merge': {
+        const r = executeMergeNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'datetime': {
+        const r = executeDatetimeNode(nodeData, state);
         return { result: r, isAgentOutput: false };
       }
 
@@ -387,13 +493,14 @@ export class NodeExecutorService {
 
     await Promise.all(
       PROVIDERS.map(async ({ key, provider }) => {
-        const dbKey = await this.memoryService.loadApiKey(
-          workspaceId,
-          provider,
-        );
+        const dbKey = await this.memoryService.loadApiKey(workspaceId, provider);
         if (dbKey) resolved[key] = dbKey;
       }),
     );
+
+    // Ollama base URL from secrets table (users can set it per-workspace)
+    const ollamaUrl = await this.memoryService.loadSecret(workspaceId, 'OLLAMA_BASE_URL');
+    if (ollamaUrl) resolved.OLLAMA_BASE_URL = ollamaUrl;
 
     return resolved;
   }

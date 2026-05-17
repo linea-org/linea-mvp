@@ -49,6 +49,7 @@ interface Template {
   upvotes: number;
   thumbnailUrl: string | null;
   workflowId: string | null;
+  publishedBy: string | null;
   definition?: { nodes: TemplateNode[]; edges: unknown[] } | null;
 }
 
@@ -493,9 +494,12 @@ function TemplateCard({
     CATEGORY_COLORS[template.category] ?? 'bg-gray-100 text-gray-700';
 
   return (
-    <button
-      className="group rounded-xl border bg-card p-4 flex flex-col gap-3 hover:shadow-sm transition-shadow text-left w-full"
+    <div
+      role="button"
+      tabIndex={0}
+      className="group rounded-xl border bg-card p-4 flex flex-col gap-3 hover:shadow-sm transition-shadow text-left w-full cursor-pointer"
       onClick={() => onPreview(template)}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onPreview(template)}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-medium text-sm leading-snug">{template.name}</p>
@@ -507,18 +511,24 @@ function TemplateCard({
         <p className="text-xs text-muted-foreground line-clamp-2">{template.description}</p>
       )}
       <div className="mt-auto flex items-center justify-between">
-        <button
-          onClick={(e) => onToggleUpvote(template, e)}
-          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors ${
-            isUpvoted
-              ? 'bg-primary/10 text-primary font-medium'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}
-          title={isUpvoted ? 'Remove upvote' : 'Upvote'}
-        >
-          <HugeiconsIcon icon={ArrowUp01Icon} className="size-3" />
-          {template.upvotes}
-        </button>
+        {template.publishedBy ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleUpvote(template, e); }}
+            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors ${
+              isUpvoted
+                ? 'bg-primary/10 text-primary font-medium'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+            title={isUpvoted ? 'Remove upvote' : 'Upvote'}
+          >
+            <HugeiconsIcon icon={ArrowUp01Icon} className="size-3" />
+            {template.upvotes}
+          </button>
+        ) : (
+          <span className="rounded-md px-2 py-1 text-[11px] text-muted-foreground">
+            {template.downloads} uses
+          </span>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -528,6 +538,6 @@ function TemplateCard({
           Use
         </Button>
       </div>
-    </button>
+    </div>
   );
 }

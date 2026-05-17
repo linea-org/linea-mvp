@@ -48,7 +48,10 @@ export class CreateScheduleDto {
   @IsUUID()
   workflowId!: string;
 
-  @ApiProperty({ example: '0 * * * *', description: '5-field cron expression, minimum 1-minute interval' })
+  @ApiProperty({
+    example: '0 * * * *',
+    description: '5-field cron expression, minimum 1-minute interval',
+  })
   @IsString()
   @IsSafeCronExpression()
   cronExpr!: string;

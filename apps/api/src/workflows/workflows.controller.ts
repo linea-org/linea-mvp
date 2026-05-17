@@ -30,6 +30,7 @@ import { ListWorkflowsDto } from './dto/list-workflows.dto';
 import { ListTemplatesDto } from './dto/list-templates.dto';
 import { GenerateWorkflowDto } from './dto/generate-workflow.dto';
 import { PublishTemplateDto, UpdateTemplateDto } from './dto/publish-template.dto';
+import { UpdateLogSettingsDto } from './dto/log-settings.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
@@ -109,6 +110,30 @@ export class WorkflowsController {
     return this.service.delete(podId, id);
   }
 
+  @Post(':id/presence')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Upsert presence and return other active users' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  upsertPresence(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.upsertPresence(id, user.id);
+  }
+
+  @Post(':id/duplicate')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Duplicate a workflow (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  duplicate(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.service.duplicate(podId, id, user.id);
+  }
+
   @Post(':id/deploy')
   @RequireRole('admin')
   @ApiOperation({ summary: 'Mark a workflow as deployed (admin+)' })
@@ -117,6 +142,16 @@ export class WorkflowsController {
   @ApiParam({ name: 'id' })
   deploy(@Param('podId') podId: string, @Param('id') id: string) {
     return this.service.deploy(podId, id);
+  }
+
+  @Post(':id/undeploy')
+  @RequireRole('admin')
+  @ApiOperation({ summary: 'Unpublish a deployed workflow (admin+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  undeploy(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.undeploy(podId, id);
   }
 
   @Get(':id/versions')
@@ -250,6 +285,20 @@ export class WorkflowsController {
     return this.service.publishToGallery(podId, id, user.id, dto);
   }
 
+  @Patch(':id/log-settings')
+  @RequireRole('admin')
+  @ApiOperation({ summary: 'Update log collection settings for a workflow (admin+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  updateLogSettings(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateLogSettingsDto,
+  ) {
+    return this.service.updateLogSettings(podId, id, dto);
+  }
+
   @Post('from-template/:templateId')
   @RequireRole('editor')
   @ApiOperation({ summary: 'Clone a template into this pod (editor+)' })
@@ -287,7 +336,7 @@ export class WorkflowsController {
     const abort = new AbortController();
     req.on('close', () => abort.abort());
 
-    const gen = this.generateService.generate(dto.prompt, abort.signal);
+    const gen = this.generateService.generate(dto.prompt, abort.signal, dto.canvasContext, dto.history);
     try {
       for await (const event of gen) {
         if (abort.signal.aborted) break;

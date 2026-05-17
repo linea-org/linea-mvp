@@ -24,12 +24,69 @@ const TRIGGERS: { value: TriggerType; label: string; icon: IconSvgElement; descr
 ];
 
 const CRON_PRESETS = [
-  { label: 'Every 5 min',  value: '*/5 * * * *' },
-  { label: 'Every hour',   value: '0 * * * *' },
-  { label: 'Every day',    value: '0 9 * * *' },
-  { label: 'Every week',   value: '0 9 * * 1' },
-  { label: 'Custom',       value: '__custom__' },
+  { label: 'Every 5 min',    value: '*/5 * * * *'  },
+  { label: 'Every 15 min',   value: '*/15 * * * *' },
+  { label: 'Every hour',     value: '0 * * * *'    },
+  { label: 'Every day 9 AM', value: '0 9 * * *'    },
+  { label: 'Weekdays 9 AM',  value: '0 9 * * 1-5'  },
+  { label: 'Every Monday',   value: '0 9 * * 1'    },
+  { label: 'Every month',    value: '0 9 1 * *'    },
 ];
+
+const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_NAMES   = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function describeCron(expr: string): string {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return 'Invalid expression';
+  const [min, hour, day, month, weekday] = parts as [string, string, string, string, string];
+
+  function fmtTime(h: string, m: string) {
+    const hNum = parseInt(h);
+    if (isNaN(hNum)) return `${h}:${m}`;
+    const ampm = hNum >= 12 ? 'PM' : 'AM';
+    const h12 = hNum % 12 || 12;
+    return `${h12}:${m.padStart(2, '0')} ${ampm}`;
+  }
+
+  if (min === '*' && hour === '*' && day === '*' && month === '*' && weekday === '*') return 'Every minute';
+  if (min.startsWith('*/') && hour === '*' && day === '*' && month === '*' && weekday === '*')
+    return `Every ${min.slice(2)} minutes`;
+  if (min === '0' && hour.startsWith('*/') && day === '*' && month === '*' && weekday === '*')
+    return `Every ${hour.slice(2)} hours`;
+
+  const parts_desc: string[] = [];
+
+  if (weekday !== '*') {
+    const days = weekday.split(',').map((d) => {
+      if (d.includes('-')) {
+        const [from, to] = d.split('-');
+        return `${WEEKDAY_NAMES[parseInt(from!)] ?? from} to ${WEEKDAY_NAMES[parseInt(to!)] ?? to}`;
+      }
+      return WEEKDAY_NAMES[parseInt(d)] ?? d;
+    }).join(', ');
+    parts_desc.push(days);
+  } else if (day !== '*') {
+    parts_desc.push(`day ${day}`);
+  } else {
+    parts_desc.push('every day');
+  }
+
+  if (month !== '*') {
+    const months = month.split(',').map((m) => MONTH_NAMES[parseInt(m) - 1] ?? m).join(', ');
+    parts_desc.push(`in ${months}`);
+  }
+
+  if (hour !== '*' && min !== '*') {
+    parts_desc.push(`at ${fmtTime(hour, min)}`);
+  } else if (hour !== '*') {
+    parts_desc.push(`at ${hour}:xx`);
+  } else if (min !== '*') {
+    parts_desc.push(`at minute ${min}`);
+  }
+
+  return parts_desc.join(', ');
+}
 
 export function StartPanel({ data, onUpdate }: StartPanelProps) {
   const triggerType: TriggerType = (data.triggerType as TriggerType) ?? 'manual';
@@ -77,36 +134,49 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
       {/* Schedule config */}
       {triggerType === 'schedule' && (
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+          {/* Human-readable preview */}
+          <div className="rounded-md bg-primary/5 border border-primary/20 px-2.5 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/60 mb-0.5">Preview</p>
+            <p className="text-xs font-medium text-primary">{describeCron(cronExpression)}</p>
+            <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{cronExpression}</p>
+          </div>
+
           <div className="space-y-1.5">
-            <Label>Cron Expression</Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {CRON_PRESETS.slice(0, -1).map((p) => (
+            <Label>Presets</Label>
+            <div className="grid grid-cols-2 gap-1">
+              {CRON_PRESETS.map((p) => (
                 <button
                   key={p.value}
                   type="button"
                   onClick={() => onUpdate({ cronExpression: p.value })}
                   className={cn(
-                    'rounded-md border px-2 py-1 text-[10px] font-medium transition-colors text-left',
+                    'rounded-md border px-2 py-1.5 text-[10px] font-medium transition-colors text-left',
                     cronExpression === p.value
                       ? 'border-primary bg-primary/5 text-primary'
                       : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
                   )}
                 >
                   {p.label}
-                  <span className="ml-1 font-mono opacity-60">{p.value}</span>
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Custom expression</Label>
             <Input
               value={cronExpression}
               onChange={(e) => onUpdate({ cronExpression: e.target.value })}
               placeholder="*/5 * * * *"
-              className="font-mono text-xs mt-1.5"
+              className="font-mono text-xs"
             />
-            <p className="text-[10px] text-muted-foreground">
-              Format: <span className="font-mono">minute hour day month weekday</span>
-            </p>
+            <div className="grid grid-cols-5 gap-1 text-center">
+              {['min', 'hour', 'day', 'mon', 'wday'].map((f) => (
+                <span key={f} className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60">{f}</span>
+              ))}
+            </div>
           </div>
+
           <div className="space-y-1.5">
             <Label>Timezone</Label>
             <Input

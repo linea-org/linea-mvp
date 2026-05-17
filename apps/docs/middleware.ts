@@ -13,7 +13,12 @@ function unauthorized() {
 }
 
 export function middleware(request: NextRequest) {
-  const password = process.env.DOCS_PASSWORD;
+  // normalize password: strip surrounding single or double quotes (from .env parsing)
+  const rawPassword = process.env.DOCS_PASSWORD;
+  const password = rawPassword && ((rawPassword.startsWith('"') && rawPassword.endsWith('"')) || (rawPassword.startsWith("'") && rawPassword.endsWith("'")))
+    ? rawPassword.slice(1, -1)
+    : rawPassword;
+  const authHeader = request.headers.get('authorization');
 
   if (!password) {
     // No password set: block everything to prevent accidental exposure
@@ -26,13 +31,13 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Basic ')) {
     try {
       const decoded = atob(authHeader.slice(6));
-      const pw = decoded.slice(decoded.indexOf(':') + 1);
+      const idx = decoded.indexOf(':');
+      const pw = idx >= 0 ? decoded.slice(idx + 1) : decoded;
       if (pw === password) return NextResponse.next();
-    } catch {
+    } catch (err) {
       // invalid base64; fall through to 401
     }
   }

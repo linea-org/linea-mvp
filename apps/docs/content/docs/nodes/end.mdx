@@ -1,0 +1,29 @@
+---
+title: End Node
+description: Terminal node that marks a workflow execution as completed and emits the final output.
+---
+
+# End Node
+
+The `end` node is the terminal node of a workflow. When execution reaches it, the run is marked `completed` and `lastOutput` is recorded as the final execution output.
+
+## What It Does
+
+- Sets execution `status` to `completed`
+- Stores the current `variables.lastOutput` as `execution.output` in the database
+- Signals the BullMQ job as done
+
+**No configuration required.** A workflow can have multiple end nodes (e.g., one per branch of an `if-else`), but execution stops at whichever is reached first.
+
+## Behavior
+
+| | Details |
+|---|---|
+| **Node type** | `end` |
+| **Configuration** | None |
+| **Output** | `execution.output` is set to `lastOutput` at the time this node is reached |
+
+## Notes
+
+- If no end node is reachable from the current execution path, the execution will run until it has no further edges and then terminate normally.
+- For suspended executions (e.g., waiting on an `approval-gate`), the end node is only reached after the execution is resumed and proceeds to completion.

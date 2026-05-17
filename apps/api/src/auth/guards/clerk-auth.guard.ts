@@ -50,7 +50,10 @@ export class ClerkAuthGuard implements CanActivate {
         .map((s) => s.trim())
         .filter(Boolean);
 
-      const payload = await verifyToken(token, { secretKey, authorizedParties });
+      const payload = await verifyToken(token, {
+        secretKey,
+        authorizedParties,
+      });
       const user = await this.usersService.findOrCreateFromClerk(payload.sub);
       request.user = user;
       return true;

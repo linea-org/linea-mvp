@@ -27,10 +27,15 @@ export class PodsService {
 
     const [pod] = await this.db
       .insert(pods)
-      .values({ workspaceId, name: dto.name, slug, description: dto.description ?? null })
+      .values({
+        workspaceId,
+        name: dto.name,
+        slug,
+        description: dto.description ?? null,
+      })
       .returning();
 
-    return pod!;
+    return pod;
   }
 
   async findAll(workspaceId: string) {
@@ -57,7 +62,7 @@ export class PodsService {
       .where(and(eq(pods.id, id), eq(pods.workspaceId, workspaceId)))
       .returning();
 
-    return updated!;
+    return updated;
   }
 
   async delete(workspaceId: string, id: string) {

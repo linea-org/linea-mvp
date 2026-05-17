@@ -1,4 +1,9 @@
-import { Injectable, Inject, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -32,25 +37,37 @@ export class SecretsService {
     const existing = await this.db
       .select({ id: secrets.id })
       .from(secrets)
-      .where(and(eq(secrets.workspaceId, workspaceId), eq(secrets.name, dto.name)))
+      .where(
+        and(eq(secrets.workspaceId, workspaceId), eq(secrets.name, dto.name)),
+      )
       .limit(1);
 
     if (existing.length) {
-      throw new ConflictException(`Secret '${dto.name}' already exists. Delete it first to replace it.`);
+      throw new ConflictException(
+        `Secret '${dto.name}' already exists. Delete it first to replace it.`,
+      );
     }
 
     const valueEncrypted = this.encrypt(dto.value);
     const [record] = await this.db
       .insert(secrets)
       .values({ workspaceId, name: dto.name, valueEncrypted })
-      .returning({ id: secrets.id, name: secrets.name, createdAt: secrets.createdAt });
+      .returning({
+        id: secrets.id,
+        name: secrets.name,
+        createdAt: secrets.createdAt,
+      });
 
     return record;
   }
 
   async findAll(workspaceId: string) {
     return this.db
-      .select({ id: secrets.id, name: secrets.name, createdAt: secrets.createdAt })
+      .select({
+        id: secrets.id,
+        name: secrets.name,
+        createdAt: secrets.createdAt,
+      })
       .from(secrets)
       .where(eq(secrets.workspaceId, workspaceId));
   }
@@ -67,7 +84,10 @@ export class SecretsService {
   }
 
   // Used by the workflow executor to resolve {{secrets.NAME}} references
-  async resolve(workspaceId: string, name: string): Promise<string | undefined> {
+  async resolve(
+    workspaceId: string,
+    name: string,
+  ): Promise<string | undefined> {
     const [row] = await this.db
       .select({ valueEncrypted: secrets.valueEncrypted })
       .from(secrets)
@@ -81,7 +101,10 @@ export class SecretsService {
   private encrypt(plaintext: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const encrypted = Buffer.concat([
+      cipher.update(plaintext, 'utf8'),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
     return Buffer.concat([iv, authTag, encrypted]).toString('base64');
   }

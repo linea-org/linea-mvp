@@ -4,6 +4,7 @@ import {
   timestamp,
   uuid,
   jsonb,
+  integer,
   pgEnum,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
@@ -45,6 +46,7 @@ export const executions = pgTable('executions', {
   variables: jsonb('variables').$type<Record<string, unknown>>().default({}).notNull(),
   checkpoint: jsonb('checkpoint'),
   threadId: text('thread_id'),
+  tokenUsage: jsonb('token_usage').$type<{ input: number; output: number; total: number }>(),
   triggeredBy: executionTriggerEnum('triggered_by').default('manual').notNull(),
   queueJobId: text('queue_job_id'),
   startedAt: timestamp('started_at', { withTimezone: true }),
@@ -61,6 +63,8 @@ export const executionLogs = pgTable('execution_logs', {
   level: logLevelEnum('level').default('info').notNull(),
   message: text('message').notNull(),
   data: jsonb('data'),
+  durationMs: integer('duration_ms'),
+  attempt: integer('attempt').default(1).notNull(),
   timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
 });
 

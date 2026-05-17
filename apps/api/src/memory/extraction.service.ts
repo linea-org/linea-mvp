@@ -26,7 +26,9 @@ export class ExtractionService {
   constructor(private readonly config: ConfigService) {
     this.apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
     if (!this.apiKey) {
-      this.logger.warn('ANTHROPIC_API_KEY not set — extraction will return content as single fact');
+      this.logger.warn(
+        'ANTHROPIC_API_KEY not set — extraction will return content as single fact',
+      );
     }
   }
 
@@ -52,7 +54,8 @@ export class ExtractionService {
         .join('');
 
       const parsed = JSON.parse(text) as unknown;
-      if (!Array.isArray(parsed)) return [{ content, factType: 'fact', confidence: 1.0 }];
+      if (!Array.isArray(parsed))
+        return [{ content, factType: 'fact', confidence: 1.0 }];
 
       return (parsed as ExtractedFact[]).filter(
         (f) => typeof f.content === 'string' && f.content.length > 0,

@@ -1,13 +1,15 @@
 ---
-title: Node Reference
-description: Complete configuration reference for every node type in the Linea workflow engine.
+title: Nodes
+description: Overview of all node types in the Linea workflow engine.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Node Reference
+# Nodes
 
-Every workflow is a directed graph of **nodes** connected by **edges**. This page documents every supported node type, its configuration fields, and example usage.
+Every workflow is a directed graph of **nodes** connected by **edges**. Each node type serves a specific purpose — running LLM inference, branching on a condition, sending a Slack message, and so on.
+
+For the full configuration reference for each node type, see the [Node Reference](/docs/nodes) section.
 
 ## Variable Substitution
 
@@ -15,328 +17,40 @@ All string fields in node configuration support `{{variableName}}` substitution:
 
 | Syntax | Resolves to |
 |---|---|
-| `{{input.field}}` | Field from the trigger input |
+| `{{input.field}}` | Field from the trigger input payload |
 | `{{nodeName}}` | Output of a previous node (by name or ID) |
 | `{{lastOutput}}` | Output of the most recently completed node |
 | `{{nodeResults.nodeId.output}}` | Deep-access a specific node result |
+| `{{variables.myVar}}` | Any variable in the LangGraph state |
 
----
-
-## Core
-
-### `start`
-
-Entry point of every workflow. Spreads the trigger `input` object into the `variables` state so downstream nodes can reference `{{input.*}}`.
-
-**No configuration required.**
-
----
-
-### `end`
-
-Terminal node. Marks the workflow as completed and emits `lastOutput` as the final execution output.
-
-**No configuration required.**
-
----
-
-## AI
-
-### `agent`
-
-Runs an LLM call with optional tool use, structured output, and long-term memory.
-
-| Field | Type | Description |
-|---|---|---|
-| `model` | string | Model ID — e.g. `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `gpt-4o` |
-| `systemPrompt` | string | Static instructions for the model (supports `{{}}` substitution) |
-| `userPrompt` | string | The user-turn message (supports `{{}}` substitution) |
-| `tools` | string[] | Tool names to enable: `web_search`, `memory_store`, `memory_search`, `calculator` |
-| `outputSchema` | string (JSON) | JSON Schema string — forces structured output, injected as a `respond_with_json` tool |
-| `enableLongTermMemory` | boolean | Prepend recent cross-execution memories before inference |
-| `maxIterations` | number | Max tool-use loop iterations (default 10) |
-
-**Example — structured output:**
-```json
-{
-  "model": "claude-sonnet-4-6",
-  "systemPrompt": "Classify the sentiment of the text.",
-  "userPrompt": "{{input.text}}",
-  "outputSchema": "{\"type\":\"object\",\"properties\":{\"sentiment\":{\"type\":\"string\",\"enum\":[\"positive\",\"neutral\",\"negative\"]},\"confidence\":{\"type\":\"number\"}},\"required\":[\"sentiment\",\"confidence\"]}"
-}
-```
-
----
-
-### `memory`
-
-Read or write key-value facts scoped to the current execution thread or workflow.
-
-| Field | Type | Description |
-|---|---|---|
-| `operation` | `store` \| `retrieve` \| `search` | Operation to perform |
-| `key` | string | Key to store or retrieve (supports `{{}}`) |
-| `value` | string | Value to store (only for `store` operation, supports `{{}}`) |
-| `query` | string | Semantic search query (only for `search`, supports `{{}}`) |
+Substitution is applied to all string fields across all node types, including object values (e.g. individual header values in the HTTP node).
 
 <Callout type="info">
-  For cross-execution persistence backed by pgvector, enable **Long-term memory** on the parent Agent node instead.
+  References like `{{input.data.items.0.name}}` with dot-path traversal work as expected. Undefined references resolve to an empty string.
 </Callout>
 
----
+## Node Quick Reference
 
-## Logic
-
-### `if-else`
-
-Branches execution based on a boolean JavaScript expression evaluated against the current state.
-
-| Field | Type | Description |
+| Node | Category | Purpose |
 |---|---|---|
-| `condition` | string | JS expression (e.g. `variables.score > 0.8`) |
-
-Connect the **true** output handle to the node that runs when the condition is met, and **false** to the alternative. Variable access uses the LangGraph state (`variables`, `nodeResults`).
-
----
-
-### `router`
-
-Routes to one of multiple branches based on a `branch` key returned by the previous node.
-
-| Field | Type | Description |
-|---|---|---|
-| *(no config)* | — | The preceding node must return `{ branch: "keyName" }` |
-
-Each outgoing edge should have its **source handle** / **label** set to the expected branch name. Use `none` as a fallback label.
-
----
-
-## Tools
-
-### `http`
-
-Make an HTTP request to any external REST API.
-
-| Field | Type | Description |
-|---|---|---|
-| `method` | `GET` \| `POST` \| `PUT` \| `PATCH` \| `DELETE` | HTTP method |
-| `url` | string | Request URL (supports `{{}}`) |
-| `headers` | object | Key-value headers (values support `{{}}`) |
-| `body` | string \| object | Request body — strings are sent as-is, objects are JSON-encoded |
-| `timeoutMs` | number | Request timeout in milliseconds (default 30 000) |
-
-The response body is parsed as JSON when possible and stored as the node output.
-
----
-
-### `mcp`
-
-Invoke a tool exposed by an attached Model Context Protocol server.
-
-| Field | Type | Description |
-|---|---|---|
-| `serverId` | string | ID of the MCP server configured in workspace settings |
-| `toolName` | string | Name of the tool to call |
-| `arguments` | object | Arguments to pass (values support `{{}}`) |
-
----
-
-## Data
-
-### `transform`
-
-Run a sandboxed JavaScript expression to reshape variables.
-
-| Field | Type | Description |
-|---|---|---|
-| `code` | string | JS expression or function body. `input` is bound to `variables.lastOutput`. Return the transformed value. |
-
-**Example:**
-```javascript
-return input.items.filter(i => i.active).map(i => i.name)
-```
-
----
-
-### `extract`
-
-Extract structured data from a URL using Firecrawl-compatible scraping.
-
-| Field | Type | Description |
-|---|---|---|
-| `url` | string | URL to fetch and parse (supports `{{}}`) |
-| `fields` | array | Each entry: `{ name: string, path: string }` where `path` is a JSONPath expression |
-
-**Example fields config:**
-```json
-[
-  { "name": "title",   "path": "$.title" },
-  { "name": "content", "path": "$.body"  }
-]
-```
-
----
-
-### `retriever`
-
-Search a workspace knowledge base with semantic vector search.
-
-| Field | Type | Description |
-|---|---|---|
-| `knowledgeBaseId` | string | ID of the knowledge base to search |
-| `query` | string | Search query (supports `{{}}`) |
-| `topK` | number | Number of results to return (default 5) |
-
-Returns an array of `{ content, score, metadata }` objects.
-
----
-
-## Safety
-
-### `guardrails`
-
-Inspect input or output content for policy violations before passing it downstream.
-
-| Field | Type | Description |
-|---|---|---|
-| `checks` | string[] | Which checks to run: `pii`, `toxicity`, `prompt_injection` |
-| `action` | `block` \| `redact` \| `flag` | What to do when a violation is detected |
-| `input` | string | Content to inspect (supports `{{}}`) |
-
-When `action` is `block` the execution is marked failed. `redact` removes detected PII patterns. `flag` passes through but adds a `violations` array to the output.
-
----
-
-### `code`
-
-Execute arbitrary JavaScript in a sandboxed Node.js `vm` context.
-
-| Field | Type | Description |
-|---|---|---|
-| `code` | string | JavaScript to execute. Has access to `input` (lastOutput) and `variables`. Must assign to `output`. |
-| `timeoutMs` | number | Execution timeout (default 5 000) |
-
-**Example:**
-```javascript
-const lines = input.split('\n');
-output = lines.map(l => l.trim()).filter(Boolean);
-```
-
-<Callout type="warn">
-  The `vm` sandbox prevents network and filesystem access, but is not a full security boundary. Do not run untrusted user-provided code.
-</Callout>
-
----
-
-## Flow
-
-### `loop`
-
-Iterate over an array variable, optionally applying a transform to each item.
-
-| Field | Type | Description |
-|---|---|---|
-| `items` | string | Variable name holding the array to iterate (e.g. `lastOutput`) |
-| `transform` | string | Optional JS expression applied to each item before collecting results |
-| `concurrency` | number | Parallel iterations (default 1 — sequential) |
-
-Results are accumulated in `loopResults` and the final array is emitted as the node output.
-
----
-
-### `subworkflow`
-
-Call another workflow synchronously and wait for its output.
-
-| Field | Type | Description |
-|---|---|---|
-| `workflowId` | string | ID of the workflow to invoke |
-
-The subworkflow receives the current `variables` as its input. Its `lastOutput` is returned as this node's output.
-
----
-
-## Integrations
-
-All integration nodes require the corresponding credential stored in **Settings → Credentials** under the name shown below.
-
-### `slack`
-
-| Field | Type | Description |
-|---|---|---|
-| `action` | `send_message` \| `send_dm` \| `list_channels` | Operation |
-| `channel` | string | Channel ID or name (for `send_message`) |
-| `userId` | string | Slack user ID (for `send_dm`) |
-| `message` | string | Message text (supports `{{}}`, Slack mrkdwn) |
-
-**Credential name:** `SLACK_TOKEN` (Bot User OAuth Token)
-
----
-
-### `github`
-
-| Field | Type | Description |
-|---|---|---|
-| `action` | `create_issue` \| `comment_issue` \| `list_issues` \| `create_pr` | Operation |
-| `owner` | string | Repository owner (supports `{{}}`) |
-| `repo` | string | Repository name (supports `{{}}`) |
-| `title` | string | Issue or PR title |
-| `body` | string | Issue or PR body (supports `{{}}`) |
-| `issueNumber` | number | Issue number (for `comment_issue`) |
-| `head` / `base` | string | Branch names (for `create_pr`) |
-
-**Credential name:** `GITHUB_TOKEN` (Personal Access Token with `repo` scope)
-
----
-
-### `notion`
-
-| Field | Type | Description |
-|---|---|---|
-| `action` | `create_page` \| `append_block` \| `query_database` \| `get_page` | Operation |
-| `databaseId` | string | Target database ID (for `create_page`, `query_database`) |
-| `pageId` | string | Target page ID (for `append_block`, `get_page`) |
-| `properties` | object | Page properties (for `create_page`, values support `{{}}`) |
-| `blocks` | array | Block objects to append (for `append_block`) |
-| `filter` | object | Notion filter object (for `query_database`) |
-
-**Credential name:** `NOTION_TOKEN` (Internal Integration Token)
-
----
-
-### `gmail`
-
-| Field | Type | Description |
-|---|---|---|
-| `action` | `send_email` \| `list_emails` \| `get_email` | Operation |
-| `to` | string | Recipient address (for `send_email`, supports `{{}}`) |
-| `subject` | string | Email subject (supports `{{}}`) |
-| `body` | string | Email body — plain text or HTML (supports `{{}}`) |
-| `messageId` | string | Gmail message ID (for `get_email`) |
-| `maxResults` | number | Maximum emails to return (for `list_emails`, default 10) |
-
-**Credential name:** `GMAIL_TOKEN` (OAuth2 access token with `gmail.send` + `gmail.readonly` scopes)
-
----
-
-## Misc
-
-### `approval-gate`
-
-Pauses the execution and waits for a human to approve or reject via the dashboard or API.
-
-| Field | Type | Description |
-|---|---|---|
-| `message` | string | Context shown to the approver (supports `{{}}`) |
-
-The execution status changes to `suspended`. Approve or reject via **Executions → [id] → Approve / Reject** or `PATCH /executions/:id/respond`.
-
----
-
-### `note`
-
-A canvas annotation. Has no runtime effect — used for documenting workflows visually.
-
-| Field | Type | Description |
-|---|---|---|
-| `text` | string | Markdown text shown on the canvas |
+| [start](/docs/nodes/start) | Core | Entry point — initializes state from trigger input |
+| [end](/docs/nodes/end) | Core | Terminal — marks execution complete |
+| [agent](/docs/nodes/agent) | AI | LLM with tool use, structured output, long-term memory |
+| [memory](/docs/nodes/memory) | AI | Read/clear in-workflow key-value memory |
+| [if-else](/docs/nodes/if-else) | Logic | Branch on a boolean Jexl expression |
+| [router](/docs/nodes/router) | Logic | Multi-branch routing via prioritized conditions |
+| [http](/docs/nodes/http) | Tools | HTTP requests to external APIs |
+| [mcp](/docs/nodes/mcp) | Tools | Model Context Protocol tool invocation |
+| [transform](/docs/nodes/transform) | Data | Reshape variables with a Jexl expression |
+| [extract](/docs/nodes/extract) | Data | Web scraping via Firecrawl or native fetch |
+| [retriever](/docs/nodes/retriever) | Data | Knowledge base search |
+| [code](/docs/nodes/code) | Data | Sandboxed JS execution (disabled — see page) |
+| [loop](/docs/nodes/loop) | Flow | Iterate over an array |
+| [subworkflow](/docs/nodes/subworkflow) | Flow | Call another workflow synchronously |
+| [guardrails](/docs/nodes/guardrails) | Safety | PII / jailbreak / harmful content detection |
+| [approval-gate](/docs/nodes/approval-gate) | Safety | Human-in-the-loop checkpoint |
+| [slack](/docs/nodes/slack) | Integration | Send Slack messages or DMs |
+| [github](/docs/nodes/github) | Integration | GitHub issues and pull requests |
+| [notion](/docs/nodes/notion) | Integration | Notion pages and database queries |
+| [gmail](/docs/nodes/gmail) | Integration | Send and read Gmail messages |
+| [note](/docs/nodes/note) | Misc | Canvas annotation (no runtime effect) |

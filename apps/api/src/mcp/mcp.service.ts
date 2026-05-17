@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Inject,
-  NotFoundException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +8,10 @@ import { DB_TOKEN } from '../database/database.module';
 import type { CreateMcpServerDto } from './dto/create-mcp-server.dto';
 import type { UpdateMcpServerDto } from './dto/update-mcp-server.dto';
 
-type McpServerSafeResponse = Omit<typeof mcpServers.$inferSelect, 'accessTokenEncrypted'> & {
+type McpServerSafeResponse = Omit<
+  typeof mcpServers.$inferSelect,
+  'accessTokenEncrypted'
+> & {
   hasToken: boolean;
 };
 
@@ -84,8 +82,9 @@ export class McpService {
         name: dto.name,
         url: dto.url,
         authType: dto.authType ?? 'none',
-        accessTokenEncrypted:
-          dto.accessToken ? this.encrypt(dto.accessToken) : null,
+        accessTokenEncrypted: dto.accessToken
+          ? this.encrypt(dto.accessToken)
+          : null,
       })
       .returning();
 
@@ -101,11 +100,16 @@ export class McpService {
     return rows.map((r) => this.toSafeResponse(r));
   }
 
-  async findOne(workspaceId: string, id: string): Promise<McpServerSafeResponse> {
+  async findOne(
+    workspaceId: string,
+    id: string,
+  ): Promise<McpServerSafeResponse> {
     const [row] = await this.db
       .select()
       .from(mcpServers)
-      .where(and(eq(mcpServers.id, id), eq(mcpServers.workspaceId, workspaceId)))
+      .where(
+        and(eq(mcpServers.id, id), eq(mcpServers.workspaceId, workspaceId)),
+      )
       .limit(1);
 
     if (!row) {
@@ -137,7 +141,9 @@ export class McpService {
     const [updated] = await this.db
       .update(mcpServers)
       .set(updateValues)
-      .where(and(eq(mcpServers.id, id), eq(mcpServers.workspaceId, workspaceId)))
+      .where(
+        and(eq(mcpServers.id, id), eq(mcpServers.workspaceId, workspaceId)),
+      )
       .returning();
 
     return this.toSafeResponse(updated);
@@ -149,6 +155,8 @@ export class McpService {
 
     await this.db
       .delete(mcpServers)
-      .where(and(eq(mcpServers.id, id), eq(mcpServers.workspaceId, workspaceId)));
+      .where(
+        and(eq(mcpServers.id, id), eq(mcpServers.workspaceId, workspaceId)),
+      );
   }
 }

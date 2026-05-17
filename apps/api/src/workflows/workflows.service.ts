@@ -8,6 +8,8 @@ import {
   desc,
   isNull,
   isNotNull,
+  gt,
+  ne,
 } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import type { SQL } from 'drizzle-orm';
@@ -19,6 +21,8 @@ import {
   workflowFavorites,
   templateUpvotes,
   webhooks,
+  workflowPresence,
+  users,
 } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { SchedulesService } from '../schedules/schedules.service';
@@ -145,7 +149,8 @@ export class WorkflowsService {
   ) {
     const existing = await this.findOne(podId, id);
 
-    if (dto.definition) {
+    const shouldVersion = dto.definition && !dto.skipVersion;
+    if (shouldVersion) {
       await this.db.insert(workflowVersions).values({
         workflowId: id,
         version: existing.version,
@@ -154,14 +159,16 @@ export class WorkflowsService {
       });
     }
 
+    const { skipVersion: _skip, ...dtoFields } = dto;
+    void _skip;
     const [updated] = await this.db
       .update(workflows)
       .set({
-        ...dto,
+        ...dtoFields,
         definition: dto.definition
           ? (redactNodeSecrets(dto.definition) as NewWorkflow['definition'])
           : undefined,
-        version: dto.definition ? existing.version + 1 : existing.version,
+        version: shouldVersion ? existing.version + 1 : existing.version,
         updatedAt: new Date(),
       })
       .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
@@ -191,6 +198,17 @@ export class WorkflowsService {
     const [updated] = await this.db
       .update(workflows)
       .set({ deployedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
+      .returning();
+
+    if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
+    return updated;
+  }
+
+  async undeploy(podId: string, id: string) {
+    const [updated] = await this.db
+      .update(workflows)
+      .set({ deployedAt: null, updatedAt: new Date() })
       .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .returning();
 
@@ -570,6 +588,35 @@ export class WorkflowsService {
     } catch {
       return [];
     }
+  }
+
+  async upsertPresence(workflowId: string, userId: string) {
+    await this.db
+      .insert(workflowPresence)
+      .values({ workflowId, userId, lastSeenAt: new Date() })
+      .onConflictDoUpdate({
+        target: [workflowPresence.workflowId, workflowPresence.userId],
+        set: { lastSeenAt: new Date() },
+      });
+
+    const cutoff = new Date(Date.now() - 60_000);
+    return this.db
+      .select({
+        userId: workflowPresence.userId,
+        name: users.name,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+        lastSeenAt: workflowPresence.lastSeenAt,
+      })
+      .from(workflowPresence)
+      .leftJoin(users, eq(workflowPresence.userId, users.id))
+      .where(
+        and(
+          eq(workflowPresence.workflowId, workflowId),
+          ne(workflowPresence.userId, userId),
+          gt(workflowPresence.lastSeenAt, cutoff),
+        ),
+      );
   }
 
   async listTemplates(query: ListTemplatesDto) {

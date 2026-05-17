@@ -26,6 +26,12 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SecretsModule } from './secrets/secrets.module';
 import { McpModule } from './mcp/mcp.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { QuotasModule } from './quotas/quotas.module';
+import { OAuthModule } from './oauth/oauth.module';
+import { PublicRunModule } from './public-run/public-run.module';
+import { AgentChatModule } from './agent-chat/agent-chat.module';
+import { CommentsModule } from './comments/comments.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { ClerkAuthGuard } from './auth/guards/clerk-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -82,6 +88,12 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
     SecretsModule,
     McpModule,
     MetricsModule,
+    QuotasModule,
+    OAuthModule,
+    PublicRunModule,
+    AgentChatModule,
+    CommentsModule,
+    UploadsModule,
   ],
   controllers: [ClerkWebhookController],
   providers: [
@@ -89,7 +101,9 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
       provide: APP_REDIS,
       useFactory: (config: ConfigService) => {
         const url = config.get<string>('REDIS_URL');
-        return url ? new Redis(url) : new Redis({ host: 'localhost', port: 6379 });
+        return url
+          ? new Redis(url)
+          : new Redis({ host: 'localhost', port: 6379 });
       },
       inject: [ConfigService],
     },

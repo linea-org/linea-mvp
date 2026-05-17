@@ -17,6 +17,7 @@ interface ModelProvider {
   placeholder: string;
   docsUrl: string;
   hint: string;
+  inputType?: 'password' | 'text';
 }
 
 const PROVIDERS: ModelProvider[] = [
@@ -47,6 +48,14 @@ const PROVIDERS: ModelProvider[] = [
     placeholder: 'gsk_…',
     docsUrl: 'https://console.groq.com/keys',
     hint: 'Fast inference for Llama, Mixtral, and Gemma models',
+  },
+  {
+    key: 'OLLAMA_BASE_URL',
+    label: 'Ollama (local)',
+    placeholder: 'http://localhost:11434',
+    docsUrl: 'https://ollama.com',
+    hint: 'Self-hosted Ollama instance — run Llama, Mistral, Qwen, and others locally',
+    inputType: 'text',
   },
 ];
 
@@ -128,7 +137,7 @@ export default function ModelKeysPage() {
   if (wsLoading || loading) {
     return (
       <div className="space-y-4">
-        {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)}
+        {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)}
       </div>
     );
   }
@@ -188,8 +197,8 @@ export default function ModelKeysPage() {
                 <div className="flex-1 space-y-1">
                   <Label className="text-xs text-muted-foreground font-mono">{p.key}</Label>
                   <Input
-                    type="password"
-                    placeholder={set ? '••••••••••••  (re-enter to rotate)' : p.placeholder}
+                    type={p.inputType === 'text' ? 'text' : 'password'}
+                    placeholder={set && p.inputType !== 'text' ? '••••••••••••  (re-enter to rotate)' : p.placeholder}
                     value={inputs[p.key] ?? ''}
                     onChange={(e) => setInputs((prev) => ({ ...prev, [p.key]: e.target.value }))}
                     onKeyDown={(e) => { if (e.key === 'Enter') void handleSave(p.key); }}
@@ -212,7 +221,7 @@ export default function ModelKeysPage() {
 
       <div className="rounded-lg border border-dashed p-4 text-xs text-muted-foreground space-y-1">
         <p className="font-medium text-foreground">How model keys are used</p>
-        <p>When an Agent node specifies a model (e.g. <code className="font-mono bg-muted px-1 rounded">claude-sonnet-4-5</code>), Linea picks the matching provider key from your workspace secrets. If no key is set, the platform falls back to the default environment-level key (if configured).</p>
+        <p>When an Agent node specifies a model (e.g. <code className="font-mono bg-muted px-1 rounded">claude-sonnet-4-6</code>), Linea picks the matching provider key from your workspace secrets. If no key is set, the platform falls back to the default environment-level key (if configured). For Ollama, set the base URL to your local or remote Ollama server — no API key required.</p>
       </div>
     </div>
   );

@@ -17,7 +17,11 @@ export class KnowledgeService {
   async createBase(workspaceId: string, dto: CreateKnowledgeBaseDto) {
     const [kb] = await this.db
       .insert(knowledgeBases)
-      .values({ workspaceId, name: dto.name, description: dto.description ?? null } satisfies Partial<NewKnowledgeBase> as NewKnowledgeBase)
+      .values({
+        workspaceId,
+        name: dto.name,
+        description: dto.description ?? null,
+      } satisfies Partial<NewKnowledgeBase> as NewKnowledgeBase)
       .returning();
     return kb;
   }
@@ -33,7 +37,10 @@ export class KnowledgeService {
         entryCount: count(knowledgeEntries.id),
       })
       .from(knowledgeBases)
-      .leftJoin(knowledgeEntries, eq(knowledgeEntries.knowledgeBaseId, knowledgeBases.id))
+      .leftJoin(
+        knowledgeEntries,
+        eq(knowledgeEntries.knowledgeBaseId, knowledgeBases.id),
+      )
       .where(eq(knowledgeBases.workspaceId, workspaceId))
       .groupBy(knowledgeBases.id)
       .orderBy(desc(knowledgeBases.updatedAt));
@@ -45,20 +52,34 @@ export class KnowledgeService {
     const [kb] = await this.db
       .select()
       .from(knowledgeBases)
-      .where(and(eq(knowledgeBases.id, id), eq(knowledgeBases.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(knowledgeBases.id, id),
+          eq(knowledgeBases.workspaceId, workspaceId),
+        ),
+      )
       .limit(1);
 
     if (!kb) throw new NotFoundException(`Knowledge base ${id} not found`);
     return kb;
   }
 
-  async updateBase(workspaceId: string, id: string, dto: UpdateKnowledgeBaseDto) {
+  async updateBase(
+    workspaceId: string,
+    id: string,
+    dto: UpdateKnowledgeBaseDto,
+  ) {
     await this.getBase(workspaceId, id);
 
     const [updated] = await this.db
       .update(knowledgeBases)
       .set({ ...dto, updatedAt: new Date() })
-      .where(and(eq(knowledgeBases.id, id), eq(knowledgeBases.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(knowledgeBases.id, id),
+          eq(knowledgeBases.workspaceId, workspaceId),
+        ),
+      )
       .returning();
 
     return updated;
@@ -68,7 +89,12 @@ export class KnowledgeService {
     await this.getBase(workspaceId, id);
     await this.db
       .delete(knowledgeBases)
-      .where(and(eq(knowledgeBases.id, id), eq(knowledgeBases.workspaceId, workspaceId)));
+      .where(
+        and(
+          eq(knowledgeBases.id, id),
+          eq(knowledgeBases.workspaceId, workspaceId),
+        ),
+      );
   }
 
   // ─── Entries ────────────────────────────────────────────────────────────────
@@ -77,7 +103,12 @@ export class KnowledgeService {
     const [kb] = await this.db
       .select({ id: knowledgeBases.id })
       .from(knowledgeBases)
-      .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(knowledgeBases.id, kbId),
+          eq(knowledgeBases.workspaceId, workspaceId),
+        ),
+      )
       .limit(1);
 
     if (!kb) throw new NotFoundException(`Knowledge base ${kbId} not found`);
@@ -123,13 +154,23 @@ export class KnowledgeService {
 
     const deleted = await this.db
       .delete(knowledgeEntries)
-      .where(and(eq(knowledgeEntries.id, entryId), eq(knowledgeEntries.knowledgeBaseId, kbId)))
+      .where(
+        and(
+          eq(knowledgeEntries.id, entryId),
+          eq(knowledgeEntries.knowledgeBaseId, kbId),
+        ),
+      )
       .returning();
 
-    if (!deleted.length) throw new NotFoundException(`Entry ${entryId} not found`);
+    if (!deleted.length)
+      throw new NotFoundException(`Entry ${entryId} not found`);
   }
 
-  async searchEntries(workspaceId: string, kbId: string, dto: SearchEntriesDto) {
+  async searchEntries(
+    workspaceId: string,
+    kbId: string,
+    dto: SearchEntriesDto,
+  ) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
     return this.db

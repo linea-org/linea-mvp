@@ -35,10 +35,7 @@ export class SchedulesController {
   @ApiOperation({ summary: 'Create a cron schedule (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  create(
-    @Param('podId') podId: string,
-    @Body() dto: CreateScheduleDto,
-  ) {
+  create(@Param('podId') podId: string, @Body() dto: CreateScheduleDto) {
     return this.service.create(podId, dto);
   }
 

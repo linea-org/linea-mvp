@@ -23,15 +23,17 @@ export function executeLogicNode(
   if (nodeType === 'if-else' || nodeType === 'if / else') {
     const condition = nodeData.condition || 'false';
     const result = evalCondition(condition, state);
-    return { condition: result, branch: result ? 'if' : 'else' };
+    // Branch values match the ReactFlow handle IDs ("true"/"false") on the custom-node
+    return { condition: result, branch: result ? 'true' : 'false' };
   }
 
   if (nodeType === 'router') {
-    const routes: Array<{ id: string; label: string; condition: string }> =
+    const routes: Array<{ id?: string; label: string; condition: string }> =
       nodeData.routes || [];
-    for (const route of routes) {
+    for (const [i, route] of routes.entries()) {
       if (evalCondition(route.condition, state)) {
-        return { branch: route.id, label: route.label };
+        // id must match the ReactFlow handle id on the custom-node (falls back to route-{i})
+        return { branch: route.id ?? `route-${i}`, label: route.label };
       }
     }
     return { branch: 'none' };

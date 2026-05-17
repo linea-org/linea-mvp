@@ -37,13 +37,12 @@ export class WebhooksController {
 
   @Post()
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Create a webhook trigger for a workflow (editor+)' })
+  @ApiOperation({
+    summary: 'Create a webhook trigger for a workflow (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  create(
-    @Param('podId') podId: string,
-    @Body() dto: CreateWebhookDto,
-  ) {
+  create(@Param('podId') podId: string, @Body() dto: CreateWebhookDto) {
     return this.service.create(podId, dto);
   }
 
@@ -74,10 +73,22 @@ export class WebhookTriggerController {
 
   @Post(':id/trigger')
   @Public()
-  @ApiOperation({ summary: 'Trigger a workflow via webhook (public, requires x-linea-signature + x-webhook-timestamp)' })
+  @ApiOperation({
+    summary:
+      'Trigger a workflow via webhook (public, requires x-linea-signature + x-webhook-timestamp)',
+  })
   @ApiParam({ name: 'id' })
-  @ApiHeader({ name: 'x-linea-signature', required: true, description: 'HMAC-SHA256 signature: sha256=<hex>' })
-  @ApiHeader({ name: 'x-webhook-timestamp', required: true, description: 'Unix timestamp in seconds (request must be within 5 minutes of server time)' })
+  @ApiHeader({
+    name: 'x-linea-signature',
+    required: true,
+    description: 'HMAC-SHA256 signature: sha256=<hex>',
+  })
+  @ApiHeader({
+    name: 'x-webhook-timestamp',
+    required: true,
+    description:
+      'Unix timestamp in seconds (request must be within 5 minutes of server time)',
+  })
   trigger(
     @Param('id') id: string,
     @Headers('x-linea-signature') signature: string,
@@ -85,9 +96,14 @@ export class WebhookTriggerController {
     @Req() req: RawBodyRequest<Request>,
     @Body() body: Record<string, unknown>,
   ) {
-    if (!signature) throw new UnauthorizedException('Missing x-linea-signature header');
-    if (!timestamp) throw new UnauthorizedException('Missing x-webhook-timestamp header');
-    if (!req.rawBody) throw new UnauthorizedException('Raw body unavailable — cannot verify signature');
+    if (!signature)
+      throw new UnauthorizedException('Missing x-linea-signature header');
+    if (!timestamp)
+      throw new UnauthorizedException('Missing x-webhook-timestamp header');
+    if (!req.rawBody)
+      throw new UnauthorizedException(
+        'Raw body unavailable — cannot verify signature',
+      );
     return this.service.trigger(id, signature, timestamp, req.rawBody, body);
   }
 }

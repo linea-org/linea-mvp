@@ -1,0 +1,64 @@
+---
+title: HTTP Node
+description: Make HTTP requests to external REST APIs with configurable method, headers, authentication, and body.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# HTTP Node
+
+The `http` node sends an HTTP request to any external URL and returns the parsed response.
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `httpMethod` | `GET` \| `POST` \| `PUT` \| `PATCH` \| `DELETE` | `GET` | HTTP method |
+| `httpUrl` | string | — | Request URL (supports `{{}}` substitution) |
+| `httpHeaders` | array | `[]` | Array of `{ key, value }` pairs (values support `{{}}`) |
+| `httpAuthType` | `none` \| `bearer` \| `api-key` | `none` | Authentication type |
+| `httpAuthToken` | string | — | Token for `bearer` or `api-key` auth |
+| `httpBody` | string | — | Request body string (for POST/PUT/PATCH, supports `{{}}`) |
+
+## Authentication
+
+| `httpAuthType` | Header sent |
+|---|---|
+| `bearer` | `Authorization: Bearer <token>` |
+| `api-key` | `X-API-Key: <token>` |
+
+The `Content-Type: application/json` header is always included automatically.
+
+## Output
+
+```typescript
+{
+  status: number    // HTTP status code
+  data: unknown     // parsed JSON body, or raw string if not JSON
+  url: string       // effective request URL
+  method: string    // HTTP method used
+}
+```
+
+Response bodies are capped at **2 MB**. Larger responses are truncated with a `[response truncated at 2 MB]` suffix.
+
+Non-2xx responses throw an error, which marks the node as failed.
+
+<Callout type="warn">
+  SSRF protection is enforced. Requests to private IP ranges (10.x.x.x, 172.16.x.x–172.31.x.x, 192.168.x.x), loopback addresses, and link-local addresses are blocked.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "httpMethod": "POST",
+  "httpUrl": "https://api.example.com/webhooks/notify",
+  "httpAuthType": "bearer",
+  "httpAuthToken": "my-secret-token",
+  "httpHeaders": [
+    { "key": "X-Request-Id", "value": "{{input.requestId}}" }
+  ],
+  "httpBody": "{\"message\": \"{{lastOutput.summary}}\"}"
+}
+```

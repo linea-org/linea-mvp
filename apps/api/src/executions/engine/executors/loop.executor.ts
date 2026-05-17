@@ -7,9 +7,14 @@ export interface LoopNodeData {
   maxIterations?: number;
 }
 
-function resolveByPath(variables: Record<string, unknown>, path: string): unknown {
+function resolveByPath(
+  variables: Record<string, unknown>,
+  path: string,
+): unknown {
   const clean = path.trim().replace(/^\{\{(.+?)\}\}$/, '$1');
-  return clean.split('.').reduce((cur: unknown, k) => (cur as any)?.[k], variables);
+  return clean
+    .split('.')
+    .reduce((cur: unknown, k) => (cur as any)?.[k], variables);
 }
 
 export function executeLoopNode(
@@ -37,10 +42,18 @@ export function executeLoopNode(
         const sandbox: Record<string, unknown> = {
           item,
           result: undefined,
-          JSON, Math, Object, Array, String, Number, Boolean,
+          JSON,
+          Math,
+          Object,
+          Array,
+          String,
+          Number,
+          Boolean,
         };
         const ctx = createContext(sandbox);
-        const script = new Script(`result = (function() { return (${expr}); })()`);
+        const script = new Script(
+          `result = (function() { return (${expr}); })()`,
+        );
         script.runInContext(ctx, { timeout: 1000 });
         return sandbox['result'];
       } catch {

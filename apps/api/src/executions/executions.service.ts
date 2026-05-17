@@ -11,6 +11,7 @@ import { randomBytes } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { executions, executionLogs, workflows } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
+import { QuotasService } from '../quotas/quotas.service';
 import type { CreateExecutionDto } from './dto/create-execution.dto';
 import type { ListExecutionsDto } from './dto/list-executions.dto';
 import { EXECUTION_QUEUE } from './queue/execution.queue';
@@ -22,10 +23,23 @@ export class ExecutionsService {
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     @InjectQueue(EXECUTION_QUEUE)
     private readonly queue: Queue<ExecutionJobData>,
+    private readonly quotas: QuotasService,
   ) {}
 
-  async create(podId: string, workspaceId: string, _userId: string, dto: CreateExecutionDto) {
-    return this.createFromTrigger(podId, workspaceId, dto.workflowId, 'manual', dto.input ?? {});
+  async create(
+    podId: string,
+    workspaceId: string,
+    userId: string,
+    dto: CreateExecutionDto,
+  ) {
+    return this.createFromTrigger(
+      podId,
+      workspaceId,
+      dto.workflowId,
+      'manual',
+      dto.input ?? {},
+      userId,
+    );
   }
 
   async createFromTrigger(
@@ -34,6 +48,7 @@ export class ExecutionsService {
     workflowId: string,
     triggeredBy: 'manual' | 'schedule' | 'webhook' | 'sdk',
     input: Record<string, unknown> = {},
+    userId?: string,
   ) {
     const [wf] = await this.db
       .select({ id: workflows.id })
@@ -42,6 +57,8 @@ export class ExecutionsService {
       .limit(1);
 
     if (!wf) throw new NotFoundException(`Workflow ${workflowId} not found`);
+
+    await this.quotas.checkLimit(workspaceId);
 
     const threadId = `thread_${randomBytes(8).toString('hex')}`;
 
@@ -64,6 +81,7 @@ export class ExecutionsService {
       workspaceId,
       input,
       threadId,
+      userId,
     };
 
     await this.queue.add('run', jobData, {
@@ -78,8 +96,10 @@ export class ExecutionsService {
 
   async findAll(podId: string, query: ListExecutionsDto) {
     const conditions = [eq(executions.podId, podId)];
-    if (query.workflowId) conditions.push(eq(executions.workflowId, query.workflowId));
-    if (query.status) conditions.push(eq(executions.status, query.status as any));
+    if (query.workflowId)
+      conditions.push(eq(executions.workflowId, query.workflowId));
+    if (query.status)
+      conditions.push(eq(executions.status, query.status as any));
 
     const [{ total }] = await this.db
       .select({ total: count() })
@@ -135,7 +155,9 @@ export class ExecutionsService {
   ) {
     const execution = await this.findOne(podId, id);
     if (execution.status !== 'suspended') {
-      throw new BadRequestException(`Execution ${id} is not waiting for a response`);
+      throw new BadRequestException(
+        `Execution ${id} is not waiting for a response`,
+      );
     }
 
     const pendingInterrupt = (execution.variables as any)?.__pendingInterrupt;
@@ -176,7 +198,12 @@ export class ExecutionsService {
     return this.findOne(podId, id);
   }
 
-  async approve(podId: string, id: string, approved: boolean, comment?: string) {
+  async approve(
+    podId: string,
+    id: string,
+    approved: boolean,
+    comment?: string,
+  ) {
     return this.respond(podId, id, { approved, comment });
   }
 
@@ -184,7 +211,9 @@ export class ExecutionsService {
     const original = await this.findOne(podId, id);
 
     if (!original.workflowId) {
-      throw new BadRequestException('Cannot replay an execution with no workflow');
+      throw new BadRequestException(
+        'Cannot replay an execution with no workflow',
+      );
     }
     if (!['completed', 'failed', 'cancelled'].includes(original.status)) {
       throw new BadRequestException(
@@ -200,7 +229,10 @@ export class ExecutionsService {
     let preloadedState: ExecutionJobData['preloadedState'] | undefined;
 
     if (fromNodeId) {
-      const origNodeResults = (original.nodeResults ?? {}) as Record<string, any>;
+      const origNodeResults = (original.nodeResults ?? {}) as Record<
+        string,
+        any
+      >;
       const origVariables = (original.variables ?? {}) as Record<string, any>;
 
       // Load workflow definition to determine topology order
@@ -212,7 +244,10 @@ export class ExecutionsService {
 
       // Nodes that completed before fromNodeId (by wall-clock completedAt order)
       const completedBefore = Object.entries(origNodeResults)
-        .filter(([nodeId, r]: [string, any]) => nodeId !== fromNodeId && r?.status === 'completed')
+        .filter(
+          ([nodeId, r]: [string, any]) =>
+            nodeId !== fromNodeId && r?.status === 'completed',
+        )
         .reduce<Record<string, any>>((acc, [nodeId, r]) => {
           acc[nodeId] = { ...r, __preloaded: true };
           return acc;

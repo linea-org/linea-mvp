@@ -25,6 +25,7 @@ const SECTIONS: ShortcutSection[] = [
     rows: [
       { keys: [['⌘', 'K'], ['Ctrl', 'K']], description: 'Open command palette' },
       { keys: [['?']], description: 'Show keyboard shortcuts' },
+      { keys: [['Esc']], description: 'Close dialog / cancel' },
     ],
   },
   {
@@ -39,9 +40,20 @@ const SECTIONS: ShortcutSection[] = [
     ],
   },
   {
-    heading: 'General',
+    heading: 'Workflow builder',
     rows: [
-      { keys: [['Esc']], description: 'Close dialog / cancel' },
+      { keys: [['⌘', 'S'], ['Ctrl', 'S']], description: 'Save workflow' },
+      { keys: [['⌘', '↵'], ['Ctrl', '↵']], description: 'Run workflow' },
+      { keys: [['⌘', 'Z'], ['Ctrl', 'Z']], description: 'Undo' },
+      { keys: [['⌘', '⇧', 'Z'], ['Ctrl', 'Y']], description: 'Redo' },
+      { keys: [['⌘', 'G'], ['Ctrl', 'G']], description: 'Open AI Generate' },
+      { keys: [['⌘', 'L'], ['Ctrl', 'L']], description: 'Auto layout' },
+      { keys: [['⌘', "'"], ['Ctrl', "'"]], description: 'Toggle comments' },
+      { keys: [['F']], description: 'Fit canvas to view' },
+      { keys: [['G']], description: 'Pan / grab mode' },
+      { keys: [['V']], description: 'Select mode' },
+      { keys: [['A']], description: 'Auto layout' },
+      { keys: [['Del'], ['⌫']], description: 'Delete selected node' },
     ],
   },
 ];

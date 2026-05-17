@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { createApiClient } from '@/lib/api';
@@ -19,7 +20,34 @@ import {
   DialogFooter,
 } from '@linea/ui/components/dialog';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, Delete01Icon, Edit01Icon, Plug01Icon } from '@hugeicons/core-free-icons';
+import {
+  Add01Icon,
+  Delete01Icon,
+  Edit01Icon,
+  Plug01Icon,
+  CheckmarkCircle01Icon,
+  LinkSquare01Icon,
+} from '@hugeicons/core-free-icons';
+
+const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3000';
+
+interface OAuthConnection {
+  id: string;
+  provider: string;
+  providerEmail: string | null;
+  scope: string | null;
+  expiresAt: string | null;
+  expired: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const OAUTH_PROVIDERS = [
+  { id: 'google',  label: 'Google',  description: 'Gmail, Google Sheets, Drive' },
+  { id: 'slack',   label: 'Slack',   description: 'Send messages, read channels' },
+  { id: 'github',  label: 'GitHub',  description: 'Issues, PRs, repositories' },
+  { id: 'notion',  label: 'Notion',  description: 'Read and write Notion pages' },
+];
 
 interface McpServer {
   id: string;
@@ -49,6 +77,7 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
 export default function ConnectionsPage() {
   const { getToken } = useAuth();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const searchParams = useSearchParams();
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -56,6 +85,10 @@ export default function ConnectionsPage() {
   const [form, setForm] = useState<FormState>(BLANK);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+
+  const [oauthConnections, setOauthConnections] = useState<OAuthConnection[]>([]);
+  const [oauthLoading, setOauthLoading] = useState(true);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
   async function load() {
     if (!activeWorkspace) return;
@@ -71,11 +104,35 @@ export default function ConnectionsPage() {
     }
   }
 
+  async function loadOAuth() {
+    if (!activeWorkspace) return;
+    setOauthLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      const data = await api.get<OAuthConnection[]>(`/workspaces/${activeWorkspace.id}/oauth/connections`);
+      setOauthConnections(data);
+    } catch {
+      setOauthConnections([]);
+    } finally {
+      setOauthLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
+    if (!activeWorkspace) { setLoading(false); setOauthLoading(false); return; }
     void load();
+    void loadOAuth();
   }, [activeWorkspace, wsLoading]);
+
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    if (connected && activeWorkspace) {
+      void loadOAuth();
+    }
+  }, [searchParams]);
 
   function openCreate() {
     setEditTarget(null);
@@ -136,10 +193,29 @@ export default function ConnectionsPage() {
     }
   }
 
+  async function handleDisconnectOAuth(id: string) {
+    if (!activeWorkspace) return;
+    setDisconnecting(id);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await api.delete(`/workspaces/${activeWorkspace.id}/oauth/connections/${id}`);
+      setOauthConnections((prev) => prev.filter((c) => c.id !== id));
+    } finally {
+      setDisconnecting(null);
+    }
+  }
+
+  function handleConnectOAuth(provider: string) {
+    if (!activeWorkspace) return;
+    window.location.href = `${API_URL}/oauth/${provider}/connect?workspaceId=${activeWorkspace.id}`;
+  }
+
   const needsToken = form.authType !== 'none';
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold">MCP Connections</h2>
@@ -206,6 +282,76 @@ export default function ConnectionsPage() {
           ))}
         </div>
       )}
+
+      <Separator />
+
+      {/* OAuth Connected Apps */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">Connected Apps</h2>
+          <p className="text-sm text-muted-foreground">
+            OAuth integrations for use in Slack, GitHub, Gmail, and Notion workflow nodes.
+          </p>
+        </div>
+
+        {searchParams.get('connected') && (
+          <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 dark:bg-green-950/30 dark:border-green-900">
+            <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-4 text-green-600 shrink-0" />
+            <p className="text-sm text-green-700 dark:text-green-400">
+              <strong className="capitalize">{searchParams.get('connected')}</strong> connected successfully.
+            </p>
+          </div>
+        )}
+
+        {oauthLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {OAUTH_PROVIDERS.map((provider) => {
+              const conn = oauthConnections.find((c) => c.provider === provider.id);
+              return (
+                <div key={provider.id} className="flex items-center gap-4 rounded-lg border p-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm">{provider.label}</p>
+                      {conn && !conn.expired && (
+                        <Badge variant="default" className="text-[10px]">connected</Badge>
+                      )}
+                      {conn?.expired && (
+                        <Badge variant="destructive" className="text-[10px]">expired</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {conn?.providerEmail ?? provider.description}
+                    </p>
+                  </div>
+                  {conn ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={disconnecting === conn.id}
+                      onClick={() => void handleDisconnectOAuth(conn.id)}
+                    >
+                      <HugeiconsIcon icon={Delete01Icon} className="mr-1.5 size-3.5" />
+                      {disconnecting === conn.id ? 'Disconnecting…' : 'Disconnect'}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => handleConnectOAuth(provider.id)}
+                    >
+                      <HugeiconsIcon icon={LinkSquare01Icon} className="mr-1.5 size-3.5" />
+                      Connect
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

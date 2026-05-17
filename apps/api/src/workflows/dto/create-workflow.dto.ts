@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsBoolean,
   IsObject,
+  IsNumber,
   MinLength,
   MaxLength,
   ValidateNested,
@@ -21,12 +22,29 @@ class WorkflowNodeDto {
   @IsObject()
   position: { x: number; y: number };
 
+  @IsOptional()
   @IsObject()
-  config: Record<string, unknown>;
+  data?: Record<string, unknown>;
 
   @IsOptional()
   @IsString()
   label?: string;
+
+  @IsOptional()
+  @IsObject()
+  style?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  parentId?: string;
+
+  @IsOptional()
+  @IsString()
+  extent?: string;
+
+  @IsOptional()
+  @IsNumber()
+  zIndex?: number;
 }
 
 class WorkflowEdgeDto {
@@ -46,6 +64,10 @@ class WorkflowEdgeDto {
   @IsOptional()
   @IsString()
   targetHandle?: string;
+
+  @IsOptional()
+  @IsString()
+  label?: string;
 }
 
 class WorkflowSettingsDto {

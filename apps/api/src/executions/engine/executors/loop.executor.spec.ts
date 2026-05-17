@@ -73,7 +73,10 @@ describe('executeLoopNode', () => {
   });
 
   it('wraps a non-array scalar in a one-element array', () => {
-    const result = executeLoopNode({ arrayPath: 'single' }, state({ single: 'hello' }));
+    const result = executeLoopNode(
+      { arrayPath: 'single' },
+      state({ single: 'hello' }),
+    );
     expect(result.results).toEqual(['hello']);
   });
 

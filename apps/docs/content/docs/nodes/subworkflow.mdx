@@ -1,0 +1,46 @@
+---
+title: Subworkflow Node
+description: Invoke another workflow synchronously and use its output as the node result.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Subworkflow Node
+
+The `subworkflow` node calls another workflow in the same workspace synchronously, waits for it to complete, and returns its `lastOutput` as the node's output.
+
+## Configuration Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `workflowId` | string | ID of the workflow to invoke |
+
+## Behavior
+
+The current workflow's `variables` are passed as the `input` to the subworkflow. The subworkflow runs to completion (or failure) before the parent workflow continues.
+
+The subworkflow's `lastOutput` is returned as this node's output and becomes `lastOutput` in the parent workflow.
+
+<Callout type="warn">
+  Recursive or mutually-recursive workflow calls are not detected at build time. They will exhaust the execution stack or time out. Avoid cycles in your workflow graph.
+</Callout>
+
+## Output
+
+The subworkflow's final `output` (its `lastOutput` at the `end` node). The exact shape depends on the subworkflow's logic.
+
+## Use Cases
+
+- **Modular composition**: break large workflows into reusable sub-workflows
+- **Conditional delegation**: route to specialized sub-workflows based on if-else/router logic
+- **Batch processing**: call a processing sub-workflow once per item inside a loop
+
+## Example Config
+
+```json
+{
+  "workflowId": "wf_summarizer_abc123"
+}
+```
+
+The parent workflow's variables are passed as input. In the subworkflow, `{{input.text}}` refers to whatever `variables.text` was in the parent at the time of the call.
