@@ -177,6 +177,22 @@ export class WorkflowsController {
     return this.service.getVersion(podId, id, version);
   }
 
+  @Post(':id/versions/:version/restore')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Restore workflow to a previous version' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  @ApiParam({ name: 'version', type: Number })
+  restoreVersion(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @Param('version', ParseIntPipe) version: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.service.restoreVersion(podId, id, version, user.id);
+  }
+
   @Patch(':id/star')
   @RequireRole('editor')
   @ApiOperation({ summary: 'Star or unstar a workflow (editor+)' })

@@ -342,6 +342,31 @@ export class WorkflowsService {
     return ver;
   }
 
+  async restoreVersion(podId: string, workflowId: string, version: number, userId: string) {
+    const ver = await this.getVersion(podId, workflowId, version);
+    const existing = await this.findOne(podId, workflowId);
+
+    // Snapshot the current state before overwriting
+    await this.db.insert(workflowVersions).values({
+      workflowId,
+      version: existing.version,
+      definition: existing.definition,
+      createdBy: userId,
+    });
+
+    const [updated] = await this.db
+      .update(workflows)
+      .set({
+        definition: ver.definition as NewWorkflow['definition'],
+        version: existing.version + 1,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(workflows.id, workflowId), eq(workflows.podId, podId)))
+      .returning();
+
+    return updated;
+  }
+
   async createFromTemplate(podId: string, userId: string, templateId: string) {
     const [template] = await this.db
       .select()

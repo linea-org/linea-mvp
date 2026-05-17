@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 
 export const APP_REDIS = 'APP_REDIS';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { LoggerModule } from 'nestjs-pino';
 import { ConfigModule } from './config/config.module';
 import { ConfigService } from '@nestjs/config';
@@ -44,20 +45,20 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
 @Module({
   imports: [
     ConfigModule,
-    ThrottlerModule.forRoot([
-      {
-        // General API — 300 requests per minute per workspace (or IP)
-        name: 'default',
-        ttl: 60_000,
-        limit: 300,
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL');
+        const redis = redisUrl ? new Redis(redisUrl) : new Redis({ host: 'localhost', port: 6379 });
+        return {
+          throttlers: [
+            { name: 'default', ttl: 60_000, limit: 300 },
+            { name: 'execution', ttl: 60_000, limit: 60 },
+          ],
+          storage: new ThrottlerStorageRedisService(redis),
+        };
       },
-      {
-        // Execution triggers — 60 per minute per workspace
-        name: 'execution',
-        ttl: 60_000,
-        limit: 60,
-      },
-    ]),
+    }),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:

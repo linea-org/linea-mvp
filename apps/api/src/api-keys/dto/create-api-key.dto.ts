@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsIn } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateApiKeyDto {
@@ -6,4 +6,12 @@ export class CreateApiKeyDto {
   @IsString()
   @IsOptional()
   label?: string;
+
+  @ApiPropertyOptional({
+    description: 'Expiry duration: 30d, 90d, 365d, or never (default: never)',
+    enum: ['30d', '90d', '365d', 'never'],
+  })
+  @IsIn(['30d', '90d', '365d', 'never'])
+  @IsOptional()
+  expiresIn?: '30d' | '90d' | '365d' | 'never';
 }

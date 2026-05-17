@@ -63,6 +63,8 @@ export const lineaApiKeys = pgTable('linea_api_keys', {
   keyHash: text('key_hash').unique().notNull(),
   label: text('label'),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

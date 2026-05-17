@@ -77,13 +77,17 @@ export class UsersService {
     const keyHash = createHash('sha256').update(rawKey).digest('hex');
 
     const [row] = await this.db
-      .select({ user: users })
+      .select({ user: users, key: lineaApiKeys })
       .from(lineaApiKeys)
       .innerJoin(users, eq(lineaApiKeys.userId, users.id))
       .where(eq(lineaApiKeys.keyHash, keyHash))
       .limit(1);
 
     if (!row) return null;
+
+    const { key } = row;
+    if (key.revokedAt) return null;
+    if (key.expiresAt && key.expiresAt < new Date()) return null;
 
     this.db
       .update(lineaApiKeys)

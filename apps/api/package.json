@@ -30,6 +30,7 @@
     "@langchain/langgraph-checkpoint-postgres": "0.0.5",
     "@linea/db": "workspace:*",
     "@linea/types": "workspace:*",
+    "@nest-lab/throttler-storage-redis": "^1.2.0",
     "@nestjs/bullmq": "^11.0.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.0",

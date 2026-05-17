@@ -1,4 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ExecutionsService } from './executions.service';
@@ -6,6 +8,7 @@ import { ExecutionsController } from './executions.controller';
 import { NodesController } from './nodes.controller';
 import { ExecutionEventsService } from './execution-events.service';
 import { ExecutionProcessor } from './queue/execution.processor';
+import { CheckpointCleanupProcessor, CLEANUP_QUEUE } from './queue/checkpoint-cleanup.processor';
 import { LangGraphService } from './engine/langgraph.service';
 import { NodeExecutorService } from './engine/node-executor.service';
 import { ExecutionSupervisor } from './engine/supervisor';
@@ -35,11 +38,13 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
       inject: [ConfigService],
     }),
     BullModule.registerQueue({ name: EXECUTION_QUEUE }),
+    BullModule.registerQueue({ name: CLEANUP_QUEUE }),
   ],
   providers: [
     ExecutionsService,
     ExecutionEventsService,
     ExecutionProcessor,
+    CheckpointCleanupProcessor,
     LangGraphService,
     NodeExecutorService,
     ExecutionSupervisor,
@@ -49,4 +54,17 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
   controllers: [ExecutionsController, NodesController],
   exports: [ExecutionsService, NodeExecutorService],
 })
-export class ExecutionsModule {}
+export class ExecutionsModule implements OnModuleInit {
+  constructor(
+    @InjectQueue(CLEANUP_QUEUE) private readonly cleanupQueue: Queue,
+  ) {}
+
+  async onModuleInit() {
+    // Schedule daily checkpoint cleanup; upsertJobScheduler is idempotent
+    await this.cleanupQueue.upsertJobScheduler(
+      'daily-checkpoint-cleanup',
+      { every: 24 * 60 * 60 * 1000 },
+      { name: 'checkpoint-cleanup' },
+    );
+  }
+}
