@@ -1,14 +1,13 @@
 import {
   Controller, Get, Post, Body, Param, Headers,
-  UseGuards, HttpCode, RawBodyRequest, Req,
+  UseGuards, HttpCode,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { BillingService } from './billing.service';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { RoleGuard } from '../common/guards/role.guard';
-import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
+import { Public } from '../common/decorators/public.decorator';
 
 class CreateOrderDto {
   plan!: string;
@@ -27,6 +26,7 @@ export class BillingController {
   constructor(private readonly service: BillingService) {}
 
   @Get('plans')
+  @Public()
   @ApiOperation({ summary: 'Get available plans and Razorpay key' })
   @ApiParam({ name: 'workspaceId' })
   getPlans(@Param('workspaceId') workspaceId: string) {
@@ -35,7 +35,7 @@ export class BillingController {
 
   @Post('order')
   @ApiBearerAuth()
-  @UseGuards(ClerkAuthGuard, WorkspaceGuard, RoleGuard)
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @RequireRole('admin')
   @ApiOperation({ summary: 'Create a Razorpay order for plan upgrade' })
   @ApiParam({ name: 'workspaceId' })
@@ -45,7 +45,7 @@ export class BillingController {
 
   @Post('verify')
   @ApiBearerAuth()
-  @UseGuards(ClerkAuthGuard, WorkspaceGuard, RoleGuard)
+  @UseGuards(WorkspaceGuard, RoleGuard)
   @RequireRole('admin')
   @HttpCode(200)
   @ApiOperation({ summary: 'Verify payment and upgrade plan' })
@@ -64,6 +64,7 @@ export class BillingController {
   }
 
   @Post('webhook')
+  @Public()
   @HttpCode(200)
   @ApiOperation({ summary: 'Razorpay webhook handler' })
   @ApiParam({ name: 'workspaceId' })

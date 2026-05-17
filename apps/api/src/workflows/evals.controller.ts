@@ -4,7 +4,6 @@ import { EvalsService, type TestCase } from './evals.service';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
-import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
 
 class RunEvalsDto {
@@ -13,7 +12,7 @@ class RunEvalsDto {
 
 @ApiTags('Evals')
 @ApiBearerAuth()
-@UseGuards(ClerkAuthGuard, WorkspaceGuard, PodGuard, RoleGuard)
+@UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/pods/:podId/workflows/:workflowId/evals')
 export class EvalsController {
   constructor(private readonly service: EvalsService) {}

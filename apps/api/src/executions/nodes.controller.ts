@@ -4,7 +4,6 @@ import { NodeExecutorService } from './engine/node-executor.service';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
-import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
 
 class TestNodeDto {
@@ -15,7 +14,7 @@ class TestNodeDto {
 
 @ApiTags('Nodes')
 @ApiBearerAuth()
-@UseGuards(ClerkAuthGuard, WorkspaceGuard, PodGuard, RoleGuard)
+@UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/pods/:podId/nodes')
 export class NodesController {
   constructor(private readonly nodeExecutor: NodeExecutorService) {}
