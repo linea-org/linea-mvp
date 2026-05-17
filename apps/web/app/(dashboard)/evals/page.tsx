@@ -115,8 +115,8 @@ export default function EvalsPage() {
             <HugeiconsIcon icon={TestTube01Icon} className="size-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold">Testing</h1>
-            <p className="text-sm text-muted-foreground">Run test suites against your workflows</p>
+            <h1 className="text-lg font-semibold">Evals</h1>
+            <p className="text-sm text-muted-foreground">Measure and track workflow performance over time</p>
           </div>
         </div>
       </div>
@@ -157,7 +157,7 @@ export default function EvalsPage() {
                   {!selectedPodId
                     ? 'Select a pod first'
                     : (workflows?.length ?? 0) === 0
-                    ? 'No workflows with test cases'
+                    ? 'No workflows with eval cases'
                     : 'Select a workflow…'}
                 </NativeSelectOption>
                 {workflows?.map((w) => (
@@ -177,7 +177,7 @@ export default function EvalsPage() {
               icon={running ? Loading01Icon : PlayIcon}
               className={running ? 'animate-spin' : ''}
             />
-            {running ? 'Running…' : 'Run all tests'}
+            {running ? 'Running…' : 'Run evals'}
           </Button>
         </div>
 
@@ -185,21 +185,21 @@ export default function EvalsPage() {
         {selectedPodId && !wfLoading && (workflows?.length ?? 0) === 0 && (
           <div className="rounded-lg border border-dashed border-border p-8 text-center">
             <HugeiconsIcon icon={TestTube01Icon} className="mx-auto size-8 text-muted-foreground/30 mb-3" />
-            <p className="text-sm font-medium">No test cases yet</p>
+            <p className="text-sm font-medium">No eval cases yet</p>
             <p className="text-xs text-muted-foreground mt-1">
               Open any workflow in the builder and use the
               <HugeiconsIcon icon={TestTube01Icon} className="inline size-3.5 mx-1" />
-              Testing panel in the toolbar to define test cases.
+              Evals panel in the toolbar to define eval cases.
             </p>
           </div>
         )}
 
-        {/* Test case list */}
+        {/* Eval case list */}
         {selectedWfId && testCases.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">
-                Test cases
+                Eval cases
                 <span className="ml-2 text-muted-foreground font-normal">({testCases.length})</span>
               </h2>
               {results && (

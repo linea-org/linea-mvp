@@ -268,7 +268,7 @@ function DashboardSidebar() {
     { href: '/tasks',      label: 'Linea Agent', icon: AiMagicIcon,    disabled: false, dataTour: 'nav-ai-tasks' },
     { href: '/knowledge',  label: 'Knowledge',  icon: Database01Icon,  disabled: false, dataTour: 'nav-knowledge' },
     { href: '/templates',  label: 'Templates',  icon: GridViewIcon,    disabled: false, dataTour: 'nav-templates' },
-    { href: '/evals',      label: 'Testing',    icon: TestTube01Icon,  disabled: false, dataTour: undefined },
+    { href: '/evals',      label: 'Evals',      icon: TestTube01Icon,  disabled: false, dataTour: undefined },
     { href: '/metrics',    label: 'Metrics',    icon: Analytics02Icon, disabled: false, dataTour: undefined },
     { href: '/usage',      label: 'Usage',      icon: Invoice03Icon,   disabled: false, dataTour: undefined },
     { href: '/audit',      label: 'Audit',      icon: BookOpen01Icon,  disabled: false, dataTour: undefined },

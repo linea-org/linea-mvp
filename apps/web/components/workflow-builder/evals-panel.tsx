@@ -65,7 +65,7 @@ interface EvalsPanelProps {
 function newCase(): TestCase {
   return {
     id: Math.random().toString(36).slice(2, 9),
-    name: 'Test case',
+    name: 'Eval case',
     input: '{}',
     assertions: [{ path: '', operator: 'exists', expected: '' }],
   };
@@ -181,7 +181,7 @@ export function EvalsPanel({
       <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <HugeiconsIcon icon={TestTube01Icon} className="size-4 text-amber-500" />
-          <span className="text-sm font-semibold">Test Suite</span>
+          <span className="text-sm font-semibold">Evals</span>
         </div>
         <div className="flex items-center gap-1.5">
           <Button size="xs" variant="ghost" onClick={addCase} disabled={running}>
@@ -208,7 +208,7 @@ export function EvalsPanel({
       {/* Summary bar */}
       {results && (
         <div className={`shrink-0 px-4 py-2 text-xs font-medium border-b border-border ${passCount === totalCount ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400'}`}>
-          {passCount}/{totalCount} test cases passed
+          {passCount}/{totalCount} eval cases passed
         </div>
       )}
 
@@ -223,10 +223,10 @@ export function EvalsPanel({
         {testCases.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2">
             <HugeiconsIcon icon={TestTube01Icon} className="size-8 text-muted-foreground/30" />
-            <p className="text-xs text-muted-foreground">No test cases yet.</p>
+            <p className="text-xs text-muted-foreground">No eval cases yet.</p>
             <Button size="xs" variant="outline" onClick={addCase}>
               <HugeiconsIcon icon={Add01Icon} />
-              Add your first test case
+              Add your first eval case
             </Button>
           </div>
         ) : (
@@ -262,7 +262,7 @@ export function EvalsPanel({
                       {/* Name + delete */}
                       <div className="flex items-center gap-2">
                         <div className="flex-1 space-y-1">
-                          <Label className="text-[10px]">Case name</Label>
+                          <Label className="text-[10px]">Eval name</Label>
                           <Input
                             value={tc.name}
                             onChange={(e) => updateCase(tc.id, { name: e.target.value })}
@@ -403,7 +403,7 @@ export function EvalsPanel({
       {testCases.length > 0 && !running && (
         <div className="shrink-0 border-t border-border px-4 py-2">
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Test cases are saved in the workflow definition. Save the workflow to persist them.
+            Eval cases are saved with the workflow. Save the workflow to persist them.
           </p>
         </div>
       )}

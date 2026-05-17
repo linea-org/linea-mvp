@@ -399,8 +399,8 @@ export function Toolbar({
           />
           <TBtn
             icon={TestTube01Icon}
-            label="Test suite"
-            description="Define and run test cases against this workflow"
+            label="Evals"
+            description="Define and run evals against this workflow"
             onClick={onEvals}
             active={evalsOpen}
           />
