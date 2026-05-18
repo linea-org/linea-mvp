@@ -351,19 +351,36 @@ export class MemoryService {
 
   // ─── Long-term memory (vector-backed, cross-execution) ───────────────────
 
+  /**
+   * Generate a 1536-d embedding using the given model and API key.
+   * Returns null when the model/key is unavailable — callers fall back to text search.
+   * Non-OpenAI models (Google/Ollama) output wrong dimensions for our schema and also return null.
+   */
   async generateEmbedding(
     text: string,
-    openaiKey: string | undefined,
+    apiKey: string | undefined,
+    modelId = 'text-embedding-3-small',
   ): Promise<number[] | null> {
-    if (!openaiKey) return null;
+    // Google and Ollama models output 768/1024d which doesn't match the 1536d pgvector column
+    if (modelId === 'text-embedding-004' || modelId === 'nomic-embed-text' || modelId === 'mxbai-embed-large') {
+      this.logger.warn(
+        `Embedding model ${modelId} outputs dimensions incompatible with 1536d pgvector column — falling back to text search`,
+      );
+      return null;
+    }
+    if (!apiKey) return null;
     try {
+      const supportsReduction = modelId === 'text-embedding-3-small' || modelId === 'text-embedding-3-large';
+      const body: Record<string, unknown> = { model: modelId, input: text };
+      if (supportsReduction) body['dimensions'] = 1536;
+
       const resp = await fetch('https://api.openai.com/v1/embeddings', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${openaiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ model: 'text-embedding-3-small', input: text }),
+        body: JSON.stringify(body),
       });
       const json = (await resp.json()) as {
         data?: [{ embedding: number[] }];
@@ -392,7 +409,7 @@ export class MemoryService {
   ): Promise<void> {
     try {
       const content = `${key}: ${value}`;
-      const embedding = await this.generateEmbedding(content, openaiKey);
+      const embedding = await this.generateEmbedding(content, openaiKey, 'text-embedding-3-small');
 
       // Upsert: delete existing entry for this key+scope, then insert fresh
       await this.db
@@ -429,7 +446,7 @@ export class MemoryService {
     openaiKey: string | undefined,
   ): Promise<Array<{ key: string; value: unknown; score: number }>> {
     try {
-      const queryEmbedding = await this.generateEmbedding(query, openaiKey);
+      const queryEmbedding = await this.generateEmbedding(query, openaiKey, 'text-embedding-3-small');
 
       if (queryEmbedding) {
         // Vector similarity search using pgvector <=> (cosine distance)

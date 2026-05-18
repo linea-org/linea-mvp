@@ -1,9 +1,10 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { isGraphInterrupt } from '@langchain/langgraph';
-import { ilike, and, eq } from 'drizzle-orm';
+import { isGraphInterrupt, interrupt } from '@langchain/langgraph';
+import { ilike, and, eq, sql } from 'drizzle-orm';
 import type { WorkflowState } from './variable-substitution';
 import { substituteInValue } from './variable-substitution';
+import { MODEL_REGISTRY } from './models/registry';
 import { executeAgentNode } from './executors/agent.executor';
 import type { LongTermMemoryContext } from './executors/agent.executor';
 import { executeHTTPNode } from './executors/http.executor';
@@ -298,14 +299,26 @@ export class NodeExecutorService {
         return { result: r, isAgentOutput: false };
       }
 
-      case 'approval':
+      case 'approval': {
+        // Suspend execution; when resumed the interrupt() call returns the resume value
+        const resumeValue = interrupt({
+          type: 'approval',
+          nodeId,
+          message: nodeData.approvalMessage || nodeData.instructions || 'Approval required',
+        });
+        // resumeValue is { approved: boolean } from ApproveExecutionDto
+        const approved = typeof resumeValue === 'object' && resumeValue !== null
+          ? Boolean((resumeValue as Record<string, unknown>).approved)
+          : true;
         return {
           result: {
-            __pendingApproval: true,
-            message: nodeData.instructions || 'Approval required',
+            __approvalDecision: approved ? 'approved' : 'rejected',
+            approved,
+            message: nodeData.approvalMessage || 'Approval required',
           },
           isAgentOutput: false,
         };
+      }
 
       case 'note':
         return { result: { skipped: true }, isAgentOutput: false };
@@ -350,22 +363,44 @@ export class NodeExecutorService {
       }
 
       case 'retriever': {
+        const embModelId = (nodeData.embeddingModel as string | undefined) ?? 'text-embedding-3-small';
+        const modelDef = MODEL_REGISTRY[embModelId];
+        const provider = modelDef?.provider ?? 'openai';
+
+        // Load workspace API key for the selected embedding model's provider
+        const embApiKey = provider !== 'ollama'
+          ? await this.memoryService.loadApiKey(workspaceId, provider)
+          : undefined;
+
+        // Generate query embedding using the selected model
+        const rawQuery = (nodeData.query as string | undefined) ?? String(state.variables['lastOutput'] ?? '');
+        const resolvedQuery = substituteInValue(rawQuery, state) as string;
+        const queryEmbedding = await this.memoryService.generateEmbedding(resolvedQuery, embApiKey, embModelId);
+
         const r = await executeRetrieverNode(nodeData, state, {
           query: async (q, kbId, topK) => {
-            const rows = await this.db
-              .select({
-                content: knowledgeEntries.content,
-                metadata: knowledgeEntries.metadata,
-              })
+            if (queryEmbedding) {
+              try {
+                const embLiteral = `[${queryEmbedding.join(',')}]`;
+                const rows = await this.db.execute(sql`
+                  SELECT content, metadata
+                  FROM knowledge_entries
+                  WHERE knowledge_base_id = ${kbId} AND embedding IS NOT NULL
+                  ORDER BY embedding <=> ${embLiteral}::vector
+                  LIMIT ${topK}
+                `);
+                const results = Array.from(rows) as Array<{ content: string; metadata: unknown }>;
+                if (results.length > 0) return results;
+              } catch {
+                /* pgvector unavailable — fall through to text search */
+              }
+            }
+            // Text search fallback
+            return this.db
+              .select({ content: knowledgeEntries.content, metadata: knowledgeEntries.metadata })
               .from(knowledgeEntries)
-              .where(
-                and(
-                  eq(knowledgeEntries.knowledgeBaseId, kbId),
-                  ilike(knowledgeEntries.content, `%${q}%`),
-                ),
-              )
+              .where(and(eq(knowledgeEntries.knowledgeBaseId, kbId), ilike(knowledgeEntries.content, `%${q}%`)))
               .limit(topK);
-            return rows;
           },
         });
         return { result: r, isAgentOutput: false };

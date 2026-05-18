@@ -60,11 +60,14 @@ function fmt(v: unknown, max = 26): string {
 function getNodeProperties(nodeType: string, data: Record<string, unknown>): Array<{ key: string; value: string }> {
   const rows: Array<{ key: string; value: string } | null> = [];
   switch (nodeType) {
-    case 'agent':
-      rows.push(data.model          ? { key: 'model',  value: fmt(data.model)          } : null);
-      rows.push(data.temperature !== undefined ? { key: 'temp', value: String(data.temperature) } : null);
-      rows.push(data.systemPrompt   ? { key: 'system', value: fmt(data.systemPrompt)   } : null);
+    case 'agent': {
+      rows.push(data.model ? { key: 'model', value: fmt(data.model) } : null);
+      const instr = (data.instructions as string) || (data.systemPrompt as string);
+      rows.push(instr ? { key: 'prompt', value: fmt(instr, 22) } : null);
+      const toolCount = Array.isArray(data.tools) ? (data.tools as unknown[]).length : 0;
+      rows.push(toolCount > 0 ? { key: 'tools', value: String(toolCount) } : null);
       break;
+    }
     case 'http':
       rows.push(data.method   ? { key: 'method', value: fmt(data.method)   } : null);
       rows.push(data.url      ? { key: 'url',    value: fmt(data.url, 22)  } : null);
@@ -105,8 +108,12 @@ function getNodeProperties(nodeType: string, data: Record<string, unknown>): Arr
       rows.push(data.iterations ? { key: 'max',  value: String(data.iterations) } : null);
       rows.push(data.source     ? { key: 'over', value: fmt(data.source, 20)    } : null);
       break;
-    case 'evaluator':   rows.push(data.metric     ? { key: 'metric', value: fmt(data.metric)     } : null); break;
-    case 'retriever':   rows.push(data.collection ? { key: 'index',  value: fmt(data.collection) } : null); break;
+    case 'evaluator':   rows.push(data.model      ? { key: 'model', value: fmt(data.model)       } : null); break;
+    case 'retriever': {
+      rows.push(data.knowledgeBaseId ? { key: 'kb', value: fmt(data.knowledgeBaseId, 12) } : null);
+      rows.push(data.embeddingModel  ? { key: 'embed', value: fmt(data.embeddingModel, 20) } : null);
+      break;
+    }
     case 'extract':     rows.push(data.prompt     ? { key: 'prompt', value: fmt(data.prompt)     } : null); break;
     case 'approval':    rows.push(data.message    ? { key: 'prompt', value: fmt(data.message)    } : null); break;
     case 'guardrails': {
@@ -254,23 +261,26 @@ function NodeShell({
         </button>
       </div>
 
-      {/* Inline property rows */}
+      {/* Inline property chips */}
       {properties.length > 0 && (
-        <div className="border-t border-border/50 mx-2.5 pt-1.5 pb-1">
+        <div className="flex flex-wrap gap-1 px-2.5 pb-2">
           {properties.map(({ key, value }) => (
-            <div key={key} className="flex items-baseline justify-between gap-2 py-0.5">
-              <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/70 shrink-0">{key}</span>
-              <span className="text-[10px] text-foreground/80 truncate text-right font-mono" title={value}>{value}</span>
-            </div>
+            <span
+              key={key}
+              title={`${key}: ${value}`}
+              className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 max-w-full"
+            >
+              <span className="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground/60 shrink-0">{key}</span>
+              <span className="text-[9px] text-foreground/75 truncate font-mono">{value}</span>
+            </span>
           ))}
         </div>
       )}
 
       {/* Output preview strip */}
       {outputPreview && (
-        <div className="border-t border-border/50 mx-2.5 pt-1 pb-1.5">
-          <p className="text-[9px] font-semibold uppercase tracking-widest text-green-600/70 mb-0.5">output</p>
-          <p className="text-[10px] font-mono text-foreground/60 truncate" title={outputPreview}>{outputPreview}</p>
+        <div className="border-t border-border/40 mx-2.5 pt-1 pb-1.5">
+          <p className="text-[9px] font-mono text-foreground/50 truncate" title={outputPreview}>{outputPreview}</p>
         </div>
       )}
 
@@ -286,6 +296,7 @@ export const CustomNode = memo(function CustomNode({ id, data, selected }: NodeP
   const { setNodes } = useReactFlow();
 
   const nodeType     = (data.nodeType      as string)  ?? 'agent';
+  const isApproval = nodeType === 'approval';
   const label        = (data.nodeName      as string)  ?? (data.label as string) ?? nodeType;
   const status       = data.status         as string | undefined;
   const posLocked    = (data.positionLocked as boolean) ?? false;
@@ -322,23 +333,21 @@ export const CustomNode = memo(function CustomNode({ id, data, selected }: NodeP
       {/* Input */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
 
-      {isIfElse ? (
+      {isIfElse || isApproval ? (
         <>
           {portsVertical ? (
-            /* vertical: true=bottom-left, false=bottom-right */
             <>
-              <Handle type="source" position={Position.Bottom} id="true"  style={{ left: '30%' }} className={TRUE_CLS} />
-              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-10" style={{ left: 'calc(30% - 10px)' }}>{trueLabel}</span>
-              <Handle type="source" position={Position.Bottom} id="false" style={{ left: '70%' }} className={FALSE_CLS} />
-              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-10" style={{ left: 'calc(70% - 10px)' }}>{falseLabel}</span>
+              <Handle type="source" position={Position.Bottom} id={isApproval ? 'approved' : 'true'}  style={{ left: '30%' }} className={TRUE_CLS} />
+              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-12" style={{ left: 'calc(30% - 14px)' }}>{isApproval ? 'approved' : trueLabel}</span>
+              <Handle type="source" position={Position.Bottom} id={isApproval ? 'rejected' : 'false'} style={{ left: '70%' }} className={FALSE_CLS} />
+              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-12" style={{ left: 'calc(70% - 14px)' }}>{isApproval ? 'rejected' : falseLabel}</span>
             </>
           ) : (
-            /* horizontal: true=right-top, false=right-bottom */
             <>
-              <Handle type="source" position={Position.Right} id="true"  style={{ top: '35%' }} className={TRUE_CLS} />
-              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-16" style={{ top: 'calc(35% - 6px)' }}>{trueLabel}</span>
-              <Handle type="source" position={Position.Right} id="false" style={{ top: '65%' }} className={FALSE_CLS} />
-              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-16" style={{ top: 'calc(65% - 6px)' }}>{falseLabel}</span>
+              <Handle type="source" position={Position.Right} id={isApproval ? 'approved' : 'true'}  style={{ top: '35%' }} className={TRUE_CLS} />
+              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-16" style={{ top: 'calc(35% - 6px)' }}>{isApproval ? 'approved' : trueLabel}</span>
+              <Handle type="source" position={Position.Right} id={isApproval ? 'rejected' : 'false'} style={{ top: '65%' }} className={FALSE_CLS} />
+              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-16" style={{ top: 'calc(65% - 6px)' }}>{isApproval ? 'rejected' : falseLabel}</span>
             </>
           )}
         </>
@@ -432,7 +441,7 @@ export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) 
 const FRAME_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
 export const FrameNode = memo(function FrameNode({ id, data, selected }: NodeProps) {
-  const { setNodes } = useReactFlow();
+  const { setNodes, setEdges } = useReactFlow();
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelValue, setLabelValue] = useState((data.frameName as string) ?? 'Group');
   const labelInputRef = useRef<HTMLInputElement>(null);
@@ -444,8 +453,11 @@ export const FrameNode = memo(function FrameNode({ id, data, selected }: NodePro
   useEffect(() => { if (editingLabel) labelInputRef.current?.focus(); }, [editingLabel]);
 
   function toggleCollapse() {
+    const nowCollapsed = !collapsed;
+    let childIds: Set<string> = new Set();
+
     setNodes((nds) => {
-      const nowCollapsed = !collapsed;
+      childIds = new Set(nds.filter((n) => n.parentId === id).map((n) => n.id));
       return nds.map((n) => {
         if (n.id === id) {
           const currentH = typeof n.style?.height === 'number' ? n.style.height : 220;
@@ -468,6 +480,15 @@ export const FrameNode = memo(function FrameNode({ id, data, selected }: NodePro
         return n;
       });
     });
+
+    // Hide/show edges connected to child nodes so they don't orphan on the canvas
+    setEdges((eds) =>
+      eds.map((e) =>
+        childIds.has(e.source) || childIds.has(e.target)
+          ? { ...e, hidden: nowCollapsed }
+          : e,
+      ),
+    );
   }
 
   function commitLabel() {

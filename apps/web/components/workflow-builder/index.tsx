@@ -72,12 +72,14 @@ interface WorkflowBuilderProps {
   workflowId: string; podId: string; workspaceId: string;
 }
 
-type EvalOperator = 'equals' | 'contains' | 'exists' | 'not_exists' | 'gt' | 'lt';
+type EvalOperator = 'equals' | 'contains' | 'exists' | 'not_exists' | 'gt' | 'lt' | 'llm_judge' | 'tool_called' | 'tool_not_called' | 'semantic_match';
 interface EvalTestCase {
   id: string;
   name: string;
   input: string;
-  assertions: { path: string; operator: EvalOperator; expected: string }[];
+  assertions: { source?: string; path: string; operator: EvalOperator; expected: string; rubric?: string; reference?: string; threshold?: string }[];
+  trials?: number;
+  scriptedResponses?: { type: 'answer' | 'approve' | 'deny'; value: string }[];
 }
 
 interface SSEEvent {
@@ -111,6 +113,20 @@ const NODE_COLORS: Record<string, string> = {
   slack: '#4a154b', github: '#1f2328', notion: '#37352f', gmail: '#ea4335',
   filter: '#06b6d4', merge: '#8b5cf6', datetime: '#0d9488',
 };
+
+/* ------------------------------------------------------------------ */
+/*  Quick-connect node picker                                           */
+/* ------------------------------------------------------------------ */
+const QUICK_NODE_TYPES: { type: string; label: string }[] = [
+  { type: 'agent',     label: 'Agent'     },
+  { type: 'http',      label: 'HTTP'      },
+  { type: 'transform', label: 'Transform' },
+  { type: 'if-else',   label: 'If / Else' },
+  { type: 'router',    label: 'Router'    },
+  { type: 'code',      label: 'Code'      },
+  { type: 'loop',      label: 'Loop'      },
+  { type: 'variables', label: 'Variables' },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Validation                                                          */
@@ -190,13 +206,25 @@ const V_GAP = 24;  // vertical gap between nodes in the same column
 function computeAutoLayout(nodes: Node[], edges: Edge[]): Node[] {
   if (nodes.length === 0) return nodes;
 
-  // Build adjacency list
+  // Frame children have parent-relative positions — exclude them and frame nodes
+  // from the BFS entirely; they'll be repositioned after their parent moves.
+  const frameIds = new Set(nodes.filter((n) => n.type === 'frame').map((n) => n.id));
+  const childIds = new Set(nodes.filter((n) => n.parentId).map((n) => n.id));
+  const layoutNodes = nodes.filter((n) => !frameIds.has(n.id) && !childIds.has(n.id));
+
+  if (layoutNodes.length === 0) return nodes;
+
+  // Build adjacency list for layout nodes only
+  const layoutIdSet = new Set(layoutNodes.map((n) => n.id));
   const adj: Record<string, string[]> = {};
-  for (const n of nodes) adj[n.id] = [];
-  for (const e of edges) adj[e.source]?.push(e.target);
+  for (const n of layoutNodes) adj[n.id] = [];
+  for (const e of edges) {
+    if (layoutIdSet.has(e.source) && layoutIdSet.has(e.target))
+      adj[e.source]?.push(e.target);
+  }
 
   // BFS from start node to assign column (level)
-  const startNode = nodes.find((n) => n.type === 'start') ?? nodes[0]!;
+  const startNode = layoutNodes.find((n) => n.type === 'start') ?? layoutNodes[0]!;
   const levels: Record<string, number> = { [startNode.id]: 0 };
   const queue = [startNode.id];
   while (queue.length > 0) {
@@ -207,17 +235,16 @@ function computeAutoLayout(nodes: Node[], edges: Edge[]): Node[] {
   }
   // Append unreachable nodes after the last reachable level
   let maxL = Math.max(0, ...Object.values(levels));
-  for (const n of nodes) { if (levels[n.id] === undefined) levels[n.id] = ++maxL; }
+  for (const n of layoutNodes) { if (levels[n.id] === undefined) levels[n.id] = ++maxL; }
 
   // Group nodes by column
   const byLevel: Record<number, Node[]> = {};
-  for (const n of nodes) { (byLevel[levels[n.id]!] ??= []).push(n); }
+  for (const n of layoutNodes) { (byLevel[levels[n.id]!] ??= []).push(n); }
 
-  // Measure each node's actual rendered height (fall back to default)
   const nodeH = (n: Node) => (n.measured?.height as number | undefined) ?? NODE_H_DEFAULT;
   const nodeW = (n: Node) => (n.measured?.width as number | undefined) ?? NODE_W_DEFAULT;
 
-  // Compute column x positions based on the widest node in each preceding column
+  // Compute column x positions
   const sortedLevels = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
   const colX: Record<number, number> = {};
   let curX = 80;
@@ -227,7 +254,7 @@ function computeAutoLayout(nodes: Node[], edges: Edge[]): Node[] {
     curX += colWidth + H_GAP;
   }
 
-  // Within each column: stack nodes vertically, centered around y=300
+  // Stack nodes vertically per column, centered around y=300
   const positioned = new Map<string, { x: number; y: number }>();
   for (const lv of sortedLevels) {
     const col = byLevel[lv]!;
@@ -239,7 +266,44 @@ function computeAutoLayout(nodes: Node[], edges: Edge[]): Node[] {
     }
   }
 
-  return nodes.map((n) => ({ ...n, position: positioned.get(n.id) ?? n.position }));
+  // Recompute frame positions to wrap their children (children keep parent-relative positions)
+  const FRAME_PAD = 40;
+  const framePositions = new Map<string, { x: number; y: number; w: number; h: number }>();
+  for (const frameId of frameIds) {
+    const children = nodes.filter((n) => n.parentId === frameId);
+    if (children.length === 0) continue;
+    const absPositions = children.map((c) => {
+      // Children positions are relative to the frame's current absolute position
+      const frame = nodes.find((n) => n.id === frameId)!;
+      return {
+        x: frame.position.x + c.position.x,
+        y: frame.position.y + c.position.y,
+        w: (c.measured?.width as number | undefined) ?? NODE_W_DEFAULT,
+        h: (c.measured?.height as number | undefined) ?? NODE_H_DEFAULT,
+      };
+    });
+    const minX = Math.min(...absPositions.map((p) => p.x)) - FRAME_PAD;
+    const minY = Math.min(...absPositions.map((p) => p.y)) - FRAME_PAD;
+    const maxX = Math.max(...absPositions.map((p) => p.x + p.w)) + FRAME_PAD;
+    const maxY = Math.max(...absPositions.map((p) => p.y + p.h)) + FRAME_PAD;
+    framePositions.set(frameId, { x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+  }
+
+  return nodes.map((n) => {
+    if (frameIds.has(n.id)) {
+      const fp = framePositions.get(n.id);
+      if (!fp) return n;
+      return {
+        ...n,
+        position: { x: fp.x, y: fp.y },
+        style: { ...(n.style ?? {}), width: fp.w, height: fp.h },
+        data: { ...n.data, expandedHeight: fp.h },
+      };
+    }
+    // Frame children: keep their parent-relative positions unchanged
+    if (childIds.has(n.id)) return n;
+    return { ...n, position: positioned.get(n.id) ?? n.position };
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -363,6 +427,10 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [testCases, setTestCases] = useState<EvalTestCase[]>([]);
+  const [quickConnect, setQuickConnect] = useState<{
+    screenX: number; screenY: number;
+    sourceNodeId: string; sourceHandle: string | null;
+  } | null>(null);
 
   // Undo/redo history
   const historyStackRef = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([]);
@@ -370,6 +438,17 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [isDeployed, setIsDeployed] = useState(false);
 
   const validationState = useMemo(() => getValidationState(nodes, edges), [nodes, edges]);
+
+  const workflowNodeMetas = useMemo(() =>
+    nodes
+      .filter((n) => n.type !== 'start' && n.type !== 'end' && n.type !== 'frame' && n.type !== 'note')
+      .map((n) => ({
+        id: n.id,
+        type: n.type ?? 'unknown',
+        label: (n.data?.nodeName as string) ?? (n.data?.label as string) ?? n.type ?? n.id,
+      })),
+    [nodes],
+  );
 
   // Keep refs in sync for stable closures (auto-layout, history)
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
@@ -380,6 +459,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge[]>([]);
+  const connectingFromRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
+  const connectionMadeRef = useRef(false);
 
   // Stable refs so keyboard handler never captures stale closures
   const handleSaveRef = useRef<(opts?: { silent?: boolean }) => Promise<void>>(async () => {});
@@ -683,14 +764,63 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   }, [workflowId, podId, workspaceId, getToken, setNodes, setEdges]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => {
-      const newEdges = addEdge({ ...params, animated: false }, eds);
-      pushHistory(nodesRef.current, newEdges);
-      return newEdges;
-    }),
+    (params: Connection) => {
+      connectionMadeRef.current = true;
+      setEdges((eds) => {
+        const newEdges = addEdge({ ...params, animated: false }, eds);
+        pushHistory(nodesRef.current, newEdges);
+        return newEdges;
+      });
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [setEdges],
   );
+
+  const onConnectStart = useCallback(
+    (_: unknown, params: { nodeId: string | null; handleId: string | null }) => {
+      if (params.nodeId) connectingFromRef.current = { nodeId: params.nodeId, handleId: params.handleId };
+    },
+    [],
+  );
+
+  const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
+    if (connectionMadeRef.current) {
+      connectionMadeRef.current = false;
+      connectingFromRef.current = null;
+      return;
+    }
+    const from = connectingFromRef.current;
+    connectingFromRef.current = null;
+    if (!from) return;
+    const target = event.target as Element;
+    if (target?.closest?.('.react-flow__handle')) return;
+    const clientX = 'clientX' in event ? event.clientX : (event as TouchEvent).changedTouches[0]?.clientX ?? 0;
+    const clientY = 'clientY' in event ? event.clientY : (event as TouchEvent).changedTouches[0]?.clientY ?? 0;
+    setQuickConnect({ screenX: clientX, screenY: clientY, sourceNodeId: from.nodeId, sourceHandle: from.handleId });
+  }, []);
+
+  function handleQuickConnectPick(nodeType: string) {
+    if (!quickConnect || !rfInstance) return;
+    const position = rfInstance.screenToFlowPosition({ x: quickConnect.screenX + 80, y: quickConnect.screenY - 20 });
+    const id = `${nodeType}-${Date.now()}`;
+    const newNode: Node = {
+      id, type: nodeType, position,
+      data: { nodeType, nodeName: nodeType.charAt(0).toUpperCase() + nodeType.slice(1), label: nodeType },
+    };
+    const newEdge: Edge = {
+      id: `e-${quickConnect.sourceNodeId}-${id}`,
+      source: quickConnect.sourceNodeId,
+      target: id,
+      ...(quickConnect.sourceHandle ? { sourceHandle: quickConnect.sourceHandle } : {}),
+    };
+    setNodes((nds) => {
+      const next = [...nds, newNode];
+      pushHistory(next, [...edgesRef.current, newEdge]);
+      return next;
+    });
+    setEdges((eds) => [...eds, newEdge]);
+    setQuickConnect(null);
+  }
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
@@ -698,6 +828,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   }, []);
   const onPaneClick = useCallback(() => {
     setContextMenu(null);
+    setQuickConnect(null);
   }, []);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -1323,7 +1454,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Library panel */}
         <div
-          className="shrink-0 border-r border-border bg-background transition-all duration-200 overflow-hidden"
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${libraryOpen ? ' border-r border-border' : ''}`}
           style={{ width: libraryOpen ? 240 : 0 }}
         >
           {libraryOpen && <LibraryPanel />}
@@ -1427,6 +1558,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             onNodesChange={isGenerating ? undefined : onNodesChange}
             onEdgesChange={isGenerating ? undefined : onEdgesChange}
             onConnect={isGenerating ? undefined : onConnect}
+            onConnectStart={isGenerating ? undefined : onConnectStart}
+            onConnectEnd={isGenerating ? undefined : onConnectEnd}
             onNodeClick={isGenerating ? undefined : onNodeClick}
             onPaneClick={isGenerating ? undefined : onPaneClick}
             onNodeContextMenu={isGenerating ? undefined : onNodeContextMenu}
@@ -1537,6 +1670,36 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </>
           )}
 
+          {/* Quick-connect node picker */}
+          {quickConnect && (
+            <>
+              <div className="fixed inset-0 z-[98]" onClick={() => setQuickConnect(null)} />
+              <div
+                className="fixed z-[99] w-48 overflow-hidden rounded-xl border border-border bg-background shadow-xl"
+                style={{ left: quickConnect.screenX + 12, top: quickConnect.screenY - 48 }}
+              >
+                <p className="border-b border-border px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Add node
+                </p>
+                <div className="grid grid-cols-2 gap-0.5 p-1.5">
+                  {QUICK_NODE_TYPES.map(({ type, label }) => (
+                    <button
+                      key={type}
+                      onClick={() => handleQuickConnectPick(type)}
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted"
+                    >
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: NODE_COLORS[type] ?? '#6366f1' }}
+                      />
+                      <span className="text-xs">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
           {/* Context menu */}
           {contextMenu && (
             <>
@@ -1595,7 +1758,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* Node config panel (right side) */}
         <div
-          className="shrink-0 border-l border-border overflow-hidden transition-all duration-200"
+          className={`shrink-0 overflow-hidden transition-all duration-200${selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen ? ' border-l border-border' : ''}`}
           style={{ width: selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen ? 340 : 0 }}
         >
           {selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && (
@@ -1618,7 +1781,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* Generate panel */}
         <div
-          className="shrink-0 border-l border-border bg-background transition-all duration-200 overflow-hidden"
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${generateOpen ? ' border-l border-border' : ''}`}
           style={{ width: generateOpen ? 400 : 0 }}
         >
           {generateOpen && (
@@ -1637,7 +1800,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* Deploy panel */}
         <div
-          className="shrink-0 border-l border-border bg-background transition-all duration-200 overflow-hidden"
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${deployPanelOpen ? ' border-l border-border' : ''}`}
           style={{ width: deployPanelOpen ? 360 : 0 }}
         >
           {deployPanelOpen && authToken && (
@@ -1657,7 +1820,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* History panel */}
         <div
-          className="shrink-0 border-l border-border bg-background transition-all duration-200 overflow-hidden"
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${historyOpen ? ' border-l border-border' : ''}`}
           style={{ width: historyOpen ? 400 : 0 }}
         >
           {historyOpen && (
@@ -1674,7 +1837,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* Versions panel */}
         <div
-          className="shrink-0 border-l border-border bg-background transition-all duration-200 overflow-hidden"
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${versionsOpen ? ' border-l border-border' : ''}`}
           style={{ width: versionsOpen ? 280 : 0 }}
         >
           {versionsOpen && (
@@ -1692,7 +1855,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* Share panel */}
         <div
-          className="shrink-0 border-l border-border bg-background transition-all duration-200 overflow-hidden"
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${shareOpen ? ' border-l border-border' : ''}`}
           style={{ width: shareOpen ? 300 : 0 }}
         >
           {shareOpen && (
@@ -1708,7 +1871,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* Comments panel */}
         <div
-          className="shrink-0 border-l border-border bg-background transition-all duration-200 overflow-hidden"
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${commentsOpen ? ' border-l border-border' : ''}`}
           style={{ width: commentsOpen ? 320 : 0 }}
         >
           {commentsOpen && (
@@ -1727,7 +1890,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* Evals panel */}
         <div
-          className="shrink-0 border-l border-border bg-background transition-all duration-200 overflow-hidden"
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${evalsOpen ? ' border-l border-border' : ''}`}
           style={{ width: evalsOpen ? 380 : 0 }}
         >
           {evalsOpen && authToken && (
@@ -1739,6 +1902,12 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               testCases={testCases}
               onTestCasesChange={setTestCases}
               onClose={() => setEvalsOpen(false)}
+              inputVariables={
+                (nodes.find((n) => n.type === 'start')?.data?.inputVariables as
+                  { name: string; type: 'string' | 'number' | 'boolean' | 'object'; required: boolean }[]
+                ) ?? []
+              }
+              workflowNodes={workflowNodeMetas}
             />
           )}
         </div>
