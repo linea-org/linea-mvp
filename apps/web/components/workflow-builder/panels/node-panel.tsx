@@ -798,7 +798,7 @@ export function NodePanel({ node, onClose, onUpdate, onDelete, nodes, edges, nod
       </div>
 
       {/* Panel content */}
-      <div className="flex flex-1 min-w-0 flex-col">
+      <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
         {/* Header — common across all tabs */}
         <div className="shrink-0 space-y-2 border-b border-border p-3">
           <div className="flex items-center justify-between">
