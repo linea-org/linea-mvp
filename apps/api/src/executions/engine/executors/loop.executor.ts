@@ -25,7 +25,17 @@ export function executeLoopNode(
 
   let items: unknown[] = [];
   if (nodeData.arrayPath?.trim()) {
-    const resolved = resolveByPath(state.variables, nodeData.arrayPath);
+    let resolved = resolveByPath(state.variables, nodeData.arrayPath);
+
+    // substituteInValue may have already resolved the path to a JSON string (e.g. "[1,2,3]")
+    // Try to parse it as JSON if path resolution returned nothing
+    if (resolved === undefined) {
+      const trimmed = nodeData.arrayPath.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try { resolved = JSON.parse(trimmed); } catch { /* keep undefined */ }
+      }
+    }
+
     if (Array.isArray(resolved)) {
       items = resolved.slice(0, maxIterations);
     } else if (resolved !== undefined && resolved !== null) {

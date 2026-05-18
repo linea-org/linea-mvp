@@ -6,7 +6,7 @@ export function executeTransformNode(
   state: WorkflowState,
 ): any {
   const expression: string =
-    nodeData.transformScript || nodeData.transformation || 'lastOutput';
+    nodeData.transformScript || nodeData.transformation || nodeData.expression || 'lastOutput';
 
   const context = {
     input: state.variables?.lastOutput,
@@ -19,8 +19,7 @@ export function executeTransformNode(
   } catch (err) {
     throw new Error(
       `Transform expression error: ${err instanceof Error ? err.message : String(err)}. ` +
-        `Use simple expressions (e.g. "input.name", "lastOutput.count + 1"). ` +
-        `Full code execution requires a Pod VM (coming soon).`,
+        `Use jexl expressions — e.g. "input.name", "lastOutput.count + 1", "variables.x == 'foo'".`,
     );
   }
 }

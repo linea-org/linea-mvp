@@ -225,6 +225,7 @@ function RichTextarea({ value, onChange, nodes, currentNodeId, rows = 8, placeho
 export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelProps) {
   const instrRef = useRef<HTMLTextAreaElement>(null);
   const instructions = (data.instructions as string) ?? '';
+  const systemPrompt = (data.systemPrompt as string) ?? '';
   const enabledTools = (data.tools as string[]) ?? [];
 
   function toggleTool(name: string, enabled: boolean) {
@@ -242,6 +243,19 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
           value={(data.model as string) ?? 'claude-sonnet-4-6'}
           onValueChange={(v) => onUpdate({ model: v })}
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="agent-system">System prompt</Label>
+        <Textarea
+          id="agent-system"
+          rows={3}
+          value={systemPrompt}
+          onChange={(e) => onUpdate({ systemPrompt: e.target.value })}
+          placeholder="You are a helpful assistant…"
+          className="resize-y font-sans text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground">Sent as the system message. Defines the agent&apos;s persona and constraints.</p>
       </div>
 
       <div className="space-y-1.5">

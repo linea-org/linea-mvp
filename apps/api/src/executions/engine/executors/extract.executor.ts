@@ -1,12 +1,13 @@
+import { assertSafeUrl } from '../../../common/utils/ssrf-guard';
 import type { WorkflowState } from '../variable-substitution';
 
 export interface ExtractNodeData {
-  scrapeUrl?: string; // URL to scrape (supports {{variable}})
-  batchUrls?: string; // comma-separated URLs for batch mode
-  scrapeFormats?: string[]; // 'markdown' | 'html' | 'text' (default: ['markdown'])
-  mapUrl?: string; // URL to map (discover links)
-  searchQuery?: string; // text to search (uses fetch + parse)
-  outputField?: string; // 'markdown' | 'html' | 'text' | 'full'
+  scrapeUrl?: string; // URL to scrape — also accepts 'url' (panel field name)
+  batchUrls?: string;
+  scrapeFormats?: string[];
+  mapUrl?: string;
+  searchQuery?: string;
+  outputField?: string; // 'markdown' | 'html' | 'text' | 'full' — also accepts 'outputFormat'
 }
 
 const HTTP_TIMEOUT_MS = 30_000;
@@ -16,16 +17,22 @@ export async function executeExtractNode(
   _state: WorkflowState,
   firecrawlApiKey?: string,
 ): Promise<unknown> {
-  // If Firecrawl key provided, use Firecrawl API
+  // Accept both 'url' (panel field name) and 'scrapeUrl' (executor field name)
+  const normalised: ExtractNodeData = {
+    ...nodeData,
+    scrapeUrl: nodeData.scrapeUrl ?? (nodeData as any).url,
+    outputField: nodeData.outputField ?? (nodeData as any).outputFormat,
+  };
+
   if (firecrawlApiKey) {
-    return executeWithFirecrawl(nodeData, firecrawlApiKey);
+    return executeWithFirecrawl(normalised, firecrawlApiKey);
   }
 
-  // Fallback: native fetch + simple HTML→text extraction
-  const url = nodeData.scrapeUrl ?? nodeData.mapUrl;
+  const url = normalised.scrapeUrl ?? normalised.mapUrl;
   if (!url) throw new Error('Extract node: no URL configured');
 
-  return executeNativeFetch(url, nodeData.outputField ?? 'text');
+  await assertSafeUrl(url);
+  return executeNativeFetch(url, normalised.outputField ?? 'text');
 }
 
 async function executeWithFirecrawl(

@@ -293,9 +293,13 @@ export class NodeExecutorService {
       }
 
       case 'if-else':
-      case 'if / else':
-      case 'router': {
+      case 'if / else': {
         const r = executeLogicNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'router': {
+        const r = executeLogicNode({ ...nodeData, nodeType: 'router' }, state);
         return { result: r, isAgentOutput: false };
       }
 

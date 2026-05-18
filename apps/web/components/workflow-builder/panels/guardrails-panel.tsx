@@ -1,13 +1,21 @@
 'use client';
 
 import { Switch } from '@linea/ui/components/switch';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
 import { Label } from '@linea/ui/components/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@linea/ui/components/select';
 
 interface GuardrailsPanelProps {
   data: Record<string, unknown>;
   onUpdate: (data: Record<string, unknown>) => void;
 }
+
+const CHECK_OPTIONS = [
+  { key: 'pii',        label: 'PII detection',       description: 'Emails, phone numbers, SSNs, credit cards, IPs' },
+  { key: 'jailbreak',  label: 'Jailbreak detection',  description: 'Detects prompt injection and override attempts' },
+  { key: 'moderation', label: 'Content moderation',   description: 'Flags harmful or offensive language' },
+];
 
 export function GuardrailsPanel({ data, onUpdate }: GuardrailsPanelProps) {
   const checks = (data.checks as string[]) ?? [];
@@ -19,17 +27,11 @@ export function GuardrailsPanel({ data, onUpdate }: GuardrailsPanelProps) {
     onUpdate({ checks: next });
   }
 
-  const checkOptions = [
-    { key: 'pii',        label: 'PII detection',    description: 'Blocks names, emails, SSNs, phone numbers' },
-    { key: 'jailbreak',  label: 'Jailbreak',         description: 'Detects prompt injection attempts' },
-    { key: 'moderation', label: 'Content moderation', description: 'Flags harmful or offensive content' },
-  ];
-
   return (
     <div className="space-y-4">
       <div className="space-y-3">
         <Label>Active checks</Label>
-        {checkOptions.map((opt) => (
+        {CHECK_OPTIONS.map((opt) => (
           <div key={opt.key} className="flex items-start gap-3">
             <Switch
               id={`check-${opt.key}`}
@@ -47,31 +49,36 @@ export function GuardrailsPanel({ data, onUpdate }: GuardrailsPanelProps) {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="guardrails-action">On violation</Label>
-        <NativeSelect
-          id="guardrails-action"
+        <Label>On violation</Label>
+        <Select
           value={(data.action as string) ?? 'block'}
-          onChange={(e) => onUpdate({ action: e.target.value })}
-          className="w-full"
+          onValueChange={(v) => onUpdate({ action: v })}
         >
-          <NativeSelectOption value="block">Block — stop execution</NativeSelectOption>
-          <NativeSelectOption value="warn">Warn — log and continue</NativeSelectOption>
-          <NativeSelectOption value="redact">Redact — remove sensitive data</NativeSelectOption>
-        </NativeSelect>
+          <SelectTrigger className="h-9 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="block">Block — stop execution</SelectItem>
+            <SelectItem value="warn">Warn — log and continue</SelectItem>
+            <SelectItem value="redact">Redact — remove sensitive data and continue</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="guardrails-input-key">Input key to check</Label>
-        <NativeSelect
-          id="guardrails-input-key"
-          value={(data.inputKey as string) ?? 'last_message'}
-          onChange={(e) => onUpdate({ inputKey: e.target.value })}
-          className="w-full"
+        <Label>Text to check</Label>
+        <Select
+          value={(data.inputKey as string) ?? 'output'}
+          onValueChange={(v) => onUpdate({ inputKey: v })}
         >
-          <NativeSelectOption value="last_message">Last message</NativeSelectOption>
-          <NativeSelectOption value="input">Workflow input</NativeSelectOption>
-          <NativeSelectOption value="output">Previous node output</NativeSelectOption>
-        </NativeSelect>
+          <SelectTrigger className="h-9 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="output">Previous node output (lastOutput)</SelectItem>
+            <SelectItem value="input">Workflow input</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );
