@@ -1,11 +1,12 @@
 import type { WorkflowState } from '../variable-substitution';
 
 export interface RetrieverNodeData {
-  query?: string; // supports {{variable}} substitution
-  knowledgeBaseId?: string; // which knowledge base to search
-  namespaceId?: string; // legacy alias for knowledgeBaseId
-  topK?: number; // how many results to return (default: 5)
+  query?: string;
+  knowledgeBaseId?: string;
+  namespaceId?: string;
+  topK?: number;
   outputField?: string; // 'documents' | 'text' | 'full' (default: 'documents')
+  outputKey?: string;   // panel field — used as variable name; ignored by format logic
 }
 
 /**
@@ -31,7 +32,11 @@ export async function executeRetrieverNode(
 ): Promise<unknown> {
   const query = nodeData.query ?? String(state.variables['lastOutput'] ?? '');
   const topK = nodeData.topK ?? 5;
-  const outputField = nodeData.outputField ?? 'documents';
+  // outputKey (panel field) is a variable name to store under — not a format selector.
+  // Only treat it as a format selector if it matches a known format keyword.
+  const FORMAT_KEYWORDS = new Set(['documents', 'text', 'full']);
+  const outputField = nodeData.outputField ??
+    (FORMAT_KEYWORDS.has(nodeData.outputKey ?? '') ? nodeData.outputKey! : 'documents');
   const kbId = nodeData.knowledgeBaseId ?? nodeData.namespaceId;
 
   if (!query) {

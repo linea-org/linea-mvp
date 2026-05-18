@@ -1,9 +1,11 @@
 'use client';
 
 import { Input } from '@linea/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
 import { Label } from '@linea/ui/components/label';
 import { Textarea } from '@linea/ui/components/textarea';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@linea/ui/components/select';
 
 interface MemoryPanelProps {
   data: Record<string, unknown>;
@@ -11,7 +13,6 @@ interface MemoryPanelProps {
 }
 
 const MODE_DESCRIPTIONS: Record<string, string> = {
-  smart:    'LLM-managed memory — the agent decides what to store.',
   retrieve: 'Query stored entries by keyword or key name.',
   write:    'Explicitly save a key-value pair to memory.',
   delete:   'Remove a specific key from memory.',
@@ -31,19 +32,18 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
     <div className="space-y-4">
       {/* Mode */}
       <div className="space-y-1.5">
-        <Label htmlFor="memory-mode">Mode</Label>
-        <NativeSelect
-          id="memory-mode"
-          value={mode}
-          onChange={(e) => onUpdate({ memoryMode: e.target.value })}
-          className="w-full"
-        >
-          <NativeSelectOption value="retrieve">Retrieve</NativeSelectOption>
-          <NativeSelectOption value="write">Write</NativeSelectOption>
-          <NativeSelectOption value="delete">Delete</NativeSelectOption>
-          <NativeSelectOption value="clear">Clear</NativeSelectOption>
-          <NativeSelectOption value="smart">Smart (auto)</NativeSelectOption>
-        </NativeSelect>
+        <Label>Mode</Label>
+        <Select value={mode} onValueChange={(v) => onUpdate({ memoryMode: v })}>
+          <SelectTrigger className="h-9 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="retrieve">Retrieve</SelectItem>
+            <SelectItem value="write">Write</SelectItem>
+            <SelectItem value="delete">Delete</SelectItem>
+            <SelectItem value="clear">Clear</SelectItem>
+          </SelectContent>
+        </Select>
         <p className="text-[11px] text-muted-foreground leading-snug">
           {MODE_DESCRIPTIONS[mode]}
         </p>
@@ -51,25 +51,24 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
 
       {/* Scope */}
       <div className="space-y-1.5">
-        <Label htmlFor="memory-scope">Scope</Label>
-        <NativeSelect
-          id="memory-scope"
-          value={scope}
-          onChange={(e) => onUpdate({ memoryScope: e.target.value })}
-          className="w-full"
-        >
-          <NativeSelectOption value="thread">Thread — this conversation</NativeSelectOption>
-          <NativeSelectOption value="workflow">Workflow — shared across all callers</NativeSelectOption>
-          <NativeSelectOption value="session">Session — isolated per caller (B2B)</NativeSelectOption>
-        </NativeSelect>
+        <Label>Scope</Label>
+        <Select value={scope} onValueChange={(v) => onUpdate({ memoryScope: v })}>
+          <SelectTrigger className="h-9 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="thread">Thread — this conversation</SelectItem>
+            <SelectItem value="workflow">Workflow — shared across all callers</SelectItem>
+            <SelectItem value="session">Session — isolated per caller (B2B)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Session key — only shown for session scope */}
+      {/* Session key */}
       {showSessionKey && (
         <div className="space-y-1.5">
-          <Label htmlFor="memory-session-key">Session Key</Label>
+          <Label>Session Key</Label>
           <Input
-            id="memory-session-key"
             value={(data.memorySessionKey as string) ?? ''}
             onChange={(e) => onUpdate({ memorySessionKey: e.target.value })}
             placeholder="e.g. {{input.userId}}"
@@ -80,12 +79,11 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
         </div>
       )}
 
-      {/* Key field — write / delete */}
+      {/* Key — write / delete */}
       {showKey && (
         <div className="space-y-1.5">
-          <Label htmlFor="memory-key">Key</Label>
+          <Label>Key</Label>
           <Input
-            id="memory-key"
             value={(data.memoryKey as string) ?? ''}
             onChange={(e) => onUpdate({ memoryKey: e.target.value })}
             placeholder="e.g. userPreferences"
@@ -93,12 +91,11 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
         </div>
       )}
 
-      {/* Value field — write only */}
+      {/* Value — write only */}
       {showValue && (
         <div className="space-y-1.5">
-          <Label htmlFor="memory-value">Value</Label>
+          <Label>Value</Label>
           <Textarea
-            id="memory-value"
             value={(data.memoryValue as string) ?? ''}
             onChange={(e) => onUpdate({ memoryValue: e.target.value })}
             placeholder={'e.g. {{agentOutput}} or {"theme":"dark"}'}
@@ -114,24 +111,22 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
       {showQuery && (
         <>
           <div className="space-y-1.5">
-            <Label htmlFor="memory-query">Query</Label>
+            <Label>Query</Label>
             <Input
-              id="memory-query"
               value={(data.memoryQuery as string) ?? ''}
               onChange={(e) => onUpdate({ memoryQuery: e.target.value })}
               placeholder="e.g. {{userIntent}} or leave blank for all"
             />
           </div>
-
           <div className="space-y-1.5">
-            <Label htmlFor="memory-topk">Top-K Results</Label>
+            <Label>Top-K Results</Label>
             <Input
-              id="memory-topk"
               type="number"
               min={1}
               max={100}
               value={(data.memoryTopK as number) ?? 5}
               onChange={(e) => onUpdate({ memoryTopK: parseInt(e.target.value, 10) })}
+              className="w-24"
             />
           </div>
         </>

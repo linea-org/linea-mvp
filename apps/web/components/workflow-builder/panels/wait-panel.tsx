@@ -9,11 +9,11 @@ interface WaitPanelProps {
   onUpdate: (fields: Record<string, unknown>) => void;
 }
 
+// Hours removed — the 5-minute hard cap makes values > 5m silently misleading.
 const UNITS = [
   { value: 'ms', label: 'Milliseconds' },
   { value: 's',  label: 'Seconds' },
-  { value: 'm',  label: 'Minutes' },
-  { value: 'h',  label: 'Hours' },
+  { value: 'm',  label: 'Minutes (max 5)' },
 ];
 
 export function WaitPanel({ data, onUpdate }: WaitPanelProps) {

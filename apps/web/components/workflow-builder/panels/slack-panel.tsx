@@ -77,6 +77,17 @@ export function SlackPanel({ data, onUpdate }: SlackPanelProps) {
         </div>
       )}
 
+      {(action === 'send_message') && (
+        <div className="space-y-1.5">
+          <Label>Bot emoji <span className="text-muted-foreground">(optional)</span></Label>
+          <Input
+            value={(data.iconEmoji as string) ?? ''}
+            onChange={(e) => onUpdate({ iconEmoji: e.target.value })}
+            placeholder=":robot_face:"
+          />
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
         Token resolved from workspace secret <code>SLACK_TOKEN</code>.
       </p>

@@ -2,7 +2,7 @@
 
 import { Label } from '@linea/ui/components/label';
 import { Input } from '@linea/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
 
 interface DatetimePanelProps {
   data: Record<string, unknown>;
@@ -29,6 +29,21 @@ const FORMAT_PRESETS = [
   { value: 'UNIX',             label: 'Unix timestamp' },
 ];
 
+function FormatSelect({ value, onValueChange }: { value: string; onValueChange: (v: string) => void }) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {FORMAT_PRESETS.map((f) => (
+          <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function DatetimePanel({ data, onUpdate }: DatetimePanelProps) {
   const op = (data.operation as string) ?? 'now';
 
@@ -36,29 +51,25 @@ export function DatetimePanel({ data, onUpdate }: DatetimePanelProps) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label>Operation</Label>
-        <NativeSelect
-          value={op}
-          onChange={(e) => onUpdate({ operation: e.target.value })}
-          className="w-full"
-        >
-          {OPERATIONS.map((o) => (
-            <NativeSelectOption key={o.value} value={o.value}>{o.label}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+        <Select value={op} onValueChange={(v) => onUpdate({ operation: v })}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {OPERATIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {op === 'now' && (
         <div className="space-y-1.5">
           <Label>Output format</Label>
-          <NativeSelect
+          <FormatSelect
             value={(data.format as string) ?? 'ISO'}
-            onChange={(e) => onUpdate({ format: e.target.value })}
-            className="w-full"
-          >
-            {FORMAT_PRESETS.map((f) => (
-              <NativeSelectOption key={f.value} value={f.value}>{f.label}</NativeSelectOption>
-            ))}
-          </NativeSelect>
+            onValueChange={(v) => onUpdate({ format: v })}
+          />
           <p className="text-[10px] text-muted-foreground">Returns: <code>iso</code>, <code>unix</code>, <code>formatted</code></p>
         </div>
       )}
@@ -78,15 +89,10 @@ export function DatetimePanel({ data, onUpdate }: DatetimePanelProps) {
           {op === 'format' && (
             <div className="space-y-1.5">
               <Label>Output format</Label>
-              <NativeSelect
+              <FormatSelect
                 value={(data.format as string) ?? 'ISO'}
-                onChange={(e) => onUpdate({ format: e.target.value })}
-                className="w-full"
-              >
-                {FORMAT_PRESETS.map((f) => (
-                  <NativeSelectOption key={f.value} value={f.value}>{f.label}</NativeSelectOption>
-                ))}
-              </NativeSelect>
+                onValueChange={(v) => onUpdate({ format: v })}
+              />
             </div>
           )}
           {op === 'parse' && (
@@ -121,28 +127,27 @@ export function DatetimePanel({ data, onUpdate }: DatetimePanelProps) {
             </div>
             <div className="space-y-1.5">
               <Label>Unit</Label>
-              <NativeSelect
+              <Select
                 value={(data.unit as string) ?? 'days'}
-                onChange={(e) => onUpdate({ unit: e.target.value })}
-                className="w-full"
+                onValueChange={(v) => onUpdate({ unit: v })}
               >
-                {UNITS.map((u) => (
-                  <NativeSelectOption key={u} value={u}>{u}</NativeSelectOption>
-                ))}
-              </NativeSelect>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {UNITS.map((u) => (
+                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="space-y-1.5">
             <Label>Output format</Label>
-            <NativeSelect
+            <FormatSelect
               value={(data.format as string) ?? 'ISO'}
-              onChange={(e) => onUpdate({ format: e.target.value })}
-              className="w-full"
-            >
-              {FORMAT_PRESETS.map((f) => (
-                <NativeSelectOption key={f.value} value={f.value}>{f.label}</NativeSelectOption>
-              ))}
-            </NativeSelect>
+              onValueChange={(v) => onUpdate({ format: v })}
+            />
           </div>
           <p className="text-[10px] text-muted-foreground">Returns: <code>iso</code>, <code>unix</code>, <code>formatted</code></p>
         </>

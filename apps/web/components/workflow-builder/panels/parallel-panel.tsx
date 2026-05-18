@@ -114,9 +114,9 @@ function BranchEditor({
           )}
           {branch.type === 'transform' && (
             <Textarea
-              placeholder="JavaScript expression (return a value)"
-              value={(branch.config.expression as string) ?? ''}
-              onChange={(e) => onUpdate({ ...branch, config: { ...branch.config, expression: e.target.value } })}
+              placeholder="input.score * 100"
+              value={(branch.config.transformScript as string) ?? ''}
+              onChange={(e) => onUpdate({ ...branch, config: { ...branch.config, transformScript: e.target.value } })}
               rows={3}
               className="font-mono text-xs resize-none"
             />
@@ -189,8 +189,8 @@ export function ParallelPanel({ data, onUpdate }: ParallelPanelProps) {
 
       <div className="flex items-center justify-between rounded-md border border-border p-2">
         <div>
-          <p className="text-xs font-medium">Fail fast</p>
-          <p className="text-[10px] text-muted-foreground">Stop all branches if any fails</p>
+          <p className="text-xs font-medium">Fail on any error</p>
+          <p className="text-[10px] text-muted-foreground">Throw if any branch fails (all branches still run to completion)</p>
         </div>
         <Switch
           checked={failFast}

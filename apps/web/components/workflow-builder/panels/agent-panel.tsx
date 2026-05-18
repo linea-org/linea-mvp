@@ -4,11 +4,22 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import type { Node } from '@xyflow/react';
 import { Switch } from '@linea/ui/components/switch';
 import { Textarea } from '@linea/ui/components/textarea';
-import { NativeSelect, NativeSelectOption, NativeSelectOptGroup } from '@linea/ui/components/native-select';
 import { Label } from '@linea/ui/components/label';
 import { Separator } from '@linea/ui/components/separator';
 import { VariableChips } from '../variable-picker';
+import { ModelPicker } from '../model-picker';
 import { cn } from '@linea/ui/lib/utils';
+
+/* ─── Built-in tools (mirrors backend definitions.ts) ───────────────── */
+const BUILTIN_TOOLS = [
+  { name: 'http_request',    label: 'HTTP request',     desc: 'Call any URL or API', approval: 'on_mutation' },
+  { name: 'ask_human',       label: 'Ask human',         desc: 'Pause and request user input', approval: 'always' },
+  { name: 'write_variable',  label: 'Write variable',    desc: 'Store a value in workflow state', approval: 'never' },
+  { name: 'read_variable',   label: 'Read variable',     desc: 'Read a workflow variable', approval: 'never' },
+  { name: 'memory_store',    label: 'Memory store',      desc: 'Persist a fact for future runs', approval: 'never' },
+  { name: 'memory_search',   label: 'Memory search',     desc: 'Recall facts from past runs', approval: 'never' },
+  { name: 'run_javascript',  label: 'Run JavaScript',    desc: 'Execute a JS snippet', approval: 'always' },
+] as const;
 
 interface AgentPanelProps {
   data: Record<string, unknown>;
@@ -16,50 +27,6 @@ interface AgentPanelProps {
   nodes?: Node[];
   nodeId?: string;
 }
-
-const modelGroups = [
-  {
-    label: 'Anthropic',
-    models: [
-      { value: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6' },
-      { value: 'claude-opus-4-7',            label: 'Claude Opus 4.7' },
-      { value: 'claude-haiku-4-5',           label: 'Claude Haiku 4.5' },
-      { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-    ],
-  },
-  {
-    label: 'OpenAI',
-    models: [
-      { value: 'gpt-4o',      label: 'GPT-4o' },
-      { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-      { value: 'o4-mini',     label: 'o4 Mini (Reasoning)' },
-    ],
-  },
-  {
-    label: 'Google',
-    models: [
-      { value: 'gemini-2.0-flash',             label: 'Gemini 2.0 Flash' },
-      { value: 'gemini-2.5-pro-preview-05-06', label: 'Gemini 2.5 Pro Preview' },
-    ],
-  },
-  {
-    label: 'Groq',
-    models: [
-      { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq)' },
-      { value: 'llama-3.1-8b-instant',    label: 'Llama 3.1 8B (Groq)' },
-    ],
-  },
-  {
-    label: 'Ollama (local)',
-    models: [
-      { value: 'llama3.2',    label: 'Llama 3.2' },
-      { value: 'llama3.1',    label: 'Llama 3.1 8B' },
-      { value: 'mistral',     label: 'Mistral 7B' },
-      { value: 'qwen2.5',     label: 'Qwen 2.5' },
-      { value: 'deepseek-r1', label: 'DeepSeek R1' },
-    ],
-  },
-];
 
 /* ─── Slash command menu ─────────────────────────────────────────── */
 interface SlashCmd {
@@ -243,25 +210,37 @@ function RichTextarea({ value, onChange, nodes, currentNodeId, rows = 8, placeho
 export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelProps) {
   const instrRef = useRef<HTMLTextAreaElement>(null);
   const instructions = (data.instructions as string) ?? '';
+  const systemPrompt = (data.systemPrompt as string) ?? '';
+  const enabledTools = (data.tools as string[]) ?? [];
+
+  function toggleTool(name: string) {
+    const next = enabledTools.includes(name)
+      ? enabledTools.filter((t) => t !== name)
+      : [...enabledTools, name];
+    onUpdate({ tools: next });
+  }
 
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="agent-model">Model</Label>
-        <NativeSelect
-          id="agent-model"
+        <ModelPicker
           value={(data.model as string) ?? 'claude-sonnet-4-6'}
-          onChange={(e) => onUpdate({ model: e.target.value })}
-          className="w-full"
-        >
-          {modelGroups.map((g) => (
-            <NativeSelectOptGroup key={g.label} label={g.label}>
-              {g.models.map((o) => (
-                <NativeSelectOption key={o.value} value={o.value}>{o.label}</NativeSelectOption>
-              ))}
-            </NativeSelectOptGroup>
-          ))}
-        </NativeSelect>
+          onChange={(v) => onUpdate({ model: v })}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="agent-system">System prompt</Label>
+        <Textarea
+          id="agent-system"
+          rows={3}
+          value={systemPrompt}
+          onChange={(e) => onUpdate({ systemPrompt: e.target.value })}
+          placeholder="You are a helpful assistant…"
+          className="resize-y font-sans text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground">Sent as the system message. Defines the agent&apos;s persona and constraints.</p>
       </div>
 
       <div className="space-y-1.5">
@@ -271,7 +250,7 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
           onChange={(v) => onUpdate({ instructions: v })}
           nodes={nodes}
           currentNodeId={nodeId}
-          rows={8}
+          rows={6}
         />
         <VariableChips
           nodes={nodes}
@@ -281,6 +260,53 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
           fieldRef={instrRef}
         />
       </div>
+
+      {/* Tools */}
+      <Separator />
+
+      <div className="space-y-2">
+        <Label>Tools</Label>
+        <p className="text-[10px] text-muted-foreground">Enable tools the agent can use during its reasoning loop.</p>
+        <div className="space-y-1">
+          {BUILTIN_TOOLS.map((tool) => {
+            const checked = enabledTools.includes(tool.name);
+            return (
+              <label
+                key={tool.name}
+                className={cn(
+                  'flex cursor-pointer items-start gap-2.5 rounded-md border px-2.5 py-2 transition-colors',
+                  checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-muted/40',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-primary"
+                  checked={checked}
+                  onChange={() => toggleTool(tool.name)}
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium">{tool.label}</span>
+                    {tool.approval !== 'never' && (
+                      <span className={cn(
+                        'rounded px-1 py-0.5 text-[9px] font-medium',
+                        tool.approval === 'always'
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                      )}>
+                        {tool.approval === 'always' ? 'requires approval' : 'approval on write'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{tool.desc}</p>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <Separator />
 
       <div className="flex items-center justify-between">
         <Label htmlFor="agent-history" className="cursor-pointer">Include chat history</Label>
@@ -307,7 +333,7 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
         </div>
         {!!data.enableLongTermMemory && (
           <p className="text-[10px] text-muted-foreground">
-            When enabled, the agent will automatically recall relevant facts stored by previous runs of this workflow via <code>memory_store</code>. Make sure <code>memory_store</code> and <code>memory_search</code> are included in the tools list.
+            When enabled, the agent will recall facts stored by previous runs. Enable <code>memory_store</code> and <code>memory_search</code> in the tools list above.
           </p>
         )}
       </div>

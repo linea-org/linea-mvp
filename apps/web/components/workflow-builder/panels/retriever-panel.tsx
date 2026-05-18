@@ -3,8 +3,10 @@
 import { useRef } from 'react';
 import type { Node } from '@xyflow/react';
 import { Input } from '@linea/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
 import { Label } from '@linea/ui/components/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@linea/ui/components/select';
 import { VariableChips } from '../variable-picker';
 
 interface RetrieverPanelProps {
@@ -17,6 +19,7 @@ interface RetrieverPanelProps {
 export function RetrieverPanel({ data, onUpdate, nodes = [], nodeId }: RetrieverPanelProps) {
   const queryRef = useRef<HTMLInputElement>(null);
   const query = (data.query as string) ?? '';
+  const kbId = (data.knowledgeBaseId as string) ?? '';
 
   return (
     <div className="space-y-4">
@@ -24,13 +27,21 @@ export function RetrieverPanel({ data, onUpdate, nodes = [], nodeId }: Retriever
         <Label htmlFor="retriever-kb">Knowledge base ID</Label>
         <Input
           id="retriever-kb"
-          value={(data.knowledgeBaseId as string) ?? ''}
+          value={kbId}
           onChange={(e) => onUpdate({ knowledgeBaseId: e.target.value })}
           placeholder="UUID of the knowledge base"
+          className="font-mono text-xs"
         />
-        <p className="text-[11px] text-muted-foreground">
-          Find knowledge base IDs in the Knowledge section.
-        </p>
+        {!kbId && (
+          <p className="text-[11px] text-amber-600 dark:text-amber-400">
+            Required — find the ID in the Knowledge section of your pod.
+          </p>
+        )}
+        {kbId && (
+          <p className="text-[11px] text-muted-foreground">
+            Search uses keyword matching against stored documents.
+          </p>
+        )}
       </div>
 
       <div className="space-y-1.5">
@@ -52,30 +63,37 @@ export function RetrieverPanel({ data, onUpdate, nodes = [], nodeId }: Retriever
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="retriever-topk">Top-K results</Label>
-        <NativeSelect
-          id="retriever-topk"
+        <Label>Top-K results</Label>
+        <Select
           value={String((data.topK as number) ?? 5)}
-          onChange={(e) => onUpdate({ topK: Number(e.target.value) })}
-          className="w-full"
+          onValueChange={(v) => onUpdate({ topK: Number(v) })}
         >
-          {[3, 5, 10, 20].map((k) => (
-            <NativeSelectOption key={k} value={String(k)}>{k}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger className="h-9 w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[3, 5, 10, 20].map((k) => (
+              <SelectItem key={k} value={String(k)}>{k}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="retriever-output">Output key</Label>
-        <Input
-          id="retriever-output"
-          value={(data.outputKey as string) ?? 'results'}
-          onChange={(e) => onUpdate({ outputKey: e.target.value })}
-          placeholder="results"
-        />
-        <p className="text-[11px] text-muted-foreground">
-          Retrieved documents are stored under this key in the workflow state.
-        </p>
+        <Label>Output format</Label>
+        <Select
+          value={(data.outputField as string) ?? 'documents'}
+          onValueChange={(v) => onUpdate({ outputField: v })}
+        >
+          <SelectTrigger className="h-9 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="documents">Documents array (with metadata)</SelectItem>
+            <SelectItem value="text">Combined text (joined passages)</SelectItem>
+            <SelectItem value="full">Full result (documents + count + query)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ export interface EvaluatorNodeData {
   input?: string;
   scoreMin?: number;
   scoreMax?: number;
+  passThreshold?: number; // 0–1 fraction, default 0.6
 }
 
 export interface EvaluatorResult {
@@ -25,7 +26,8 @@ export async function executeEvaluatorNode(
 ): Promise<EvaluatorResult> {
   const scoreMin = nodeData.scoreMin ?? 0;
   const scoreMax = nodeData.scoreMax ?? 10;
-  const passThreshold = scoreMin + (scoreMax - scoreMin) * 0.6;
+  const thresholdFraction = nodeData.passThreshold ?? 0.6;
+  const passThreshold = scoreMin + (scoreMax - scoreMin) * thresholdFraction;
 
   const rawInput = nodeData.input
     ? String(nodeData.input)
@@ -78,7 +80,8 @@ Respond with a JSON object in this exact format (no markdown, just JSON):
   let score = scoreMin;
   let reasoning = 'Could not parse evaluation response.';
   try {
-    const parsed = JSON.parse(text) as { score?: number; reasoning?: string };
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch?.[0] ?? text) as { score?: number; reasoning?: string };
     score = Math.min(scoreMax, Math.max(scoreMin, Number(parsed.score ?? scoreMin)));
     reasoning = String(parsed.reasoning ?? '');
   } catch {

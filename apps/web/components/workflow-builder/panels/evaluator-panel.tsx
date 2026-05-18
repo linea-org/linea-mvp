@@ -4,15 +4,9 @@ import { useRef } from 'react';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import { Textarea } from '@linea/ui/components/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
 import type { Node } from '@xyflow/react';
 import { VariableChips } from '../variable-picker';
-
-const EVALUATOR_MODELS = [
-  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku (fast, cheap)' },
-  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet (balanced)' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-];
+import { ModelPicker } from '../model-picker';
 
 interface EvaluatorPanelProps {
   data: Record<string, unknown>;
@@ -33,16 +27,8 @@ export function EvaluatorPanel({ data, onUpdate, nodes = [], nodeId }: Evaluator
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label>Model</Label>
-        <Select value={model} onValueChange={(v) => onUpdate({ model: v })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {EVALUATOR_MODELS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ModelPicker value={model} onChange={(v) => onUpdate({ model: v })} providerFilter="anthropic" />
+        <p className="text-[10px] text-muted-foreground">Evaluator runs on Anthropic models only.</p>
       </div>
 
       <div className="space-y-1.5">
@@ -94,7 +80,24 @@ export function EvaluatorPanel({ data, onUpdate, nodes = [], nodeId }: Evaluator
             />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">Pass threshold = 60% of range (e.g. 6/10).</p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Pass threshold</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={1}
+            step={0.05}
+            value={(data.passThreshold as number) ?? 0.6}
+            onChange={(e) => onUpdate({ passThreshold: Math.min(1, Math.max(0, Number(e.target.value))) })}
+            className="w-24 font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">
+            Fraction 0–1. With range 0–10 and threshold 0.6: pass if score ≥ {((scoreMin + (scoreMax - scoreMin) * ((data.passThreshold as number) ?? 0.6))).toFixed(1)}.
+          </p>
+        </div>
       </div>
     </div>
   );
