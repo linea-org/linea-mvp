@@ -8,9 +8,10 @@ import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  Archive01Icon, CheckmarkCircle01Icon, Cancel01Icon,
+  CheckmarkCircle01Icon, Cancel01Icon,
   Loading01Icon, Alert01Icon, Clock01Icon, ArrowRight01Icon,
   FlowCircleIcon, ReloadIcon,
+  Archive02Icon,
 } from '@hugeicons/core-free-icons';
 
 interface Notification {
@@ -48,7 +49,7 @@ function notifConfig(type: string) {
   if (/approval|suspend/i.test(type))  return { icon: Alert01Icon,            border: 'border-l-amber-500',        dot: 'bg-amber-500'    };
   if (/schedul|trigger|cron/i.test(type)) return { icon: Clock01Icon,         border: 'border-l-blue-500',         dot: 'bg-blue-500'     };
   if (/run|execution/i.test(type))     return { icon: FlowCircleIcon,         border: 'border-l-violet-500',       dot: 'bg-violet-500'   };
-  return { icon: Archive01Icon, border: 'border-l-border', dot: 'bg-muted-foreground' };
+  return { icon: Archive02Icon, border: 'border-l-border', dot: 'bg-muted-foreground' };
 }
 
 function timeAgo(iso: string): string {
@@ -243,7 +244,7 @@ export default function NotificationsPage() {
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
-            <HugeiconsIcon icon={Archive01Icon} className="size-5 text-muted-foreground" />
+            <HugeiconsIcon icon={Archive02Icon} className="size-5 text-muted-foreground" />
           </div>
           <p className="text-sm font-medium">
             {readFilter === 'unread' ? 'No unread notifications' : notifications.length === 0 ? 'No notifications yet' : 'No matches'}
