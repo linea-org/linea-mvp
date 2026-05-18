@@ -179,6 +179,33 @@ export class MemoryService {
   }
 
   /**
+   * Delete all memory entries for the given scope. Called by the Memory node's clear mode.
+   */
+  async clearEntries(
+    workspaceId: string,
+    workflowId: string | undefined,
+    threadId: string,
+    scope: 'thread' | 'session' | 'workflow',
+    sessionKey: string | undefined,
+  ): Promise<void> {
+    try {
+      const conditions: ReturnType<typeof eq>[] = [
+        eq(memories.workspaceId, workspaceId),
+        eq(memories.scope, scope),
+      ];
+      if (scope === 'thread') conditions.push(eq(memories.threadId, threadId));
+      if (scope === 'workflow' && workflowId) conditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'session' && workflowId && sessionKey) {
+        conditions.push(eq(memories.workflowId, workflowId));
+        conditions.push(eq(memories.sessionKey, sessionKey));
+      }
+      await this.db.delete(memories).where(and(...conditions));
+    } catch (err) {
+      this.logger.warn(`clearEntries failed for scope "${scope}": ${err}`);
+    }
+  }
+
+  /**
    * Read keyed entries for retrieve mode (keyword match on content).
    */
   async readEntries(

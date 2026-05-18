@@ -101,8 +101,11 @@ export function executeGuardrailsNode(
   }
 
   const passed = violations.length === 0;
+  const hasNonPiiViolation = violations.some((v) => v.type !== 'pii');
 
-  if (!passed && action === 'block') {
+  // Redact can only replace PII patterns — jailbreak/moderation violations have no text
+  // to substitute, so escalate redact to block when non-PII violations are present.
+  if (!passed && (action === 'block' || (action === 'redact' && hasNonPiiViolation))) {
     throw new Error(
       `Guardrails blocked execution — violations: ${violations.map((v) => v.detail).join(', ')}`,
     );

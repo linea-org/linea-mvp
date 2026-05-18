@@ -50,7 +50,14 @@ export async function executeMemoryNode(
   }
 
   const { workspaceId, workflowId, threadId, service } = ctx;
-  const sessionKey = nodeData.memorySessionKey || undefined;
+  const sessionKey = nodeData.memorySessionKey?.trim() || undefined;
+
+  // Session scope without an isolation key leaks memory across all callers
+  if (scope === 'session' && !sessionKey) {
+    return {
+      error: 'Session scope requires a non-empty memorySessionKey. Without it all callers share the same memory namespace.',
+    };
+  }
 
   switch (mode) {
     case 'write': {
@@ -78,8 +85,10 @@ export async function executeMemoryNode(
       return { memories: entries, count: entries.length, query };
     }
 
-    case 'clear':
-      return { __clearMemory: true, scope };
+    case 'clear': {
+      await service.clearEntries(workspaceId, workflowId, threadId, scope, sessionKey);
+      return { cleared: true, scope };
+    }
 
     case 'smart':
     default: {
