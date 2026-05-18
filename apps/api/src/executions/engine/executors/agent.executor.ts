@@ -349,15 +349,11 @@ function buildResult(
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }));
 
-  let finalValue: string | unknown = hitMaxSteps
-    ? `${text}\n\n[Note: reached maximum steps limit]`
-    : text;
-
-  // Parse structured output if a schema was requested
-  if (structuredSchema && typeof finalValue === 'string') {
+  // Parse structured output before appending any notes — otherwise JSON.parse fails
+  let finalValue: unknown = text;
+  if (structuredSchema && typeof text === 'string') {
     try {
-      // Strip markdown code fences if present
-      const cleaned = finalValue
+      const cleaned = text
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/\s*```$/, '')
         .trim();
@@ -365,6 +361,10 @@ function buildResult(
     } catch {
       // Leave as text if parsing fails
     }
+  }
+
+  if (hitMaxSteps && typeof finalValue === 'string') {
+    finalValue = `${finalValue}\n\n[Note: reached maximum steps limit]`;
   }
 
   return {

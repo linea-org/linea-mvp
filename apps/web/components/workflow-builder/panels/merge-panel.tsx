@@ -13,7 +13,7 @@ interface MergePanelProps {
 
 const MODES = [
   { id: 'concat', label: 'Concat',  desc: 'Concatenate arrays into one flat array.' },
-  { id: 'merge',  label: 'Merge',   desc: 'Deep-merge objects into a single object.' },
+  { id: 'merge',  label: 'Merge',   desc: 'Shallow-merge objects into a single object (later sources win).' },
   { id: 'zip',    label: 'Zip',     desc: 'Pair elements by index into tuples.' },
 ] as const;
 

@@ -44,6 +44,7 @@ export interface NodeInput {
   workspaceId: string;
   workflowId?: string;
   threadId?: string;
+  supervisorModelOverride?: string;
 }
 
 export interface NodeOutput {
@@ -100,6 +101,7 @@ export class NodeExecutorService {
     this.envApiKeys = {
       ANTHROPIC_API_KEY: config.get('ANTHROPIC_API_KEY'),
       OPENAI_API_KEY: config.get('OPENAI_API_KEY'),
+      XAI_API_KEY: config.get('XAI_API_KEY'),
       GROQ_API_KEY: config.get('GROQ_API_KEY'),
       GOOGLE_API_KEY: config.get('GOOGLE_API_KEY'),
       OLLAMA_BASE_URL: config.get('OLLAMA_BASE_URL'),
@@ -152,6 +154,7 @@ export class NodeExecutorService {
           retryCount: attempt,
           maxRetries,
           state: { variables: input.state.variables },
+          modelOverride: input.supervisorModelOverride,
         });
 
         this.logger.log(
@@ -291,9 +294,15 @@ export class NodeExecutorService {
       }
 
       case 'if-else':
-      case 'if / else':
-      case 'router': {
+      case 'if / else': {
         const r = executeLogicNode(nodeData, state);
+        return { result: r, isAgentOutput: false };
+      }
+
+      case 'router': {
+        // Inject nodeType so executeLogicNode knows to use the router branch,
+        // regardless of whether the panel stored nodeType in node data.
+        const r = executeLogicNode({ ...nodeData, nodeType: 'router' }, state);
         return { result: r, isAgentOutput: false };
       }
 
@@ -301,7 +310,8 @@ export class NodeExecutorService {
         return {
           result: {
             __pendingApproval: true,
-            message: nodeData.instructions || 'Approval required',
+            message: nodeData.approvalMessage || nodeData.instructions || 'Approval required',
+            instructions: nodeData.instructions,
           },
           isAgentOutput: false,
         };
@@ -418,8 +428,8 @@ export class NodeExecutorService {
       }
 
       case 'evaluator': {
-        const anthropicKey = this.config.get<string>('ANTHROPIC_API_KEY');
-        const r = await executeEvaluatorNode(nodeData, state, anthropicKey);
+        const resolvedKeys = await this.resolveApiKeys(workspaceId);
+        const r = await executeEvaluatorNode(nodeData, state, resolvedKeys.ANTHROPIC_API_KEY);
         return { result: r, isAgentOutput: false };
       }
 
@@ -470,6 +480,13 @@ export class NodeExecutorService {
         return { result: r, isAgentOutput: false };
       }
 
+      case 'subworkflow':
+        throw new Error(
+          `Sub-workflow node is not yet implemented. ` +
+          `Recursive workflow invocation requires orchestration support that is currently in development. ` +
+          `As a workaround, restructure the sub-workflow steps directly into this workflow.`,
+        );
+
       default:
         return {
           result: {
@@ -485,6 +502,7 @@ export class NodeExecutorService {
     const PROVIDERS = [
       { key: 'ANTHROPIC_API_KEY', provider: 'anthropic' },
       { key: 'OPENAI_API_KEY', provider: 'openai' },
+      { key: 'XAI_API_KEY', provider: 'xai' },
       { key: 'GROQ_API_KEY', provider: 'groq' },
       { key: 'GOOGLE_API_KEY', provider: 'google' },
     ] as const;

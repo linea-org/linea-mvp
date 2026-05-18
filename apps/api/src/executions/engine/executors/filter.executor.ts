@@ -16,7 +16,7 @@ export function executeFilterNode(
     );
   }
 
-  const condition: string = nodeData.condition ?? 'true';
+  const condition: string = nodeData.condition || 'true';
 
   return source.filter((item: unknown, index: number) => {
     const ctx = { item, index, variables: state.variables };
