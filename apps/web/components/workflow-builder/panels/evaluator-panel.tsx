@@ -4,15 +4,9 @@ import { useRef } from 'react';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import { Textarea } from '@linea/ui/components/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
 import type { Node } from '@xyflow/react';
 import { VariableChips } from '../variable-picker';
-
-const EVALUATOR_MODELS = [
-  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku (fast, cheap)' },
-  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet (balanced)' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-];
+import { ModelPicker } from '../model-picker';
 
 interface EvaluatorPanelProps {
   data: Record<string, unknown>;
@@ -23,7 +17,7 @@ interface EvaluatorPanelProps {
 
 export function EvaluatorPanel({ data, onUpdate, nodes = [], nodeId }: EvaluatorPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const model = (data.model as string) ?? 'claude-haiku-4-5-20251001';
+  const model = (data.model as string) ?? 'claude-haiku-4-5';
   const criteria = (data.criteria as string) ?? '';
   const input = (data.input as string) ?? '';
   const scoreMin = (data.scoreMin as number) ?? 0;
@@ -33,16 +27,12 @@ export function EvaluatorPanel({ data, onUpdate, nodes = [], nodeId }: Evaluator
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label>Model</Label>
-        <Select value={model} onValueChange={(v) => onUpdate({ model: v })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {EVALUATOR_MODELS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ModelPicker
+          value={model}
+          onValueChange={(v) => onUpdate({ model: v })}
+          filterUseCases={['fast-response', 'general', 'conversation', 'data-extraction']}
+        />
+        <p className="text-[10px] text-muted-foreground">Fast, cheap models work well for evaluation — they don't need to generate content, just judge it.</p>
       </div>
 
       <div className="space-y-1.5">

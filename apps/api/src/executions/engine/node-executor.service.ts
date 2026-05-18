@@ -44,6 +44,7 @@ export interface NodeInput {
   workspaceId: string;
   workflowId?: string;
   threadId?: string;
+  supervisorModelOverride?: string;
 }
 
 export interface NodeOutput {
