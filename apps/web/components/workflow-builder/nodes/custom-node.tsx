@@ -65,7 +65,8 @@ function getNodeProperties(nodeType: string, data: Record<string, unknown>): Arr
       const instr = (data.instructions as string) || (data.systemPrompt as string);
       rows.push(instr ? { key: 'prompt', value: fmt(instr, 22) } : null);
       const toolCount = Array.isArray(data.tools) ? (data.tools as unknown[]).length : 0;
-      rows.push(toolCount > 0 ? { key: 'tools', value: String(toolCount) } : null);
+      if (toolCount > 0) rows.push({ key: 'tools', value: String(toolCount) });
+      else if (data.maxSteps) rows.push({ key: 'steps', value: String(data.maxSteps) });
       break;
     }
     case 'http':
@@ -82,7 +83,11 @@ function getNodeProperties(nodeType: string, data: Record<string, unknown>): Arr
       break;
     }
     case 'code':       rows.push(data.language  ? { key: 'lang',    value: fmt(data.language)  } : null); break;
-    case 'memory':     rows.push(data.memoryMode ? { key: 'mode', value: fmt(data.memoryMode) } : null); break;
+    case 'memory': {
+      rows.push(data.memoryMode  ? { key: 'mode',  value: fmt(data.memoryMode)  } : null);
+      rows.push(data.memoryScope ? { key: 'scope', value: fmt(data.memoryScope) } : null);
+      break;
+    }
     case 'mcp':
       rows.push(data.serverName ? { key: 'server', value: fmt(data.serverName) } : null);
       rows.push(data.toolName   ? { key: 'tool',   value: fmt(data.toolName)   } : null);
@@ -105,8 +110,8 @@ function getNodeProperties(nodeType: string, data: Record<string, unknown>): Arr
       break;
     case 'wait':        rows.push(data.duration   ? { key: 'wait',   value: `${fmt(data.duration)}s`    } : null); break;
     case 'loop':
-      rows.push(data.iterations ? { key: 'max',  value: String(data.iterations) } : null);
-      rows.push(data.source     ? { key: 'over', value: fmt(data.source, 20)    } : null);
+      rows.push(data.maxIterations ? { key: 'max',  value: String(data.maxIterations) } : null);
+      rows.push(data.arrayPath     ? { key: 'over', value: fmt(data.arrayPath, 20)    } : null);
       break;
     case 'evaluator':   rows.push(data.model      ? { key: 'model', value: fmt(data.model)       } : null); break;
     case 'retriever': {
@@ -292,23 +297,54 @@ function NodeShell({
 /* ------------------------------------------------------------------ */
 /*  CustomNode                                                          */
 /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/*  Connection-rule helpers                                             */
+/* ------------------------------------------------------------------ */
+
+/** Nodes whose target handle accepts more than 1 incoming connection */
+const MULTI_TARGET_NODES = new Set(['merge', 'end']);
+
+/** Nodes that render their own branching source handles */
+const BRANCHING_NODES = new Set(['if-else', 'approval', 'evaluator', 'guardrails']);
+
+type BranchSide = { id: string; label: string; cls: string };
+
+const BRANCH_DEFS: Record<string, [BranchSide, BranchSide]> = {
+  'if-else':   [{ id: 'true',     label: 'T',        cls: TRUE_CLS  }, { id: 'false',    label: 'F',       cls: FALSE_CLS }],
+  approval:    [{ id: 'approved', label: 'approved',  cls: TRUE_CLS  }, { id: 'rejected', label: 'rejected',cls: FALSE_CLS }],
+  evaluator:   [{ id: 'passed',   label: 'passed',    cls: TRUE_CLS  }, { id: 'failed',   label: 'failed',  cls: FALSE_CLS }],
+  guardrails:  [{ id: 'pass',     label: 'pass',      cls: TRUE_CLS  }, { id: 'block',    label: 'block',   cls: FALSE_CLS }],
+};
+
 export const CustomNode = memo(function CustomNode({ id, data, selected }: NodeProps) {
   const { setNodes } = useReactFlow();
 
-  const nodeType     = (data.nodeType      as string)  ?? 'agent';
-  const isApproval = nodeType === 'approval';
-  const label        = (data.nodeName      as string)  ?? (data.label as string) ?? nodeType;
-  const status       = data.status         as string | undefined;
-  const posLocked    = (data.positionLocked as boolean) ?? false;
-  const delLocked    = (data.deleteLocked   as boolean) ?? false;
-  const portsVertical = (data.portsVertical as boolean) ?? false;
-  const outputPreview = data._outputPreview as string | undefined;
+  const nodeType      = (data.nodeType      as string)  ?? 'agent';
+  const label         = (data.nodeName      as string)  ?? (data.label as string) ?? nodeType;
+  const status        = data.status         as string | undefined;
+  const posLocked     = (data.positionLocked as boolean) ?? false;
+  const delLocked     = (data.deleteLocked   as boolean) ?? false;
+  const portsVertical = (data.portsVertical  as boolean) ?? false;
+  const outputPreview = data._outputPreview  as string | undefined;
 
-  const isIfElse  = nodeType === 'if-else';
-  const trueLabel  = (data.trueLabel  as string | undefined) || 'T';
-  const falseLabel = (data.falseLabel as string | undefined) || 'F';
-  const isRouter = nodeType === 'router';
-  const routes   = isRouter
+  const isBranching = BRANCHING_NODES.has(nodeType);
+  const isRouter    = nodeType === 'router';
+  const isMerge     = nodeType === 'merge';
+
+  // For if-else: allow label overrides; other branching nodes use fixed labels
+  const branchDef = BRANCH_DEFS[nodeType];
+  const branchTrue  = branchDef
+    ? (nodeType === 'if-else'
+        ? { ...branchDef[0], label: (data.trueLabel  as string | undefined) || branchDef[0].label }
+        : branchDef[0])
+    : null;
+  const branchFalse = branchDef
+    ? (nodeType === 'if-else'
+        ? { ...branchDef[1], label: (data.falseLabel as string | undefined) || branchDef[1].label }
+        : branchDef[1])
+    : null;
+
+  const routes = isRouter
     ? ((data.routes as Array<{ id?: string; label: string }>) ?? []).map((r, i) => ({ ...r, id: r.id ?? `route-${i}` }))
     : [];
 
@@ -330,24 +366,25 @@ export const CustomNode = memo(function CustomNode({ id, data, selected }: NodeP
       portsVertical={portsVertical} onTogglePorts={togglePorts}
       outputPreview={outputPreview}
     >
-      {/* Input */}
+      {/* Target handle */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
 
-      {isIfElse || isApproval ? (
+      {/* Source handles */}
+      {isBranching && branchTrue && branchFalse ? (
         <>
           {portsVertical ? (
             <>
-              <Handle type="source" position={Position.Bottom} id={isApproval ? 'approved' : 'true'}  style={{ left: '30%' }} className={TRUE_CLS} />
-              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-12" style={{ left: 'calc(30% - 14px)' }}>{isApproval ? 'approved' : trueLabel}</span>
-              <Handle type="source" position={Position.Bottom} id={isApproval ? 'rejected' : 'false'} style={{ left: '70%' }} className={FALSE_CLS} />
-              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-12" style={{ left: 'calc(70% - 14px)' }}>{isApproval ? 'rejected' : falseLabel}</span>
+              <Handle type="source" position={Position.Bottom} id={branchTrue.id}  style={{ left: '30%' }} className={branchTrue.cls} />
+              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-12" style={{ left: 'calc(30% - 14px)' }}>{branchTrue.label}</span>
+              <Handle type="source" position={Position.Bottom} id={branchFalse.id} style={{ left: '70%' }} className={branchFalse.cls} />
+              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-12" style={{ left: 'calc(70% - 14px)' }}>{branchFalse.label}</span>
             </>
           ) : (
             <>
-              <Handle type="source" position={Position.Right} id={isApproval ? 'approved' : 'true'}  style={{ top: '35%' }} className={TRUE_CLS} />
-              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-16" style={{ top: 'calc(35% - 6px)' }}>{isApproval ? 'approved' : trueLabel}</span>
-              <Handle type="source" position={Position.Right} id={isApproval ? 'rejected' : 'false'} style={{ top: '65%' }} className={FALSE_CLS} />
-              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-16" style={{ top: 'calc(65% - 6px)' }}>{isApproval ? 'rejected' : falseLabel}</span>
+              <Handle type="source" position={Position.Right} id={branchTrue.id}  style={{ top: '35%' }} className={branchTrue.cls} />
+              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-16" style={{ top: 'calc(35% - 6px)' }}>{branchTrue.label}</span>
+              <Handle type="source" position={Position.Right} id={branchFalse.id} style={{ top: '65%' }} className={branchFalse.cls} />
+              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-16" style={{ top: 'calc(65% - 6px)' }}>{branchFalse.label}</span>
             </>
           )}
         </>
@@ -430,6 +467,7 @@ export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) 
       properties={[]} posLocked={posLocked} delLocked={delLocked}
       portsVertical={portsVertical} onTogglePorts={togglePorts}
     >
+      {/* End accepts any number of incoming connections — multiple branches can converge here */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
     </NodeShell>
   );

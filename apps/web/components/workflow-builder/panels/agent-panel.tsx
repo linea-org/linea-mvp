@@ -6,6 +6,7 @@ import { Switch } from '@linea/ui/components/switch';
 import { Textarea } from '@linea/ui/components/textarea';
 import { Label } from '@linea/ui/components/label';
 import { Separator } from '@linea/ui/components/separator';
+import { Input } from '@linea/ui/components/input';
 import { VariableChips } from '../variable-picker';
 import { ModelPicker } from '../model-picker';
 import { cn } from '@linea/ui/lib/utils';
@@ -259,6 +260,47 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
           onChange={(v) => onUpdate({ instructions: v })}
           fieldRef={instrRef}
         />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-1">
+          <Label htmlFor="agent-maxsteps" className="text-[10px]">Max steps</Label>
+          <Input
+            id="agent-maxsteps"
+            type="number"
+            min={1}
+            max={50}
+            value={(data.maxSteps as number) ?? 10}
+            onChange={(e) => onUpdate({ maxSteps: parseInt(e.target.value) || 10 })}
+            className="h-7 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="agent-temp" className="text-[10px]">Temperature</Label>
+          <Input
+            id="agent-temp"
+            type="number"
+            min={0}
+            max={1}
+            step={0.1}
+            value={(data.temperature as number) ?? 0.7}
+            onChange={(e) => onUpdate({ temperature: parseFloat(e.target.value) })}
+            className="h-7 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="agent-maxtokens" className="text-[10px]">Max tokens</Label>
+          <Input
+            id="agent-maxtokens"
+            type="number"
+            min={256}
+            max={128000}
+            step={256}
+            value={(data.maxTokens as number) ?? 4096}
+            onChange={(e) => onUpdate({ maxTokens: parseInt(e.target.value) || 4096 })}
+            className="h-7 text-xs"
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between">

@@ -82,15 +82,22 @@ export function RetrieverPanel({ data, onUpdate, nodes = [], nodeId }: Retriever
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="retriever-output">Output key</Label>
-        <Input
-          id="retriever-output"
-          value={(data.outputKey as string) ?? 'results'}
-          onChange={(e) => onUpdate({ outputKey: e.target.value })}
-          placeholder="results"
-        />
+        <Label htmlFor="retriever-output">Output format</Label>
+        <Select
+          value={(data.outputField as string) ?? 'documents'}
+          onValueChange={(v) => onUpdate({ outputField: v })}
+        >
+          <SelectTrigger id="retriever-output" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="documents">Documents (array with metadata)</SelectItem>
+            <SelectItem value="text">Text (concatenated string)</SelectItem>
+            <SelectItem value="full">Full (documents + count + query)</SelectItem>
+          </SelectContent>
+        </Select>
         <p className="text-[11px] text-muted-foreground">
-          Retrieved documents are stored under this key in the workflow state.
+          Controls what shape this node outputs to downstream nodes.
         </p>
       </div>
     </div>

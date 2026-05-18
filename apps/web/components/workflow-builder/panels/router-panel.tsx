@@ -32,7 +32,10 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
     onUpdate({ routes: routes.filter((_, i) => i !== index) });
   }
 
+  const MAX_ROUTES = 4;
+
   function addRoute() {
+    if (routes.length >= MAX_ROUTES) return;
     onUpdate({ routes: [...routes, newRoute()] });
   }
 
@@ -57,8 +60,8 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
       {/* Routes list */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label>Routes</Label>
-          <Button size="xs" variant="ghost" onClick={addRoute}>
+          <Label>Routes <span className="text-muted-foreground font-normal text-[10px]">({routes.length}/{MAX_ROUTES})</span></Label>
+          <Button size="xs" variant="ghost" onClick={addRoute} disabled={routes.length >= MAX_ROUTES}>
             <HugeiconsIcon icon={Add01Icon} />
             Add route
           </Button>
@@ -137,10 +140,17 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
 
       {/* Fallback note */}
       {routes.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900 dark:bg-amber-950/30">
-          <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
-            Add a route with condition <span className="font-mono">true</span> as the last route to act as a catch-all fallback.
-          </p>
+        <div className="space-y-2">
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900 dark:bg-amber-950/30">
+            <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
+              Add a route with condition <span className="font-mono">true</span> as the last route to act as a catch-all fallback.
+            </p>
+          </div>
+          {routes.length >= MAX_ROUTES && (
+            <p className="text-[11px] text-muted-foreground">
+              Maximum {MAX_ROUTES} routes reached. Chain another Router node for more complex branching.
+            </p>
+          )}
         </div>
       )}
     </div>

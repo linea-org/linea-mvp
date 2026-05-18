@@ -149,7 +149,9 @@ export class LangGraphService {
         sourceType === 'if-else' ||
         sourceType === 'if / else' ||
         sourceType === 'router' ||
-        sourceType === 'approval'
+        sourceType === 'approval' ||
+        sourceType === 'evaluator' ||
+        sourceType === 'guardrails'
       ) {
         if (!conditionals.has(sourceId)) {
           const pathMap: Record<string, string> = {};
@@ -392,6 +394,8 @@ export class LangGraphService {
       const output = result.output;
       if (nodeType === 'router') return output?.branch ?? 'none';
       if (nodeType === 'approval') return output?.__approvalDecision ?? 'approved';
+      if (nodeType === 'evaluator') return output?.passed === true ? 'passed' : 'failed';
+      if (nodeType === 'guardrails') return output?.passed === true ? 'pass' : 'block';
       return output?.branch ?? 'else';
     };
   }

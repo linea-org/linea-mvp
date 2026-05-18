@@ -776,6 +776,55 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     [setEdges],
   );
 
+  // Connection-rule enforcement: limit outgoing/incoming edges per handle
+  const isValidConnection = useCallback(
+    (connection: Edge | Connection) => {
+      const { source, target, sourceHandle, targetHandle } = connection;
+      if (!source || !target) return false;
+
+      const currentEdges = edgesRef.current;
+      const currentNodes = nodesRef.current;
+
+      const sourceNode = currentNodes.find((n) => n.id === source);
+      const targetNode = currentNodes.find((n) => n.id === target);
+      const sourceType = (sourceNode?.data?.nodeType as string) ?? sourceNode?.type ?? '';
+      const targetType = (targetNode?.data?.nodeType as string) ?? targetNode?.type ?? '';
+
+      // Prevent self-loops
+      if (source === target) return false;
+
+      // Nodes that allow multiple incoming connections
+      const multiInTypes = new Set(['merge', 'end']);
+
+      // Check: target node already has an incoming edge (for single-in nodes)
+      if (!multiInTypes.has(targetType)) {
+        const alreadyHasIncoming = currentEdges.some(
+          (e) => e.target === target && (targetHandle ? e.targetHandle === targetHandle : true),
+        );
+        if (alreadyHasIncoming) return false;
+      }
+
+      // Check: source handle already has an outgoing edge (named handles: 1 each; single-output: 1 total)
+      const isBranchingSource = ['if-else', 'approval', 'evaluator', 'guardrails'].includes(sourceType);
+      const isRouterSource = sourceType === 'router';
+
+      if (isBranchingSource || isRouterSource) {
+        // Each named handle allows exactly 1 outgoing connection
+        const alreadyConnected = currentEdges.some(
+          (e) => e.source === source && e.sourceHandle === sourceHandle,
+        );
+        if (alreadyConnected) return false;
+      } else {
+        // Single-output nodes: max 1 outgoing edge total
+        const alreadyConnected = currentEdges.some((e) => e.source === source);
+        if (alreadyConnected) return false;
+      }
+
+      return true;
+    },
+    [],
+  );
+
   const onConnectStart = useCallback(
     (_: unknown, params: { nodeId: string | null; handleId: string | null }) => {
       if (params.nodeId) connectingFromRef.current = { nodeId: params.nodeId, handleId: params.handleId };
@@ -1558,6 +1607,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             onNodesChange={isGenerating ? undefined : onNodesChange}
             onEdgesChange={isGenerating ? undefined : onEdgesChange}
             onConnect={isGenerating ? undefined : onConnect}
+            isValidConnection={isValidConnection}
             onConnectStart={isGenerating ? undefined : onConnectStart}
             onConnectEnd={isGenerating ? undefined : onConnectEnd}
             onNodeClick={isGenerating ? undefined : onNodeClick}
@@ -1601,7 +1651,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
                 </button>
                 {minimapVisible && (
                   <MiniMap
-                    nodeColor={(n) => NODE_COLORS[(n.data?.nodeType as string) ?? n.type ?? ''] ?? '#d4d4d8'}
+                    nodeColor={(n) => NODE_COLORS[(n.data?.nodeType as string) ?? n.type ?? ''] ?? '#6b7280'}
+                    maskColor="rgba(128,128,128,0.12)"
+                    style={{ background: 'hsl(var(--background))', border: 'none' }}
                     className="!relative !bottom-auto !right-auto !m-0 rounded-b-lg rounded-tl-lg border border-border"
                   />
                 )}
