@@ -41,6 +41,7 @@ import { EvaluatorPanel } from './evaluator-panel';
 import { FilterPanel } from './filter-panel';
 import { MergePanel } from './merge-panel';
 import { DatetimePanel } from './datetime-panel';
+import { cn } from '@linea/ui/lib/utils';
 
 interface NodePanelProps {
   node: Node | null;
@@ -573,13 +574,13 @@ const NODE_DOCS: Record<string, NodeDoc> = {
 };
 
 /* ─── Document tab ───────────────────────────────────────────────── */
-function DocumentTab({ node }: { node: Node }) {
+function DocumentTab({ node, className }: { node: Node; className?: string }) {
   const nodeType = (node.data.nodeType as string) ?? node.type ?? '';
   const doc = NODE_DOCS[nodeType];
 
   if (!doc) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+      <div className={cn('flex flex-col items-center justify-center py-12 text-center px-4', className)}>
         <HugeiconsIcon icon={NoteAddIcon} className="size-8 text-muted-foreground/30 mb-3" />
         <p className="text-xs text-muted-foreground">No reference docs available for this node type.</p>
       </div>
@@ -587,8 +588,8 @@ function DocumentTab({ node }: { node: Node }) {
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-3 space-y-4">
+    <ScrollArea className={cn('h-full', className)}>
+      <div className="py-3 px-3 space-y-4">
         {/* Summary */}
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Overview</p>
@@ -848,8 +849,8 @@ export function NodePanel({ node, onClose, onUpdate, onDelete, nodes, edges, nod
 
         {/* Tab content */}
         {activeTab === 'editor' && (
-          <ScrollArea className="flex-1">
-            <div className="p-3 space-y-4">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="py-3 px-3 space-y-4 mr-2">
               {renderSubPanel()}
 
               {/* Continue on fail — shown for all executable node types */}
@@ -958,15 +959,13 @@ export function NodePanel({ node, onClose, onUpdate, onDelete, nodes, edges, nod
         )}
 
         {activeTab === 'connections' && (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <ConnectionsTab node={node} nodes={nodes} edges={edges} />
           </ScrollArea>
         )}
 
         {activeTab === 'document' && (
-          <div className="flex-1 overflow-hidden">
-            <DocumentTab node={node} />
-          </div>
+          <DocumentTab node={node} className="flex-1 min-h-0" />
         )}
       </div>
     </div>

@@ -113,15 +113,14 @@ export default function WebhooksPage() {
 
   const { data: workflows = [], isFetching: fetchingWorkflows } = useQuery({
     queryKey: workflowsKey,
-    enabled: createOpen && !!activeWorkspace,
+    enabled: !!activeWorkspace && !wsLoading,
     queryFn: async () => {
       const token = await getToken();
       if (!token) return [];
       const api = createApiClient(token);
-      const res = await api.get<{ workflows: Workflow[] }>(
+      return api.get<Workflow[]>(
         `/workspaces/${activeWorkspace!.id}/pods/${podId}/workflows`,
       );
-      return res.workflows;
     },
   });
 
@@ -208,8 +207,8 @@ export default function WebhooksPage() {
                     <CopyButton value={triggerUrl(wh.id)} />
                   </div>
                 </TableCell>
-                <TableCell className="text-sm font-mono text-muted-foreground">
-                  {wh.workflowId.slice(0, 8)}…
+                <TableCell className="text-sm text-foreground">
+                  {workflows.find((w) => w.id === wh.workflowId)?.name ?? wh.workflowId.slice(0, 8) + '…'}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {new Date(wh.createdAt).toLocaleDateString()}

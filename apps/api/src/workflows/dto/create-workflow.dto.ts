@@ -90,6 +90,10 @@ class WorkflowSettingsDto {
   @IsOptional()
   @IsString()
   webhookOnFailure?: string;
+
+  @IsOptional()
+  @IsArray()
+  testCases?: unknown[];
 }
 
 export class WorkflowDefinitionDto {

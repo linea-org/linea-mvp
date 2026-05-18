@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useClerk, useUser, useAuth } from '@clerk/nextjs';
 import { WorkspaceProvider, useWorkspace } from '@/contexts/workspace-context';
 import { PodProvider, usePod } from '@/contexts/space-context';
@@ -77,6 +78,9 @@ import {
   Clock01Icon,
   ArrowRight01Icon,
   TestTube01Icon,
+  Sun01Icon,
+  Moon01Icon,
+  ComputerIcon,
 } from '@hugeicons/core-free-icons';
 import {
   Sheet,
@@ -237,6 +241,9 @@ function DashboardSidebar() {
   const [creatingWs, setCreatingWs] = useState(false);
 
   const isSettings = pathname.startsWith('/settings');
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   async function handleCreateWorkspace() {
     if (!wsName.trim()) return;
@@ -342,32 +349,14 @@ function DashboardSidebar() {
 
       <SidebarContent className="px-2 py-2">
         {isSettings ? (
-          <>
-            <div className="mb-1 px-1">
-              <button
-                onClick={() => router.back()}
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
-              >
-                <HugeiconsIcon icon={ArrowLeft01Icon} className="size-3.5 shrink-0" />
-                <span>Back</span>
-              </button>
-              <p className="mt-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                Settings
-              </p>
-            </div>
-            <SidebarMenu>
-              {settingsNavItems.map(({ href, label, icon }) => (
-                <SidebarMenuItem key={href}>
-                  <SidebarMenuButton asChild isActive={pathname === href || pathname.startsWith(href + '/')}>
-                    <Link href={href} className="flex items-center gap-2">
-                      <HugeiconsIcon icon={icon} className="size-4" />
-                      <span>{label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </>
+          <div className="px-1">
+            <SidebarMenuButton asChild>
+              <Link href="/home" className="flex items-center gap-2 text-muted-foreground">
+                <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
+                <span>Back to Home</span>
+              </Link>
+            </SidebarMenuButton>
+          </div>
         ) : (
           <SidebarMenu>
             {navItems.map(({ href, label, icon, disabled, dataTour }) => (
@@ -447,6 +436,28 @@ function DashboardSidebar() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Theme toggle */}
+        <div className="flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
+          {([
+            { key: 'light',  icon: Sun01Icon,     title: 'Light' },
+            { key: 'dark',   icon: Moon01Icon,    title: 'Dark'  },
+            { key: 'system', icon: ComputerIcon, title: 'System'},
+          ] as const).map(({ key, icon, title }) => (
+            <button
+              key={key}
+              title={title}
+              onClick={() => setTheme(key)}
+              className={`flex flex-1 items-center justify-center rounded py-1 transition-colors ${
+                mounted && theme === key
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <HugeiconsIcon icon={icon} className="size-3.5" />
+            </button>
+          ))}
+        </div>
 
         <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
           <Avatar className="size-7 shrink-0">

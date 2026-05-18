@@ -1,322 +1,279 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useAuth } from '@clerk/nextjs';
-import { useQuery } from '@tanstack/react-query';
-import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  ArrowDown01Icon, Tick02Icon, SearchIcon, AiBrain01Icon, SparklesIcon,
-  FlashIcon, EyeIcon, CodeIcon, DollarCircleIcon,
-} from '@hugeicons/core-free-icons';
+import { useEffect, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@linea/ui/components/popover';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
 import { cn } from '@linea/ui/lib/utils';
-import { createApiClient } from '@/lib/api';
 
-/* ------------------------------------------------------------------ */
-/*  Types (mirrors backend ModelDefinition)                            */
-/* ------------------------------------------------------------------ */
+const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+
 interface ModelDef {
   id: string;
   name: string;
   provider: string;
   description: string;
-  contextWindow: number;
-  maxOutputTokens: number;
-  tier: 'fast' | 'balanced' | 'powerful' | 'reasoning';
+  tier: string;
   useCases: string[];
-  capabilities: { vision: boolean; functionCalling: boolean; extendedThinking?: boolean };
-  costPer1mTokens: { input: number; output: number };
   badge?: string;
+  dimensions?: number;
+  capabilities: {
+    vision: boolean;
+    functionCalling: boolean;
+    embedding?: boolean;
+  };
+  costPer1mTokens: { input: number; output: number };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Provider metadata                                                   */
-/* ------------------------------------------------------------------ */
-const PROVIDER_META: Record<string, { label: string; color: string; dot: string }> = {
-  anthropic: { label: 'Anthropic', color: 'text-orange-600', dot: 'bg-orange-500' },
-  openai:    { label: 'OpenAI',    color: 'text-green-600',  dot: 'bg-green-500' },
-  xai:       { label: 'xAI',       color: 'text-foreground', dot: 'bg-foreground' },
-  groq:      { label: 'Groq',      color: 'text-orange-500', dot: 'bg-orange-400' },
-  google:    { label: 'Google',    color: 'text-blue-600',   dot: 'bg-blue-500' },
-  ollama:    { label: 'Ollama',    color: 'text-purple-600', dot: 'bg-purple-500' },
+const BADGE_STYLES: Record<string, string> = {
+  recommended:       'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  'best-for-agents': 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  'best-reasoning':  'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  'best-value':      'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  fastest:           'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+  'most-capable':    'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
 };
 
-const PROVIDER_ORDER = ['anthropic', 'openai', 'xai', 'groq', 'google', 'ollama'];
-
-/* ------------------------------------------------------------------ */
-/*  Badge metadata                                                      */
-/* ------------------------------------------------------------------ */
-const BADGE_META: Record<string, { label: string; className: string }> = {
-  'recommended':    { label: 'Recommended',   className: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' },
-  'best-for-agents':{ label: 'Best for agents',className: 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400' },
-  'best-reasoning': { label: 'Best reasoning', className: 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' },
-  'best-value':     { label: 'Best value',     className: 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400' },
-  'fastest':        { label: 'Fastest',        className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-400' },
-  'most-capable':   { label: 'Most capable',   className: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' },
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic',
+  openai:    'OpenAI',
+  xai:       'xAI',
+  groq:      'Groq',
+  google:    'Google',
+  ollama:    'Ollama',
 };
 
-/* ------------------------------------------------------------------ */
-/*  Tag icons & labels                                                  */
-/* ------------------------------------------------------------------ */
-function ModelTags({ model }: { model: ModelDef }) {
-  const tags: { icon: unknown; label: string; className: string }[] = [];
+const PROVIDER_ORDER = ['anthropic', 'openai', 'google', 'xai', 'groq', 'ollama'];
 
-  if (model.tier === 'reasoning') {
-    tags.push({ icon: AiBrain01Icon, label: 'Reasoning', className: 'text-violet-600 dark:text-violet-400' });
-  }
-  if (model.capabilities.vision) {
-    tags.push({ icon: EyeIcon, label: 'Vision', className: 'text-teal-600 dark:text-teal-400' });
-  }
-  if (model.useCases.includes('coding')) {
-    tags.push({ icon: CodeIcon, label: 'Coding', className: 'text-orange-600 dark:text-orange-400' });
-  }
-  if (model.tier === 'fast') {
-    tags.push({ icon: FlashIcon, label: 'Fast', className: 'text-blue-600 dark:text-blue-400' });
-  }
-  if (model.useCases.includes('long-context') || model.contextWindow >= 200_000) {
-    tags.push({ icon: SparklesIcon, label: `${(model.contextWindow / 1000).toFixed(0)}K ctx`, className: 'text-cyan-600 dark:text-cyan-400' });
-  }
-  if (model.costPer1mTokens.input <= 0.5 && model.costPer1mTokens.input > 0) {
-    tags.push({ icon: DollarCircleIcon, label: 'Affordable', className: 'text-green-600 dark:text-green-400' });
-  }
-  if (model.costPer1mTokens.input === 0) {
-    tags.push({ icon: DollarCircleIcon, label: 'Free', className: 'text-green-600 dark:text-green-400' });
-  }
-
-  return (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {tags.slice(0, 4).map((t) => (
-        <span key={t.label} className={cn('inline-flex items-center gap-0.5 text-[9px] font-medium', t.className)}>
-          <HugeiconsIcon icon={t.icon as any} className="size-2.5" />
-          {t.label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Fallback static list (used when API is unavailable)                */
-/* ------------------------------------------------------------------ */
-const FALLBACK_MODELS: ModelDef[] = [
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'anthropic', description: 'Best all-around for agentic workflows', contextWindow: 200000, maxOutputTokens: 16000, tier: 'balanced', useCases: ['general', 'coding'], capabilities: { vision: true, functionCalling: true }, costPer1mTokens: { input: 3, output: 15 }, badge: 'best-for-agents' },
-  { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'anthropic', description: 'Fastest Claude model', contextWindow: 200000, maxOutputTokens: 8000, tier: 'fast', useCases: ['fast-response'], capabilities: { vision: true, functionCalling: true }, costPer1mTokens: { input: 0.8, output: 4 } },
-  { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai', description: 'Flagship multimodal model', contextWindow: 128000, maxOutputTokens: 16384, tier: 'balanced', useCases: ['general', 'vision'], capabilities: { vision: true, functionCalling: true }, costPer1mTokens: { input: 2.5, output: 10 }, badge: 'recommended' },
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai', description: 'Ultra-affordable with vision', contextWindow: 128000, maxOutputTokens: 16384, tier: 'fast', useCases: ['fast-response'], capabilities: { vision: true, functionCalling: true }, costPer1mTokens: { input: 0.15, output: 0.6 }, badge: 'best-value' },
-  { id: 'grok-3', name: 'Grok 3', provider: 'xai', description: 'xAI flagship model', contextWindow: 131072, maxOutputTokens: 131072, tier: 'powerful', useCases: ['general', 'coding'], capabilities: { vision: false, functionCalling: true }, costPer1mTokens: { input: 3, output: 15 } },
-  { id: 'grok-3-mini', name: 'Grok 3 Mini', provider: 'xai', description: 'Lightweight with reasoning', contextWindow: 131072, maxOutputTokens: 131072, tier: 'reasoning', useCases: ['reasoning'], capabilities: { vision: false, functionCalling: true }, costPer1mTokens: { input: 0.3, output: 0.5 } },
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', provider: 'groq', description: 'Fast open-source inference', contextWindow: 128000, maxOutputTokens: 32768, tier: 'balanced', useCases: ['general'], capabilities: { vision: false, functionCalling: true }, costPer1mTokens: { input: 0.59, output: 0.79 } },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'google', description: 'Fast multimodal, 1M context', contextWindow: 1048576, maxOutputTokens: 8192, tier: 'fast', useCases: ['fast-response', 'long-context', 'vision'], capabilities: { vision: true, functionCalling: true }, costPer1mTokens: { input: 0.1, output: 0.4 } },
-];
-
-/* ------------------------------------------------------------------ */
-/*  Main component                                                      */
-/* ------------------------------------------------------------------ */
-interface ModelPickerProps {
+export interface ModelPickerProps {
   value: string;
-  onChange: (modelId: string) => void;
+  onValueChange: (v: string) => void;
+  embeddingOnly?: boolean;
+  filterUseCases?: string[];
   className?: string;
-  /** When set, only models from this provider are shown and provider tabs are hidden */
-  providerFilter?: string;
+  placeholder?: string;
 }
 
-export function ModelPicker({ value, onChange, className, providerFilter }: ModelPickerProps) {
-  const { getToken } = useAuth();
+export function ModelPicker({
+  value,
+  onValueChange,
+  embeddingOnly = false,
+  filterUseCases,
+  className,
+  placeholder = 'Select a model…',
+}: ModelPickerProps) {
+  const [models, setModels] = useState<ModelDef[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [activeProvider, setActiveProvider] = useState<string>(providerFilter ?? 'all');
+  const [providerFilter, setProviderFilter] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const { data: models } = useQuery({
-    queryKey: ['models-registry'],
-    staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const token = await getToken();
-      if (!token) return FALLBACK_MODELS;
-      const api = createApiClient(token);
-      return api.get<ModelDef[]>('/models').catch(() => FALLBACK_MODELS);
-    },
+  useEffect(() => {
+    fetch(`${API_BASE}/models`)
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        const raw = (data as { data?: unknown }).data ?? data;
+        const list = Array.isArray(raw) ? (raw as ModelDef[]) : [];
+        setModels(list);
+      })
+      .catch(() => setModels([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => searchRef.current?.focus());
+    } else {
+      setSearch('');
+      setProviderFilter(null);
+    }
+  }, [open]);
+
+  const baseFiltered = models.filter((m) => {
+    if (embeddingOnly) return m.capabilities.embedding === true;
+    if (m.capabilities.embedding) return false;
+    if (filterUseCases && filterUseCases.length > 0)
+      return m.useCases.some((uc) => filterUseCases.includes(uc));
+    return true;
   });
 
-  const allModels = (models ?? FALLBACK_MODELS).filter(
-    (m) => !providerFilter || m.provider === providerFilter,
+  const availableProviders = PROVIDER_ORDER.filter((p) =>
+    baseFiltered.some((m) => m.provider === p),
   );
-  const selectedModel = allModels.find((m) => m.id === value);
 
-  const providers = useMemo(() => {
-    const seen = new Set<string>();
-    PROVIDER_ORDER.forEach((p) => {
-      if (allModels.some((m) => m.provider === p)) seen.add(p);
-    });
-    return Array.from(seen);
-  }, [allModels]);
-
-  const filtered = useMemo(() => {
-    let list = allModels;
-    if (activeProvider !== 'all') {
-      list = list.filter((m) => m.provider === activeProvider);
-    }
-    if (search.trim()) {
+  const visible = baseFiltered.filter((m) => {
+    if (providerFilter && m.provider !== providerFilter) return false;
+    if (search) {
       const q = search.toLowerCase();
-      list = list.filter(
-        (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.id.toLowerCase().includes(q) ||
-          m.description.toLowerCase().includes(q) ||
-          m.provider.toLowerCase().includes(q) ||
-          m.useCases.some((u) => u.includes(q)),
+      return (
+        m.name.toLowerCase().includes(q) ||
+        m.provider.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q)
       );
     }
-    return list;
-  }, [allModels, activeProvider, search]);
+    return true;
+  });
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, ModelDef[]>();
-    PROVIDER_ORDER.forEach((p) => {
-      const group = filtered.filter((m) => m.provider === p);
-      if (group.length) map.set(p, group);
-    });
-    return map;
-  }, [filtered]);
+  const byProvider: Record<string, ModelDef[]> = {};
+  for (const m of visible) (byProvider[m.provider] ??= []).push(m);
+  const orderedProviders = PROVIDER_ORDER.filter((p) => byProvider[p]?.length);
 
-  const meta = selectedModel ? PROVIDER_META[selectedModel.provider] : null;
+  const selected = models.find((m) => m.id === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          type="button"
           className={cn(
-            'flex w-full items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors',
+            'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors',
+            'hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             className,
           )}
         >
-          {meta && (
-            <span className={cn('size-2 rounded-full shrink-0', meta.dot)} />
-          )}
-          <span className="flex-1 text-left truncate">
-            {selectedModel?.name ?? value ?? 'Select a model…'}
+          <span className="flex min-w-0 items-center gap-1.5 truncate">
+            {loading ? (
+              <span className="text-muted-foreground">{placeholder}</span>
+            ) : selected ? (
+              <>
+                <span className="truncate text-xs">{selected.name}</span>
+                {selected.badge && (
+                  <span className={cn('shrink-0 rounded px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wide', BADGE_STYLES[selected.badge] ?? 'bg-muted text-muted-foreground')}>
+                    {selected.badge.replace(/-/g, ' ')}
+                  </span>
+                )}
+                {embeddingOnly && selected.dimensions && (
+                  <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[8px] font-mono text-muted-foreground">
+                    {selected.dimensions}d
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-muted-foreground text-xs">{placeholder}</span>
+            )}
           </span>
-          {selectedModel?.badge && selectedModel.badge in BADGE_META && (
-            <span className={cn('hidden sm:inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold shrink-0', BADGE_META[selectedModel.badge!]!.className)}>
-              {BADGE_META[selectedModel.badge!]!.label}
-            </span>
-          )}
-          <HugeiconsIcon icon={ArrowDown01Icon} className="size-3.5 text-muted-foreground shrink-0" />
+          <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth={1.5}>
+            <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </button>
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-[380px] p-0"
+        className="w-[var(--radix-popover-trigger-width)] p-0 shadow-lg"
         align="start"
         sideOffset={4}
       >
         {/* Search */}
-        <div className="border-b border-border p-2">
-          <div className="relative">
-            <HugeiconsIcon icon={SearchIcon} className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search models…"
-              className="pl-8 h-8 text-xs"
-              autoFocus
-            />
-          </div>
+        <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
+          <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth={1.5}>
+            <circle cx="7" cy="7" r="4.5" />
+            <path d="M10.5 10.5L14 14" strokeLinecap="round" />
+          </svg>
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search models…"
+            className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch('')} className="shrink-0 text-muted-foreground hover:text-foreground">
+              <svg viewBox="0 0 16 16" className="size-3" fill="currentColor">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" fill="none" />
+              </svg>
+            </button>
+          )}
         </div>
 
-        {/* Provider filter tabs — hidden when a providerFilter is set */}
-        {!providerFilter && (
-          <div className="flex items-center gap-0.5 border-b border-border px-2 py-1.5 overflow-x-auto scrollbar-none">
+        {/* Provider filter chips */}
+        {availableProviders.length > 1 && (
+          <div className="flex flex-wrap gap-1 border-b border-border px-2.5 py-2">
             <button
-              onClick={() => setActiveProvider('all')}
+              type="button"
+              onClick={() => setProviderFilter(null)}
               className={cn(
-                'shrink-0 rounded px-2 py-0.5 text-[10px] font-medium transition-colors',
-                activeProvider === 'all'
+                'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors',
+                providerFilter === null
                   ? 'bg-foreground text-background'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80',
               )}
             >
               All
             </button>
-            {providers.map((p) => (
+            {availableProviders.map((p) => (
               <button
                 key={p}
-                onClick={() => setActiveProvider(p)}
+                type="button"
+                onClick={() => setProviderFilter(providerFilter === p ? null : p)}
                 className={cn(
-                  'shrink-0 rounded px-2 py-0.5 text-[10px] font-medium transition-colors',
-                  activeProvider === p
+                  'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors',
+                  providerFilter === p
                     ? 'bg-foreground text-background'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
                 )}
               >
-                {PROVIDER_META[p]?.label ?? p}
+                {PROVIDER_LABELS[p] ?? p}
               </button>
             ))}
           </div>
         )}
 
         {/* Model list */}
-        <div className="max-h-[340px] overflow-y-auto p-1.5 space-y-3">
-          {filtered.length === 0 ? (
-            <p className="text-center py-8 text-xs text-muted-foreground">No models match your search.</p>
+        <div className="max-h-[280px] overflow-y-auto py-1">
+          {loading ? (
+            <div className="px-3 py-4 text-center text-xs text-muted-foreground">Loading models…</div>
+          ) : visible.length === 0 ? (
+            <div className="px-3 py-4 text-center text-xs text-muted-foreground">No models found.</div>
           ) : (
-            Array.from(grouped.entries()).map(([provider, providerModels]) => (
+            orderedProviders.map((provider) => (
               <div key={provider}>
-                <p className={cn('px-2 py-1 text-[9px] font-bold uppercase tracking-widest', PROVIDER_META[provider]?.color ?? 'text-muted-foreground')}>
-                  {PROVIDER_META[provider]?.label ?? provider}
+                <p className="px-2.5 pb-0.5 pt-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                  {PROVIDER_LABELS[provider] ?? provider}
                 </p>
-                <div className="space-y-0.5">
-                  {providerModels.map((model) => {
-                    const isSelected = model.id === value;
-                    const badge = model.badge ? BADGE_META[model.badge] : null;
-                    return (
-                      <button
-                        key={model.id}
-                        onClick={() => { onChange(model.id); setOpen(false); setSearch(''); }}
-                        className={cn(
-                          'w-full text-left rounded-md px-2.5 py-2 transition-colors group',
-                          isSelected
-                            ? 'bg-accent'
-                            : 'hover:bg-muted/60',
+                {byProvider[provider]!.map((m) => {
+                  const isSelected = m.id === value;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => { onValueChange(m.id); setOpen(false); }}
+                      className={cn(
+                        'flex w-full items-start gap-2 px-2.5 py-1.5 text-left transition-colors',
+                        isSelected ? 'bg-accent' : 'hover:bg-accent/50',
+                      )}
+                    >
+                      {/* checkmark column */}
+                      <div className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center">
+                        {isSelected && (
+                          <svg viewBox="0 0 10 10" className="size-3" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         )}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-medium">{model.name}</span>
-                              {badge && (
-                                <span className={cn('inline-flex items-center rounded-full px-1.5 py-px text-[9px] font-semibold', badge.className)}>
-                                  {badge.label}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{model.description}</p>
-                            <ModelTags model={model} />
-                          </div>
-                          {isSelected && (
-                            <HugeiconsIcon icon={Tick02Icon} className="size-3.5 text-foreground shrink-0 mt-0.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="text-[11px] font-medium leading-tight">{m.name}</span>
+                          {m.badge && (
+                            <span className={cn('rounded px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wide', BADGE_STYLES[m.badge] ?? 'bg-muted text-muted-foreground')}>
+                              {m.badge.replace(/-/g, ' ')}
+                            </span>
+                          )}
+                          {embeddingOnly && m.dimensions && (
+                            <span className="rounded bg-muted px-1 py-0.5 text-[8px] font-mono text-muted-foreground">
+                              {m.dimensions}d
+                            </span>
                           )}
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                        {m.description && (
+                          <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">{m.description}</p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ))
           )}
         </div>
-
-        {/* Footer: cost hint for selected */}
-        {selectedModel && selectedModel.costPer1mTokens.input > 0 && (
-          <div className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
-            <span className="font-mono">{selectedModel.id}</span>
-            <span className="mx-2">·</span>
-            ${selectedModel.costPer1mTokens.input}/M in
-            · ${selectedModel.costPer1mTokens.output}/M out
-            · {(selectedModel.contextWindow / 1000).toFixed(0)}K ctx
-          </div>
-        )}
       </PopoverContent>
     </Popover>
   );

@@ -109,14 +109,14 @@ export default function WorkflowsPage() {
       if (mode === 'favorites') params.set('favorited', 'true');
       if (mode === 'pod-templates') params.set('isTemplate', 'true');
       const [data, favIds] = await Promise.all([
-        api.get<{ workflows: Workflow[] }>(
+        api.get<{ workflows: Workflow[]; meta?: unknown }>(
           `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows?${params}`,
         ),
         api.get<string[]>(
           `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/me/favorites`,
         ).catch(() => [] as string[]),
       ]);
-      setWorkflows(data.workflows);
+      setWorkflows(Array.isArray(data) ? data : (data?.workflows ?? []));
       setFavoriteIds(new Set(favIds));
     } finally {
       setLoading(false);

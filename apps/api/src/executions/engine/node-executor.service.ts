@@ -1,9 +1,10 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { isGraphInterrupt } from '@langchain/langgraph';
+import { isGraphInterrupt, interrupt } from '@langchain/langgraph';
 import { ilike, and, eq, sql } from 'drizzle-orm';
 import type { WorkflowState } from './variable-substitution';
 import { substituteInValue } from './variable-substitution';
+import { MODEL_REGISTRY } from './models/registry';
 import { executeAgentNode } from './executors/agent.executor';
 import type { LongTermMemoryContext } from './executors/agent.executor';
 import { executeHTTPNode } from './executors/http.executor';
@@ -101,7 +102,6 @@ export class NodeExecutorService {
     this.envApiKeys = {
       ANTHROPIC_API_KEY: config.get('ANTHROPIC_API_KEY'),
       OPENAI_API_KEY: config.get('OPENAI_API_KEY'),
-      XAI_API_KEY: config.get('XAI_API_KEY'),
       GROQ_API_KEY: config.get('GROQ_API_KEY'),
       GOOGLE_API_KEY: config.get('GOOGLE_API_KEY'),
       OLLAMA_BASE_URL: config.get('OLLAMA_BASE_URL'),
@@ -154,7 +154,6 @@ export class NodeExecutorService {
           retryCount: attempt,
           maxRetries,
           state: { variables: input.state.variables },
-          modelOverride: input.supervisorModelOverride,
         });
 
         this.logger.log(
@@ -300,21 +299,30 @@ export class NodeExecutorService {
       }
 
       case 'router': {
-        // Inject nodeType so executeLogicNode knows to use the router branch,
-        // regardless of whether the panel stored nodeType in node data.
         const r = executeLogicNode({ ...nodeData, nodeType: 'router' }, state);
         return { result: r, isAgentOutput: false };
       }
 
-      case 'approval':
+      case 'approval': {
+        // Suspend execution; when resumed the interrupt() call returns the resume value
+        const resumeValue = interrupt({
+          type: 'approval',
+          nodeId,
+          message: nodeData.approvalMessage || nodeData.instructions || 'Approval required',
+        });
+        // resumeValue is { approved: boolean } from ApproveExecutionDto
+        const approved = typeof resumeValue === 'object' && resumeValue !== null
+          ? Boolean((resumeValue as Record<string, unknown>).approved)
+          : true;
         return {
           result: {
-            __pendingApproval: true,
-            message: nodeData.approvalMessage || nodeData.instructions || 'Approval required',
-            instructions: nodeData.instructions,
+            __approvalDecision: approved ? 'approved' : 'rejected',
+            approved,
+            message: nodeData.approvalMessage || 'Approval required',
           },
           isAgentOutput: false,
         };
+      }
 
       case 'note':
         return { result: { skipped: true }, isAgentOutput: false };
@@ -359,49 +367,44 @@ export class NodeExecutorService {
       }
 
       case 'retriever': {
-        const resolvedKeys = await this.resolveApiKeys(workspaceId);
-        const openaiKey = resolvedKeys.OPENAI_API_KEY;
+        const embModelId = (nodeData.embeddingModel as string | undefined) ?? 'text-embedding-3-small';
+        const modelDef = MODEL_REGISTRY[embModelId];
+        const provider = modelDef?.provider ?? 'openai';
+
+        // Load workspace API key for the selected embedding model's provider
+        const embApiKey = provider !== 'ollama'
+          ? await this.memoryService.loadApiKey(workspaceId, provider)
+          : undefined;
+
+        // Generate query embedding using the selected model
+        const rawQuery = (nodeData.query as string | undefined) ?? String(state.variables['lastOutput'] ?? '');
+        const resolvedQuery = substituteInValue(rawQuery, state) as string;
+        const queryEmbedding = await this.memoryService.generateEmbedding(resolvedQuery, embApiKey, embModelId);
+
         const r = await executeRetrieverNode(nodeData, state, {
           query: async (q, kbId, topK) => {
-            // Prefer vector similarity search when an OpenAI key is available
-            const queryEmbedding = openaiKey
-              ? await this.memoryService.generateEmbedding(q, openaiKey)
-              : null;
-
             if (queryEmbedding) {
-              const vec = `[${queryEmbedding.join(',')}]`;
-              const rows = await this.db.execute(sql`
-                SELECT content, metadata,
-                       1 - (embedding <=> ${vec}::vector) AS score
-                FROM knowledge_entries
-                WHERE knowledge_base_id = ${kbId}
-                  AND embedding IS NOT NULL
-                ORDER BY embedding <=> ${vec}::vector
-                LIMIT ${topK}
-              `);
-              const results = Array.from(rows).map((row: any) => ({
-                content: row.content as string,
-                metadata: row.metadata as Record<string, unknown>,
-                score: Number(row.score),
-              }));
-              if (results.length > 0) return results;
+              try {
+                const embLiteral = `[${queryEmbedding.join(',')}]`;
+                const rows = await this.db.execute(sql`
+                  SELECT content, metadata
+                  FROM knowledge_entries
+                  WHERE knowledge_base_id = ${kbId} AND embedding IS NOT NULL
+                  ORDER BY embedding <=> ${embLiteral}::vector
+                  LIMIT ${topK}
+                `);
+                const results = Array.from(rows) as Array<{ content: string; metadata: unknown }>;
+                if (results.length > 0) return results;
+              } catch {
+                /* pgvector unavailable — fall through to text search */
+              }
             }
-
-            // Fallback: keyword search (no key or no embeddings stored)
-            const rows = await this.db
-              .select({
-                content: knowledgeEntries.content,
-                metadata: knowledgeEntries.metadata,
-              })
+            // Text search fallback
+            return this.db
+              .select({ content: knowledgeEntries.content, metadata: knowledgeEntries.metadata })
               .from(knowledgeEntries)
-              .where(
-                and(
-                  eq(knowledgeEntries.knowledgeBaseId, kbId),
-                  ilike(knowledgeEntries.content, `%${q}%`),
-                ),
-              )
+              .where(and(eq(knowledgeEntries.knowledgeBaseId, kbId), ilike(knowledgeEntries.content, `%${q}%`)))
               .limit(topK);
-            return rows;
           },
         });
         return { result: r, isAgentOutput: false };
@@ -455,8 +458,8 @@ export class NodeExecutorService {
       }
 
       case 'evaluator': {
-        const resolvedKeys = await this.resolveApiKeys(workspaceId);
-        const r = await executeEvaluatorNode(nodeData, state, resolvedKeys.ANTHROPIC_API_KEY);
+        const anthropicKey = this.config.get<string>('ANTHROPIC_API_KEY');
+        const r = await executeEvaluatorNode(nodeData, state, anthropicKey);
         return { result: r, isAgentOutput: false };
       }
 
@@ -507,13 +510,6 @@ export class NodeExecutorService {
         return { result: r, isAgentOutput: false };
       }
 
-      case 'subworkflow':
-        // Subworkflow is handled inline by LangGraphService.createNodeFn before this code is reached.
-        // This path is only hit if node-executor is called directly outside of the LangGraph runner.
-        throw new Error(
-          'Subworkflow nodes must run inside the LangGraph workflow engine. Direct dispatch is not supported.',
-        );
-
       default:
         return {
           result: {
@@ -529,7 +525,6 @@ export class NodeExecutorService {
     const PROVIDERS = [
       { key: 'ANTHROPIC_API_KEY', provider: 'anthropic' },
       { key: 'OPENAI_API_KEY', provider: 'openai' },
-      { key: 'XAI_API_KEY', provider: 'xai' },
       { key: 'GROQ_API_KEY', provider: 'groq' },
       { key: 'GOOGLE_API_KEY', provider: 'google' },
     ] as const;

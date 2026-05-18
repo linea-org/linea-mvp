@@ -16,6 +16,7 @@ export interface SupervisorContext {
   retryCount: number;
   maxRetries: number;
   state: Pick<WorkflowState, 'variables'>;
+  modelOverride?: string;
 }
 
 export interface SupervisorDecision {
@@ -34,6 +35,7 @@ export class ExecutionSupervisor {
     this.apiKeys = {
       ANTHROPIC_API_KEY: config.get('ANTHROPIC_API_KEY'),
       OPENAI_API_KEY: config.get('OPENAI_API_KEY'),
+      XAI_API_KEY: config.get('XAI_API_KEY'),
       GROQ_API_KEY: config.get('GROQ_API_KEY'),
       GOOGLE_API_KEY: config.get('GOOGLE_API_KEY'),
     };
@@ -99,7 +101,8 @@ export class ExecutionSupervisor {
   }
 
   private async askModel(ctx: SupervisorContext): Promise<SupervisorDecision> {
-    const modelDef = getModelOrDefault(this.supervisorModelId, 'fast');
+    const modelId = ctx.modelOverride ?? this.supervisorModelId;
+    const modelDef = getModelOrDefault(modelId, 'fast');
     const client = createModelClient(
       modelDef.id,
       modelDef.provider,

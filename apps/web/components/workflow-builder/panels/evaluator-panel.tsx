@@ -17,7 +17,7 @@ interface EvaluatorPanelProps {
 
 export function EvaluatorPanel({ data, onUpdate, nodes = [], nodeId }: EvaluatorPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const model = (data.model as string) ?? 'claude-haiku-4-5-20251001';
+  const model = (data.model as string) ?? 'claude-haiku-4-5';
   const criteria = (data.criteria as string) ?? '';
   const input = (data.input as string) ?? '';
   const scoreMin = (data.scoreMin as number) ?? 0;
@@ -27,8 +27,12 @@ export function EvaluatorPanel({ data, onUpdate, nodes = [], nodeId }: Evaluator
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label>Model</Label>
-        <ModelPicker value={model} onChange={(v) => onUpdate({ model: v })} providerFilter="anthropic" />
-        <p className="text-[10px] text-muted-foreground">Evaluator runs on Anthropic models only.</p>
+        <ModelPicker
+          value={model}
+          onValueChange={(v) => onUpdate({ model: v })}
+          filterUseCases={['fast-response', 'general', 'conversation', 'data-extraction']}
+        />
+        <p className="text-[10px] text-muted-foreground">Fast, cheap models work well for evaluation — they don't need to generate content, just judge it.</p>
       </div>
 
       <div className="space-y-1.5">
@@ -80,24 +84,7 @@ export function EvaluatorPanel({ data, onUpdate, nodes = [], nodeId }: Evaluator
             />
           </div>
         </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label>Pass threshold</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min={0}
-            max={1}
-            step={0.05}
-            value={(data.passThreshold as number) ?? 0.6}
-            onChange={(e) => onUpdate({ passThreshold: Math.min(1, Math.max(0, Number(e.target.value))) })}
-            className="w-24 font-mono text-xs"
-          />
-          <p className="text-xs text-muted-foreground">
-            Fraction 0–1. With range 0–10 and threshold 0.6: pass if score ≥ {((scoreMin + (scoreMax - scoreMin) * ((data.passThreshold as number) ?? 0.6))).toFixed(1)}.
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground">Pass threshold = 60% of range (e.g. 6/10).</p>
       </div>
     </div>
   );

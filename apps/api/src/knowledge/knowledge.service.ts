@@ -1,10 +1,9 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
 import { and, eq, ilike, count, desc, sql } from 'drizzle-orm';
 import type { DrizzleDB, NewKnowledgeBase, NewKnowledgeEntry } from '@linea/db';
 import { knowledgeBases, knowledgeEntries } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
+import { EmbeddingService } from '../memory/embedding.service';
 import type { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
 import type { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto';
 import type { CreateEntryDto } from './dto/create-entry.dto';
@@ -16,29 +15,8 @@ export class KnowledgeService {
 
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
-    private readonly config: ConfigService,
+    private readonly embeddingService: EmbeddingService,
   ) {}
-
-  private async generateEmbedding(text: string): Promise<number[] | null> {
-    const apiKey = this.config.get<string>('OPENAI_API_KEY');
-    if (!apiKey) return null;
-    try {
-      const resp = await fetch('https://api.openai.com/v1/embeddings', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'text-embedding-3-small', input: text }),
-      });
-      const json = (await resp.json()) as { data?: [{ embedding: number[] }]; error?: { message: string } };
-      if (!resp.ok || !json.data?.[0]) {
-        this.logger.warn(`Embedding API error: ${json.error?.message ?? resp.status}`);
-        return null;
-      }
-      return json.data[0].embedding;
-    } catch (err) {
-      this.logger.warn(`generateEmbedding failed: ${err}`);
-      return null;
-    }
-  }
 
   // ─── Knowledge Bases ────────────────────────────────────────────────────────
 
@@ -145,14 +123,22 @@ export class KnowledgeService {
   async addEntry(workspaceId: string, kbId: string, dto: CreateEntryDto) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
-    const embedding = await this.generateEmbedding(dto.content);
+    let embedding: number[] | undefined;
+    try {
+      const vec = await this.embeddingService.embed(dto.content);
+      // A zero-vector means the API key is missing or the model doesn't match — skip storage
+      const isZero = vec.every((v) => v === 0);
+      if (!isZero) embedding = vec;
+    } catch (err) {
+      this.logger.warn(`Failed to embed entry content: ${err}`);
+    }
 
     const [entry] = await this.db
       .insert(knowledgeEntries)
       .values({
         knowledgeBaseId: kbId,
         content: dto.content,
-        embedding: embedding ?? undefined,
+        embedding,
         metadata: dto.metadata ?? {},
       } satisfies Partial<NewKnowledgeEntry> as NewKnowledgeEntry)
       .returning();
@@ -163,6 +149,41 @@ export class KnowledgeService {
       .where(eq(knowledgeBases.id, kbId));
 
     return entry;
+  }
+
+  /**
+   * Vector-similarity search against embedded entries.
+   * Falls back to keyword search when no embeddings are stored or when the
+   * query embedding is unavailable.
+   */
+  async vectorSearch(
+    kbId: string,
+    queryEmbedding: number[] | null,
+    query: string,
+    limit: number,
+  ): Promise<Array<{ content: string; metadata: Record<string, unknown> }>> {
+    if (queryEmbedding) {
+      try {
+        const embLiteral = `[${queryEmbedding.join(',')}]`;
+        const rows = await this.db.execute(sql`
+          SELECT content, metadata
+          FROM knowledge_entries
+          WHERE knowledge_base_id = ${kbId} AND embedding IS NOT NULL
+          ORDER BY embedding <=> ${embLiteral}::vector
+          LIMIT ${limit}
+        `);
+        const results = Array.from(rows) as Array<{ content: string; metadata: Record<string, unknown> }>;
+        if (results.length > 0) return results;
+      } catch (err) {
+        this.logger.warn(`Vector search failed, falling back to keyword search: ${err}`);
+      }
+    }
+    // Keyword fallback
+    return this.db
+      .select({ content: knowledgeEntries.content, metadata: knowledgeEntries.metadata })
+      .from(knowledgeEntries)
+      .where(and(eq(knowledgeEntries.knowledgeBaseId, kbId), ilike(knowledgeEntries.content, `%${query}%`)))
+      .limit(limit) as Promise<Array<{ content: string; metadata: Record<string, unknown> }>>;
   }
 
   async listEntries(workspaceId: string, kbId: string) {
@@ -204,33 +225,6 @@ export class KnowledgeService {
   ) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
-    const limit = dto.limit ?? 10;
-
-    // Attempt vector similarity search if embeddings are available
-    const queryEmbedding = dto.query ? await this.generateEmbedding(dto.query) : null;
-    if (queryEmbedding) {
-      const vec = `[${queryEmbedding.join(',')}]`;
-      const rows = await this.db.execute(sql`
-        SELECT id, content, metadata, created_at,
-               1 - (embedding <=> ${vec}::vector) AS score
-        FROM knowledge_entries
-        WHERE knowledge_base_id = ${kbId}
-          AND embedding IS NOT NULL
-        ORDER BY embedding <=> ${vec}::vector
-        LIMIT ${limit}
-      `);
-      if (Array.from(rows).length > 0) {
-        return Array.from(rows).map((r: any) => ({
-          id: r.id as string,
-          content: r.content as string,
-          metadata: r.metadata as Record<string, unknown>,
-          createdAt: r.created_at as Date,
-          score: Number(r.score),
-        }));
-      }
-    }
-
-    // Fallback: keyword search (no OpenAI key or no embeddings stored yet)
     return this.db
       .select({
         id: knowledgeEntries.id,
@@ -242,9 +236,9 @@ export class KnowledgeService {
       .where(
         and(
           eq(knowledgeEntries.knowledgeBaseId, kbId),
-          dto.query ? ilike(knowledgeEntries.content, `%${dto.query}%`) : undefined,
+          ilike(knowledgeEntries.content, `%${dto.query}%`),
         ),
       )
-      .limit(limit);
+      .limit(dto.limit);
   }
 }

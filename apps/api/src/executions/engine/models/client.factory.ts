@@ -33,6 +33,7 @@ export interface CompletionResult {
 export type ModelApiKeys = {
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
+  XAI_API_KEY?: string;
   GROQ_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   OLLAMA_BASE_URL?: string;
@@ -53,6 +54,8 @@ export function createModelClient(
       return createAnthropicClient(modelId, apiKeys.ANTHROPIC_API_KEY);
     case 'openai':
       return createOpenAIClient(modelId, apiKeys.OPENAI_API_KEY);
+    case 'xai':
+      return createOpenAIClient(modelId, apiKeys.XAI_API_KEY, 'https://api.x.ai/v1');
     case 'groq':
       return createOpenAIClient(
         modelId,

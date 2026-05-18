@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Headers, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiHeader } from '@nestjs/swagger';
 import { UseGuards } from '@nestjs/common';
 import { PublicRunService } from './public-run.service';
@@ -33,9 +33,24 @@ export class PublicRunController {
     @Headers('x-api-key') xApiKey?: string,
     @Headers('authorization') authorization?: string,
   ) {
-    // Accept API key from x-api-key header or Authorization: Bearer <key>
     const apiKey = xApiKey ?? (authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined);
     return this.service.trigger(workflowId, body, apiKey);
+  }
+
+  @Get(':workflowId/executions/:executionId')
+  @Public()
+  @ApiOperation({ summary: 'Poll execution status (same API key as trigger)' })
+  @ApiParam({ name: 'workflowId' })
+  @ApiParam({ name: 'executionId' })
+  @ApiHeader({ name: 'x-api-key', required: false })
+  getExecutionStatus(
+    @Param('workflowId') workflowId: string,
+    @Param('executionId') executionId: string,
+    @Headers('x-api-key') xApiKey?: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const apiKey = xApiKey ?? (authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined);
+    return this.service.getExecutionStatus(workflowId, executionId, apiKey);
   }
 }
 

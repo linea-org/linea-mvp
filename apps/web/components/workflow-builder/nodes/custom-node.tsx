@@ -60,11 +60,15 @@ function fmt(v: unknown, max = 26): string {
 function getNodeProperties(nodeType: string, data: Record<string, unknown>): Array<{ key: string; value: string }> {
   const rows: Array<{ key: string; value: string } | null> = [];
   switch (nodeType) {
-    case 'agent':
-      rows.push(data.model          ? { key: 'model',  value: fmt(data.model)          } : null);
-      rows.push(data.temperature !== undefined ? { key: 'temp', value: String(data.temperature) } : null);
-      rows.push(data.systemPrompt   ? { key: 'system', value: fmt(data.systemPrompt)   } : null);
+    case 'agent': {
+      rows.push(data.model ? { key: 'model', value: fmt(data.model) } : null);
+      const instr = (data.instructions as string) || (data.systemPrompt as string);
+      rows.push(instr ? { key: 'prompt', value: fmt(instr, 22) } : null);
+      const toolCount = Array.isArray(data.tools) ? (data.tools as unknown[]).length : 0;
+      if (toolCount > 0) rows.push({ key: 'tools', value: String(toolCount) });
+      else if (data.maxSteps) rows.push({ key: 'steps', value: String(data.maxSteps) });
       break;
+    }
     case 'http':
       rows.push(data.method   ? { key: 'method', value: fmt(data.method)   } : null);
       rows.push(data.url      ? { key: 'url',    value: fmt(data.url, 22)  } : null);
@@ -79,7 +83,11 @@ function getNodeProperties(nodeType: string, data: Record<string, unknown>): Arr
       break;
     }
     case 'code':       rows.push(data.language  ? { key: 'lang',    value: fmt(data.language)  } : null); break;
-    case 'memory':     rows.push(data.memoryMode ? { key: 'mode', value: fmt(data.memoryMode) } : null); break;
+    case 'memory': {
+      rows.push(data.memoryMode  ? { key: 'mode',  value: fmt(data.memoryMode)  } : null);
+      rows.push(data.memoryScope ? { key: 'scope', value: fmt(data.memoryScope) } : null);
+      break;
+    }
     case 'mcp':
       rows.push(data.serverName ? { key: 'server', value: fmt(data.serverName) } : null);
       rows.push(data.toolName   ? { key: 'tool',   value: fmt(data.toolName)   } : null);
@@ -102,11 +110,15 @@ function getNodeProperties(nodeType: string, data: Record<string, unknown>): Arr
       break;
     case 'wait':        rows.push(data.duration   ? { key: 'wait',   value: `${fmt(data.duration)}s`    } : null); break;
     case 'loop':
-      rows.push(data.iterations ? { key: 'max',  value: String(data.iterations) } : null);
-      rows.push(data.source     ? { key: 'over', value: fmt(data.source, 20)    } : null);
+      rows.push(data.maxIterations ? { key: 'max',  value: String(data.maxIterations) } : null);
+      rows.push(data.arrayPath     ? { key: 'over', value: fmt(data.arrayPath, 20)    } : null);
       break;
-    case 'evaluator':   rows.push(data.metric     ? { key: 'metric', value: fmt(data.metric)     } : null); break;
-    case 'retriever':   rows.push(data.collection ? { key: 'index',  value: fmt(data.collection) } : null); break;
+    case 'evaluator':   rows.push(data.model      ? { key: 'model', value: fmt(data.model)       } : null); break;
+    case 'retriever': {
+      rows.push(data.knowledgeBaseId ? { key: 'kb', value: fmt(data.knowledgeBaseId, 12) } : null);
+      rows.push(data.embeddingModel  ? { key: 'embed', value: fmt(data.embeddingModel, 20) } : null);
+      break;
+    }
     case 'extract':     rows.push(data.prompt     ? { key: 'prompt', value: fmt(data.prompt)     } : null); break;
     case 'approval':    rows.push(data.message    ? { key: 'prompt', value: fmt(data.message)    } : null); break;
     case 'guardrails': {
@@ -254,23 +266,26 @@ function NodeShell({
         </button>
       </div>
 
-      {/* Inline property rows */}
+      {/* Inline property chips */}
       {properties.length > 0 && (
-        <div className="border-t border-border/50 mx-2.5 pt-1.5 pb-1">
+        <div className="flex flex-wrap gap-1 px-2.5 pb-2">
           {properties.map(({ key, value }) => (
-            <div key={key} className="flex items-baseline justify-between gap-2 py-0.5">
-              <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/70 shrink-0">{key}</span>
-              <span className="text-[10px] text-foreground/80 truncate text-right font-mono" title={value}>{value}</span>
-            </div>
+            <span
+              key={key}
+              title={`${key}: ${value}`}
+              className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 max-w-full"
+            >
+              <span className="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground/60 shrink-0">{key}</span>
+              <span className="text-[9px] text-foreground/75 truncate font-mono">{value}</span>
+            </span>
           ))}
         </div>
       )}
 
       {/* Output preview strip */}
       {outputPreview && (
-        <div className="border-t border-border/50 mx-2.5 pt-1 pb-1.5">
-          <p className="text-[9px] font-semibold uppercase tracking-widest text-green-600/70 mb-0.5">output</p>
-          <p className="text-[10px] font-mono text-foreground/60 truncate" title={outputPreview}>{outputPreview}</p>
+        <div className="border-t border-border/40 mx-2.5 pt-1 pb-1.5">
+          <p className="text-[9px] font-mono text-foreground/50 truncate" title={outputPreview}>{outputPreview}</p>
         </div>
       )}
 
@@ -282,22 +297,54 @@ function NodeShell({
 /* ------------------------------------------------------------------ */
 /*  CustomNode                                                          */
 /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/*  Connection-rule helpers                                             */
+/* ------------------------------------------------------------------ */
+
+/** Nodes whose target handle accepts more than 1 incoming connection */
+const MULTI_TARGET_NODES = new Set(['merge', 'end']);
+
+/** Nodes that render their own branching source handles */
+const BRANCHING_NODES = new Set(['if-else', 'approval', 'evaluator', 'guardrails']);
+
+type BranchSide = { id: string; label: string; cls: string };
+
+const BRANCH_DEFS: Record<string, [BranchSide, BranchSide]> = {
+  'if-else':   [{ id: 'true',     label: 'T',        cls: TRUE_CLS  }, { id: 'false',    label: 'F',       cls: FALSE_CLS }],
+  approval:    [{ id: 'approved', label: 'approved',  cls: TRUE_CLS  }, { id: 'rejected', label: 'rejected',cls: FALSE_CLS }],
+  evaluator:   [{ id: 'passed',   label: 'passed',    cls: TRUE_CLS  }, { id: 'failed',   label: 'failed',  cls: FALSE_CLS }],
+  guardrails:  [{ id: 'pass',     label: 'pass',      cls: TRUE_CLS  }, { id: 'block',    label: 'block',   cls: FALSE_CLS }],
+};
+
 export const CustomNode = memo(function CustomNode({ id, data, selected }: NodeProps) {
   const { setNodes } = useReactFlow();
 
-  const nodeType     = (data.nodeType      as string)  ?? 'agent';
-  const label        = (data.nodeName      as string)  ?? (data.label as string) ?? nodeType;
-  const status       = data.status         as string | undefined;
-  const posLocked    = (data.positionLocked as boolean) ?? false;
-  const delLocked    = (data.deleteLocked   as boolean) ?? false;
-  const portsVertical = (data.portsVertical as boolean) ?? false;
-  const outputPreview = data._outputPreview as string | undefined;
+  const nodeType      = (data.nodeType      as string)  ?? 'agent';
+  const label         = (data.nodeName      as string)  ?? (data.label as string) ?? nodeType;
+  const status        = data.status         as string | undefined;
+  const posLocked     = (data.positionLocked as boolean) ?? false;
+  const delLocked     = (data.deleteLocked   as boolean) ?? false;
+  const portsVertical = (data.portsVertical  as boolean) ?? false;
+  const outputPreview = data._outputPreview  as string | undefined;
 
-  const isIfElse  = nodeType === 'if-else';
-  const trueLabel  = (data.trueLabel  as string | undefined) || 'T';
-  const falseLabel = (data.falseLabel as string | undefined) || 'F';
-  const isRouter = nodeType === 'router';
-  const routes   = isRouter
+  const isBranching = BRANCHING_NODES.has(nodeType);
+  const isRouter    = nodeType === 'router';
+  const isMerge     = nodeType === 'merge';
+
+  // For if-else: allow label overrides; other branching nodes use fixed labels
+  const branchDef = BRANCH_DEFS[nodeType];
+  const branchTrue  = branchDef
+    ? (nodeType === 'if-else'
+        ? { ...branchDef[0], label: (data.trueLabel  as string | undefined) || branchDef[0].label }
+        : branchDef[0])
+    : null;
+  const branchFalse = branchDef
+    ? (nodeType === 'if-else'
+        ? { ...branchDef[1], label: (data.falseLabel as string | undefined) || branchDef[1].label }
+        : branchDef[1])
+    : null;
+
+  const routes = isRouter
     ? ((data.routes as Array<{ id?: string; label: string }>) ?? []).map((r, i) => ({ ...r, id: r.id ?? `route-${i}` }))
     : [];
 
@@ -319,26 +366,25 @@ export const CustomNode = memo(function CustomNode({ id, data, selected }: NodeP
       portsVertical={portsVertical} onTogglePorts={togglePorts}
       outputPreview={outputPreview}
     >
-      {/* Input */}
+      {/* Target handle */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
 
-      {isIfElse ? (
+      {/* Source handles */}
+      {isBranching && branchTrue && branchFalse ? (
         <>
           {portsVertical ? (
-            /* vertical: true=bottom-left, false=bottom-right */
             <>
-              <Handle type="source" position={Position.Bottom} id="true"  style={{ left: '30%' }} className={TRUE_CLS} />
-              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-10" style={{ left: 'calc(30% - 10px)' }}>{trueLabel}</span>
-              <Handle type="source" position={Position.Bottom} id="false" style={{ left: '70%' }} className={FALSE_CLS} />
-              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-10" style={{ left: 'calc(70% - 10px)' }}>{falseLabel}</span>
+              <Handle type="source" position={Position.Bottom} id={branchTrue.id}  style={{ left: '30%' }} className={branchTrue.cls} />
+              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-12" style={{ left: 'calc(30% - 14px)' }}>{branchTrue.label}</span>
+              <Handle type="source" position={Position.Bottom} id={branchFalse.id} style={{ left: '70%' }} className={branchFalse.cls} />
+              <span className="pointer-events-none absolute bottom-[-16px] text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-12" style={{ left: 'calc(70% - 14px)' }}>{branchFalse.label}</span>
             </>
           ) : (
-            /* horizontal: true=right-top, false=right-bottom */
             <>
-              <Handle type="source" position={Position.Right} id="true"  style={{ top: '35%' }} className={TRUE_CLS} />
-              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-16" style={{ top: 'calc(35% - 6px)' }}>{trueLabel}</span>
-              <Handle type="source" position={Position.Right} id="false" style={{ top: '65%' }} className={FALSE_CLS} />
-              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-16" style={{ top: 'calc(65% - 6px)' }}>{falseLabel}</span>
+              <Handle type="source" position={Position.Right} id={branchTrue.id}  style={{ top: '35%' }} className={branchTrue.cls} />
+              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-green-600 select-none truncate max-w-16" style={{ top: 'calc(35% - 6px)' }}>{branchTrue.label}</span>
+              <Handle type="source" position={Position.Right} id={branchFalse.id} style={{ top: '65%' }} className={branchFalse.cls} />
+              <span className="pointer-events-none absolute right-[-4px] translate-x-full text-[9px] font-bold uppercase tracking-wide text-red-500 select-none truncate max-w-16" style={{ top: 'calc(65% - 6px)' }}>{branchFalse.label}</span>
             </>
           )}
         </>
@@ -421,6 +467,7 @@ export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) 
       properties={[]} posLocked={posLocked} delLocked={delLocked}
       portsVertical={portsVertical} onTogglePorts={togglePorts}
     >
+      {/* End accepts any number of incoming connections — multiple branches can converge here */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
     </NodeShell>
   );
@@ -432,7 +479,7 @@ export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) 
 const FRAME_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
 export const FrameNode = memo(function FrameNode({ id, data, selected }: NodeProps) {
-  const { setNodes } = useReactFlow();
+  const { setNodes, setEdges } = useReactFlow();
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelValue, setLabelValue] = useState((data.frameName as string) ?? 'Group');
   const labelInputRef = useRef<HTMLInputElement>(null);
@@ -444,8 +491,11 @@ export const FrameNode = memo(function FrameNode({ id, data, selected }: NodePro
   useEffect(() => { if (editingLabel) labelInputRef.current?.focus(); }, [editingLabel]);
 
   function toggleCollapse() {
+    const nowCollapsed = !collapsed;
+    let childIds: Set<string> = new Set();
+
     setNodes((nds) => {
-      const nowCollapsed = !collapsed;
+      childIds = new Set(nds.filter((n) => n.parentId === id).map((n) => n.id));
       return nds.map((n) => {
         if (n.id === id) {
           const currentH = typeof n.style?.height === 'number' ? n.style.height : 220;
@@ -468,6 +518,15 @@ export const FrameNode = memo(function FrameNode({ id, data, selected }: NodePro
         return n;
       });
     });
+
+    // Hide/show edges connected to child nodes so they don't orphan on the canvas
+    setEdges((eds) =>
+      eds.map((e) =>
+        childIds.has(e.source) || childIds.has(e.target)
+          ? { ...e, hidden: nowCollapsed }
+          : e,
+      ),
+    );
   }
 
   function commitLabel() {

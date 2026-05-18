@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { MemoryModule } from '../memory/memory.module';
 import { KnowledgeService } from './knowledge.service';
 import { KnowledgeController } from './knowledge.controller';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [MemoryModule],
   providers: [KnowledgeService],
   controllers: [KnowledgeController],
   exports: [KnowledgeService],

@@ -101,15 +101,15 @@ export default function HomePage() {
       const token = await getToken();
       if (!token || !activeWorkspace || !activePod) return;
       const api = createApiClient(token);
-      const [m, execData, wfData] = await Promise.all([
+      const [m, execList, wfList] = await Promise.all([
         api.get<MetricsData>(`/workspaces/${activeWorkspace.id}/metrics?period=24h`),
-        api.get<{ executions: Execution[] }>(`/workspaces/${activeWorkspace.id}/pods/${activePod.id}/executions`),
-        api.get<{ workflows: Workflow[] }>(`/workspaces/${activeWorkspace.id}/pods/${activePod.id}/workflows`),
+        api.get<Execution[]>(`/workspaces/${activeWorkspace.id}/pods/${activePod.id}/executions`),
+        api.get<Workflow[]>(`/workspaces/${activeWorkspace.id}/pods/${activePod.id}/workflows`),
       ]);
       setMetrics(m);
-      setExecutions((execData.executions ?? []).slice(0, 6));
+      setExecutions((execList ?? []).slice(0, 6));
       const map: Record<string, string> = {};
-      for (const wf of wfData.workflows ?? []) map[wf.id] = wf.name;
+      for (const wf of wfList ?? []) map[wf.id] = wf.name;
       setWorkflowNames(map);
     } catch {
       // degrade gracefully

@@ -53,11 +53,45 @@ interface SSEEvent {
 interface CreatedWorkflow { id: string; name: string; podId?: string }
 
 /* ─── Models ─────────────────────────────────────────────────────────────── */
-const MODELS = [
-  { id: 'claude-sonnet-4-6',          label: 'Sonnet 4.6', hint: 'Balanced'  },
-  { id: 'claude-haiku-4-5-20251001',  label: 'Haiku 4.5',  hint: 'Fast'      },
-  { id: 'claude-opus-4-7',            label: 'Opus 4.7',   hint: 'Powerful'  },
+interface ModelOption { id: string; label: string; hint: string; provider: string; badge?: string }
+
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic', openai: 'OpenAI', xai: 'xAI (Grok)',
+  groq: 'Groq', google: 'Google', ollama: 'Ollama (Local)',
+};
+
+const MODEL_LIST: ModelOption[] = [
+  { id: 'claude-sonnet-4-6',              label: 'Claude Sonnet 4.6',     hint: 'Balanced',    provider: 'anthropic', badge: 'best-for-agents' },
+  { id: 'claude-opus-4-7',               label: 'Claude Opus 4.7',       hint: 'Powerful',    provider: 'anthropic', badge: 'most-capable'   },
+  { id: 'claude-haiku-4-5',              label: 'Claude Haiku 4.5',      hint: 'Fast',        provider: 'anthropic'                          },
+  { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5 Sonnet',     hint: 'Legacy',      provider: 'anthropic'                          },
+  { id: 'gpt-4o',                        label: 'GPT-4o',                hint: 'Balanced',    provider: 'openai',    badge: 'recommended'    },
+  { id: 'gpt-4o-mini',                   label: 'GPT-4o Mini',           hint: 'Fast',        provider: 'openai',    badge: 'best-value'     },
+  { id: 'gpt-4.1',                       label: 'GPT-4.1',               hint: 'Long ctx',    provider: 'openai'                             },
+  { id: 'o4-mini',                       label: 'o4 Mini',               hint: 'Reasoning',   provider: 'openai',    badge: 'best-reasoning' },
+  { id: 'o3',                            label: 'o3',                    hint: 'Reasoning',   provider: 'openai'                             },
+  { id: 'grok-3',                        label: 'Grok 3',                hint: 'Powerful',    provider: 'xai',       badge: 'recommended'    },
+  { id: 'grok-3-mini',                   label: 'Grok 3 Mini',           hint: 'Reasoning',   provider: 'xai',       badge: 'best-value'     },
+  { id: 'grok-2-1212',                   label: 'Grok 2',                hint: 'Balanced',    provider: 'xai'                                },
+  { id: 'grok-2-vision-1212',            label: 'Grok 2 Vision',         hint: 'Vision',      provider: 'xai'                                },
+  { id: 'llama-3.3-70b-versatile',       label: 'Llama 3.3 70B',         hint: 'Fast',        provider: 'groq',      badge: 'recommended'    },
+  { id: 'llama-3.1-8b-instant',          label: 'Llama 3.1 8B',          hint: 'Fastest',     provider: 'groq',      badge: 'fastest'        },
+  { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 70B',       hint: 'Reasoning',   provider: 'groq',      badge: 'best-reasoning' },
+  { id: 'qwen-qwq-32b',                  label: 'Qwen QwQ 32B',          hint: 'Reasoning',   provider: 'groq'                               },
+  { id: 'mixtral-8x7b-32768',            label: 'Mixtral 8x7B',          hint: 'Balanced',    provider: 'groq'                               },
+  { id: 'gemini-2.5-pro-preview-05-06',  label: 'Gemini 2.5 Pro',        hint: 'Powerful',    provider: 'google',    badge: 'most-capable'   },
+  { id: 'gemini-2.0-flash',              label: 'Gemini 2.0 Flash',      hint: 'Fast',        provider: 'google',    badge: 'recommended'    },
+  { id: 'gemini-2.0-flash-lite',         label: 'Gemini 2.0 Flash Lite', hint: 'Cheapest',    provider: 'google',    badge: 'best-value'     },
+  { id: 'llama3.2',                      label: 'Llama 3.2',             hint: 'Local',       provider: 'ollama'                             },
+  { id: 'qwen2.5',                       label: 'Qwen 2.5',              hint: 'Local',       provider: 'ollama',    badge: 'recommended'    },
+  { id: 'deepseek-r1',                   label: 'DeepSeek R1',           hint: 'Local',       provider: 'ollama'                             },
+  { id: 'mistral',                       label: 'Mistral 7B',            hint: 'Local',       provider: 'ollama'                             },
 ];
+
+const MODEL_PROVIDERS = Array.from(new Set(MODEL_LIST.map((m) => m.provider)));
+const MODELS_BY_PROVIDER = Object.fromEntries(
+  MODEL_PROVIDERS.map((p) => [p, MODEL_LIST.filter((m) => m.provider === p)]),
+);
 
 const TOOL_LABELS: Record<string, string> = {
   check_workspace_secrets: 'Check workspace secrets',
@@ -247,7 +281,7 @@ function MessageBubble({ msg, feedbackVote, onFeedback }: {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const modelLabel = MODELS.find((m) => m.id === msg.model)?.label;
+  const modelLabel = MODEL_LIST.find((m) => m.id === msg.model)?.label;
 
   const createdWorkflows: CreatedWorkflow[] = (msg.toolCalls ?? [])
     .filter((tc) => tc.name === 'create_workflow' && tc.result != null)
@@ -544,11 +578,12 @@ export default function TasksPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionId, setSessionId] = useState(() => `s-${Date.now()}`);
-  const [model, setModel] = useState(MODELS[0]!.id);
+  const [model, setModel] = useState(MODEL_LIST[0]!.id);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down'>>({});
   const [workflows, setWorkflows] = useState<{ id: string; name: string }[]>([]);
   const [workflowsLoading, setWorkflowsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   /* slash command state */
   const [slashOpen, setSlashOpen] = useState(false);
@@ -560,10 +595,12 @@ export default function TasksPage() {
   const [tickerVisible, setTickerVisible] = useState(true);
   const [isFocused, setIsFocused] = useState(false);
 
-  const bottomRef    = useRef<HTMLDivElement>(null);
-  const textareaRef  = useRef<HTMLTextAreaElement>(null);
-  const abortRef     = useRef<AbortController | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const bottomRef      = useRef<HTMLDivElement>(null);
+  const textareaRef    = useRef<HTMLTextAreaElement>(null);
+  const abortRef       = useRef<AbortController | null>(null);
+  const fileInputRef   = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
 
   const hasMessages = messages.length > 0;
 
@@ -728,6 +765,40 @@ export default function TasksPage() {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }
 
+  /* ── Mic (Web Speech API) ────────────────────────────────────────────── */
+  function toggleMic() {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const win = window as any;
+    const SpeechRec = win.SpeechRecognition ?? win.webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
+    const recognition = new SpeechRec();
+    recognitionRef.current = recognition;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    recognition.lang = 'en-US';
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    recognition.interimResults = false;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    recognition.maxAlternatives = 1;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    recognition.onresult = (event: { results: { [k: number]: { [k: number]: { transcript: string } } } }) => {
+      const transcript = event.results[0]?.[0]?.transcript ?? '';
+      if (transcript) handleInputChange(input ? `${input} ${transcript}` : transcript);
+    };
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    recognition.onend = () => setIsListening(false);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    recognition.onerror = () => setIsListening(false);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    recognition.start();
+    setIsListening(true);
+  }
+
   /* ── Feedback ────────────────────────────────────────────────────────── */
   function handleFeedback(messageId: string, vote: 'up' | 'down') {
     setFeedback((prev) => {
@@ -885,7 +956,7 @@ export default function TasksPage() {
     setMessages((prev) => prev.map((m) => m.streaming ? { ...m, streaming: false } : m));
   }
 
-  const currentModel = MODELS.find((m) => m.id === model) ?? MODELS[0]!;
+  const currentModel = MODEL_LIST.find((m) => m.id === model) ?? MODEL_LIST[0]!;
 
   /* ── Input box ───────────────────────────────────────────────────────── */
   const inputBox = (
@@ -970,9 +1041,14 @@ export default function TasksPage() {
         {/* Right side: mic + send/stop */}
         <div className="flex items-center gap-1.5 shrink-0 self-end">
           <button
-            disabled
-            title="Voice input (coming soon)"
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground opacity-30 cursor-not-allowed"
+            onClick={toggleMic}
+            disabled={isStreaming}
+            title={isListening ? 'Stop listening' : 'Voice input'}
+            className={`flex size-7 items-center justify-center rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+              isListening
+                ? 'bg-red-500/10 text-red-500 animate-pulse'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
           >
             <HugeiconsIcon icon={Mic01Icon} className="size-4" />
           </button>
@@ -1019,21 +1095,32 @@ export default function TasksPage() {
               <HugeiconsIcon icon={ArrowDown01Icon} className="size-3 opacity-60" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" className="w-44">
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground font-normal">AI Model</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {MODELS.map((m) => (
-              <DropdownMenuItem
-                key={m.id}
-                onClick={() => setModel(m.id)}
-                className="flex items-center justify-between gap-3"
-              >
-                <span>{m.label}</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-muted-foreground">{m.hint}</span>
-                  {model === m.id && <span className="size-1.5 rounded-full bg-primary shrink-0" />}
-                </div>
-              </DropdownMenuItem>
+          <DropdownMenuContent side="top" align="end" className="w-52 max-h-[360px] overflow-y-auto">
+            {MODEL_PROVIDERS.map((provider, pi) => (
+              <div key={provider}>
+                {pi > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground font-normal px-2 py-1">
+                  {PROVIDER_LABELS[provider] ?? provider}
+                </DropdownMenuLabel>
+                {(MODELS_BY_PROVIDER[provider] ?? []).map((m) => (
+                  <DropdownMenuItem
+                    key={m.id}
+                    onClick={() => setModel(m.id)}
+                    className="flex items-center justify-between gap-2 py-1.5"
+                  >
+                    <span className="truncate flex-1 text-xs">{m.label}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {m.badge && (
+                        <span className="text-[9px] rounded px-1 py-0.5 bg-primary/10 text-primary font-medium hidden sm:block">
+                          {m.badge.replace(/-/g, ' ')}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">{m.hint}</span>
+                      {model === m.id && <span className="size-1.5 rounded-full bg-primary shrink-0" />}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </div>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>

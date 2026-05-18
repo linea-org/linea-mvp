@@ -6,20 +6,10 @@ import { Switch } from '@linea/ui/components/switch';
 import { Textarea } from '@linea/ui/components/textarea';
 import { Label } from '@linea/ui/components/label';
 import { Separator } from '@linea/ui/components/separator';
+import { Input } from '@linea/ui/components/input';
 import { VariableChips } from '../variable-picker';
 import { ModelPicker } from '../model-picker';
 import { cn } from '@linea/ui/lib/utils';
-
-/* ─── Built-in tools (mirrors backend definitions.ts) ───────────────── */
-const BUILTIN_TOOLS = [
-  { name: 'http_request',    label: 'HTTP request',     desc: 'Call any URL or API', approval: 'on_mutation' },
-  { name: 'ask_human',       label: 'Ask human',         desc: 'Pause and request user input', approval: 'always' },
-  { name: 'write_variable',  label: 'Write variable',    desc: 'Store a value in workflow state', approval: 'never' },
-  { name: 'read_variable',   label: 'Read variable',     desc: 'Read a workflow variable', approval: 'never' },
-  { name: 'memory_store',    label: 'Memory store',      desc: 'Persist a fact for future runs', approval: 'never' },
-  { name: 'memory_search',   label: 'Memory search',     desc: 'Recall facts from past runs', approval: 'never' },
-  { name: 'run_javascript',  label: 'Run JavaScript',    desc: 'Execute a JS snippet', approval: 'always' },
-] as const;
 
 interface AgentPanelProps {
   data: Record<string, unknown>;
@@ -27,6 +17,31 @@ interface AgentPanelProps {
   nodes?: Node[];
   nodeId?: string;
 }
+
+/** Built-in tools agents can use — mirrors BUILTIN_TOOLS in tools/definitions.ts */
+const AGENT_TOOLS: Array<{
+  name: string;
+  label: string;
+  description: string;
+  approvalTag: 'auto' | 'mutation' | 'always';
+}> = [
+  { name: 'http_request',   label: 'HTTP Request',   description: 'Call any REST API or URL', approvalTag: 'mutation' },
+  { name: 'run_javascript', label: 'Run JavaScript',  description: 'Execute a JS snippet for data transforms', approvalTag: 'always' },
+  { name: 'ask_human',      label: 'Ask Human',       description: 'Pause and ask the user a question', approvalTag: 'always' },
+  { name: 'memory_store',   label: 'Memory: Store',   description: 'Persist facts across executions', approvalTag: 'auto' },
+  { name: 'memory_search',  label: 'Memory: Search',  description: 'Recall facts from previous runs', approvalTag: 'auto' },
+  { name: 'read_variable',  label: 'Read Variable',   description: 'Read a named workflow variable', approvalTag: 'auto' },
+  { name: 'write_variable', label: 'Write Variable',  description: 'Set a named workflow variable', approvalTag: 'auto' },
+];
+
+const APPROVAL_TAG_STYLES: Record<string, string> = {
+  auto:     'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  mutation: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  always:   'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+};
+const APPROVAL_TAG_LABELS: Record<string, string> = {
+  auto: 'auto', mutation: 'needs approval', always: 'always approved',
+};
 
 /* ─── Slash command menu ─────────────────────────────────────────── */
 interface SlashCmd {
@@ -45,7 +60,7 @@ function buildSlashCommands(nodes: Node[], currentNodeId?: string): SlashCmd[] {
   ];
 
   const nodeRefs: SlashCmd[] = nodes
-    .filter((n) => n.id !== currentNodeId && n.type !== 'note' && n.type !== 'end')
+    .filter((n) => n.id !== currentNodeId && n.type !== 'note' && n.type !== 'end' && n.type !== 'frame')
     .map((n) => {
       const name = (n.data?.nodeName as string) || (n.data?.label as string) || n.type || n.id;
       return { label: `{{${name}}}`, insert: `{{${name}}}`, desc: `Output from "${name}" node` };
@@ -213,20 +228,20 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
   const systemPrompt = (data.systemPrompt as string) ?? '';
   const enabledTools = (data.tools as string[]) ?? [];
 
-  function toggleTool(name: string) {
-    const next = enabledTools.includes(name)
-      ? enabledTools.filter((t) => t !== name)
-      : [...enabledTools, name];
+  function toggleTool(name: string, enabled: boolean) {
+    const next = enabled
+      ? [...new Set([...enabledTools, name])]
+      : enabledTools.filter((t) => t !== name);
     onUpdate({ tools: next });
   }
 
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="agent-model">Model</Label>
+        <Label>Model</Label>
         <ModelPicker
           value={(data.model as string) ?? 'claude-sonnet-4-6'}
-          onChange={(v) => onUpdate({ model: v })}
+          onValueChange={(v) => onUpdate({ model: v })}
         />
       </div>
 
@@ -250,7 +265,7 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
           onChange={(v) => onUpdate({ instructions: v })}
           nodes={nodes}
           currentNodeId={nodeId}
-          rows={6}
+          rows={8}
         />
         <VariableChips
           nodes={nodes}
@@ -261,52 +276,46 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
         />
       </div>
 
-      {/* Tools */}
-      <Separator />
-
-      <div className="space-y-2">
-        <Label>Tools</Label>
-        <p className="text-[10px] text-muted-foreground">Enable tools the agent can use during its reasoning loop.</p>
+      <div className="grid grid-cols-3 gap-2">
         <div className="space-y-1">
-          {BUILTIN_TOOLS.map((tool) => {
-            const checked = enabledTools.includes(tool.name);
-            return (
-              <label
-                key={tool.name}
-                className={cn(
-                  'flex cursor-pointer items-start gap-2.5 rounded-md border px-2.5 py-2 transition-colors',
-                  checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-muted/40',
-                )}
-              >
-                <input
-                  type="checkbox"
-                  className="mt-0.5 accent-primary"
-                  checked={checked}
-                  onChange={() => toggleTool(tool.name)}
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium">{tool.label}</span>
-                    {tool.approval !== 'never' && (
-                      <span className={cn(
-                        'rounded px-1 py-0.5 text-[9px] font-medium',
-                        tool.approval === 'always'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                      )}>
-                        {tool.approval === 'always' ? 'requires approval' : 'approval on write'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">{tool.desc}</p>
-                </div>
-              </label>
-            );
-          })}
+          <Label htmlFor="agent-maxsteps" className="text-[10px]">Max steps</Label>
+          <Input
+            id="agent-maxsteps"
+            type="number"
+            min={1}
+            max={50}
+            value={(data.maxSteps as number) ?? 10}
+            onChange={(e) => onUpdate({ maxSteps: parseInt(e.target.value) || 10 })}
+            className="h-7 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="agent-temp" className="text-[10px]">Temperature</Label>
+          <Input
+            id="agent-temp"
+            type="number"
+            min={0}
+            max={1}
+            step={0.1}
+            value={(data.temperature as number) ?? 0.7}
+            onChange={(e) => onUpdate({ temperature: parseFloat(e.target.value) })}
+            className="h-7 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="agent-maxtokens" className="text-[10px]">Max tokens</Label>
+          <Input
+            id="agent-maxtokens"
+            type="number"
+            min={256}
+            max={128000}
+            step={256}
+            value={(data.maxTokens as number) ?? 4096}
+            onChange={(e) => onUpdate({ maxTokens: parseInt(e.target.value) || 4096 })}
+            className="h-7 text-xs"
+          />
         </div>
       </div>
-
-      <Separator />
 
       <div className="flex items-center justify-between">
         <Label htmlFor="agent-history" className="cursor-pointer">Include chat history</Label>
@@ -331,10 +340,58 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
             onCheckedChange={(v) => onUpdate({ enableLongTermMemory: v })}
           />
         </div>
-        {!!data.enableLongTermMemory && (
-          <p className="text-[10px] text-muted-foreground">
-            When enabled, the agent will recall facts stored by previous runs. Enable <code>memory_store</code> and <code>memory_search</code> in the tools list above.
+      </div>
+
+      <Separator />
+
+      {/* ── Tools ───────────────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <div>
+          <Label>Tools</Label>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Capabilities the agent can invoke during its reasoning loop.
           </p>
+        </div>
+        <div className="space-y-1.5">
+          {AGENT_TOOLS.map((tool) => {
+            const enabled = enabledTools.includes(tool.name);
+            return (
+              <button
+                key={tool.name}
+                type="button"
+                onClick={() => toggleTool(tool.name, !enabled)}
+                className={cn(
+                  'flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                  enabled
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border bg-transparent hover:bg-muted/50',
+                )}
+              >
+                <div className={cn(
+                  'mt-0.5 flex size-3.5 shrink-0 items-center justify-center rounded border transition-colors',
+                  enabled ? 'border-primary bg-primary' : 'border-muted-foreground/40 bg-background',
+                )}>
+                  {enabled && (
+                    <svg viewBox="0 0 10 10" className="size-2.5 text-primary-foreground" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                      <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium">{tool.label}</span>
+                    <span className={cn('rounded px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wide', APPROVAL_TAG_STYLES[tool.approvalTag])}>
+                      {APPROVAL_TAG_LABELS[tool.approvalTag]}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{tool.description}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {enabledTools.length === 0 && (
+          <p className="text-[10px] text-muted-foreground/60 italic">No tools selected — the agent will respond without calling external services.</p>
         )}
       </div>
 

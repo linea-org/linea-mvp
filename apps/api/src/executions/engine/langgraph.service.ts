@@ -36,6 +36,7 @@ export interface WorkflowEdge {
 export interface WorkflowDefinition {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  settings?: { supervisorModel?: string; [k: string]: unknown };
 }
 
 export type NodeUpdateCallback = (
@@ -108,6 +109,7 @@ export class LangGraphService {
   ) {
     const saver = checkpointer ?? new MemorySaver();
     const builder = new StateGraph(WorkflowStateAnnotation);
+    const supervisorModelOverride = definition.settings?.supervisorModel;
 
     const validIds = new Set(definition.nodes.map((n) => n.id));
     const edgesBySource = new Map<string, WorkflowEdge[]>();
@@ -131,6 +133,7 @@ export class LangGraphService {
           checkpointer,
           workflowId,
           threadId,
+          supervisorModelOverride,
         ),
       );
     }
@@ -145,7 +148,10 @@ export class LangGraphService {
       if (
         sourceType === 'if-else' ||
         sourceType === 'if / else' ||
-        sourceType === 'router'
+        sourceType === 'router' ||
+        sourceType === 'approval' ||
+        sourceType === 'evaluator' ||
+        sourceType === 'guardrails'
       ) {
         if (!conditionals.has(sourceId)) {
           const pathMap: Record<string, string> = {};
@@ -186,10 +192,10 @@ export class LangGraphService {
     node: WorkflowNode,
     onNodeUpdate: NodeUpdateCallback,
     workspaceId: string,
-
     _checkpointer?: BaseCheckpointSaver,
     workflowId?: string,
     threadId?: string,
+    supervisorModelOverride?: string,
   ) {
     const nodeType = node.data?.nodeType || node.type;
 
@@ -311,23 +317,10 @@ export class LangGraphService {
           workspaceId,
           workflowId,
           threadId,
+          supervisorModelOverride,
         });
 
         const durationMs = Date.now() - nodeStart;
-
-        // Approval gate node (non-agent)
-        if (
-          result &&
-          typeof result === 'object' &&
-          '__pendingApproval' in result
-        ) {
-          onNodeUpdate(node.id, 'suspended', result, undefined, durationMs);
-          interrupt({
-            type: 'approval',
-            nodeId: node.id,
-            message: result.message,
-          });
-        }
 
         let actualOutput = result;
         let chatUpdates: any[] = [];
@@ -400,6 +393,9 @@ export class LangGraphService {
 
       const output = result.output;
       if (nodeType === 'router') return output?.branch ?? 'none';
+      if (nodeType === 'approval') return output?.__approvalDecision ?? 'approved';
+      if (nodeType === 'evaluator') return output?.passed === true ? 'passed' : 'failed';
+      if (nodeType === 'guardrails') return output?.passed === true ? 'pass' : 'block';
       return output?.branch ?? 'else';
     };
   }

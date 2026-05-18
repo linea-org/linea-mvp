@@ -1,134 +1,158 @@
 import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
-import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 
+/* ─── Plan catalogue ────────────────────────────────────────────────── */
 export const PLANS: Record<string, {
-  name: string; amount: number; currency: string;
+  name: string; priceUsd: number;
   executions: string; workflows: string; members: string; features: string[];
+  polarPriceId?: string; // set via env at runtime
 }> = {
   free: {
-    name: 'Free', amount: 0, currency: 'INR',
-    executions: '500 / month', workflows: '5', members: '3',
-    features: [],
+    name: 'Free', priceUsd: 0,
+    executions: '500 / month', workflows: '5', members: '3', features: [],
   },
   pro: {
-    name: 'Pro', amount: 299900, currency: 'INR',
+    name: 'Pro', priceUsd: 29,
     executions: '10,000 / month', workflows: 'Unlimited', members: '10',
-    features: ['Priority support'],
+    features: ['Priority support', 'Advanced analytics', 'Custom domains'],
   },
   team: {
-    name: 'Team', amount: 999900, currency: 'INR',
+    name: 'Team', priceUsd: 99,
     executions: '100,000 / month', workflows: 'Unlimited', members: '25',
-    features: ['SSO', 'Audit logs', 'Dedicated support'],
+    features: ['SSO', 'Audit logs', 'Dedicated support', 'SLA guarantee'],
   },
 };
+
+/* ─── Polar webhook payload types ────────────────────────────────────── */
+interface PolarSubscriptionPayload {
+  type: string;
+  data: {
+    id: string;
+    status: string;
+    product?: { id: string };
+    metadata?: Record<string, string>;
+    subscription_id?: string;
+  };
+}
 
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
-  private readonly rz: Razorpay | null = null;
-  private readonly keySecret: string;
+  private readonly accessToken: string;
+  private readonly webhookSecret: string;
+  private readonly priceIds: Record<string, string>;
+  private readonly frontendUrl: string;
 
   constructor(
     private readonly config: ConfigService,
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
   ) {
-    const keyId = config.get<string>('RAZORPAY_KEY_ID');
-    this.keySecret = config.get<string>('RAZORPAY_KEY_SECRET') ?? '';
-    if (keyId && this.keySecret) {
-      this.rz = new Razorpay({ key_id: keyId, key_secret: this.keySecret });
-    }
-  }
-
-  async getPlans(workspaceId: string) {
-    const keyId = this.config.get<string>('RAZORPAY_KEY_ID') ?? '';
-    const plans = Object.entries(PLANS).map(([key, p]) => ({
-      key, label: p.name, price: p.amount, currency: p.currency,
-      executions: p.executions, workflows: p.workflows, members: p.members,
-      features: p.features,
-    }));
-    const [ws] = await this.db.select({ plan: workspaces.plan }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
-    return { plans, keyId, currentPlan: ws?.plan ?? 'free' };
-  }
-
-  async createOrder(workspaceId: string, planKey: string) {
-    const plan = PLANS[planKey];
-    if (!plan) throw new BadRequestException(`Unknown plan: ${planKey}`);
-    if (plan.amount === 0) throw new BadRequestException('Free plan does not require payment');
-    if (!this.rz) throw new BadRequestException('Payment gateway not configured');
-
-    const order = await this.rz.orders.create({
-      amount: plan.amount,
-      currency: plan.currency,
-      receipt: `ws_${workspaceId}_${planKey}_${Date.now()}`,
-      notes: { workspaceId, plan: planKey },
-    });
-
-    return {
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      keyId: this.config.get<string>('RAZORPAY_KEY_ID'),
-      planName: plan.name,
+    this.accessToken = config.get<string>('POLAR_ACCESS_TOKEN') ?? '';
+    this.webhookSecret = config.get<string>('POLAR_WEBHOOK_SECRET') ?? '';
+    this.frontendUrl = config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    this.priceIds = {
+      pro:  config.get<string>('POLAR_PRICE_ID_PRO')  ?? '',
+      team: config.get<string>('POLAR_PRICE_ID_TEAM') ?? '',
     };
   }
 
-  async verifyPayment(
-    workspaceId: string,
-    orderId: string,
-    paymentId: string,
-    signature: string,
-    planKey: string,
-  ) {
-    if (!this.rz) throw new BadRequestException('Payment gateway not configured');
+  /* ── Helpers ────────────────────────────────────────────────────── */
 
-    const expected = crypto
-      .createHmac('sha256', this.keySecret)
-      .update(`${orderId}|${paymentId}`)
-      .digest('hex');
-
-    if (expected !== signature) {
-      throw new BadRequestException('Payment signature verification failed');
+  private async polarPost<T>(path: string, body: unknown): Promise<T> {
+    const res = await fetch(`https://api.polar.sh${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new BadRequestException(`Polar API error: ${err}`);
     }
-
-    if (!PLANS[planKey]) throw new BadRequestException(`Unknown plan: ${planKey}`);
-
-    await this.db
-      .update(workspaces)
-      .set({ plan: planKey as any, updatedAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
-
-    this.logger.log(`Workspace ${workspaceId} upgraded to ${planKey} via payment ${paymentId}`);
-    return { success: true, plan: planKey };
+    return res.json() as Promise<T>;
   }
 
-  async handleWebhook(payload: Record<string, unknown>, signature: string) {
-    const body = JSON.stringify(payload);
-    const expected = crypto
-      .createHmac('sha256', this.keySecret)
-      .update(body)
-      .digest('hex');
+  /* ── Public methods ─────────────────────────────────────────────── */
 
-    if (expected !== signature) {
-      throw new BadRequestException('Invalid webhook signature');
+  async getPlans(workspaceId: string) {
+    const plans = Object.entries(PLANS).map(([key, p]) => ({
+      key,
+      label: p.name,
+      priceUsd: p.priceUsd,
+      executions: p.executions,
+      workflows: p.workflows,
+      members: p.members,
+      features: p.features,
+    }));
+    const [ws] = await this.db
+      .select({ plan: workspaces.plan })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+    return { plans, currentPlan: ws?.plan ?? 'free' };
+  }
+
+  async createCheckout(workspaceId: string, planKey: string) {
+    const plan = PLANS[planKey];
+    if (!plan) throw new BadRequestException(`Unknown plan: ${planKey}`);
+    if (plan.priceUsd === 0) throw new BadRequestException('Free plan does not require payment');
+    if (!this.accessToken) throw new BadRequestException('Polar.sh not configured');
+
+    const priceId = this.priceIds[planKey];
+    if (!priceId) throw new BadRequestException(`No Polar price ID configured for plan: ${planKey}`);
+
+    const checkout = await this.polarPost<{ url: string }>('/v1/checkouts', {
+      product_price_id: priceId,
+      success_url: `${this.frontendUrl}/settings/billing?success=1&plan=${planKey}`,
+      metadata: { workspaceId, plan: planKey },
+    });
+
+    return { url: checkout.url };
+  }
+
+  async handleWebhook(rawBody: string, signature: string) {
+    /* HMAC-SHA256 verification */
+    if (this.webhookSecret) {
+      const expected = crypto
+        .createHmac('sha256', this.webhookSecret)
+        .update(rawBody)
+        .digest('hex');
+      if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature ?? ''))) {
+        throw new BadRequestException('Invalid webhook signature');
+      }
     }
 
-    const event = payload.event as string;
-    this.logger.log(`Razorpay webhook: ${event}`);
+    const payload = JSON.parse(rawBody) as PolarSubscriptionPayload;
+    this.logger.log(`Polar webhook: ${payload.type}`);
 
-    if (event === 'payment.captured') {
-      const notes = (payload as any)?.payload?.payment?.entity?.notes as Record<string, string> | undefined;
-      if (notes?.workspaceId && notes?.plan) {
-        await this.db
-          .update(workspaces)
-          .set({ plan: notes.plan as any, updatedAt: new Date() })
-          .where(eq(workspaces.id, notes.workspaceId));
-      }
+    const meta = payload.data?.metadata;
+    const workspaceId = meta?.workspaceId;
+    const plan = meta?.plan as string | undefined;
+
+    if (
+      (payload.type === 'subscription.created' || payload.type === 'order.created') &&
+      workspaceId && plan && PLANS[plan]
+    ) {
+      await this.db
+        .update(workspaces)
+        .set({ plan: plan as 'free' | 'pro' | 'team', updatedAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
+      this.logger.log(`Workspace ${workspaceId} upgraded to ${plan}`);
+    }
+
+    if (payload.type === 'subscription.revoked' && workspaceId) {
+      await this.db
+        .update(workspaces)
+        .set({ plan: 'free', updatedAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
+      this.logger.log(`Workspace ${workspaceId} downgraded to free (subscription revoked)`);
     }
 
     return { received: true };
