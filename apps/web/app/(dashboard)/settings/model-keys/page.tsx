@@ -17,6 +17,7 @@ interface ModelProvider {
   placeholder: string;
   docsUrl: string;
   hint: string;
+  models?: string[];
   inputType?: 'password' | 'text';
 }
 
@@ -26,36 +27,49 @@ const PROVIDERS: ModelProvider[] = [
     label: 'Anthropic',
     placeholder: 'sk-ant-…',
     docsUrl: 'https://console.anthropic.com/settings/keys',
-    hint: 'Powers Claude models (claude-sonnet, claude-opus, etc.)',
+    hint: 'Claude Sonnet 4.6, Claude Opus 4.7, Claude Haiku 4.5',
+    models: ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5'],
   },
   {
     key: 'OPENAI_API_KEY',
     label: 'OpenAI',
     placeholder: 'sk-…',
     docsUrl: 'https://platform.openai.com/api-keys',
-    hint: 'Powers GPT-4o, GPT-4 Turbo, and other OpenAI models',
+    hint: 'GPT-4o, GPT-4.1, o4 Mini, o3',
+    models: ['gpt-4o', 'gpt-4.1', 'o4-mini', 'o3'],
   },
   {
-    key: 'GOOGLE_API_KEY',
-    label: 'Google AI',
-    placeholder: 'AIza…',
-    docsUrl: 'https://aistudio.google.com/app/apikey',
-    hint: 'Powers Gemini models (gemini-1.5-pro, gemini-flash, etc.)',
+    key: 'XAI_API_KEY',
+    label: 'xAI (Grok)',
+    placeholder: 'xai-…',
+    docsUrl: 'https://console.x.ai',
+    hint: 'Grok 3, Grok 3 Mini, Grok 2 Vision',
+    models: ['grok-3', 'grok-3-mini', 'grok-2-vision-1212'],
   },
   {
     key: 'GROQ_API_KEY',
     label: 'Groq',
     placeholder: 'gsk_…',
     docsUrl: 'https://console.groq.com/keys',
-    hint: 'Fast inference for Llama, Mixtral, and Gemma models',
+    hint: 'Llama 3.3 70B, DeepSeek R1, Qwen QwQ 32B — ultra-fast inference',
+    models: ['llama-3.3-70b-versatile', 'deepseek-r1-distill-llama-70b', 'qwen-qwq-32b'],
+  },
+  {
+    key: 'GOOGLE_API_KEY',
+    label: 'Google AI',
+    placeholder: 'AIza…',
+    docsUrl: 'https://aistudio.google.com/app/apikey',
+    hint: 'Gemini 2.5 Pro, Gemini 2.0 Flash — 1M token context window',
+    models: ['gemini-2.5-pro-preview-05-06', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
   },
   {
     key: 'OLLAMA_BASE_URL',
     label: 'Ollama (local)',
     placeholder: 'http://localhost:11434',
     docsUrl: 'https://ollama.com',
-    hint: 'Self-hosted Ollama instance — run Llama, Mistral, Qwen, and others locally',
+    hint: 'Self-hosted — Llama, Qwen, DeepSeek R1, Mistral. No API key required.',
     inputType: 'text',
+    models: ['llama3.2', 'qwen2.5', 'deepseek-r1', 'mistral'],
   },
 ];
 
@@ -174,6 +188,15 @@ export default function ModelKeysPage() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{p.hint}</p>
+                  {p.models && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {p.models.map((m) => (
+                        <span key={m} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {set && secret && (
                     <p className="text-[10px] text-muted-foreground mt-1">
                       Set {new Date(secret.createdAt).toLocaleDateString()}

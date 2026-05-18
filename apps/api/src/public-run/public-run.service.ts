@@ -2,7 +2,7 @@ import { Injectable, Inject, NotFoundException, ForbiddenException, Unauthorized
 import { eq, and } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
-import { workflows, pods } from '@linea/db';
+import { workflows, pods, executions } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { ExecutionsService } from '../executions/executions.service';
 
@@ -95,6 +95,59 @@ export class PublicRunService {
     );
 
     return { executionId: execution.id, status: execution.status };
+  }
+
+  async getExecutionStatus(workflowId: string, executionId: string, providedApiKey?: string) {
+    // Verify workflow access first (same key check as trigger)
+    const [wf] = await this.db
+      .select({
+        id: workflows.id,
+        apiEnabled: workflows.apiEnabled,
+        apiVisibility: workflows.apiVisibility,
+        apiKey: workflows.apiKey,
+        isPublic: workflows.isPublic,
+      })
+      .from(workflows)
+      .where(eq(workflows.id, workflowId))
+      .limit(1);
+
+    if (!wf) throw new NotFoundException('Workflow not found');
+
+    if (wf.apiEnabled) {
+      if (wf.apiVisibility === 'api_key') {
+        if (!wf.apiKey || !providedApiKey || providedApiKey !== wf.apiKey) {
+          throw new UnauthorizedException('Invalid or missing API key');
+        }
+      }
+    } else if (!wf.isPublic) {
+      throw new ForbiddenException('This workflow is not publicly accessible');
+    }
+
+    const [row] = await this.db
+      .select({
+        id: executions.id,
+        status: executions.status,
+        output: executions.output,
+        error: executions.error,
+        startedAt: executions.startedAt,
+        finishedAt: executions.finishedAt,
+        tokenUsage: executions.tokenUsage,
+      })
+      .from(executions)
+      .where(and(eq(executions.id, executionId), eq(executions.workflowId, workflowId)))
+      .limit(1);
+
+    if (!row) throw new NotFoundException('Execution not found');
+
+    return {
+      executionId: row.id,
+      status: row.status,
+      output: row.status === 'completed' ? (row.output as { result?: unknown } | null)?.result ?? null : null,
+      error: row.error,
+      startedAt: row.startedAt?.toISOString() ?? null,
+      finishedAt: row.finishedAt?.toISOString() ?? null,
+      tokenUsage: row.tokenUsage,
+    };
   }
 
   async rotateApiKey(workflowId: string, podId: string): Promise<string> {

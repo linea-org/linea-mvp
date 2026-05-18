@@ -77,10 +77,10 @@ export default function SchedulesPage() {
       const base = `/workspaces/${activeWorkspace.id}/pods/${podId}`;
       const [sched, wfsResult] = await Promise.all([
         api.get<Schedule[]>(`${base}/schedules`),
-        api.get<{ workflows: Workflow[] }>(`${base}/workflows`),
+        api.get<Workflow[]>(`${base}/workflows`),
       ]);
       setSchedules(sched);
-      setWorkflows(wfsResult.workflows ?? []);
+      setWorkflows(wfsResult ?? []);
     } finally {
       setLoading(false);
     }

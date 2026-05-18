@@ -104,12 +104,12 @@ export default function ExecutionsPage() {
       const token = await getToken();
       if (!token) return;
       const api = createApiClient(token);
-      const [data, wfs] = await Promise.all([
-        api.get<{ executions: Execution[] }>(`/workspaces/${activeWorkspace.id}/pods/${podId}/executions`),
-        api.get<{ workflows: Workflow[] }>(`/workspaces/${activeWorkspace.id}/pods/${podId}/workflows`),
+      const [execList, wfArr] = await Promise.all([
+        api.get<Execution[]>(`/workspaces/${activeWorkspace.id}/pods/${podId}/executions`),
+        api.get<Workflow[]>(`/workspaces/${activeWorkspace.id}/pods/${podId}/workflows`),
       ]);
-      setExecutions(data.executions);
-      const wfList = wfs.workflows ?? [];
+      setExecutions(execList ?? []);
+      const wfList = wfArr ?? [];
       setWorkflows(wfList);
       const nameMap: Record<string, string> = {};
       for (const wf of wfList) nameMap[wf.id] = wf.name;

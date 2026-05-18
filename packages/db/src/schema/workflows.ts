@@ -102,6 +102,17 @@ export const templateUpvotes = pgTable(
   (t) => ({ uniq: unique().on(t.userId, t.templateId) }),
 );
 
+export const evalRuns = pgTable('eval_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workflowId: uuid('workflow_id').references(() => workflows.id, { onDelete: 'cascade' }).notNull(),
+  podId: uuid('pod_id').references(() => pods.id, { onDelete: 'cascade' }).notNull(),
+  workspaceId: uuid('workspace_id').notNull(),
+  results: jsonb('results').notNull(),
+  passCount: integer('pass_count').notNull(),
+  totalCount: integer('total_count').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const workflowsRelations = relations(workflows, ({ one, many }) => ({
   pod: one(pods, {
     fields: [workflows.podId],
@@ -120,3 +131,4 @@ export type WorkflowVersion = typeof workflowVersions.$inferSelect;
 export type Template = typeof templates.$inferSelect;
 export type WorkflowFavorite = typeof workflowFavorites.$inferSelect;
 export type TemplateUpvote = typeof templateUpvotes.$inferSelect;
+export type EvalRun = typeof evalRuns.$inferSelect;
