@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isGraphInterrupt } from '@langchain/langgraph';
-import { ilike, and, eq } from 'drizzle-orm';
+import { ilike, and, eq, sql } from 'drizzle-orm';
 import type { WorkflowState } from './variable-substitution';
 import { substituteInValue } from './variable-substitution';
 import { executeAgentNode } from './executors/agent.executor';
@@ -359,8 +359,35 @@ export class NodeExecutorService {
       }
 
       case 'retriever': {
+        const resolvedKeys = await this.resolveApiKeys(workspaceId);
+        const openaiKey = resolvedKeys.OPENAI_API_KEY;
         const r = await executeRetrieverNode(nodeData, state, {
           query: async (q, kbId, topK) => {
+            // Prefer vector similarity search when an OpenAI key is available
+            const queryEmbedding = openaiKey
+              ? await this.memoryService.generateEmbedding(q, openaiKey)
+              : null;
+
+            if (queryEmbedding) {
+              const vec = `[${queryEmbedding.join(',')}]`;
+              const rows = await this.db.execute(sql`
+                SELECT content, metadata,
+                       1 - (embedding <=> ${vec}::vector) AS score
+                FROM knowledge_entries
+                WHERE knowledge_base_id = ${kbId}
+                  AND embedding IS NOT NULL
+                ORDER BY embedding <=> ${vec}::vector
+                LIMIT ${topK}
+              `);
+              const results = Array.from(rows).map((row: any) => ({
+                content: row.content as string,
+                metadata: row.metadata as Record<string, unknown>,
+                score: Number(row.score),
+              }));
+              if (results.length > 0) return results;
+            }
+
+            // Fallback: keyword search (no key or no embeddings stored)
             const rows = await this.db
               .select({
                 content: knowledgeEntries.content,
@@ -481,10 +508,10 @@ export class NodeExecutorService {
       }
 
       case 'subworkflow':
+        // Subworkflow is handled inline by LangGraphService.createNodeFn before this code is reached.
+        // This path is only hit if node-executor is called directly outside of the LangGraph runner.
         throw new Error(
-          `Sub-workflow node is not yet implemented. ` +
-          `Recursive workflow invocation requires orchestration support that is currently in development. ` +
-          `As a workaround, restructure the sub-workflow steps directly into this workflow.`,
+          'Subworkflow nodes must run inside the LangGraph workflow engine. Direct dispatch is not supported.',
         );
 
       default:

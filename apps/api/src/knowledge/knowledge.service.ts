@@ -1,5 +1,7 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { and, eq, ilike, count, desc } from 'drizzle-orm';
+import { Injectable, Inject, Logger } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { and, eq, ilike, count, desc, sql } from 'drizzle-orm';
 import type { DrizzleDB, NewKnowledgeBase, NewKnowledgeEntry } from '@linea/db';
 import { knowledgeBases, knowledgeEntries } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
@@ -10,7 +12,33 @@ import type { SearchEntriesDto } from './dto/search-entries.dto';
 
 @Injectable()
 export class KnowledgeService {
-  constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
+  private readonly logger = new Logger(KnowledgeService.name);
+
+  constructor(
+    @Inject(DB_TOKEN) private readonly db: DrizzleDB,
+    private readonly config: ConfigService,
+  ) {}
+
+  private async generateEmbedding(text: string): Promise<number[] | null> {
+    const apiKey = this.config.get<string>('OPENAI_API_KEY');
+    if (!apiKey) return null;
+    try {
+      const resp = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'text-embedding-3-small', input: text }),
+      });
+      const json = (await resp.json()) as { data?: [{ embedding: number[] }]; error?: { message: string } };
+      if (!resp.ok || !json.data?.[0]) {
+        this.logger.warn(`Embedding API error: ${json.error?.message ?? resp.status}`);
+        return null;
+      }
+      return json.data[0].embedding;
+    } catch (err) {
+      this.logger.warn(`generateEmbedding failed: ${err}`);
+      return null;
+    }
+  }
 
   // ─── Knowledge Bases ────────────────────────────────────────────────────────
 
@@ -117,11 +145,14 @@ export class KnowledgeService {
   async addEntry(workspaceId: string, kbId: string, dto: CreateEntryDto) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
+    const embedding = await this.generateEmbedding(dto.content);
+
     const [entry] = await this.db
       .insert(knowledgeEntries)
       .values({
         knowledgeBaseId: kbId,
         content: dto.content,
+        embedding: embedding ?? undefined,
         metadata: dto.metadata ?? {},
       } satisfies Partial<NewKnowledgeEntry> as NewKnowledgeEntry)
       .returning();
@@ -173,6 +204,33 @@ export class KnowledgeService {
   ) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
+    const limit = dto.limit ?? 10;
+
+    // Attempt vector similarity search if embeddings are available
+    const queryEmbedding = dto.query ? await this.generateEmbedding(dto.query) : null;
+    if (queryEmbedding) {
+      const vec = `[${queryEmbedding.join(',')}]`;
+      const rows = await this.db.execute(sql`
+        SELECT id, content, metadata, created_at,
+               1 - (embedding <=> ${vec}::vector) AS score
+        FROM knowledge_entries
+        WHERE knowledge_base_id = ${kbId}
+          AND embedding IS NOT NULL
+        ORDER BY embedding <=> ${vec}::vector
+        LIMIT ${limit}
+      `);
+      if (Array.from(rows).length > 0) {
+        return Array.from(rows).map((r: any) => ({
+          id: r.id as string,
+          content: r.content as string,
+          metadata: r.metadata as Record<string, unknown>,
+          createdAt: r.created_at as Date,
+          score: Number(r.score),
+        }));
+      }
+    }
+
+    // Fallback: keyword search (no OpenAI key or no embeddings stored yet)
     return this.db
       .select({
         id: knowledgeEntries.id,
@@ -184,9 +242,9 @@ export class KnowledgeService {
       .where(
         and(
           eq(knowledgeEntries.knowledgeBaseId, kbId),
-          ilike(knowledgeEntries.content, `%${dto.query}%`),
+          dto.query ? ilike(knowledgeEntries.content, `%${dto.query}%`) : undefined,
         ),
       )
-      .limit(dto.limit);
+      .limit(limit);
   }
 }
