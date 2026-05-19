@@ -115,9 +115,9 @@ export default function ExecutionsPage() {
         api.get<Execution[]>(`/workspaces/${activeWorkspace.id}/pods/${podId}/executions`),
         api.get<Workflow[]>(`/workspaces/${activeWorkspace.id}/pods/${podId}/workflows`),
       ]);
-      const list = execList ?? [];
+      const list: Execution[] = Array.isArray(execList) ? execList : ((execList as any)?.executions ?? []);
       setExecutions(list);
-      const wfList = wfArr ?? [];
+      const wfList: Workflow[] = Array.isArray(wfArr) ? wfArr : ((wfArr as any)?.workflows ?? []);
       setWorkflows(wfList);
       const nameMap: Record<string, string> = {};
       for (const wf of wfList) nameMap[wf.id] = wf.name;

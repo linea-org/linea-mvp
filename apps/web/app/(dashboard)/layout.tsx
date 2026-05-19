@@ -989,7 +989,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <WorkspaceProvider>
       <PodProvider>
-        <SidebarProvider>
+        <SidebarProvider className="h-svh overflow-hidden">
           <ShortcutsProvider>
             <DashboardSidebar />
             <main className="flex flex-1 flex-col min-h-0 bg-sidebar pr-2 py-2">

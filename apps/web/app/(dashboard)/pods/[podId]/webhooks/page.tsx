@@ -118,9 +118,10 @@ export default function WebhooksPage() {
       const token = await getToken();
       if (!token) return [];
       const api = createApiClient(token);
-      return api.get<Workflow[]>(
+      const res = await api.get<Workflow[]>(
         `/workspaces/${activeWorkspace!.id}/pods/${podId}/workflows`,
       );
+      return (Array.isArray(res) ? res : ((res as any)?.workflows ?? [])) as Workflow[];
     },
   });
 

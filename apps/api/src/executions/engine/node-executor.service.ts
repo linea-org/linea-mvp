@@ -168,7 +168,8 @@ export class NodeExecutorService {
         }
 
         if (decision.action === 'abort') {
-          throw new Error(`Node ${nodeId} aborted: ${decision.reason}`);
+          const label = (nodeData.nodeName as string | undefined) ?? nodeId;
+          throw new Error(`"${label}" failed: ${decision.reason}`);
         }
 
         if (decision.action === 'retry') {

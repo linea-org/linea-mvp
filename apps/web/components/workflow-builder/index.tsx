@@ -652,7 +652,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), type === 'error' ? 6000 : 3500);
   }
 
   function pushHistory(ns: Node[], es: Edge[]) {
@@ -1314,7 +1314,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       case 'execution_failed':
         setRunStatus({ id: executionId, status: 'failed' });
         setInterrupt(null);
-        showToast('Execution failed', 'error');
+        showToast(evt.error ? `Execution failed: ${evt.error}` : 'Execution failed', 'error');
         break;
       default:
         break;
@@ -1326,34 +1326,76 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     const ac = new AbortController();
     sseAbortRef.current = ac;
 
-    try {
-      const resp = await fetch(
-        `${API_BASE}/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/events`,
-        { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal },
-      );
-      if (!resp.ok || !resp.body) return;
+    let receivedTerminal = false;
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
+    for (let attempt = 0; attempt <= 5; attempt++) {
+      if (ac.signal.aborted) return;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const evt = JSON.parse(line.slice(6)) as SSEEvent;
-            handleSSEEvent(evt, executionId);
-          } catch { /* ignore malformed */ }
+      try {
+        const resp = await fetch(
+          `${API_BASE}/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/events`,
+          { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal },
+        );
+        if (!resp.ok || !resp.body) return;
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const evt = JSON.parse(line.slice(6)) as SSEEvent;
+              if (evt.type === 'execution_complete' || evt.type === 'execution_failed') {
+                receivedTerminal = true;
+              }
+              handleSSEEvent(evt, executionId);
+            } catch { /* ignore malformed */ }
+          }
+        }
+
+        // Stream ended cleanly — if we missed the terminal event, poll for final status
+        if (!receivedTerminal && !ac.signal.aborted) {
+          await pollExecutionFinalStatus(token, executionId);
+        }
+        return;
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        // Network drop — reconnect with exponential backoff
+        if (attempt < 5 && !ac.signal.aborted) {
+          await new Promise<void>((resolve) => {
+            const delay = Math.min(1_000 * 2 ** attempt, 30_000);
+            const t = setTimeout(resolve, delay);
+            ac.signal.addEventListener('abort', () => { clearTimeout(t); resolve(); });
+          });
         }
       }
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
-      // stream ended unexpectedly — status reflects last known state
+    }
+  }
+
+  async function pollExecutionFinalStatus(token: string, executionId: string) {
+    try {
+      const api = createApiClient(token);
+      const ex = await api.get<{ status: string; output?: { result?: unknown } | null; error?: string | null }>(
+        `/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}`,
+      );
+      if (ex.status === 'completed') {
+        setRunStatus({ id: executionId, status: 'completed' });
+        const rawOutput = ex.output?.result;
+        if (rawOutput !== undefined) setExecutionOutput(rawOutput);
+        showToast('Execution completed');
+      } else if (ex.status === 'failed') {
+        setRunStatus({ id: executionId, status: 'failed' });
+        showToast(ex.error ? `Execution failed: ${ex.error}` : 'Execution failed', 'error');
+      }
+    } catch {
+      // best-effort — toast already shown if SSE delivered the event
     }
   }
 
@@ -1366,7 +1408,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   }
 
   async function handleRun() {
-    handleRunRef.current = handleRun;
     const validationError = validateWorkflow();
     if (validationError) {
       showToast(validationError, 'error');
@@ -1404,6 +1445,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setIsRunning(false);
     }
   }
+  handleRunRef.current = handleRun;
 
   function handleRetryNode(nodeId: string) {
     setNodeResults((prev) => ({
@@ -2128,7 +2170,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       {/* Toast */}
       {toast && (
         <div
-          className={`pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
+          className={`pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg max-w-sm text-center ${
             toast.type === 'error' ? 'bg-destructive' : 'bg-foreground'
           }`}
         >

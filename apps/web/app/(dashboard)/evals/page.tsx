@@ -74,7 +74,7 @@ export default function EvalsPage() {
       if (!token) return [];
       const api = createApiClient(token);
       const res = await api.get<Workflow[]>(`/workspaces/${wsId}/pods/${selectedPodId}/workflows?limit=100`);
-      return (res ?? []).filter((w) => (w.definition?.settings?.testCases?.length ?? 0) > 0);
+      return Array.isArray(res) ? res : ((res as any)?.workflows ?? []) as Workflow[];
     },
   });
 
@@ -161,13 +161,16 @@ export default function EvalsPage() {
               </SelectTrigger>
               <SelectContent>
                 {(workflows?.length ?? 0) === 0 ? (
-                  <SelectItem value="__none" disabled>No workflows with eval cases</SelectItem>
+                  <SelectItem value="__none" disabled>No workflows in this pod</SelectItem>
                 ) : (
-                  workflows?.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name} ({w.definition?.settings?.testCases?.length ?? 0})
-                    </SelectItem>
-                  ))
+                  workflows?.map((w) => {
+                    const caseCount = w.definition?.settings?.testCases?.length ?? 0;
+                    return (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name}{caseCount > 0 ? ` (${caseCount} cases)` : ''}
+                      </SelectItem>
+                    );
+                  })
                 )}
               </SelectContent>
             </Select>
@@ -197,10 +200,10 @@ export default function EvalsPage() {
         </div>
       )}
 
-      {selectedPodId && !wfLoading && (workflows?.length ?? 0) === 0 && (
+      {selectedWfId && !wfLoading && testCases.length === 0 && (
         <div className="rounded-lg border border-dashed p-12 text-center">
-          <p className="text-sm font-medium">No eval cases found</p>
-          <p className="text-xs text-muted-foreground mt-1">Open a workflow in the builder, click Evals in the toolbar, and add eval cases.</p>
+          <p className="text-sm font-medium">No eval cases on this workflow</p>
+          <p className="text-xs text-muted-foreground mt-1">Open it in the builder, click Evals in the toolbar, and add eval cases.</p>
         </div>
       )}
 

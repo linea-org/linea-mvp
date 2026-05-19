@@ -39,6 +39,13 @@ import {
 import '@xyflow/react/dist/style.css';
 import { nodeTypes } from '@/components/workflow-builder/nodes/node-types';
 
+interface PendingInterrupt {
+  type?: 'ask_human' | 'approval' | 'tool_approval';
+  message?: string;
+  question?: string;
+  prompt?: string;
+}
+
 interface Execution {
   id: string;
   workflowId: string | null;
@@ -48,6 +55,7 @@ interface Execution {
   output: unknown;
   error: string | null;
   nodeResults: Record<string, NodeResult>;
+  variables?: Record<string, unknown>;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
@@ -647,6 +655,7 @@ export default function ExecutionDetailPage() {
   const [workflow, setWorkflow] = useState<WorkflowInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [approvalComment, setApprovalComment] = useState('');
+  const [humanAnswer, setHumanAnswer] = useState('');
   const [approving, setApproving] = useState(false);
   const [replaying, setReplaying] = useState(false);
   const [logSettingsOpen, setLogSettingsOpen] = useState(false);
@@ -745,6 +754,24 @@ export default function ExecutionDetailPage() {
     }
   }
 
+  async function respondWithAnswer() {
+    if (!activeWorkspace || !humanAnswer.trim()) return;
+    setApproving(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await api.patch(
+        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}/respond`,
+        { answer: humanAnswer.trim() },
+      );
+      setHumanAnswer('');
+      void loadData();
+    } finally {
+      setApproving(false);
+    }
+  }
+
   async function saveLogSettings(logLevel: string, logRetentionDays: number | null) {
     if (!activeWorkspace || !execution?.workflowId) return;
     const token = await getToken();
@@ -760,6 +787,10 @@ export default function ExecutionDetailPage() {
   const nodeMap = new Map<string, WorkflowNode>(
     (workflow?.definition?.nodes ?? []).map((n) => [n.id, n]),
   );
+
+  const pendingInterrupt = (execution?.variables as any)?.__pendingInterrupt as PendingInterrupt | undefined;
+  const interruptType = pendingInterrupt?.type ?? 'approval';
+  const interruptPrompt = pendingInterrupt?.question ?? pendingInterrupt?.message ?? pendingInterrupt?.prompt;
 
   if (loading || wsLoading) {
     return (
@@ -864,39 +895,68 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Approval panel */}
+      {/* Suspension panel */}
       {execution.status === 'suspended' && (
         <>
           <Separator />
           <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 p-4 space-y-3">
-            <p className="text-sm font-semibold">Awaiting approval</p>
-            <p className="text-xs text-muted-foreground">
-              This execution is paused. Review the node output above and approve or reject.
-            </p>
-            <Textarea
-              rows={2}
-              value={approvalComment}
-              onChange={(e) => setApprovalComment(e.target.value)}
-              placeholder="Optional comment or reason…"
-              className="text-xs"
-            />
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                disabled={approving}
-                onClick={() => void respond(true)}
-              >
-                {approving ? 'Submitting…' : 'Approve'}
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={approving}
-                onClick={() => void respond(false)}
-              >
-                Reject
-              </Button>
-            </div>
+            {interruptType === 'ask_human' ? (
+              <>
+                <p className="text-sm font-semibold">Input required</p>
+                {interruptPrompt && (
+                  <p className="text-sm text-foreground">{interruptPrompt}</p>
+                )}
+                <Textarea
+                  rows={3}
+                  autoFocus
+                  value={humanAnswer}
+                  onChange={(e) => setHumanAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void respondWithAnswer();
+                  }}
+                  placeholder="Type your response…"
+                  className="text-sm"
+                />
+                <Button
+                  size="sm"
+                  disabled={approving || !humanAnswer.trim()}
+                  onClick={() => void respondWithAnswer()}
+                >
+                  {approving ? 'Submitting…' : 'Send'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold">Awaiting approval</p>
+                <p className="text-xs text-muted-foreground">
+                  This execution is paused. Review the node output above and approve or reject.
+                </p>
+                <Textarea
+                  rows={2}
+                  value={approvalComment}
+                  onChange={(e) => setApprovalComment(e.target.value)}
+                  placeholder="Optional comment or reason…"
+                  className="text-xs"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={approving}
+                    onClick={() => void respond(true)}
+                  >
+                    {approving ? 'Submitting…' : 'Approve'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={approving}
+                    onClick={() => void respond(false)}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

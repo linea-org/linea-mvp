@@ -79,8 +79,8 @@ export default function SchedulesPage() {
         api.get<Schedule[]>(`${base}/schedules`),
         api.get<Workflow[]>(`${base}/workflows`),
       ]);
-      setSchedules(sched);
-      setWorkflows(wfsResult ?? []);
+      setSchedules(Array.isArray(sched) ? sched : []);
+      setWorkflows(Array.isArray(wfsResult) ? wfsResult : ((wfsResult as any)?.workflows ?? []));
     } finally {
       setLoading(false);
     }

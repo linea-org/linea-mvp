@@ -107,9 +107,10 @@ export default function HomePage() {
         api.get<Workflow[]>(`/workspaces/${activeWorkspace.id}/pods/${activePod.id}/workflows`),
       ]);
       setMetrics(m);
-      setExecutions((execList ?? []).slice(0, 6));
+      setExecutions((Array.isArray(execList) ? execList : ((execList as any)?.executions ?? [])).slice(0, 6));
       const map: Record<string, string> = {};
-      for (const wf of wfList ?? []) map[wf.id] = wf.name;
+      const wfs: Workflow[] = Array.isArray(wfList) ? wfList : ((wfList as any)?.workflows ?? []);
+      for (const wf of wfs) map[wf.id] = wf.name;
       setWorkflowNames(map);
     } catch {
       // degrade gracefully
