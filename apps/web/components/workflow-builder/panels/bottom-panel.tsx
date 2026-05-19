@@ -125,16 +125,7 @@ function LogsTab({
 
   const isDone = runStatus.status === 'completed' || runStatus.status === 'failed';
 
-  if (logsLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 h-full text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
-        Loading logs...
-      </div>
-    );
-  }
-
-  if (isDone && logs.length > 0) {
+  if (logs.length > 0) {
     return (
       <div className="h-full overflow-auto">
         {runStatus?.status === 'completed' && executionOutput !== undefined && (
@@ -632,6 +623,15 @@ export function BottomPanel({ nodes, nodeResults, validationState, runStatus, wo
       void fetchLogs(runStatus!.id);
     }
   }, [runStatus?.status, runStatus?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Poll logs every 2s while running so the log table streams in real-time
+  useEffect(() => {
+    const isRunning = runStatus?.status === 'running' || runStatus?.status === 'queued';
+    if (!isRunning || !runStatus?.id) return;
+    const id = runStatus.id;
+    const interval = setInterval(() => void fetchLogs(id), 2000);
+    return () => clearInterval(interval);
+  }, [runStatus?.id, runStatus?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchLogs(execId: string) {
     setLogsLoading(true);

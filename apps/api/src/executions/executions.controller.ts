@@ -19,7 +19,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
-import { Observable, map, takeUntil, timer } from 'rxjs';
+import { Observable, map, takeUntil, timer, merge, of } from 'rxjs';
 import { ExecutionsService } from './executions.service';
 import { ExecutionEventsService } from './execution-events.service';
 import { CreateExecutionDto } from './dto/create-execution.dto';
@@ -94,12 +94,34 @@ export class ExecutionsController {
     @Param('podId') podId: string,
     @Param('id') id: string,
   ): Promise<Observable<MessageEvent>> {
-    // Verify the execution belongs to this pod before subscribing — prevents IDOR
-    await this.service.findOne(podId, id);
-    return this.events.forExecution(id).pipe(
+    const execution = await this.service.findOne(podId, id);
+
+    // If already terminal, emit the final event immediately and close —
+    // avoids the race where fast executions finish before the SSE handshake.
+    if (execution.status === 'completed') {
+      const event = {
+        type: 'execution_complete',
+        output: (execution.output as any)?.result ?? execution.output,
+      };
+      return of({ data: event } as MessageEvent);
+    }
+    if (execution.status === 'failed') {
+      const event = { type: 'execution_failed', error: execution.error };
+      return of({ data: event } as MessageEvent);
+    }
+
+    // Still running — stream live events, but also emit current status
+    // immediately so the client knows it's running (not queued).
+    const currentStatus = of({
+      data: { type: 'execution_status', status: execution.status },
+    } as MessageEvent);
+
+    const live = this.events.forExecution(id).pipe(
       map((event) => ({ data: event }) as MessageEvent),
       takeUntil(timer(10 * 60 * 1000)),
     );
+
+    return merge(currentStatus, live);
   }
 
   @Patch(':id/respond')

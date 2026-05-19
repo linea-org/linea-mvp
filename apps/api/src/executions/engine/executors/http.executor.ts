@@ -4,6 +4,23 @@ import { assertSafeUrl } from '../../../common/utils/ssrf-guard';
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 
+function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 async function readBodyWithLimit(res: Response): Promise<string> {
   const reader = res.body?.getReader();
   if (!reader) return '';
@@ -76,17 +93,26 @@ export async function executeHTTPNode(
   const response = await fetch(url, { method, headers, body });
   const rawBody = await readBodyWithLimit(response);
 
-  let data: unknown;
-  try {
-    data = rawBody ? JSON.parse(rawBody) : null;
-  } catch {
-    data = rawBody;
-  }
-
   if (!response.ok) {
     throw new Error(
       `HTTP ${response.status} ${response.statusText}: ${rawBody.slice(0, 200)}`,
     );
+  }
+
+  // Apply response processing options
+  let processedBody = rawBody;
+  if (nodeData.stripHtml) {
+    processedBody = stripHtmlToText(processedBody);
+  }
+  if (nodeData.maxChars && processedBody.length > nodeData.maxChars) {
+    processedBody = processedBody.slice(0, nodeData.maxChars as number) + '\n[truncated]';
+  }
+
+  let data: unknown;
+  try {
+    data = processedBody ? JSON.parse(processedBody) : null;
+  } catch {
+    data = processedBody;
   }
 
   return { status: response.status, data, url, method };

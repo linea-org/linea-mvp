@@ -5,6 +5,7 @@ import type { Node } from '@xyflow/react';
 import { Input } from '@linea/ui/components/input';
 import { Textarea } from '@linea/ui/components/textarea';
 import { Label } from '@linea/ui/components/label';
+import { Switch } from '@linea/ui/components/switch';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@linea/ui/components/select';
@@ -24,6 +25,8 @@ export function HttpPanel({ data, onUpdate, nodes = [], nodeId }: HttpPanelProps
   const url = (data.url as string) ?? '';
   const body = (data.body as string) ?? '';
   const authType = (data.authType as string) ?? 'none';
+  const stripHtml = (data.stripHtml as boolean) ?? false;
+  const maxChars = (data.maxChars as number | undefined);
   const urlRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
@@ -130,6 +133,37 @@ export function HttpPanel({ data, onUpdate, nodes = [], nodeId }: HttpPanelProps
           />
         </div>
       )}
+
+      {/* Response processing */}
+      <div className="space-y-3 border-t pt-3">
+        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Response</Label>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Strip HTML</p>
+            <p className="text-[11px] text-muted-foreground">Extract plain text from HTML responses — removes tags, scripts, and styles. Recommended when passing web pages to an AI node.</p>
+          </div>
+          <Switch
+            checked={stripHtml}
+            onCheckedChange={(v) => onUpdate({ stripHtml: v })}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="http-max-chars">Character limit</Label>
+          <Input
+            id="http-max-chars"
+            type="number"
+            min={100}
+            step={1000}
+            value={maxChars ?? ''}
+            onChange={(e) => onUpdate({ maxChars: e.target.value ? Number(e.target.value) : undefined })}
+            placeholder="No limit (e.g. 8000)"
+            className="text-xs"
+          />
+          <p className="text-[11px] text-muted-foreground">Truncate the response body to this many characters before passing to the next node. Useful for keeping AI context small.</p>
+        </div>
+      </div>
     </div>
   );
 }

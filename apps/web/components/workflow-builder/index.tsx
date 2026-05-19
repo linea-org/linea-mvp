@@ -1318,6 +1318,11 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         setInterrupt(null);
         showToast(evt.error ? `Execution failed: ${evt.error}` : 'Execution failed', 'error');
         break;
+      case 'execution_status':
+        if ((evt as any).status) {
+          setRunStatus({ id: executionId, status: (evt as any).status as string });
+        }
+        break;
       default:
         break;
     }

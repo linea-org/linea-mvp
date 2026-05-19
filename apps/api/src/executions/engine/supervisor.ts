@@ -65,6 +65,22 @@ export class ExecutionSupervisor {
     }
 
     if (
+      ctx.error?.includes('request size limit') ||
+      ctx.error?.includes('Request too large') ||
+      ctx.error?.includes('too large') ||
+      ctx.error?.includes('context length') ||
+      ctx.error?.includes('context_length_exceeded') ||
+      ctx.error?.includes('maximum context') ||
+      ctx.error?.includes('tokens') && ctx.error?.includes('limit') ||
+      ctx.error?.includes('413')
+    ) {
+      return {
+        action: 'abort',
+        reason: 'Input exceeds model context limit — reduce input size or use a model with a larger context window',
+      };
+    }
+
+    if (
       ctx.nodeType === 'transform' ||
       ctx.nodeType === 'if-else' ||
       ctx.nodeType === 'router'
