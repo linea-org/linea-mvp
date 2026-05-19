@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useClerk, useUser, useAuth } from '@clerk/nextjs';
@@ -574,22 +574,28 @@ function timeAgoShort(iso: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
+const NOTIF_API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+
 function NotificationBell() {
   const { getToken } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loadingNotifs, setLoadingNotifs] = useState(false);
   const [typeFilter, setTypeFilter] = useState<NotifFilter>('all');
+  const sseAbortRef = useRef<AbortController | null>(null);
 
+  const workspaceId = activeWorkspace?.id;
   const unread = notifications.filter((n) => !n.read).length;
 
   async function loadNotifs() {
+    if (!workspaceId) return;
     setLoadingNotifs(true);
     try {
       const token = await getToken();
       if (!token) return;
       const api = createApiClient(token);
-      const data = await api.get<Notification[]>('/notifications');
+      const data = await api.get<Notification[]>(`/workspaces/${workspaceId}/notifications`);
       setNotifications(data ?? []);
     } catch {
       // silently fail
@@ -598,44 +604,81 @@ function NotificationBell() {
     }
   }
 
-  // Poll unread count every 30s
-  useEffect(() => {
-    void loadNotifs();
-    const interval = setInterval(() => void loadNotifs(), 30_000);
-    return () => clearInterval(interval);
-  }, [getToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function startSSE() {
+    if (!workspaceId) return;
+    sseAbortRef.current?.abort();
+    const ac = new AbortController();
+    sseAbortRef.current = ac;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const resp = await fetch(
+        `${NOTIF_API_BASE}/workspaces/${workspaceId}/notifications/stream`,
+        { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal },
+      );
+      if (!resp.ok || !resp.body) return;
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) void loadNotifs();
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+    }
+    // Reconnect after 2s when stream closes (10-min server timeout)
+    if (!sseAbortRef.current?.signal.aborted) {
+      setTimeout(() => void startSSE(), 2_000);
+    }
+  }
 
-  // Reload when sheet opens
+  useEffect(() => {
+    if (!workspaceId) return;
+    void loadNotifs();
+    void startSSE();
+    return () => { sseAbortRef.current?.abort(); };
+  }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (open) void loadNotifs();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function markRead(id: string) {
+    if (!workspaceId) return;
     try {
       const token = await getToken();
       if (!token) return;
       const api = createApiClient(token);
-      await api.patch(`/notifications/${id}/read`);
+      await api.patch(`/workspaces/${workspaceId}/notifications/${id}/read`);
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
     } catch { /* ignore */ }
   }
 
   async function markAllRead() {
+    if (!workspaceId) return;
     try {
       const token = await getToken();
       if (!token) return;
       const api = createApiClient(token);
-      await api.patch('/notifications/read-all');
+      await api.patch(`/workspaces/${workspaceId}/notifications/read-all`);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch { /* ignore */ }
   }
 
   async function dismiss(id: string) {
+    if (!workspaceId) return;
     try {
       const token = await getToken();
       if (!token) return;
       const api = createApiClient(token);
-      await api.delete(`/notifications/${id}`);
+      await api.delete(`/workspaces/${workspaceId}/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch { /* ignore */ }
   }

@@ -7,6 +7,8 @@ import {
   Param,
   HttpCode,
   UseGuards,
+  Res,
+  Sse,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,6 +17,8 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { map, takeUntil, timer } from 'rxjs';
+import type { Response } from 'express';
 import { NotificationsService } from './notifications.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
@@ -28,15 +32,44 @@ export class NotificationsController {
   constructor(private readonly service: NotificationsService) {}
 
   @Get()
-  @ApiOperation({
-    summary: "List current user's notifications for this workspace",
-  })
+  @ApiOperation({ summary: "List current user's notifications for this workspace" })
   @ApiParam({ name: 'workspaceId' })
   findAll(
     @CurrentUser() user: User,
     @Param('workspaceId') workspaceId: string,
   ) {
     return this.service.findAll(user.id, workspaceId);
+  }
+
+  /** SSE stream — emits a `ping` event every 25 s and a `notification` event
+   *  whenever a new notification is created for this user+workspace. */
+  @Sse('stream')
+  @ApiOperation({ summary: 'Server-sent events stream for new notifications' })
+  @ApiParam({ name: 'workspaceId' })
+  stream(
+    @CurrentUser() user: User,
+    @Param('workspaceId') workspaceId: string,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+    const subject = this.service.getStream(user.id, workspaceId);
+    return subject.pipe(
+      map(() => ({ data: { type: 'notification' } })),
+      // Close after 10 minutes — client should reconnect
+      takeUntil(timer(10 * 60 * 1000)),
+    );
+  }
+
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Get the unread notification count' })
+  @ApiParam({ name: 'workspaceId' })
+  async unreadCount(
+    @CurrentUser() user: User,
+    @Param('workspaceId') workspaceId: string,
+  ) {
+    const count = await this.service.countUnread(user.id, workspaceId);
+    return { count };
   }
 
   @Patch('read-all')

@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { createApiClient } from '@/lib/api';
 import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
+import { Input } from '@linea/ui/components/input';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { FlowCircleIcon } from '@hugeicons/core-free-icons';
+import { FlowCircleIcon, Search01Icon, ReloadIcon } from '@hugeicons/core-free-icons';
 import {
   Select,
   SelectContent,
@@ -83,6 +84,8 @@ function matchesDateFilter(createdAt: string, filter: string): boolean {
   return true;
 }
 
+const ACTIVE_STATUSES = new Set(['running', 'queued', 'suspended']);
+
 export default function ExecutionsPage() {
   const { podId } = useParams<{ podId: string }>();
   const { getToken } = useAuth();
@@ -94,12 +97,16 @@ export default function ExecutionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [workflowFilter, setWorkflowFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
   const [actioning, setActioning] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
 
-  async function load() {
+  const load = useCallback(async (silent = false) => {
     if (!activeWorkspace) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
     try {
       const token = await getToken();
       if (!token) return;
@@ -108,22 +115,33 @@ export default function ExecutionsPage() {
         api.get<Execution[]>(`/workspaces/${activeWorkspace.id}/pods/${podId}/executions`),
         api.get<Workflow[]>(`/workspaces/${activeWorkspace.id}/pods/${podId}/workflows`),
       ]);
-      setExecutions(execList ?? []);
+      const list = execList ?? [];
+      setExecutions(list);
       const wfList = wfArr ?? [];
       setWorkflows(wfList);
       const nameMap: Record<string, string> = {};
       for (const wf of wfList) nameMap[wf.id] = wf.name;
       setWorkflowNames(nameMap);
+      // Auto-refresh while any execution is active
+      const hasActive = list.some((ex) => ACTIVE_STATUSES.has(ex.status));
+      if (hasActive && !pollRef.current) {
+        pollRef.current = setInterval(() => void load(true), 4_000);
+      } else if (!hasActive && pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  }, [activeWorkspace, podId, getToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (wsLoading) return;
     if (!activeWorkspace) { setLoading(false); return; }
     void load();
-  }, [activeWorkspace, wsLoading, podId, getToken]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+  }, [activeWorkspace, wsLoading, podId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCancel(ex: Execution, e: React.MouseEvent) {
     e.stopPropagation();
@@ -158,23 +176,45 @@ export default function ExecutionsPage() {
     }
   }
 
+  const searchLower = search.toLowerCase();
   const filtered = executions.filter((ex) => {
     if (statusFilter !== 'all' && ex.status !== statusFilter) return false;
     if (workflowFilter !== 'all' && ex.workflowId !== workflowFilter) return false;
     if (!matchesDateFilter(ex.createdAt, dateFilter)) return false;
+    if (search) {
+      const wfName = ex.workflowId ? (workflowNames[ex.workflowId] ?? '') : '';
+      const matchesSearch = wfName.toLowerCase().includes(searchLower) ||
+        ex.id.toLowerCase().includes(searchLower) ||
+        ex.triggeredBy.toLowerCase().includes(searchLower);
+      if (!matchesSearch) return false;
+    }
     return true;
   });
 
   const activeFilterCount =
     (statusFilter !== 'all' ? 1 : 0) +
     (workflowFilter !== 'all' ? 1 : 0) +
-    (dateFilter !== 'all' ? 1 : 0);
+    (dateFilter !== 'all' ? 1 : 0) +
+    (search ? 1 : 0);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-xl font-semibold">Executions</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold">Executions</h1>
+          {refreshing && <HugeiconsIcon icon={ReloadIcon} className="size-3.5 text-muted-foreground animate-spin" />}
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Search */}
+          <div className="relative">
+            <HugeiconsIcon icon={Search01Icon} className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              className="h-8 w-52 pl-8 text-xs"
+              placeholder="Search workflows, IDs…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           {/* Date filter pills */}
           <div className="flex items-center gap-1 rounded-lg border p-0.5">
             {DATE_FILTERS.map((f) => (
@@ -228,7 +268,7 @@ export default function ExecutionsPage() {
               variant="ghost"
               size="sm"
               className="text-xs text-muted-foreground"
-              onClick={() => { setStatusFilter('all'); setWorkflowFilter('all'); setDateFilter('all'); }}
+              onClick={() => { setStatusFilter('all'); setWorkflowFilter('all'); setDateFilter('all'); setSearch(''); }}
             >
               Clear {activeFilterCount > 1 ? `${activeFilterCount} filters` : 'filter'}
             </Button>
@@ -258,7 +298,7 @@ export default function ExecutionsPage() {
               variant="outline"
               size="sm"
               className="mt-4 text-xs"
-              onClick={() => { setStatusFilter('all'); setWorkflowFilter('all'); setDateFilter('all'); }}
+              onClick={() => { setStatusFilter('all'); setWorkflowFilter('all'); setDateFilter('all'); setSearch(''); }}
             >
               Clear filters
             </Button>

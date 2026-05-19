@@ -1,4 +1,5 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Subject } from 'rxjs';
 import { and, eq, desc, isNull, or } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { notifications } from '@linea/db';
@@ -6,7 +7,17 @@ import { DB_TOKEN } from '../database/database.module';
 
 @Injectable()
 export class NotificationsService {
+  /** Per-user SSE subjects. Key: `userId:workspaceId` */
+  private readonly streams = new Map<string, Subject<void>>();
+
   constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
+
+  /** Get (or create) the SSE subject for a user+workspace pair. */
+  getStream(userId: string, workspaceId: string): Subject<void> {
+    const key = `${userId}:${workspaceId}`;
+    if (!this.streams.has(key)) this.streams.set(key, new Subject<void>());
+    return this.streams.get(key)!;
+  }
 
   async findAll(userId: string, workspaceId: string) {
     return this.db
@@ -22,6 +33,23 @@ export class NotificationsService {
         ),
       )
       .orderBy(desc(notifications.createdAt));
+  }
+
+  async countUnread(userId: string, workspaceId: string): Promise<number> {
+    const rows = await this.db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.read, false),
+          or(
+            eq(notifications.workspaceId, workspaceId),
+            isNull(notifications.workspaceId),
+          ),
+        ),
+      );
+    return rows.length;
   }
 
   async markRead(userId: string, workspaceId: string, id: string) {
@@ -98,6 +126,13 @@ export class NotificationsService {
         resourceUrl: resourceUrl ?? null,
       })
       .returning();
+
+    // Push a signal to any open SSE stream for this user+workspace
+    if (workspaceId) {
+      const key = `${userId}:${workspaceId}`;
+      this.streams.get(key)?.next();
+    }
+
     return notif;
   }
 }
