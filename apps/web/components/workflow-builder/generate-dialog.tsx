@@ -5,9 +5,12 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   AiMagicIcon, Cancel01Icon, Loading03Icon, PlaneIcon,
   Tick02Icon, Alert02Icon, WorkflowSquare01Icon,
+  AiBrain01Icon, LinkSquare01Icon, FlowCircleIcon, FlowIcon,
+  SourceCodeSquareIcon, MailSend01Icon, CloudUploadIcon, ReloadIcon,
+  Calendar01Icon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@linea/ui/components/button';
-import { cn } from '@linea/ui/lib/utils';
+import { Kbd } from '@linea/ui/components/kbd';
 import type { Node, Edge } from '@xyflow/react';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
@@ -39,12 +42,25 @@ type Turn =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; progress: string[]; nodeCount: number; done: boolean; error?: string };
 
-interface SlashCmd { label: string; insert: string; desc: string }
+interface SlashCmd {
+  cmd: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  icon: any;
+  description: string;
+}
 
-const STATIC_CMDS: SlashCmd[] = [
-  { label: '{{lastOutput}}',  insert: '{{lastOutput}}',  desc: 'Output from the previous node' },
-  { label: '{{input.x}}',    insert: '{{input.}}',       desc: 'Workflow input field' },
-  { label: '{{executionId}}',insert: '{{executionId}}',  desc: 'Current execution ID' },
+const NODE_SLASH_CMDS: SlashCmd[] = [
+  { cmd: '/agent',     icon: AiBrain01Icon,       description: 'Add an AI agent node'            },
+  { cmd: '/http',      icon: LinkSquare01Icon,     description: 'Add an HTTP request node'        },
+  { cmd: '/transform', icon: FlowCircleIcon,       description: 'Add a data transform node'       },
+  { cmd: '/branch',    icon: FlowIcon,             description: 'Add a conditional if-else node'  },
+  { cmd: '/router',    icon: WorkflowSquare01Icon, description: 'Add a router / switch node'      },
+  { cmd: '/code',      icon: SourceCodeSquareIcon, description: 'Add a code execution node'       },
+  { cmd: '/email',     icon: MailSend01Icon,       description: 'Add an email send node'          },
+  { cmd: '/webhook',   icon: CloudUploadIcon,      description: 'Trigger on incoming webhook'     },
+  { cmd: '/wait',      icon: Calendar01Icon,       description: 'Add a delay / wait step'         },
+  { cmd: '/modify',    icon: AiMagicIcon,          description: 'Modify an existing node'         },
+  { cmd: '/replace',   icon: ReloadIcon,           description: 'Replace the entire workflow'     },
 ];
 
 const EXAMPLES = [
@@ -64,7 +80,6 @@ export function GenerateDialog({
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashIdx, setSlashIdx] = useState(0);
-  const [slashPos, setSlashPos] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -74,65 +89,47 @@ export function GenerateDialog({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [turns]);
 
-  // Build slash commands from current canvas nodes
-  const allCmds: SlashCmd[] = [
-    ...STATIC_CMDS,
-    ...nodes
-      .filter((n) => n.type !== 'start' && n.type !== 'end' && n.type !== 'frame' && n.type !== 'note')
-      .map((n) => {
-        const name = (n.data?.nodeName as string) || n.type || n.id;
-        return { label: `{{${name}}}`, insert: `{{${name}}}`, desc: `Output from "${name}" node` };
-      }),
-  ];
-
-  const filteredCmds = slashQuery
-    ? allCmds.filter((c) => c.label.toLowerCase().includes(slashQuery) || c.desc.toLowerCase().includes(slashQuery))
-    : allCmds;
+  const filteredCmds = NODE_SLASH_CMDS.filter((c) =>
+    c.cmd.slice(1).startsWith(slashQuery.toLowerCase()) ||
+    c.description.toLowerCase().includes(slashQuery.toLowerCase()),
+  );
 
   function closeMenu() { setSlashOpen(false); setSlashQuery(''); setSlashIdx(0); }
 
-  function insertCommand(cmd: SlashCmd) {
-    const el = textareaRef.current;
-    if (!el) return;
-    const before = input.slice(0, slashPos - 1);
-    const after = input.slice(el.selectionStart ?? slashPos);
-    const next = before + cmd.insert + after;
-    setInput(next);
+  function selectSlashCommand(cmd: SlashCmd) {
+    setInput(cmd.cmd + ' ');
     closeMenu();
-    requestAnimationFrame(() => {
-      const pos = before.length + cmd.insert.length;
-      el.selectionStart = el.selectionEnd = pos;
-      el.focus();
-    });
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }, 10);
   }
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (slashOpen) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx((i) => Math.min(i + 1, filteredCmds.length - 1)); return; }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); setSlashIdx((i) => Math.max(i - 1, 0)); return; }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); if (filteredCmds[slashIdx]) insertCommand(filteredCmds[slashIdx]); return; }
+    if (slashOpen && filteredCmds.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx((i) => (i + 1) % filteredCmds.length); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setSlashIdx((i) => (i - 1 + filteredCmds.length) % filteredCmds.length); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); const cmd = filteredCmds[slashIdx]; if (cmd) selectSlashCommand(cmd); return; }
       if (e.key === 'Escape') { e.preventDefault(); closeMenu(); return; }
     }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend(); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slashOpen, filteredCmds, slashIdx, input]);
+  }, [slashOpen, filteredCmds, slashIdx]);
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value;
     setInput(next);
-    const caret = e.target.selectionStart ?? next.length;
-    const charBefore = next[caret - 1];
-    const twoBack = next[caret - 2];
-    if (charBefore === '/' && (!twoBack || /\s/.test(twoBack))) {
-      setSlashOpen(true); setSlashPos(caret); setSlashQuery(''); setSlashIdx(0);
-    } else if (slashOpen) {
-      const afterSlash = next.slice(slashPos, caret);
-      if (/\s/.test(afterSlash) || caret < slashPos) closeMenu();
-      else { setSlashQuery(afterSlash); setSlashIdx(0); }
+    const match = next.match(/^\/(\w*)$/);
+    if (match) {
+      setSlashQuery(match[1] ?? '');
+      setSlashIdx(0);
+      setSlashOpen(true);
+    } else {
+      setSlashOpen(false);
     }
   }
-
-  useEffect(() => { if (slashOpen && filteredCmds.length === 0) closeMenu(); }, [filteredCmds.length, slashOpen]);
 
   function buildCanvasContext() {
     if (nodes.length === 0) return undefined;
@@ -332,30 +329,30 @@ export function GenerateDialog({
         <div className="relative">
           {/* Slash command menu */}
           {slashOpen && filteredCmds.length > 0 && (
-            <div className="absolute bottom-full left-0 mb-1 w-full rounded-md border border-border bg-popover shadow-lg overflow-hidden z-50">
-              <p className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border">
-                Insert reference
-              </p>
-              <ul className="max-h-40 overflow-y-auto py-0.5">
-                {filteredCmds.map((cmd, i) => (
-                  <li
-                    key={cmd.label}
-                    className={cn(
-                      'flex cursor-pointer items-start gap-2 px-2.5 py-1.5',
-                      i === slashIdx ? 'bg-accent' : 'hover:bg-accent/50',
-                    )}
-                    onMouseDown={(e) => { e.preventDefault(); insertCommand(cmd); }}
-                  >
-                    <code className="shrink-0 text-[10px] text-foreground font-mono">{cmd.label}</code>
-                    <span className="text-[10px] text-muted-foreground truncate">{cmd.desc}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="px-2.5 py-1 text-[9px] text-muted-foreground border-t border-border">
-                <kbd className="rounded border border-border px-1 py-0.5 text-[8px]">Enter</kbd> to insert
-                &nbsp;|&nbsp;
-                <kbd className="rounded border border-border px-1 py-0.5 text-[8px]">Esc</kbd> to close
-              </p>
+            <div className="absolute bottom-full left-0 mb-1 w-full rounded-md border border-border bg-popover shadow-lg overflow-hidden z-50 animate-in fade-in-0 slide-in-from-bottom-2 duration-150">
+              <div className="no-scrollbar overflow-y-auto" style={{ maxHeight: 200 }}>
+                <div className="px-1 py-1">
+                  {filteredCmds.map((cmd, i) => (
+                    <button
+                      key={cmd.cmd}
+                      onMouseDown={(e) => { e.preventDefault(); selectSlashCommand(cmd); }}
+                      className={`group relative flex min-h-7 w-full cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-left outline-none select-none transition-colors ${slashIdx === i ? 'bg-muted text-foreground' : 'text-foreground/80 hover:bg-muted/50'}`}
+                    >
+                      <HugeiconsIcon icon={cmd.icon} className="size-3.5 text-muted-foreground shrink-0" />
+                      <span className="font-mono text-xs font-semibold text-primary w-[5.5rem] shrink-0">{cmd.cmd}</span>
+                      <span className="truncate flex-1 text-[11px] text-muted-foreground">{cmd.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 border-t border-border/30 px-3 py-1.5">
+                <Kbd>↑</Kbd><Kbd>↓</Kbd>
+                <span className="text-[10px] text-muted-foreground/40 mr-2">navigate</span>
+                <Kbd>↵</Kbd>
+                <span className="text-[10px] text-muted-foreground/40 mr-2">select</span>
+                <Kbd>esc</Kbd>
+                <span className="text-[10px] text-muted-foreground/40">dismiss</span>
+              </div>
             </div>
           )}
 
@@ -372,7 +369,7 @@ export function GenerateDialog({
             />
             <div className="flex items-center justify-between px-3 pb-2">
               <p className="text-[10px] text-muted-foreground/50">
-                <kbd className="rounded border border-border px-1 text-[8px]">/</kbd> for variables
+                <kbd className="rounded border border-border px-1 text-[8px]">/</kbd> for node commands
                 &nbsp;·&nbsp;
                 Shift+Enter for newline
               </p>

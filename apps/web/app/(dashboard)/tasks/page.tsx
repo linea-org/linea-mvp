@@ -687,7 +687,7 @@ export default function TasksPage() {
   }
 
   function selectSlashCommand(cmd: typeof SLASH_COMMANDS[number]) {
-    setInput(cmd.template);
+    setInput(cmd.cmd + ' ');
     setSlashOpen(false);
     setTimeout(() => {
       const ta = textareaRef.current;

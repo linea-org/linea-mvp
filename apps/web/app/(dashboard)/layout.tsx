@@ -51,7 +51,6 @@ import {
   ArrowLeft01Icon,
   Logout03Icon,
   Database01Icon,
-  Archive01Icon,
   Calendar01Icon,
   LinkSquare01Icon,
   Add01Icon,
@@ -81,6 +80,7 @@ import {
   Sun01Icon,
   Moon01Icon,
   ComputerIcon,
+  Archive02Icon,
 } from '@hugeicons/core-free-icons';
 import {
   Sheet,
@@ -217,15 +217,30 @@ async function startTour() {
 
 const BILLING_ENABLED = process.env['NEXT_PUBLIC_BILLING_ENABLED'] === 'true';
 
-const settingsNavItems = [
-  { href: '/settings/general',     label: 'General',      icon: Settings01Icon     },
-  { href: '/settings/members',     label: 'Members',      icon: UserMultiple02Icon },
-  { href: '/settings/api-keys',    label: 'API Keys',     icon: Key01Icon          },
-  { href: '/settings/credentials', label: 'Secrets',      icon: SquareLock01Icon   },
-  { href: '/settings/model-keys',  label: 'Model Keys',   icon: AiBrain01Icon      },
-  { href: '/settings/connections', label: 'Connections',  icon: GlobalIcon         },
-  { href: '/settings/mcp-servers', label: 'MCP Servers',  icon: ComputerCloudIcon  },
-  ...(BILLING_ENABLED ? [{ href: '/settings/billing', label: 'Billing', icon: Invoice03Icon }] : []),
+const SETTINGS_NAV_SECTIONS = [
+  {
+    label: 'Workspace',
+    items: [
+      { href: '/settings/general',    label: 'General',     icon: Settings01Icon     },
+      { href: '/settings/members',    label: 'Members',     icon: UserMultiple02Icon },
+      ...(BILLING_ENABLED ? [{ href: '/settings/billing', label: 'Billing', icon: Invoice03Icon }] : []),
+    ],
+  },
+  {
+    label: 'Security',
+    items: [
+      { href: '/settings/api-keys',    label: 'API Keys',    icon: Key01Icon        },
+      { href: '/settings/credentials', label: 'Secrets',     icon: SquareLock01Icon },
+    ],
+  },
+  {
+    label: 'AI & Integrations',
+    items: [
+      { href: '/settings/model-keys',  label: 'Model Keys',  icon: AiBrain01Icon    },
+      { href: '/settings/connections', label: 'Connections', icon: GlobalIcon        },
+      { href: '/settings/mcp-servers', label: 'MCP Servers', icon: ComputerCloudIcon },
+    ],
+  },
 ];
 
 function DashboardSidebar() {
@@ -282,14 +297,14 @@ function DashboardSidebar() {
   ];
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b px-3 py-2 space-y-1">
+    <Sidebar className="group-data-[side=left]:border-r-0">
+      <SidebarHeader className="px-2 pt-4 space-y-1">
         {wsLoading ? (
           <Skeleton className="h-8 w-full" />
         ) : (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button data-tour="workspace-switcher" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium hover:bg-sidebar-accent">
+              <button data-tour="workspace-switcher" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium bg-sidebar-accent/80 hover:bg-sidebar-accent">
                 <span
                   className={`flex-1 truncate text-left ${activeWorkspace ? '' : 'font-normal text-muted-foreground'}`}
                 >
@@ -349,13 +364,34 @@ function DashboardSidebar() {
 
       <SidebarContent className="px-2 py-2">
         {isSettings ? (
-          <div className="px-1">
+          <div className="space-y-5 px-1 pt-1">
             <SidebarMenuButton asChild>
               <Link href="/home" className="flex items-center gap-2 text-muted-foreground">
                 <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
                 <span>Back to Home</span>
               </Link>
             </SidebarMenuButton>
+            <div className="space-y-5">
+              {SETTINGS_NAV_SECTIONS.map((section) => (
+                <div key={section.label}>
+                  <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+                    {section.label}
+                  </p>
+                  <SidebarMenu>
+                    {section.items.map(({ href, label, icon }) => (
+                      <SidebarMenuItem key={href}>
+                        <SidebarMenuButton asChild isActive={pathname === href || pathname.startsWith(href + '/')}>
+                          <Link href={href} className="flex items-center gap-2">
+                            <HugeiconsIcon icon={icon} className="size-4" />
+                            <span>{label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <SidebarMenu>
@@ -386,57 +422,6 @@ function DashboardSidebar() {
 
       <GettingStarted />
       <SidebarFooter className="px-3 py-3 space-y-1">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              data-tour="help-menu"
-              title="Help"
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
-            >
-              <HugeiconsIcon icon={HelpCircleIcon} className="size-3.5" />
-              <span>Help</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-44">
-            <DropdownMenuItem asChild>
-              <a
-                href="https://docs.linea.build"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2"
-              >
-                <HugeiconsIcon icon={BookOpen01Icon} className="size-3.5" />
-                Docs
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href="mailto:support@linea.build" className="flex items-center gap-2">
-                <HugeiconsIcon icon={CustomerSupportIcon} className="size-3.5" />
-                Support
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a
-                href="https://github.com/linea-build/linea/issues/new"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2"
-              >
-                <HugeiconsIcon icon={Bug01Icon} className="size-3.5" />
-                Report a bug
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => void startTour()}
-              className="flex items-center gap-2"
-            >
-              <HugeiconsIcon icon={CompassIcon} className="size-3.5" />
-              Take a tour
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {/* Theme toggle */}
         <div className="flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
           {([
@@ -487,6 +472,61 @@ function DashboardSidebar() {
   );
 }
 
+function HelpMenu() {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          data-tour="help-menu"
+          title="Help"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <HugeiconsIcon icon={HelpCircleIcon} className="size-3.5" />
+          <span className="hidden sm:inline">Help</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="end" className="w-44">
+        <DropdownMenuItem asChild>
+          <a
+            href="https://docs.linea.build"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2"
+          >
+            <HugeiconsIcon icon={BookOpen01Icon} className="size-3.5" />
+            Docs
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="mailto:support@linea.build" className="flex items-center gap-2">
+            <HugeiconsIcon icon={CustomerSupportIcon} className="size-3.5" />
+            Support
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a
+            href="https://github.com/linea-build/linea/issues/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2"
+          >
+            <HugeiconsIcon icon={Bug01Icon} className="size-3.5" />
+            Report a bug
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => void startTour()}
+          className="flex items-center gap-2"
+        >
+          <HugeiconsIcon icon={CompassIcon} className="size-3.5" />
+          Take a tour
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 interface Notification {
   id: string;
   type: string;
@@ -521,7 +561,7 @@ function notifIcon(type: string) {
   if (type.includes('complet') || type.includes('success')) return { icon: CheckmarkCircle01Icon, color: 'text-green-500' };
   if (type.includes('approval') || type.includes('suspend')) return { icon: Alert01Icon, color: 'text-amber-500' };
   if (type.includes('schedul') || type.includes('trigger')) return { icon: Clock01Icon, color: 'text-blue-500' };
-  return { icon: Archive01Icon, color: 'text-muted-foreground' };
+  return { icon: Archive02Icon, color: 'text-muted-foreground' };
 }
 
 function timeAgoShort(iso: string): string {
@@ -611,7 +651,7 @@ function NotificationBell() {
         className="relative p-1.5 rounded-md hover:bg-muted transition-colors"
         title="Notifications"
       >
-        <HugeiconsIcon icon={Archive01Icon} className="size-5 text-muted-foreground" />
+        <HugeiconsIcon icon={Archive02Icon} className="size-5 text-muted-foreground" />
         {unread > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] text-white font-medium">
             {unread > 9 ? '9+' : unread}
@@ -673,7 +713,7 @@ function NotificationBell() {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center px-6">
                 <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
-                  <HugeiconsIcon icon={Archive01Icon} className="size-5 text-muted-foreground" />
+                  <HugeiconsIcon icon={Archive02Icon} className="size-5 text-muted-foreground" />
                 </div>
                 <p className="text-sm font-medium">{notifications.length === 0 ? 'All caught up' : 'No matches'}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{notifications.length === 0 ? 'No notifications right now.' : 'Try a different filter.'}</p>
@@ -909,23 +949,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <SidebarProvider>
           <ShortcutsProvider>
             <DashboardSidebar />
-            <main className="flex flex-1 flex-col">
-              <header className="flex h-12 items-center gap-3 border-b px-4">
-                <SidebarTrigger />
-                <PodSwitcher />
-                <button
-                  data-tour="search-bar"
-                  onClick={() => window.dispatchEvent(new CustomEvent('linea:open-cmdk'))}
-                  className="flex flex-1 items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors max-w-xs mx-2"
-                >
-                  <HugeiconsIcon icon={Search01Icon} className="size-3.5 shrink-0" />
-                  <span className="flex-1 text-left">Search or jump to…</span>
-                  <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘K</kbd>
-                </button>
-                <div className="flex-1" />
-                <NotificationBell />
-              </header>
-              <div className="flex-1 p-6">{children}</div>
+            <main className="flex flex-1 flex-col min-h-0 bg-sidebar pr-2 py-2">
+              <div className="flex flex-1 flex-col min-h-0 rounded-r-xl rounded-l-xl bg-background overflow-hidden">
+                <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
+                  <SidebarTrigger />
+                  <PodSwitcher />
+                  <button
+                    data-tour="search-bar"
+                    onClick={() => window.dispatchEvent(new CustomEvent('linea:open-cmdk'))}
+                    className="flex flex-1 items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors max-w-xs mx-2"
+                  >
+                    <HugeiconsIcon icon={Search01Icon} className="size-3.5 shrink-0" />
+                    <span className="flex-1 text-left">Search or jump to…</span>
+                    <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">⌘K</kbd>
+                  </button>
+                  <div className="flex-1" />
+                  <NotificationBell />
+                  <HelpMenu />
+                </header>
+                <div className="flex-1 overflow-auto p-6">{children}</div>
+              </div>
             </main>
             <WelcomeModal />
           </ShortcutsProvider>
