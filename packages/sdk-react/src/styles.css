@@ -204,6 +204,113 @@
   flex-shrink: 0;
 }
 
+/* ── WorkflowRunner — node progress & suspension ───────────────────────── */
+
+.linea-runner__nodes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.linea-runner__node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--linea-text-muted);
+}
+
+.linea-runner__node--completed { color: #16a34a; }
+.linea-runner__node--failed    { color: var(--linea-text-error); }
+.linea-runner__node--suspended { color: var(--linea-primary); }
+
+.linea-runner__node-label {
+  font-family: var(--linea-font-mono);
+  font-size: 11px;
+}
+
+.linea-runner__node-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid color-mix(in srgb, var(--linea-primary) 30%, transparent);
+  border-top-color: var(--linea-primary);
+  border-radius: 50%;
+  animation: linea-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.linea-runner__node-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.linea-runner__node-icon--ok   { color: #16a34a; }
+.linea-runner__node-icon--err  { color: var(--linea-text-error); }
+.linea-runner__node-icon--pause{ color: var(--linea-primary); }
+
+/* Suspension card */
+.linea-runner__suspend {
+  background: var(--linea-bg-accent);
+  border: 1px solid color-mix(in srgb, var(--linea-primary) 30%, transparent);
+  border-radius: var(--linea-radius-sm);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.linea-runner__suspend-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--linea-primary);
+  margin: 0;
+}
+
+.linea-runner__suspend-msg {
+  font-size: 13px;
+  color: var(--linea-text);
+  margin: 0;
+}
+
+.linea-runner__suspend-ctx {
+  font-size: 12px;
+  color: var(--linea-text-muted);
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.linea-runner__suspend-tool {
+  font-size: 12px;
+  color: var(--linea-text-muted);
+  margin: 0;
+}
+
+.linea-runner__suspend-tool code {
+  font-family: var(--linea-font-mono);
+  background: var(--linea-bg-muted);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.linea-runner__suspend-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.linea-runner__suspend-input-row .linea-runner__input {
+  flex: 1;
+}
+
+.linea-runner__suspend-btns {
+  display: flex;
+  gap: 8px;
+}
+
 /* ── LineaChat ─────────────────────────────────────────────────────────── */
 
 .linea-chat {
@@ -306,7 +413,6 @@
 }
 
 .linea-chat__bubble {
-  max-width: 80%;
   padding: 8px 12px;
   border-radius: 12px;
   font-size: 13px;
@@ -445,6 +551,131 @@
   background: var(--linea-text);
   border-radius: 2px;
 }
+
+/* Message column (wraps tool cards + bubble) */
+.linea-chat__msg-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 85%;
+}
+
+.linea-chat__message--user .linea-chat__msg-col {
+  align-items: flex-end;
+}
+
+/* Tool call cards */
+.linea-chat__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.linea-chat__tool {
+  background: var(--linea-bg-muted);
+  border: 1px solid var(--linea-border);
+  border-radius: var(--linea-radius-sm);
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.linea-chat__tool--running {
+  border-color: color-mix(in srgb, var(--linea-primary) 40%, transparent);
+}
+
+.linea-chat__tool-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--linea-text-muted);
+  transition: background 0.1s;
+}
+
+.linea-chat__tool-header:hover {
+  background: var(--linea-border);
+}
+
+.linea-chat__tool-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+  color: var(--linea-text-muted);
+}
+
+.linea-chat__tool--done .linea-chat__tool-icon { color: #16a34a; }
+.linea-chat__tool--done[data-error] .linea-chat__tool-icon { color: var(--linea-text-error); }
+
+.linea-chat__tool-spinner {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid color-mix(in srgb, var(--linea-primary) 30%, transparent);
+  border-top-color: var(--linea-primary);
+  border-radius: 50%;
+  animation: linea-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+.linea-chat__tool-name {
+  flex: 1;
+  font-family: var(--linea-font-mono);
+  font-size: 11px;
+  color: var(--linea-text);
+}
+
+.linea-chat__tool-chevron {
+  font-size: 9px;
+  color: var(--linea-text-muted);
+}
+
+.linea-chat__tool-body {
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.linea-chat__tool-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.linea-chat__tool-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--linea-text-muted);
+  margin: 0;
+}
+
+.linea-chat__tool-section-label--err { color: var(--linea-text-error); }
+
+.linea-chat__tool-code {
+  font-family: var(--linea-font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--linea-text);
+  background: var(--linea-bg);
+  border: 1px solid var(--linea-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 0;
+  overflow-x: auto;
+  max-height: 160px;
+}
+
+.linea-chat__tool-code--err { color: var(--linea-text-error); }
 
 /* ── Keyframes ─────────────────────────────────────────────────────────── */
 

@@ -4,10 +4,18 @@ export type { LineaProviderProps } from './context';
 
 // Hooks
 export { useWorkflow } from './hooks/use-workflow';
-export type { WorkflowStatus, WorkflowState, UseWorkflowReturn } from './hooks/use-workflow';
+export type {
+  WorkflowStatus,
+  WorkflowState,
+  UseWorkflowReturn,
+  NodeEvent,
+  Interrupt,
+  SuspensionState,
+  RespondOptions,
+} from './hooks/use-workflow';
 
 export { useAgent } from './hooks/use-agent';
-export type { AgentMessage, UseAgentOptions, UseAgentReturn } from './hooks/use-agent';
+export type { AgentMessage, UseAgentOptions, UseAgentReturn, ToolCall } from './hooks/use-agent';
 
 // Pre-built components
 export { WorkflowRunner } from './components/workflow-runner';

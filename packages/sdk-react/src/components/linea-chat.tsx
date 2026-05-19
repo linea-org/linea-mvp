@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAgent } from '../hooks/use-agent';
-import type { AgentMessage } from '../hooks/use-agent';
+import type { AgentMessage, ToolCall } from '../hooks/use-agent';
 
 export interface LineaChatProps {
   workspaceId: string;
@@ -31,8 +31,54 @@ function TypingIndicator() {
   );
 }
 
+function ToolCallCard({ tc }: { tc: ToolCall }): React.ReactElement {
+  const [expanded, setExpanded] = useState(false);
+  const done = tc.result !== undefined || tc.error !== undefined;
+
+  return (
+    <div className={`linea-chat__tool ${done ? 'linea-chat__tool--done' : 'linea-chat__tool--running'}`}>
+      <button
+        className="linea-chat__tool-header"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <span className="linea-chat__tool-icon" aria-hidden>
+          {done ? (tc.error ? '✕' : '✓') : <span className="linea-chat__tool-spinner" />}
+        </span>
+        <span className="linea-chat__tool-name">{tc.name}</span>
+        <span className="linea-chat__tool-chevron" aria-hidden>{expanded ? '▴' : '▾'}</span>
+      </button>
+      {expanded && (
+        <div className="linea-chat__tool-body">
+          {tc.input !== undefined && (
+            <div className="linea-chat__tool-section">
+              <p className="linea-chat__tool-section-label">Input</p>
+              <pre className="linea-chat__tool-code">{JSON.stringify(tc.input, null, 2)}</pre>
+            </div>
+          )}
+          {tc.error && (
+            <div className="linea-chat__tool-section">
+              <p className="linea-chat__tool-section-label linea-chat__tool-section-label--err">Error</p>
+              <pre className="linea-chat__tool-code linea-chat__tool-code--err">{tc.error}</pre>
+            </div>
+          )}
+          {tc.result !== undefined && !tc.error && (
+            <div className="linea-chat__tool-section">
+              <p className="linea-chat__tool-section-label">Result</p>
+              <pre className="linea-chat__tool-code">
+                {typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Message({ msg }: { msg: AgentMessage }): React.ReactElement {
   const isUser = msg.role === 'user';
+  const hasTools = (msg.toolCalls?.length ?? 0) > 0;
   return (
     <div className={`linea-chat__message linea-chat__message--${isUser ? 'user' : 'assistant'}`}>
       {!isUser && (
@@ -42,15 +88,24 @@ function Message({ msg }: { msg: AgentMessage }): React.ReactElement {
           </svg>
         </div>
       )}
-      <div className="linea-chat__bubble">
-        {msg.streaming && !msg.content ? (
-          <TypingIndicator />
-        ) : (
-          <span className="linea-chat__text">{msg.content}</span>
+      <div className="linea-chat__msg-col">
+        {hasTools && (
+          <div className="linea-chat__tools">
+            {msg.toolCalls!.map((tc) => <ToolCallCard key={tc.id} tc={tc} />)}
+          </div>
         )}
-        {msg.streaming && msg.content && (
-          <span className="linea-chat__cursor" aria-hidden>▋</span>
-        )}
+        <div className="linea-chat__bubble">
+          {msg.streaming && !msg.content && !hasTools ? (
+            <TypingIndicator />
+          ) : msg.content ? (
+            <>
+              <span className="linea-chat__text">{msg.content}</span>
+              {msg.streaming && (
+                <span className="linea-chat__cursor" aria-hidden>▋</span>
+              )}
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -112,7 +167,11 @@ export function LineaChat({
           </svg>
         </div>
         <span className="linea-chat__header-title">{title}</span>
-        <div className="linea-chat__header-status" data-streaming={streaming} aria-label={streaming ? 'Agent is thinking' : 'Ready'} />
+        <div
+          className="linea-chat__header-status"
+          data-streaming={streaming}
+          aria-label={streaming ? 'Agent is thinking' : 'Ready'}
+        />
       </div>
 
       {/* Messages */}

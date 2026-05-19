@@ -3,11 +3,20 @@
 import { useCallback, useRef, useState } from 'react';
 import { useLineaContext } from '../context';
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  input?: unknown;
+  result?: unknown;
+  error?: string;
+}
+
 export interface AgentMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   streaming?: boolean;
+  toolCalls?: ToolCall[];
 }
 
 export interface UseAgentOptions {
@@ -31,9 +40,14 @@ export interface UseAgentReturn {
   clear: () => void;
 }
 
-interface SSEDelta {
+interface SSEEvent {
   type: string;
   delta?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+  content?: unknown;
+  error?: string;
 }
 
 export function useAgent(options: UseAgentOptions): UseAgentReturn {
@@ -50,7 +64,13 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
 
       const userMsg: AgentMessage = { id: `u-${Date.now()}`, role: 'user', content: text };
       const assistantId = `a-${Date.now()}`;
-      const assistantMsg: AgentMessage = { id: assistantId, role: 'assistant', content: '', streaming: true };
+      const assistantMsg: AgentMessage = {
+        id: assistantId,
+        role: 'assistant',
+        content: '',
+        streaming: true,
+        toolCalls: [],
+      };
 
       let currentMessages: AgentMessage[] = [];
       setMessages((prev) => {
@@ -95,11 +115,39 @@ export function useAgent(options: UseAgentOptions): UseAgentReturn {
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
             try {
-              const evt = JSON.parse(line.slice(6)) as SSEDelta;
+              const evt = JSON.parse(line.slice(6)) as SSEEvent;
               if (evt.type === 'text_delta' && evt.delta) {
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId ? { ...m, content: m.content + (evt.delta ?? '') } : m,
+                  ),
+                );
+              } else if (evt.type === 'tool_call') {
+                const tc: ToolCall = {
+                  id: evt.id ?? `tc-${Date.now()}`,
+                  name: evt.name ?? 'unknown',
+                  input: evt.input,
+                };
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, toolCalls: [...(m.toolCalls ?? []), tc] }
+                      : m,
+                  ),
+                );
+              } else if (evt.type === 'tool_result') {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          toolCalls: (m.toolCalls ?? []).map((tc) =>
+                            tc.id === evt.id
+                              ? { ...tc, result: evt.content, error: evt.error }
+                              : tc,
+                          ),
+                        }
+                      : m,
                   ),
                 );
               }
