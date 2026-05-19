@@ -430,8 +430,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [searchQuery, setSearchQuery] = useState('');
   const [testCases, setTestCases] = useState<EvalTestCase[]>([]);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
-  const [runInputJson, setRunInputJson] = useState('{}');
-  const [runInputError, setRunInputError] = useState<string | null>(null);
+  const [runInputValues, setRunInputValues] = useState<Record<string, string>>({});
   const [quickConnect, setQuickConnect] = useState<{
     screenX: number; screenY: number;
     sourceNodeId: string; sourceHandle: string | null;
@@ -1412,31 +1411,27 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
   function handleRun() {
     const validationError = validateWorkflow();
-    if (validationError) {
-      showToast(validationError, 'error');
-      return;
-    }
+    if (validationError) { showToast(validationError, 'error'); return; }
+
     const startNode = nodes.find((n) => n.type === 'start');
-    const existing = (startNode?.data?.testInput as Record<string, unknown>) ?? {};
-    const hasContent = Object.keys(existing).length > 0;
-    setRunInputJson(hasContent ? JSON.stringify(existing, null, 2) : '{}');
-    setRunInputError(null);
-    setRunDialogOpen(true);
+    const inputVars = ((startNode?.data?.inputVariables as { name: string; type: string; required?: boolean }[]) ?? []).filter((v) => v.name);
+
+    if (inputVars.length > 0) {
+      // Builder defined inputs — show form
+      const saved = (startNode?.data?.testInput as Record<string, string>) ?? {};
+      setRunInputValues(Object.fromEntries(inputVars.map((v) => [v.name, String(saved[v.name] ?? '')])));
+      setRunDialogOpen(true);
+    } else {
+      // No inputs defined — run immediately
+      void handleRunWithInput({});
+    }
   }
   handleRunRef.current = handleRun;
 
-  async function handleRunWithInput(jsonStr: string) {
-    let parsed: Record<string, unknown> = {};
-    try {
-      parsed = JSON.parse(jsonStr) as Record<string, unknown>;
-    } catch {
-      setRunInputError('Invalid JSON');
-      return;
-    }
+  async function handleRunWithInput(input: Record<string, string>) {
     setRunDialogOpen(false);
-    // Save back to start node so values persist
     setNodes((nds) => nds.map((n) =>
-      n.type === 'start' ? { ...n, data: { ...n.data, testInput: parsed } } : n,
+      n.type === 'start' ? { ...n, data: { ...n.data, testInput: input } } : n,
     ));
 
     setIsRunning(true);
@@ -1449,15 +1444,13 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       const token = await getToken();
       if (!token) return;
       const api = createApiClient(token);
-
       const ex = await api.post<{ id: string; status: string }>(
         `/workspaces/${workspaceId}/pods/${podId}/executions`,
-        { workflowId, input: parsed },
+        { workflowId, input },
       );
       localStorage.setItem('linea_gs_run', 'true');
       setRunStatus({ id: ex.id, status: ex.status ?? 'queued' });
       showToast('Execution started');
-
       void startSSE(token, ex.id);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Run failed', 'error');
@@ -2162,62 +2155,41 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
       {/* Confirmation dialog */}
       {/* Run input dialog */}
+      {/* Run input dialog — only shown when Start node has declared input variables */}
       {(() => {
         const startNode = nodes.find((n) => n.type === 'start');
         const inputVars = ((startNode?.data?.inputVariables as { name: string; type: string; required?: boolean }[]) ?? []).filter((v) => v.name);
-        let parsedJson: Record<string, string> = {};
-        try { parsedJson = JSON.parse(runInputJson) as Record<string, string>; } catch { /* ignore */ }
         return (
           <Dialog open={runDialogOpen} onOpenChange={(o) => { if (!o) setRunDialogOpen(false); }}>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Run workflow</DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  {inputVars.length > 0 ? 'Fill in the inputs below, then click Run.' : 'Enter JSON input or leave empty to run with no input.'}
+                  Fill in the inputs below, then click Run.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3">
-                {inputVars.length > 0 ? (
-                  <div className="space-y-2.5">
-                    {inputVars.map((v) => (
-                      <div key={v.name} className="space-y-1">
-                        <label className="text-xs font-medium flex items-center gap-1">
-                          <code className="font-mono">{v.name}</code>
-                          <span className="text-[10px] text-muted-foreground">({v.type})</span>
-                          {v.required && <span className="text-destructive text-[10px]">*</span>}
-                        </label>
-                        <input
-                          className="w-full rounded-md border border-input bg-muted/30 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                          value={parsedJson[v.name] ?? ''}
-                          onChange={(e) => {
-                            const updated = { ...parsedJson, [v.name]: e.target.value };
-                            setRunInputJson(JSON.stringify(updated, null, 2));
-                            setRunInputError(null);
-                          }}
-                          placeholder={v.type === 'object' ? '{"key": "value"}' : `Enter ${v.name}…`}
-                          autoFocus={inputVars[0]?.name === v.name}
-                        />
-                      </div>
-                    ))}
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                {inputVars.map((v, i) => (
+                  <div key={v.name} className="space-y-1">
+                    <label className="text-xs font-medium flex items-center gap-1.5">
+                      {v.name}
+                      <span className="text-[10px] text-muted-foreground font-normal">· {v.type}</span>
+                      {v.required && <span className="text-[10px] text-destructive">required</span>}
+                    </label>
+                    <input
+                      autoFocus={i === 0}
+                      className="w-full rounded-md border border-input bg-muted/30 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      value={runInputValues[v.name] ?? ''}
+                      placeholder={v.type === 'object' ? '{"key": "value"}' : `Enter ${v.name}…`}
+                      onChange={(e) => setRunInputValues((prev) => ({ ...prev, [v.name]: e.target.value }))}
+                      onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void handleRunWithInput(runInputValues); } }}
+                    />
                   </div>
-                ) : (
-                  <textarea
-                    className={`w-full rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs leading-relaxed focus:outline-none focus:ring-1 focus:ring-ring resize-none h-36 ${runInputError ? 'border-destructive' : 'border-input'}`}
-                    value={runInputJson}
-                    onChange={(e) => { setRunInputJson(e.target.value); setRunInputError(null); }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void handleRunWithInput(runInputJson); }
-                    }}
-                    spellCheck={false}
-                    autoFocus
-                  />
-                )}
-                {runInputError && <p className="text-xs text-destructive">{runInputError}</p>}
-                <p className="text-[10px] text-muted-foreground">{inputVars.length > 0 ? 'Ctrl+Enter to run' : 'JSON object · Ctrl+Enter to run'}</p>
+                ))}
               </div>
               <DialogFooter>
                 <Button variant="outline" size="sm" onClick={() => setRunDialogOpen(false)}>Cancel</Button>
-                <Button size="sm" onClick={() => void handleRunWithInput(runInputJson)}>
+                <Button size="sm" onClick={() => void handleRunWithInput(runInputValues)}>
                   <HugeiconsIcon icon={PlayIcon} className="size-3.5" />
                   Run
                 </Button>
