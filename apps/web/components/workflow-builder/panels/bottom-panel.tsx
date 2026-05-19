@@ -39,6 +39,7 @@ interface Props {
   podId: string;
   token: string;
   onRetryNode?: (nodeId: string) => void;
+  executionOutput?: unknown;
 }
 
 type BottomTab = 'logs' | 'timeline' | 'issues' | 'variables';
@@ -75,6 +76,7 @@ function LogsTab({
   podId,
   token,
   onRetryNode,
+  executionOutput,
 }: {
   nodes: Node[];
   nodeResults: Record<string, NodeResult>;
@@ -85,6 +87,7 @@ function LogsTab({
   podId: string;
   token: string;
   onRetryNode?: (nodeId: string) => void;
+  executionOutput?: unknown;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -134,6 +137,18 @@ function LogsTab({
   if (isDone && logs.length > 0) {
     return (
       <div className="h-full overflow-auto">
+        {runStatus?.status === 'completed' && executionOutput !== undefined && (
+          <div className="mx-3 mt-3 mb-1 rounded-lg border border-green-200 bg-green-50/60 dark:border-green-900 dark:bg-green-950/20 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-green-700 dark:text-green-400 mb-1.5">
+              Workflow Output
+            </p>
+            <pre className="text-[11px] font-mono whitespace-pre-wrap break-all text-foreground max-h-28 overflow-y-auto leading-relaxed">
+              {typeof executionOutput === 'string'
+                ? executionOutput
+                : JSON.stringify(executionOutput, null, 2)}
+            </pre>
+          </div>
+        )}
         <table className="w-full text-xs border-collapse">
           <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
             <tr>
@@ -582,7 +597,7 @@ function VariablesTab({ nodes, nodeResults }: { nodes: Node[]; nodeResults: Reco
 }
 
 /* ---- Main component ------------------------------------------ */
-export function BottomPanel({ nodes, nodeResults, validationState, runStatus, workspaceId, podId, token, onRetryNode }: Props) {
+export function BottomPanel({ nodes, nodeResults, validationState, runStatus, workspaceId, podId, token, onRetryNode, executionOutput }: Props) {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<BottomTab>('logs');
   const [panelHeight, setPanelHeight] = useState(200);
@@ -753,6 +768,7 @@ export function BottomPanel({ nodes, nodeResults, validationState, runStatus, wo
                 podId={podId}
                 token={token}
                 onRetryNode={onRetryNode}
+                executionOutput={executionOutput}
               />
             )}
             {activeTab === 'timeline' && (

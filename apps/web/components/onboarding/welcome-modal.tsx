@@ -17,9 +17,105 @@ import {
   FlowCircleIcon,
   ArrowRight01Icon,
   CheckmarkCircle01Icon,
+  AiBrain01Icon,
+  LinkSquare01Icon,
+  Layers01Icon,
 } from '@hugeicons/core-free-icons';
 
-type Step = 'welcome' | 'pod' | 'ready';
+type Step = 'welcome' | 'pod' | 'template' | 'ready';
+
+interface StarterTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: Parameters<typeof HugeiconsIcon>[0]['icon'];
+  accent: string;
+  definition: {
+    nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>;
+    edges: Array<{ id: string; source: string; target: string; type?: string }>;
+  };
+}
+
+const STARTER_TEMPLATES: StarterTemplate[] = [
+  {
+    id: 'ai-assistant',
+    name: 'AI Assistant',
+    description: 'A simple agent that responds to user messages.',
+    icon: AiBrain01Icon,
+    accent: 'border-blue-200 bg-blue-50/60 dark:border-blue-900 dark:bg-blue-950/20',
+    definition: {
+      nodes: [
+        { id: 's1', type: 'start', position: { x: 80, y: 180 }, data: { nodeName: 'Start', label: 'Start' } },
+        { id: 'a1', type: 'agent', position: { x: 320, y: 180 }, data: { nodeName: 'AI Agent', label: 'AI Agent', systemPrompt: 'You are a helpful assistant.' } },
+        { id: 'e1', type: 'end', position: { x: 560, y: 180 }, data: { nodeName: 'End', label: 'End' } },
+      ],
+      edges: [
+        { id: 'e1', source: 's1', target: 'a1' },
+        { id: 'e2', source: 'a1', target: 'e1' },
+      ],
+    },
+  },
+  {
+    id: 'data-pipeline',
+    name: 'Data Pipeline',
+    description: 'Fetch from an API and transform the result.',
+    icon: LinkSquare01Icon,
+    accent: 'border-purple-200 bg-purple-50/60 dark:border-purple-900 dark:bg-purple-950/20',
+    definition: {
+      nodes: [
+        { id: 's1', type: 'start', position: { x: 80, y: 180 }, data: { nodeName: 'Start', label: 'Start' } },
+        { id: 'h1', type: 'http', position: { x: 300, y: 180 }, data: { nodeName: 'Fetch Data', label: 'Fetch Data', method: 'GET', url: '' } },
+        { id: 't1', type: 'transform', position: { x: 540, y: 180 }, data: { nodeName: 'Transform', label: 'Transform' } },
+        { id: 'e1', type: 'end', position: { x: 780, y: 180 }, data: { nodeName: 'End', label: 'End' } },
+      ],
+      edges: [
+        { id: 'e1', source: 's1', target: 'h1' },
+        { id: 'e2', source: 'h1', target: 't1' },
+        { id: 'e3', source: 't1', target: 'e1' },
+      ],
+    },
+  },
+  {
+    id: 'approval-flow',
+    name: 'Approval Flow',
+    description: 'Agent output reviewed by a human before proceeding.',
+    icon: CheckmarkCircle01Icon,
+    accent: 'border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20',
+    definition: {
+      nodes: [
+        { id: 's1', type: 'start', position: { x: 80, y: 180 }, data: { nodeName: 'Start', label: 'Start' } },
+        { id: 'a1', type: 'agent', position: { x: 300, y: 180 }, data: { nodeName: 'Draft', label: 'Draft', systemPrompt: 'Draft a response for human review.' } },
+        { id: 'ap1', type: 'approval', position: { x: 540, y: 180 }, data: { nodeName: 'Review', label: 'Review' } },
+        { id: 'e1', type: 'end', position: { x: 780, y: 180 }, data: { nodeName: 'End', label: 'End' } },
+      ],
+      edges: [
+        { id: 'e1', source: 's1', target: 'a1' },
+        { id: 'e2', source: 'a1', target: 'ap1' },
+        { id: 'e3', source: 'ap1', target: 'e1' },
+      ],
+    },
+  },
+  {
+    id: 'multi-step',
+    name: 'Multi-step Agent',
+    description: 'Two chained agents for complex reasoning tasks.',
+    icon: Layers01Icon,
+    accent: 'border-green-200 bg-green-50/60 dark:border-green-900 dark:bg-green-950/20',
+    definition: {
+      nodes: [
+        { id: 's1', type: 'start', position: { x: 80, y: 180 }, data: { nodeName: 'Start', label: 'Start' } },
+        { id: 'a1', type: 'agent', position: { x: 300, y: 180 }, data: { nodeName: 'Research', label: 'Research', systemPrompt: 'Research the given topic and summarise key points.' } },
+        { id: 'a2', type: 'agent', position: { x: 540, y: 180 }, data: { nodeName: 'Synthesise', label: 'Synthesise', systemPrompt: 'Using the research, produce a clear final answer.' } },
+        { id: 'e1', type: 'end', position: { x: 780, y: 180 }, data: { nodeName: 'End', label: 'End' } },
+      ],
+      edges: [
+        { id: 'e1', source: 's1', target: 'a1' },
+        { id: 'e2', source: 'a1', target: 'a2' },
+        { id: 'e3', source: 'a2', target: 'e1' },
+      ],
+    },
+  },
+];
 
 export function WelcomeModal() {
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
@@ -32,6 +128,8 @@ export function WelcomeModal() {
   const [podName, setPodName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createdPodId, setCreatedPodId] = useState<string | null>(null);
+  const [createdWorkflowId, setCreatedWorkflowId] = useState<string | null>(null);
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
 
   useEffect(() => {
     if (wsLoading || podLoading) return;
@@ -75,14 +173,40 @@ export function WelcomeModal() {
       void reloadPods();
       void markOnboarded();
       localStorage.setItem('linea_gs_pod', 'true');
-      setStep('ready');
+      setStep('template');
     } finally {
       setCreating(false);
     }
   }
 
+  async function handleSelectTemplate(template: StarterTemplate) {
+    if (!activeWorkspace || !createdPodId) return;
+    setCreatingTemplate(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      const wf = await api.post<{ id: string }>(
+        `/workspaces/${activeWorkspace.id}/pods/${createdPodId}/workflows`,
+        { name: template.name, definition: template.definition },
+      );
+      setCreatedWorkflowId(wf.id);
+    } catch {
+      // silently skip — user can still create workflows manually
+    } finally {
+      setCreatingTemplate(false);
+      setStep('ready');
+    }
+  }
+
   function handleGoToBuilder() {
-    if (createdPodId) router.push(`/pods/${createdPodId}/workflows`);
+    if (createdPodId) {
+      if (createdWorkflowId) {
+        router.push(`/pods/${createdPodId}/workflows/${createdWorkflowId}`);
+      } else {
+        router.push(`/pods/${createdPodId}/workflows`);
+      }
+    }
     setOpen(false);
   }
 
@@ -101,8 +225,15 @@ export function WelcomeModal() {
             onSkip={dismiss}
           />
         )}
+        {step === 'template' && (
+          <TemplateStep
+            loading={creatingTemplate}
+            onSelect={handleSelectTemplate}
+            onSkip={() => setStep('ready')}
+          />
+        )}
         {step === 'ready' && (
-          <ReadyStep onGo={handleGoToBuilder} />
+          <ReadyStep hasTemplate={!!createdWorkflowId} onGo={handleGoToBuilder} />
         )}
       </DialogContent>
     </Dialog>
@@ -228,7 +359,65 @@ function PodStep({
   );
 }
 
-function ReadyStep({ onGo }: { onGo: () => void }) {
+function TemplateStep({
+  loading,
+  onSelect,
+  onSkip,
+}: {
+  loading: boolean;
+  onSelect: (t: StarterTemplate) => Promise<void>;
+  onSkip: () => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col">
+      <div className="px-8 pt-8 pb-5 border-b">
+        <h2 className="text-lg font-semibold">Start with a template</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pick a starter workflow to open in the builder, or start from scratch.
+        </p>
+      </div>
+
+      <div className="px-6 py-5 grid grid-cols-2 gap-3">
+        {STARTER_TEMPLATES.map((t) => (
+          <button
+            key={t.id}
+            disabled={loading}
+            onClick={() => {
+              setSelected(t.id);
+              void onSelect(t);
+            }}
+            className={`relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all hover:shadow-sm focus:outline-none disabled:opacity-60 ${t.accent} ${selected === t.id ? 'ring-2 ring-primary' : ''}`}
+          >
+            <div className="flex size-8 items-center justify-center rounded-lg bg-background/80">
+              <HugeiconsIcon icon={t.icon} className="size-4 text-foreground" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold leading-snug">{t.name}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground leading-relaxed">{t.description}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between border-t px-8 py-4">
+        <button
+          onClick={onSkip}
+          disabled={loading}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          Start from scratch
+        </button>
+        {loading && (
+          <p className="text-xs text-muted-foreground animate-pulse">Setting up…</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReadyStep({ hasTemplate, onGo }: { hasTemplate: boolean; onGo: () => void }) {
   return (
     <div className="flex flex-col items-center px-8 py-12 text-center">
       <div className="flex size-14 items-center justify-center rounded-2xl bg-emerald-500/10 ring-1 ring-emerald-500/20 mb-4">
@@ -236,7 +425,9 @@ function ReadyStep({ onGo }: { onGo: () => void }) {
       </div>
       <h2 className="text-xl font-bold">You&apos;re all set!</h2>
       <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-        Your pod is ready. Open the workflow builder to create your first automation.
+        {hasTemplate
+          ? 'Your starter workflow is ready. Open the builder to customise it.'
+          : 'Your pod is ready. Open the workflow builder to create your first automation.'}
       </p>
       <Button className="mt-6" onClick={onGo}>
         Open workflow builder

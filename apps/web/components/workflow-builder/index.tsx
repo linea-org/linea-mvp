@@ -89,7 +89,7 @@ interface SSEEvent {
   output?: unknown;
   error?: string;
   durationMs?: number;
-  interrupt?: { nodeId?: string; message?: string; prompt?: string };
+  interrupt?: { type?: string; nodeId?: string; message?: string; prompt?: string; question?: string };
 }
 
 export interface NodeResult {
@@ -400,6 +400,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [runStatus, setRunStatus] = useState<{ id: string; status: string } | null>(null);
   const [interrupt, setInterrupt] = useState<SSEEvent['interrupt'] | null>(null);
+  const [executionOutput, setExecutionOutput] = useState<unknown>(undefined);
+  const [askHumanAnswer, setAskHumanAnswer] = useState('');
   const [generateOpen, setGenerateOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [authToken, setAuthToken] = useState<string>('');
@@ -694,6 +696,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
   function clearNodeStatuses() {
     setNodeResults({});
+    setExecutionOutput(undefined);
     setNodes((nds) => nds.map((n) => {
       const { status: _s, _outputPreview: _op, ...rest } = n.data as Record<string, unknown>;
       void _s; void _op;
@@ -1305,6 +1308,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       case 'execution_complete':
         setRunStatus({ id: executionId, status: 'completed' });
         setInterrupt(null);
+        if (evt.output !== undefined) setExecutionOutput(evt.output);
         showToast('Execution completed');
         break;
       case 'execution_failed':
@@ -1424,6 +1428,23 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setRunStatus((prev) => prev ? { ...prev, status: 'running' } : prev);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Approval failed', 'error');
+    }
+  }
+
+  async function handleAnswer(answer: string) {
+    if (!runStatus || !answer.trim()) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await api.patch(`/workspaces/${workspaceId}/pods/${podId}/executions/${runStatus.id}/respond`, {
+        answer: answer.trim(),
+      });
+      setInterrupt(null);
+      setAskHumanAnswer('');
+      setRunStatus((prev) => prev ? { ...prev, status: 'running' } : prev);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Response failed', 'error');
     }
   }
 
@@ -1805,6 +1826,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           podId={podId}
           token={authToken}
           onRetryNode={handleRetryNode}
+          executionOutput={executionOutput}
         />
         </div>{/* end center column */}
 
@@ -1980,39 +2002,63 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         />
       )}
 
-      {/* Approval banner */}
+      {/* Suspension banner — approval or ask_human */}
       {isSuspended && (
         <div className="shrink-0 border-t border-amber-300 bg-amber-50 px-5 py-3 dark:border-amber-800 dark:bg-amber-950/30">
           <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                Approval required
+                {interrupt?.type === 'ask_human' ? 'Response required' : 'Approval required'}
               </p>
-              {(interrupt?.message || interrupt?.prompt) && (
+              {(interrupt?.question ?? interrupt?.message ?? interrupt?.prompt) && (
                 <p className="mt-0.5 truncate text-xs text-amber-700 dark:text-amber-300">
-                  {interrupt.message ?? interrupt.prompt}
+                  {interrupt?.question ?? interrupt?.message ?? interrupt?.prompt}
                 </p>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
-                onClick={() => void handleApproval(false)}
-              >
-                <HugeiconsIcon icon={Cancel01Icon} className="mr-1 size-3.5" />
-                Reject
-              </Button>
-              <Button
-                size="sm"
-                className="bg-green-600 text-white hover:bg-green-700"
-                onClick={() => void handleApproval(true)}
-              >
-                <HugeiconsIcon icon={Tick01Icon} className="mr-1 size-3.5" />
-                Approve
-              </Button>
-            </div>
+            {interrupt?.type === 'ask_human' ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <input
+                  className="h-8 w-52 rounded border border-amber-300 bg-white px-3 text-sm text-amber-900 placeholder:text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 dark:bg-amber-950/60 dark:text-amber-100 dark:border-amber-700"
+                  placeholder="Your answer…"
+                  value={askHumanAnswer}
+                  onChange={(e) => setAskHumanAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && askHumanAnswer.trim()) {
+                      void handleAnswer(askHumanAnswer);
+                    }
+                  }}
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  disabled={!askHumanAnswer.trim()}
+                  onClick={() => void handleAnswer(askHumanAnswer)}
+                >
+                  Send
+                </Button>
+              </div>
+            ) : (
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
+                  onClick={() => void handleApproval(false)}
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} className="mr-1 size-3.5" />
+                  Reject
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-green-600 text-white hover:bg-green-700"
+                  onClick={() => void handleApproval(true)}
+                >
+                  <HugeiconsIcon icon={Tick01Icon} className="mr-1 size-3.5" />
+                  Approve
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}
