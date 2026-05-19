@@ -7,7 +7,6 @@ import {
   Param,
   HttpCode,
   UseGuards,
-  Res,
   Sse,
 } from '@nestjs/common';
 import {
@@ -18,7 +17,6 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { map, takeUntil, timer } from 'rxjs';
-import type { Response } from 'express';
 import { NotificationsService } from './notifications.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
@@ -49,10 +47,7 @@ export class NotificationsController {
   stream(
     @CurrentUser() user: User,
     @Param('workspaceId') workspaceId: string,
-    @Res() res: Response,
   ) {
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('X-Accel-Buffering', 'no');
     const subject = this.service.getStream(user.id, workspaceId);
     return subject.pipe(
       map(() => ({ data: { type: 'notification' } })),

@@ -429,6 +429,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [testCases, setTestCases] = useState<EvalTestCase[]>([]);
+  const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [runInputJson, setRunInputJson] = useState('{}');
+  const [runInputError, setRunInputError] = useState<string | null>(null);
   const [quickConnect, setQuickConnect] = useState<{
     screenX: number; screenY: number;
     sourceNodeId: string; sourceHandle: string | null;
@@ -466,7 +469,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
   // Stable refs so keyboard handler never captures stale closures
   const handleSaveRef = useRef<(opts?: { silent?: boolean }) => Promise<void>>(async () => {});
-  const handleRunRef  = useRef<() => Promise<void>>(async () => {});
+  const handleRunRef  = useRef<() => void>(() => {});
 
   async function openGenerate() {
     const token = await getToken();
@@ -1407,12 +1410,42 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     return null;
   }
 
-  async function handleRun() {
+  function handleRun() {
     const validationError = validateWorkflow();
     if (validationError) {
       showToast(validationError, 'error');
       return;
     }
+    // Pre-populate dialog with current start node test input
+    const startNode = nodes.find((n) => n.type === 'start');
+    const existing = (startNode?.data?.testInput as Record<string, unknown>) ?? {};
+    const hasVars = ((startNode?.data?.inputVariables as unknown[]) ?? []).length > 0;
+    // Only open dialog if there are defined variables or existing test input
+    const hasContent = Object.keys(existing).length > 0;
+    const pretty = hasContent ? JSON.stringify(existing, null, 2) : '{}';
+    setRunInputJson(pretty);
+    setRunInputError(null);
+    if (hasVars || hasContent) {
+      setRunDialogOpen(true);
+    } else {
+      void handleRunWithInput('{}');
+    }
+  }
+  handleRunRef.current = handleRun;
+
+  async function handleRunWithInput(jsonStr: string) {
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+    } catch {
+      setRunInputError('Invalid JSON');
+      return;
+    }
+    setRunDialogOpen(false);
+    // Save back to start node so values persist
+    setNodes((nds) => nds.map((n) =>
+      n.type === 'start' ? { ...n, data: { ...n.data, testInput: parsed } } : n,
+    ));
 
     setIsRunning(true);
     sseAbortRef.current?.abort();
@@ -1425,19 +1458,14 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       if (!token) return;
       const api = createApiClient(token);
 
-      // Collect test input from the start node
-      const startNode = nodes.find((n) => n.type === 'start');
-      const testInput = (startNode?.data?.testInput as Record<string, string>) ?? {};
-
       const ex = await api.post<{ id: string; status: string }>(
         `/workspaces/${workspaceId}/pods/${podId}/executions`,
-        { workflowId, input: testInput },
+        { workflowId, input: parsed },
       );
       localStorage.setItem('linea_gs_run', 'true');
       setRunStatus({ id: ex.id, status: ex.status ?? 'queued' });
       showToast('Execution started');
 
-      // Start SSE stream (fire-and-forget — aborted on next run or unmount)
       void startSSE(token, ex.id);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Run failed', 'error');
@@ -1445,7 +1473,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setIsRunning(false);
     }
   }
-  handleRunRef.current = handleRun;
 
   function handleRetryNode(nodeId: string) {
     setNodeResults((prev) => ({
@@ -1544,12 +1571,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         onAutoLayout={handleAutoLayout}
         onAutoSaveToggle={handleAutoSaveToggle}
         onSave={() => void handleSave()}
-        onRun={() => setConfirm({
-          title: 'Run workflow',
-          description: 'This will execute the current workflow using the test inputs defined in the Start node. Any configured actions (API calls, messages, etc.) will run for real.',
-          action: 'Run',
-          onConfirm: () => void handleRun(),
-        })}
+        onRun={() => handleRun()}
         onDeployPanel={() => void openDeployPanel()}
         onBack={() => router.push(`/pods/${podId}/workflows`)}
         onNameChange={setWorkflowName}
@@ -2147,6 +2169,44 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       </Dialog>
 
       {/* Confirmation dialog */}
+      {/* Run input dialog */}
+      <Dialog open={runDialogOpen} onOpenChange={(o) => { if (!o) setRunDialogOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Run workflow</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Enter the JSON input for this run. Leave <code className="font-mono">{'{}'}</code> for no input.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <textarea
+              className={`w-full rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs leading-relaxed focus:outline-none focus:ring-1 focus:ring-ring resize-none h-40 ${runInputError ? 'border-destructive' : 'border-input'}`}
+              value={runInputJson}
+              onChange={(e) => { setRunInputJson(e.target.value); setRunInputError(null); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  void handleRunWithInput(runInputJson);
+                }
+              }}
+              spellCheck={false}
+              autoFocus
+            />
+            {runInputError && (
+              <p className="text-xs text-destructive">{runInputError}</p>
+            )}
+            <p className="text-[10px] text-muted-foreground">⌘ Enter to run</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRunDialogOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={() => void handleRunWithInput(runInputJson)}>
+              <HugeiconsIcon icon={PlayIcon} className="size-3.5" />
+              Run
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
