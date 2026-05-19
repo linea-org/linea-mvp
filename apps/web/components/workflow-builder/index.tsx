@@ -1415,16 +1415,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
     const startNode = nodes.find((n) => n.type === 'start');
     const inputVars = ((startNode?.data?.inputVariables as { name: string; type: string; required?: boolean }[]) ?? []).filter((v) => v.name);
-
-    if (inputVars.length > 0) {
-      // Builder defined inputs — show form
-      const saved = (startNode?.data?.testInput as Record<string, string>) ?? {};
-      setRunInputValues(Object.fromEntries(inputVars.map((v) => [v.name, String(saved[v.name] ?? '')])));
-      setRunDialogOpen(true);
-    } else {
-      // No inputs defined — run immediately
-      void handleRunWithInput({});
-    }
+    const saved = (startNode?.data?.testInput as Record<string, string>) ?? {};
+    setRunInputValues(Object.fromEntries(inputVars.map((v) => [v.name, String(saved[v.name] ?? '')])));
+    setRunDialogOpen(true);
   }
   handleRunRef.current = handleRun;
 
@@ -2155,43 +2148,55 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
       {/* Confirmation dialog */}
       {/* Run input dialog */}
-      {/* Run input dialog — only shown when Start node has declared input variables */}
+      {/* Run input dialog */}
       {(() => {
         const startNode = nodes.find((n) => n.type === 'start');
         const inputVars = ((startNode?.data?.inputVariables as { name: string; type: string; required?: boolean }[]) ?? []).filter((v) => v.name);
+        const hasVars = inputVars.length > 0;
         return (
           <Dialog open={runDialogOpen} onOpenChange={(o) => { if (!o) setRunDialogOpen(false); }}>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Run workflow</DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Fill in the inputs below, then click Run.
+                  {hasVars ? 'Fill in the inputs below, then click Run.' : 'No input variables defined on the Start node.'}
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                {inputVars.map((v, i) => (
-                  <div key={v.name} className="space-y-1">
-                    <label className="text-xs font-medium flex items-center gap-1.5">
-                      {v.name}
-                      <span className="text-[10px] text-muted-foreground font-normal">· {v.type}</span>
-                      {v.required && <span className="text-[10px] text-destructive">required</span>}
-                    </label>
-                    <input
-                      autoFocus={i === 0}
-                      className="w-full rounded-md border border-input bg-muted/30 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                      value={runInputValues[v.name] ?? ''}
-                      placeholder={v.type === 'object' ? '{"key": "value"}' : `Enter ${v.name}…`}
-                      onChange={(e) => setRunInputValues((prev) => ({ ...prev, [v.name]: e.target.value }))}
-                      onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void handleRunWithInput(runInputValues); } }}
-                    />
-                  </div>
-                ))}
-              </div>
+
+              {hasVars ? (
+                <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                  {inputVars.map((v, i) => (
+                    <div key={v.name} className="space-y-1">
+                      <label className="text-xs font-medium flex items-center gap-1.5">
+                        {v.name}
+                        <span className="text-[10px] text-muted-foreground font-normal">· {v.type}</span>
+                        {v.required && <span className="text-[10px] text-destructive">required</span>}
+                      </label>
+                      <input
+                        autoFocus={i === 0}
+                        className="w-full rounded-md border border-input bg-muted/30 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        value={runInputValues[v.name] ?? ''}
+                        placeholder={v.type === 'object' ? '{"key": "value"}' : `Enter ${v.name}…`}
+                        onChange={(e) => setRunInputValues((prev) => ({ ...prev, [v.name]: e.target.value }))}
+                        onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void handleRunWithInput(runInputValues); } }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed p-4 text-center space-y-1">
+                  <p className="text-sm text-muted-foreground">
+                    Click the <span className="font-medium text-foreground">Start</span> node on the canvas, then add input variables to let users pass data into this workflow.
+                  </p>
+                  <p className="text-xs text-muted-foreground">You can still run now with no input.</p>
+                </div>
+              )}
+
               <DialogFooter>
                 <Button variant="outline" size="sm" onClick={() => setRunDialogOpen(false)}>Cancel</Button>
                 <Button size="sm" onClick={() => void handleRunWithInput(runInputValues)}>
                   <HugeiconsIcon icon={PlayIcon} className="size-3.5" />
-                  Run
+                  {hasVars ? 'Run' : 'Run with no input'}
                 </Button>
               </DialogFooter>
             </DialogContent>

@@ -123,7 +123,7 @@ export class LangGraphService {
 
     for (const node of definition.nodes) {
       const nodeType = node.data?.nodeType || node.type;
-      if (nodeType === 'note') continue;
+      if (nodeType === 'note' || nodeType === 'frame') continue;
       builder.addNode(
         node.id,
         this.createNodeFn(
@@ -143,7 +143,7 @@ export class LangGraphService {
     for (const [sourceId, edges] of edgesBySource) {
       const sourceNode = definition.nodes.find((n) => n.id === sourceId);
       const sourceType = sourceNode?.data?.nodeType || sourceNode?.type;
-      if (!sourceNode || sourceType === 'note') continue;
+      if (!sourceNode || sourceType === 'note' || sourceType === 'frame') continue;
 
       if (
         sourceType === 'if-else' ||
