@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, jsonb, pgEnum, real } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, jsonb, pgEnum, real, integer } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { vector } from './_vector';
 import { workspaces } from './workspaces';
@@ -61,6 +61,9 @@ export const knowledgeEntries = pgTable('knowledge_entries', {
   content: text('content').notNull(),
   embedding: vector('embedding', { dimensions: 1536 }),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+  sourceId: text('source_id'),
+  chunkIndex: integer('chunk_index'),
+  totalChunks: integer('total_chunks'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

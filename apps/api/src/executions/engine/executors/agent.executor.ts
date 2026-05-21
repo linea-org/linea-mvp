@@ -4,10 +4,11 @@ import type { ModelDefinition, ModelProvider } from '../models/registry';
 import { createModelClient } from '../models/client.factory';
 import type {
   ChatMessage,
+  CompletionOptions,
+  CompletionResult,
+  ModelClient,
   NormalizedToolCall,
   ModelApiKeys,
-  ModelClient,
-  CompletionOptions,
 } from '../models/client.factory';
 import type { WorkflowState } from '../variable-substitution';
 import { substituteVariables } from '../variable-substitution';
@@ -144,11 +145,22 @@ export async function executeAgentNode(
   apiKeys: ModelApiKeys,
   ltmCtx?: LongTermMemoryContext,
   onToken?: (delta: string) => void,
+  workspaceFallbackChain?: string[],
 ): Promise<AgentResult> {
   const modelDef = getModelOrDefault(nodeData.model, 'balanced');
 
-  // Build active client + fallback chain. Primary may fail immediately (missing key).
-  const fallbacks = buildFallbackChain(modelDef, apiKeys);
+  // Build fallback chain: workspace-configured chain takes priority; auto-detect from API keys as fallback.
+  const fallbacks: Array<{ def: ModelDefinition; client: ModelClient }> = workspaceFallbackChain?.length
+    ? workspaceFallbackChain
+        .filter((id) => id !== modelDef.id)
+        .flatMap((modelId) => {
+          const def = MODEL_REGISTRY[modelId];
+          if (!def || !hasApiKey(def.provider, apiKeys)) return [];
+          try { return [{ def, client: createModelClient(def.id, def.provider, apiKeys) }]; }
+          catch { return []; }
+        })
+    : buildFallbackChain(modelDef, apiKeys);
+
   const fallbackIdx = { v: 0 };
   const activeRef: { def: ModelDefinition; client: ModelClient } = (() => {
     try {

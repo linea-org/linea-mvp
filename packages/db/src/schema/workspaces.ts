@@ -5,8 +5,16 @@ import {
   uuid,
   primaryKey,
   pgEnum,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+
+export interface WorkspaceSettings {
+  modelFallbackChain?: string[];
+  ragSimilarityThreshold?: number;
+  ragChunkSize?: number;
+  ragChunkOverlap?: number;
+}
 
 export const workspacePlanEnum = pgEnum('workspace_plan', [
   'free',
@@ -28,6 +36,7 @@ export const workspaces = pgTable('workspaces', {
   name: text('name').notNull(),
   plan: workspacePlanEnum('plan').default('free').notNull(),
   clerkOrgId: text('clerk_org_id').unique(),
+  settings: jsonb('settings').$type<WorkspaceSettings>().default({}).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

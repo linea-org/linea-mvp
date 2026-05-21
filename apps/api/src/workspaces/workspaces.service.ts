@@ -9,6 +9,7 @@ import {
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import type { DrizzleDB, WorkspaceMember } from '@linea/db';
+import type { WorkspaceSettings } from '@linea/db';
 import {
   workspaces,
   workspaceMembers,
@@ -371,6 +372,32 @@ export class WorkspacesService {
     });
 
     return { workspaceId: invite.workspaceId, role: invite.role };
+  }
+
+  // ─── Settings ──────────────────────────────────────────────────────────────
+
+  async getSettings(workspaceId: string, actor: WorkspaceMember): Promise<WorkspaceSettings> {
+    const ws = await this.findOne(workspaceId);
+    return (ws.settings ?? {}) as WorkspaceSettings;
+  }
+
+  async updateSettings(
+    workspaceId: string,
+    actor: WorkspaceMember,
+    patch: Partial<WorkspaceSettings>,
+  ): Promise<WorkspaceSettings> {
+    assertMinRole(actor, 'admin');
+
+    const ws = await this.findOne(workspaceId);
+    const merged: WorkspaceSettings = { ...(ws.settings as WorkspaceSettings ?? {}), ...patch };
+
+    const [updated] = await this.db
+      .update(workspaces)
+      .set({ settings: merged, updatedAt: new Date() })
+      .where(eq(workspaces.id, workspaceId))
+      .returning();
+
+    return (updated.settings ?? {}) as WorkspaceSettings;
   }
 
   // ─── Clerk org sync ────────────────────────────────────────────────────────

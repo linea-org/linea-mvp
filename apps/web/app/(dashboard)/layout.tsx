@@ -236,9 +236,10 @@ const SETTINGS_NAV_SECTIONS = [
   {
     label: 'AI & Integrations',
     items: [
-      { href: '/settings/model-keys',  label: 'Model Keys',  icon: AiBrain01Icon    },
-      { href: '/settings/connections', label: 'Connections', icon: GlobalIcon        },
-      { href: '/settings/mcp-servers', label: 'MCP Servers', icon: ComputerCloudIcon },
+      { href: '/settings/model-keys',  label: 'Model Keys',        icon: AiBrain01Icon    },
+      { href: '/settings/models',      label: 'Model Preferences', icon: AiMagicIcon      },
+      { href: '/settings/connections', label: 'Connections',       icon: GlobalIcon        },
+      { href: '/settings/mcp-servers', label: 'MCP Servers',       icon: ComputerCloudIcon },
     ],
   },
 ];
