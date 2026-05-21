@@ -2,6 +2,39 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, Inject } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { eq } from 'drizzle-orm';
+
+const EXECUTION_TIMEOUT_MS = 15 * 60 * 1_000; // 15 minutes wall-clock per execution
+
+async function drainWithTimeout<T>(
+  gen: AsyncIterable<T>,
+  timeoutMs: number,
+): Promise<T | undefined> {
+  let last: T | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Execution timed out after ${timeoutMs / 60_000} minutes`)),
+      timeoutMs,
+    );
+  });
+  try {
+    // Race: each iteration either yields from the generator or the timeout fires
+    for await (const state of {
+      [Symbol.asyncIterator]: () => {
+        const iter = gen[Symbol.asyncIterator]();
+        return {
+          next: () => Promise.race([iter.next(), timeoutPromise]) as Promise<IteratorResult<T>>,
+          return: iter.return?.bind(iter),
+        };
+      },
+    } as AsyncIterable<T>) {
+      last = state;
+    }
+    return last;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 import type { DrizzleDB } from '@linea/db';
 import { executions, executionLogs, workflows } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
@@ -114,17 +147,19 @@ export class ExecutionProcessor extends WorkerHost {
       let finalState: any;
 
       if (isResume) {
-        const stream = this.langGraph.resumeFromApproval(
-          definition,
-          threadId,
-          resumeValue,
-          onNodeUpdate,
-          workspaceId,
-          checkpointer,
-          workflowId,
-          onAgentToken,
+        finalState = await drainWithTimeout(
+          this.langGraph.resumeFromApproval(
+            definition,
+            threadId,
+            resumeValue,
+            onNodeUpdate,
+            workspaceId,
+            checkpointer,
+            workflowId,
+            onAgentToken,
+          ),
+          EXECUTION_TIMEOUT_MS,
         );
-        for await (const state of stream) finalState = state;
       } else {
         // Load persisted memory from previous runs before starting
         const initialMemory = await this.memoryService.loadForExecution(
@@ -132,19 +167,21 @@ export class ExecutionProcessor extends WorkerHost {
           workflowId,
           threadId,
         );
-        const stream = this.langGraph.stream(
-          definition,
-          input,
-          onNodeUpdate,
-          threadId,
-          workspaceId,
-          checkpointer,
-          initialMemory,
-          workflowId,
-          preloadedState,
-          onAgentToken,
+        finalState = await drainWithTimeout(
+          this.langGraph.stream(
+            definition,
+            input,
+            onNodeUpdate,
+            threadId,
+            workspaceId,
+            checkpointer,
+            initialMemory,
+            workflowId,
+            preloadedState,
+            onAgentToken,
+          ),
+          EXECUTION_TIMEOUT_MS,
         );
-        for await (const state of stream) finalState = state;
       }
 
       const isSuspended = Boolean(finalState?.pendingInterrupt);

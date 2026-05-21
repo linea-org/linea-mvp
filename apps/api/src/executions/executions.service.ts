@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { and, eq, desc, count } from 'drizzle-orm';
+import { and, eq, desc, count, inArray } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { executions, executionLogs, workflows } from '@linea/db';
@@ -59,6 +59,23 @@ export class ExecutionsService {
     if (!wf) throw new NotFoundException(`Workflow ${workflowId} not found`);
 
     await this.quotas.checkLimit(workspaceId);
+
+    // Concurrency cap: prevent a single workspace from saturating workers
+    const MAX_CONCURRENT = 10;
+    const [activeRow] = await this.db
+      .select({ n: count() })
+      .from(executions)
+      .where(
+        and(
+          eq(executions.workspaceId, workspaceId),
+          inArray(executions.status, ['queued', 'running']),
+        ),
+      );
+    if ((activeRow?.n ?? 0) >= MAX_CONCURRENT) {
+      throw new BadRequestException(
+        `Too many concurrent executions (limit: ${MAX_CONCURRENT}). Wait for running executions to finish.`,
+      );
+    }
 
     const threadId = `thread_${randomBytes(8).toString('hex')}`;
 
