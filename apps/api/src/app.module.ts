@@ -63,6 +63,9 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
     }),
     LoggerModule.forRoot({
       pinoHttp: {
+        // In production use warn level — pino-http's info logs every request
+        // which creates enormous volume; warnings + errors are what matter.
+        level: process.env['NODE_ENV'] === 'production' ? 'warn' : 'info',
         transport:
           process.env['NODE_ENV'] !== 'production'
             ? { target: 'pino-pretty', options: { singleLine: true } }
@@ -72,7 +75,30 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
           return raw && /^[a-zA-Z0-9\-_]{1,64}$/.test(raw) ? raw : randomUUID();
         },
         customProps: (_req, _res) => ({ context: 'HTTP' }),
-        autoLogging: { ignore: (req) => req.url === '/health' },
+        // Skip health checks and long-lived SSE/stream connections
+        autoLogging: {
+          ignore: (req) =>
+            req.url === '/health' ||
+            /\/(events|stream)(\/|$)/.test(req.url ?? ''),
+        },
+        // Redact credentials from request logs
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers["x-api-key"]',
+            'req.headers.cookie',
+          ],
+          censor: '[REDACTED]',
+        },
+        serializers: {
+          req: (req) => ({
+            id: req.id,
+            method: req.method,
+            url: req.url,
+            remoteAddress: req.remoteAddress,
+          }),
+          res: (res) => ({ statusCode: res.statusCode }),
+        },
       },
     }),
     DatabaseModule,
