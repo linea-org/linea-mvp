@@ -157,6 +157,24 @@ export const workflowPresenceRelations = relations(workflowPresence, ({ one }) =
   user: one(users, { fields: [workflowPresence.userId], references: [users.id] }),
 }));
 
+export const agentChatSessions = pgTable('agent_chat_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id')
+    .references(() => workspaces.id, { onDelete: 'cascade' })
+    .notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  threadId: text('thread_id').notNull().unique(),
+  title: text('title').notNull(),
+  messages: jsonb('messages').$type<unknown[]>().default([]).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const agentChatSessionsRelations = relations(agentChatSessions, ({ one }) => ({
+  workspace: one(workspaces, { fields: [agentChatSessions.workspaceId], references: [workspaces.id] }),
+  user: one(users, { fields: [agentChatSessions.userId], references: [users.id] }),
+}));
+
 export type Schedule = typeof schedules.$inferSelect;
 export type Approval = typeof approvals.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
@@ -164,3 +182,4 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type WorkflowComment = typeof workflowComments.$inferSelect;
 export type CommentReaction = typeof commentReactions.$inferSelect;
 export type WorkflowPresence = typeof workflowPresence.$inferSelect;
+export type AgentChatSession = typeof agentChatSessions.$inferSelect;

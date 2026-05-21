@@ -1,10 +1,37 @@
-import { Controller, Post, Param, Body, Res } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Post, Get, Patch, Delete, Param, Body, Res, HttpCode, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { IsString, IsArray, IsOptional } from 'class-validator';
 import type { Response } from 'express';
 import { AgentChatService } from './agent-chat.service';
 import { ChatDto } from './dto/chat.dto';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { WorkspaceGuard } from '../common/guards/workspace.guard';
+import type { User } from '@linea/db';
+
+class UpsertSessionDto {
+  @IsString()
+  threadId!: string;
+
+  @IsString()
+  title!: string;
+
+  @IsArray()
+  messages!: unknown[];
+}
+
+class PatchSessionDto {
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsArray()
+  @IsOptional()
+  messages?: unknown[];
+}
 
 @ApiTags('Agent Chat')
+@ApiBearerAuth()
+@UseGuards(WorkspaceGuard)
 @Controller('workspaces/:workspaceId/agent')
 export class AgentChatController {
   constructor(private readonly service: AgentChatService) {}
@@ -32,5 +59,43 @@ export class AgentChatController {
     } finally {
       res.end();
     }
+  }
+
+  // ─── Sessions ─────────────────────────────────────────────────────────────
+
+  @Get('sessions')
+  @ApiOperation({ summary: 'List chat sessions for this workspace' })
+  listSessions(@Param('workspaceId') workspaceId: string) {
+    return this.service.listSessions(workspaceId);
+  }
+
+  @Post('sessions')
+  @ApiOperation({ summary: 'Create or update a chat session' })
+  upsertSession(
+    @Param('workspaceId') workspaceId: string,
+    @CurrentUser() user: User,
+    @Body() dto: UpsertSessionDto,
+  ) {
+    return this.service.upsertSession(workspaceId, user.id, dto.threadId, dto.title, dto.messages);
+  }
+
+  @Patch('sessions/:sessionId')
+  @ApiOperation({ summary: 'Update session title or messages' })
+  patchSession(
+    @Param('workspaceId') workspaceId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() dto: PatchSessionDto,
+  ) {
+    return this.service.patchSession(workspaceId, sessionId, dto);
+  }
+
+  @Delete('sessions/:sessionId')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete a chat session' })
+  deleteSession(
+    @Param('workspaceId') workspaceId: string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.service.deleteSession(workspaceId, sessionId);
   }
 }

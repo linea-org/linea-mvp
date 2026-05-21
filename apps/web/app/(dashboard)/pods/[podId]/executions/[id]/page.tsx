@@ -301,10 +301,12 @@ function NodeTimeline({
   execution,
   logs,
   nodeMap,
+  onReplayFrom,
 }: {
   execution: Execution;
   logs: ExecutionLog[];
   nodeMap: Map<string, WorkflowNode>;
+  onReplayFrom?: (nodeId: string) => void;
 }) {
   const nodeResults = execution.nodeResults ?? {};
 
@@ -370,7 +372,7 @@ function NodeTimeline({
             <div className="rounded-lg border bg-card">
               <CollapsibleTrigger asChild>
                 <button
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left disabled:cursor-default"
+                  className="group/node flex w-full items-center gap-3 px-4 py-3 text-left disabled:cursor-default"
                   disabled={!hasDetails}
                 >
                   <div className="flex shrink-0 items-center gap-2 text-muted-foreground text-xs">
@@ -398,6 +400,15 @@ function NodeTimeline({
                       <span className="text-xs text-destructive truncate max-w-[160px]">
                         {result.error}
                       </span>
+                    )}
+                    {onReplayFrom && status === 'completed' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onReplayFrom(nodeId); }}
+                        className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover/node:opacity-100"
+                        title="Re-run workflow from this node"
+                      >
+                        ↩ from here
+                      </button>
                     )}
                     {hasDetails && (
                       <span className="text-muted-foreground text-xs">▾</span>
@@ -746,7 +757,7 @@ export default function ExecutionDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace, wsLoading, podId, id]);
 
-  async function replay() {
+  async function replay(fromNodeId?: string) {
     if (!activeWorkspace) return;
     setReplaying(true);
     try {
@@ -755,7 +766,7 @@ export default function ExecutionDetailPage() {
       const api = createApiClient(token);
       const newExec = await api.post<{ id: string }>(
         `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}/replay`,
-        {},
+        fromNodeId ? { fromNodeId } : {},
       );
       router.push(`/pods/${podId}/executions/${newExec.id}`);
     } finally {
@@ -879,7 +890,7 @@ export default function ExecutionDetailPage() {
               disabled={replaying}
               onClick={() => void replay()}
             >
-              {replaying ? 'Replaying…' : 'Replay'}
+              {replaying ? 'Re-running…' : 'Re-run'}
             </Button>
           )}
           {execution.workflowId && (
@@ -1017,7 +1028,16 @@ export default function ExecutionDetailPage() {
           )}
         </div>
         {timelineView === 'list' ? (
-          <NodeTimeline execution={execution} logs={logs} nodeMap={nodeMap} />
+          <NodeTimeline
+            execution={execution}
+            logs={logs}
+            nodeMap={nodeMap}
+            onReplayFrom={
+              ['completed', 'failed', 'cancelled'].includes(execution.status)
+                ? (nodeId) => void replay(nodeId)
+                : undefined
+            }
+          />
         ) : (
           <GanttTimeline execution={execution} logs={logs} nodeMap={nodeMap} />
         )}

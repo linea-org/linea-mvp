@@ -1,9 +1,9 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { eq } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import type { DrizzleDB } from '@linea/db';
-import { pods, workflows } from '@linea/db';
+import { pods, workflows, executions, schedules, agentChatSessions } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { SecretsService } from '../secrets/secrets.service';
 import { ExecutionsService } from '../executions/executions.service';
@@ -73,6 +73,8 @@ const SYSTEM_PROMPT = `You are Linea's built-in AI assistant. Linea is a visual 
 5. If missing secrets: list exactly which ones to add and where (Settings → Secrets)
 6. Use run_workflow to test an existing workflow — pass input: { message: "..." } for chat-style workflows
 7. Use save_to_memory to remember user preferences, names, or facts across conversations
+8. Use list_executions / get_execution to inspect recent runs and debug failures
+9. Use list_schedules to show what's scheduled in a pod
 
 Be direct, clear, and structured. Use emoji section headers for readability.`;
 
@@ -145,6 +147,45 @@ const AGENT_TOOLS: ToolDefinition[] = [
         value: { type: 'string', description: 'The information to remember' },
       },
       required: ['key', 'value'],
+    },
+    approval: 'never',
+  },
+  {
+    name: 'list_executions',
+    description: 'List recent executions for a pod, optionally filtered by workflow. Returns id, status, triggeredBy, startedAt, finishedAt.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pod_id: { type: 'string', description: 'Pod ID to list executions for' },
+        workflow_id: { type: 'string', description: 'Optional: filter by workflow ID' },
+        limit: { type: 'number', description: 'Max results (default 10, max 50)' },
+      },
+      required: ['pod_id'],
+    },
+    approval: 'never',
+  },
+  {
+    name: 'get_execution',
+    description: 'Get details of a specific execution — status, output, error, node results.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pod_id: { type: 'string', description: 'Pod ID that owns the execution' },
+        execution_id: { type: 'string', description: 'Execution ID' },
+      },
+      required: ['pod_id', 'execution_id'],
+    },
+    approval: 'never',
+  },
+  {
+    name: 'list_schedules',
+    description: 'List scheduled triggers for a pod — cron expression, enabled state, last and next run times.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pod_id: { type: 'string', description: 'Pod ID to list schedules for' },
+      },
+      required: ['pod_id'],
     },
     approval: 'never',
   },
@@ -459,8 +500,132 @@ export class AgentChatService {
         return { success: true, key, message: `Remembered: ${key}` };
       }
 
+      case 'list_executions': {
+        const podId = input['pod_id'] as string;
+        const workflowId = input['workflow_id'] as string | undefined;
+        const limit = Math.min(Number(input['limit'] ?? 10), 50);
+
+        const conditions = [eq(executions.podId, podId)];
+        if (workflowId) conditions.push(eq(executions.workflowId, workflowId));
+
+        const rows = await this.db
+          .select({
+            id: executions.id,
+            status: executions.status,
+            triggeredBy: executions.triggeredBy,
+            startedAt: executions.startedAt,
+            finishedAt: executions.finishedAt,
+            workflowId: executions.workflowId,
+          })
+          .from(executions)
+          .where(and(...conditions))
+          .orderBy(desc(executions.createdAt))
+          .limit(limit);
+
+        return { executions: rows, count: rows.length };
+      }
+
+      case 'get_execution': {
+        const podId = input['pod_id'] as string;
+        const executionId = input['execution_id'] as string;
+        try {
+          const ex = await this.executionsService.findOne(podId, executionId);
+          return {
+            id: ex.id,
+            status: ex.status,
+            triggeredBy: ex.triggeredBy,
+            startedAt: ex.startedAt,
+            finishedAt: ex.finishedAt,
+            error: ex.error,
+            output: ex.output,
+            nodeResults: ex.nodeResults,
+          };
+        } catch {
+          return { error: `Execution ${executionId} not found in pod ${podId}` };
+        }
+      }
+
+      case 'list_schedules': {
+        const podId = input['pod_id'] as string;
+        const rows = await this.db
+          .select({
+            id: schedules.id,
+            workflowId: schedules.workflowId,
+            cronExpr: schedules.cronExpr,
+            enabled: schedules.enabled,
+            lastRunAt: schedules.lastRunAt,
+            nextRunAt: schedules.nextRunAt,
+          })
+          .from(schedules)
+          .where(eq(schedules.podId, podId))
+          .orderBy(schedules.nextRunAt);
+
+        return { schedules: rows, count: rows.length };
+      }
+
       default:
         return { error: `Unknown tool: ${name}` };
     }
+  }
+
+  // ─── Session persistence ───────────────────────────────────────────────────
+
+  async listSessions(workspaceId: string) {
+    return this.db
+      .select({
+        id: agentChatSessions.id,
+        threadId: agentChatSessions.threadId,
+        title: agentChatSessions.title,
+        createdAt: agentChatSessions.createdAt,
+        updatedAt: agentChatSessions.updatedAt,
+      })
+      .from(agentChatSessions)
+      .where(eq(agentChatSessions.workspaceId, workspaceId))
+      .orderBy(desc(agentChatSessions.updatedAt))
+      .limit(50);
+  }
+
+  async upsertSession(
+    workspaceId: string,
+    userId: string,
+    threadId: string,
+    title: string,
+    messages: unknown[],
+  ) {
+    const [row] = await this.db
+      .insert(agentChatSessions)
+      .values({ workspaceId, userId, threadId, title, messages })
+      .onConflictDoUpdate({
+        target: agentChatSessions.threadId,
+        set: { title, messages, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async patchSession(
+    workspaceId: string,
+    sessionId: string,
+    dto: { title?: string; messages?: unknown[] },
+  ) {
+    const [existing] = await this.db
+      .select({ id: agentChatSessions.id })
+      .from(agentChatSessions)
+      .where(and(eq(agentChatSessions.id, sessionId), eq(agentChatSessions.workspaceId, workspaceId)))
+      .limit(1);
+    if (!existing) throw new NotFoundException('Session not found');
+
+    const [row] = await this.db
+      .update(agentChatSessions)
+      .set({ ...dto, updatedAt: new Date() })
+      .where(eq(agentChatSessions.id, sessionId))
+      .returning();
+    return row;
+  }
+
+  async deleteSession(workspaceId: string, sessionId: string) {
+    await this.db
+      .delete(agentChatSessions)
+      .where(and(eq(agentChatSessions.id, sessionId), eq(agentChatSessions.workspaceId, workspaceId)));
   }
 }
