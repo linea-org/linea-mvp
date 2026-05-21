@@ -276,7 +276,7 @@ export async function executeAgentNode(
     const temperature = tools.length > 0 ? 0 : (nodeData.temperature ?? 0.7);
 
     const response = await callWithFallback(
-      trimToTokenBudget(messages, activeRef.def.contextWindow, budgetPct),
+      await compactWithSummary(messages, activeRef.def.contextWindow, budgetPct, apiKeys),
       {
         maxTokens: nodeData.maxTokens ?? 4096,
         temperature,
@@ -471,40 +471,100 @@ function buildResult(
 // ─── Context compaction ───────────────────────────────────────────────────────
 
 const TOOL_RESULT_MAX_CHARS = 8_000; // ~2 000 tokens; prevents single large API response blowing context
+const SUMMARY_KEEP_LAST = 6; // always keep this many recent non-system messages verbatim
 
 function estimateTokens(messages: ChatMessage[]): number {
   return Math.ceil(JSON.stringify(messages).length / 4);
 }
 
-function trimToTokenBudget(
+function hasApiKeyForProvider(provider: ModelProvider, apiKeys: ModelApiKeys): boolean {
+  if (provider === 'ollama') return true;
+  const map: Record<string, keyof ModelApiKeys> = {
+    anthropic: 'ANTHROPIC_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    xai: 'XAI_API_KEY',
+    groq: 'GROQ_API_KEY',
+    google: 'GOOGLE_API_KEY',
+  };
+  return Boolean(apiKeys[map[provider]]);
+}
+
+/**
+ * Compact the message list to fit within the token budget.
+ * When the list is over-budget, the oldest non-system turns are summarized
+ * with the cheapest available model instead of being silently dropped.
+ * Falls back to drop-oldest if the summarization call fails.
+ */
+async function compactWithSummary(
   messages: ChatMessage[],
   contextWindow: number,
   budgetPct: number,
-): ChatMessage[] {
+  apiKeys: ModelApiKeys,
+): Promise<ChatMessage[]> {
   const budget = Math.floor(contextWindow * budgetPct);
 
-  // Truncate oversized tool-result content in place first
+  // Truncate oversized tool results in place first
   const capped = messages.map((m) =>
     m.role === 'tool' && m.content.length > TOOL_RESULT_MAX_CHARS
-      ? {
-          ...m,
-          content: m.content.slice(0, TOOL_RESULT_MAX_CHARS) + '\n[truncated]',
-        }
+      ? { ...m, content: m.content.slice(0, TOOL_RESULT_MAX_CHARS) + '\n[truncated]' }
       : m,
   );
 
   if (estimateTokens(capped) <= budget) return capped;
 
-  // Separate system messages (keep always) from the rest
   const system = capped.filter((m) => m.role === 'system');
   const rest = capped.filter((m) => m.role !== 'system');
 
-  // Drop from the oldest end of rest until within budget, keeping at least the last message
-  while (rest.length > 1 && estimateTokens([...system, ...rest]) > budget) {
-    rest.shift();
+  if (rest.length <= SUMMARY_KEEP_LAST) {
+    // Too few messages to split — fall back to drop-oldest
+    while (rest.length > 1 && estimateTokens([...system, ...rest]) > budget) rest.shift();
+    return [...system, ...rest];
   }
 
-  return [...system, ...rest];
+  const toSummarize = rest.slice(0, rest.length - SUMMARY_KEEP_LAST);
+  const toKeep = rest.slice(rest.length - SUMMARY_KEEP_LAST);
+
+  try {
+    // Pick cheapest model we have a key for
+    const cheapestDef = Object.values(MODEL_REGISTRY)
+      .filter((m) => !m.capabilities.embedding && hasApiKeyForProvider(m.provider, apiKeys))
+      .sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input)[0];
+
+    if (cheapestDef) {
+      const summaryClient = createModelClient(cheapestDef.id, cheapestDef.provider, apiKeys);
+      const convText = toSummarize
+        .map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 600)}`)
+        .join('\n');
+
+      const summaryResp = await summaryClient(
+        [
+          {
+            role: 'user',
+            content: `Summarize the following conversation history in 3-5 concise bullet points. Focus on key facts discovered, decisions made, and tool results. Be terse.\n\n${convText}`,
+          },
+        ],
+        { maxTokens: 512, temperature: 0 },
+      );
+
+      const compacted = [
+        ...system,
+        { role: 'user' as const, content: `[Earlier context summary]\n${summaryResp.text}` },
+        ...toKeep,
+      ];
+      if (estimateTokens(compacted) <= budget) return compacted;
+    }
+  } catch {
+    // Non-fatal — fall through to drop-oldest
+  }
+
+  // Fallback: drop oldest non-system messages until within budget
+  const fallback = [...system, ...rest];
+  while (fallback.length > 1 && estimateTokens(fallback) > budget) {
+    const idx = fallback.findIndex((m) => m.role !== 'system');
+    if (idx === -1) break;
+    fallback.splice(idx, 1);
+  }
+  return fallback;
 }
 
 function captureToolSideEffects(
