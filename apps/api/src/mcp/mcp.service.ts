@@ -159,4 +159,23 @@ export class McpService {
         and(eq(mcpServers.id, id), eq(mcpServers.workspaceId, workspaceId)),
       );
   }
+
+  /** Returns the server URL and decrypted access token for making tool calls. */
+  async getServerForCall(
+    workspaceId: string,
+    serverId: string,
+  ): Promise<{ url: string; accessToken: string | null }> {
+    const [row] = await this.db
+      .select()
+      .from(mcpServers)
+      .where(and(eq(mcpServers.id, serverId), eq(mcpServers.workspaceId, workspaceId)))
+      .limit(1);
+
+    if (!row) throw new NotFoundException(`MCP server ${serverId} not found`);
+
+    return {
+      url: row.url,
+      accessToken: row.accessTokenEncrypted ? this.decrypt(row.accessTokenEncrypted) : null,
+    };
+  }
 }
