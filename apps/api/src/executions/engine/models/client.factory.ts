@@ -1,6 +1,23 @@
 import type { ModelProvider } from './registry';
 import type { ToolDefinition } from '../tools/definitions';
 
+// Retry 429 / 5xx with exponential backoff + jitter. 4xx other than 429 are not retried.
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const status: number = err?.status ?? err?.response?.status ?? 0;
+      if (status !== 429 && (status < 500 || status > 599)) throw err;
+      lastErr = err;
+      const delay = Math.min(1_000 * 2 ** attempt + Math.random() * 500, 30_000);
+      await new Promise<void>((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
@@ -149,7 +166,7 @@ function createAnthropicClient(modelId: string, apiKey?: string): ModelClient {
       stream.on('text', opts.onToken);
       response = await stream.finalMessage();
     } else {
-      response = await client.messages.create(msgParams);
+      response = await withRetry(() => client.messages.create(msgParams));
     }
 
     const text = response.content
@@ -290,7 +307,7 @@ function createOpenAIClient(
       };
     }
 
-    const response = await client.chat.completions.create(baseParams, { signal: opts.signal });
+    const response = await withRetry(() => client.chat.completions.create(baseParams, { signal: opts.signal }));
 
     const choice = response.choices[0];
     const text = choice.message.content ?? '';
@@ -412,7 +429,7 @@ function createGoogleClient(modelId: string, apiKey?: string): ModelClient {
       };
     }
 
-    const result = await chat.sendMessage(lastMsg);
+    const result = await withRetry(() => chat.sendMessage(lastMsg));
     const response = result.response;
     const text = response.text() || '';
     const usage = response.usageMetadata;

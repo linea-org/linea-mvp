@@ -44,7 +44,11 @@ interface Message {
   attachments?: Attachment[]; model?: string;
 }
 interface Session {
-  id: string; title: string; createdAt: number; messages: Message[];
+  id: string;       // threadId — used as LangGraph thread_id
+  dbId?: string;    // DB row UUID — used for delete/patch API calls
+  title: string;
+  createdAt: number;
+  messages: Message[];
 }
 interface SSEEvent {
   type: string; delta?: string; id?: string; name?: string;
@@ -138,25 +142,12 @@ const TICKER_PROMPTS = [
   '/connect — check external integrations…',
 ];
 
-const SESSIONS_KEY = 'linea_chat_sessions';
-const MAX_SESSIONS = 50;
-
 function timeAgo(ts: number) {
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return 'just now';
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
-}
-
-/* ─── Session persistence ────────────────────────────────────────────────── */
-function loadSessions(): Session[] {
-  try { const r = localStorage.getItem(SESSIONS_KEY); return r ? (JSON.parse(r) as Session[]) : []; }
-  catch { return []; }
-}
-function saveSessions(sessions: Session[]) {
-  try { localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.slice(0, MAX_SESSIONS))); }
-  catch { /* ignore */ }
 }
 
 /* ─── ThinkingSteps ──────────────────────────────────────────────────────── */
@@ -652,7 +643,25 @@ export default function TasksPage() {
     c.cmd.slice(1).startsWith(slashQuery.toLowerCase()),
   );
 
-  useEffect(() => { setSessions(loadSessions()); }, []);
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const api = createApiClient(token);
+        const rows = await api.get<Array<{ id: string; threadId: string; title: string; messages: unknown[]; createdAt: string }>>(`/workspaces/${activeWorkspace.id}/agent/sessions`);
+        setSessions(rows.map((r) => ({
+          id: r.threadId,
+          dbId: r.id,
+          title: r.title,
+          createdAt: new Date(r.createdAt).getTime(),
+          messages: r.messages as Message[],
+        })));
+      } catch { /* ignore */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspace?.id]);
   useEffect(() => { if (hasMessages) bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, hasMessages]);
   useEffect(() => {
     if (!slashOpen) return;
@@ -685,14 +694,24 @@ export default function TasksPage() {
     ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
   }
 
-  function upsertSession(msgs: Message[], sid: string, firstUserMsg: string) {
+  async function upsertSession(msgs: Message[], sid: string, firstUserMsg: string) {
+    const title = firstUserMsg.slice(0, 60);
     setSessions((prev) => {
-      const next: Session = { id: sid, title: firstUserMsg.slice(0, 60), createdAt: Date.now(), messages: msgs };
-      const filtered = prev.filter((s) => s.id !== sid);
-      const updated = [next, ...filtered];
-      saveSessions(updated);
-      return updated;
+      const existing = prev.find((s) => s.id === sid);
+      const next: Session = { id: sid, dbId: existing?.dbId, title, createdAt: existing?.createdAt ?? Date.now(), messages: msgs };
+      return [next, ...prev.filter((s) => s.id !== sid)];
     });
+    if (!activeWorkspace) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      const saved = await api.post<{ id: string; threadId: string }>(
+        `/workspaces/${activeWorkspace.id}/agent/sessions`,
+        { threadId: sid, title, messages: msgs },
+      );
+      setSessions((prev) => prev.map((s) => s.id === sid ? { ...s, dbId: saved.id } : s));
+    } catch { /* ignore */ }
   }
 
   function startNewChat() {
@@ -708,13 +727,18 @@ export default function TasksPage() {
     setSessionId(s.id); setIsStreaming(false); setAttachments([]);
   }
 
-  function deleteSession(id: string) {
-    setSessions((prev) => {
-      const updated = prev.filter((s) => s.id !== id);
-      saveSessions(updated);
-      return updated;
-    });
+  async function deleteSession(id: string) {
+    const session = sessions.find((s) => s.id === id);
+    setSessions((prev) => prev.filter((s) => s.id !== id));
     if (id === sessionId) startNewChat();
+    if (session?.dbId && activeWorkspace) {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const api = createApiClient(token);
+        await api.delete(`/workspaces/${activeWorkspace.id}/agent/sessions/${session.dbId}`);
+      } catch { /* ignore */ }
+    }
   }
 
   function getHistory(currentMessages: Message[]) {
@@ -923,7 +947,7 @@ export default function TasksPage() {
     setMessages((prev) => {
       const next = [...prev, userMsg, assistantMsg];
       const firstMsg = prev.find((m) => m.role === 'user')?.content ?? text;
-      setTimeout(() => upsertSession(next, sessionId, firstMsg), 0);
+      void upsertSession(next, sessionId, firstMsg);
       return next;
     });
     setInput('');
@@ -975,7 +999,7 @@ export default function TasksPage() {
       setMessages((prev) => {
         const next = prev.map((m) => m.id === assistantId ? { ...m, streaming: false } : m);
         const firstMsg = prev.find((m) => m.role === 'user')?.content ?? '';
-        setTimeout(() => upsertSession(next, sessionId, firstMsg), 0);
+        void upsertSession(next, sessionId, firstMsg);
         return next;
       });
       setIsStreaming(false);
@@ -1224,7 +1248,7 @@ export default function TasksPage() {
             currentId={sessionId}
             onLoad={(s) => { loadSession(s); }}
             onNew={startNewChat}
-            onDelete={deleteSession}
+            onDelete={(id) => void deleteSession(id)}
           />
         )}
       </div>
