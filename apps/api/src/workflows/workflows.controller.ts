@@ -39,6 +39,7 @@ import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('Workflows')
 @ApiBearerAuth()
@@ -48,6 +49,7 @@ export class WorkflowsController {
   constructor(
     private readonly service: WorkflowsService,
     private readonly generateService: GenerateWorkflowService,
+    private readonly auditService: AuditService,
   ) {}
 
   @Post()
@@ -55,12 +57,22 @@ export class WorkflowsController {
   @ApiOperation({ summary: 'Create a workflow (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  create(
+  async create(
+    @Param('workspaceId') workspaceId: string,
     @Param('podId') podId: string,
     @CurrentUser() user: User,
     @Body() dto: CreateWorkflowDto,
   ) {
-    return this.service.create(podId, user.id, dto);
+    const result = await this.service.create(podId, user.id, dto);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'workflow.create',
+      resourceType: 'workflow',
+      resourceId: result.id,
+      resourceName: result.name,
+    });
+    return result;
   }
 
   @Get()
@@ -106,8 +118,21 @@ export class WorkflowsController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  delete(@Param('podId') podId: string, @Param('id') id: string) {
-    return this.service.delete(podId, id);
+  async delete(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    const result = await this.service.delete(podId, id);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'workflow.delete',
+      resourceType: 'workflow',
+      resourceId: id,
+    });
+    return result;
   }
 
   @Post(':id/presence')

@@ -81,6 +81,21 @@ export class ExecutionSupervisor {
     }
 
     if (
+      ctx.error?.includes('Invalid URL') ||
+      ctx.error?.includes('URL is required') ||
+      ctx.error?.includes('unresolved variable') ||
+      ctx.error?.includes('Failed to parse URL') ||
+      ctx.error?.includes('URL scheme') ||
+      ctx.error?.includes('private/internal address') ||
+      ctx.error?.includes('Could not resolve hostname')
+    ) {
+      return {
+        action: 'abort',
+        reason: ctx.error ?? 'Invalid or missing URL — check the URL field in the node configuration',
+      };
+    }
+
+    if (
       ctx.nodeType === 'transform' ||
       ctx.nodeType === 'if-else' ||
       ctx.nodeType === 'router'

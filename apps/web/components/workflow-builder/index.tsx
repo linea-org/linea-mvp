@@ -46,6 +46,7 @@ import { DiffPanel } from './diff-panel';
 import { SharePanel } from './share-panel';
 import { CommentsPanel } from './comments-panel';
 import { EvalsPanel } from './evals-panel';
+import { ChatPreviewPanel } from './chat-preview-panel';
 import { useRouter } from 'next/navigation';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
@@ -89,6 +90,7 @@ interface SSEEvent {
   output?: unknown;
   error?: string;
   durationMs?: number;
+  delta?: string;
   interrupt?: { type?: string; nodeId?: string; message?: string; prompt?: string; question?: string };
 }
 
@@ -406,12 +408,14 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [isGenerating, setIsGenerating] = useState(false);
   const [authToken, setAuthToken] = useState<string>('');
   const [nodeResults, setNodeResults] = useState<Record<string, NodeResult>>({});
+  const [streamingTokens, setStreamingTokens] = useState<Record<string, string>>({});
   const [deployPanelOpen, setDeployPanelOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [evalsOpen, setEvalsOpen] = useState(false);
+  const [chatPreviewOpen, setChatPreviewOpen] = useState(false);
   const [deployedAt, setDeployedAt] = useState<string | null>(null);
   const [diffVersion, setDiffVersion] = useState<number | null>(null);
   const [autoSave, setAutoSave] = useState(false);
@@ -469,6 +473,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   // Stable refs so keyboard handler never captures stale closures
   const handleSaveRef = useRef<(opts?: { silent?: boolean }) => Promise<void>>(async () => {});
   const handleRunRef  = useRef<() => void>(() => {});
+  const runInFlightRef = useRef(false); // guard against double-submit
 
   async function openGenerate() {
     const token = await getToken();
@@ -529,7 +534,21 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setVersionsOpen(false);
     setShareOpen(false);
     setCommentsOpen(false);
+    setChatPreviewOpen(false);
     setEvalsOpen((v) => !v);
+  }
+
+  async function openChatPreview() {
+    const token = await getToken();
+    if (token) setAuthToken(token);
+    setGenerateOpen(false);
+    setDeployPanelOpen(false);
+    setHistoryOpen(false);
+    setVersionsOpen(false);
+    setShareOpen(false);
+    setCommentsOpen(false);
+    setEvalsOpen(false);
+    setChatPreviewOpen((v) => !v);
   }
 
   async function openComments() {
@@ -629,6 +648,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         setGenerateOpen(false);
         setCommentsOpen(false);
         setEvalsOpen(false);
+        setChatPreviewOpen(false);
         return;
       }
       if (e.key === 'f' || e.key === 'F') { rfInstance?.fitView({ padding: 0.25, duration: 300 }); return; }
@@ -698,6 +718,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
   function clearNodeStatuses() {
     setNodeResults({});
+    setStreamingTokens({});
     setExecutionOutput(undefined);
     setNodes((nds) => nds.map((n) => {
       const { status: _s, _outputPreview: _op, ...rest } = n.data as Record<string, unknown>;
@@ -1307,13 +1328,23 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         setInterrupt(evt.interrupt ?? null);
         setRunStatus({ id: executionId, status: 'suspended' });
         break;
+      case 'agent_token':
+        if (evt.nodeId && evt.delta) {
+          setStreamingTokens((prev) => ({
+            ...prev,
+            [evt.nodeId!]: (prev[evt.nodeId!] ?? '') + evt.delta!,
+          }));
+        }
+        break;
       case 'execution_complete':
+        setStreamingTokens({});
         setRunStatus({ id: executionId, status: 'completed' });
         setInterrupt(null);
         if (evt.output !== undefined) setExecutionOutput(evt.output);
         showToast('Execution completed');
         break;
       case 'execution_failed':
+        setStreamingTokens({});
         setRunStatus({ id: executionId, status: 'failed' });
         setInterrupt(null);
         showToast(evt.error ? `Execution failed: ${evt.error}` : 'Execution failed', 'error');
@@ -1334,14 +1365,18 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     sseAbortRef.current = ac;
 
     let receivedTerminal = false;
+    let lastEventId: string | null = null;
 
     for (let attempt = 0; attempt <= 5; attempt++) {
       if (ac.signal.aborted) return;
 
       try {
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        if (lastEventId) headers['Last-Event-ID'] = lastEventId;
+
         const resp = await fetch(
           `${API_BASE}/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/events`,
-          { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal },
+          { headers, signal: ac.signal },
         );
         if (!resp.ok || !resp.body) return;
 
@@ -1356,6 +1391,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           const lines = buf.split('\n');
           buf = lines.pop() ?? '';
           for (const line of lines) {
+            if (line.startsWith('id: ')) { lastEventId = line.slice(4).trim(); continue; }
             if (!line.startsWith('data: ')) continue;
             try {
               const evt = JSON.parse(line.slice(6)) as SSEEvent;
@@ -1427,6 +1463,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   handleRunRef.current = handleRun;
 
   async function handleRunWithInput(input: Record<string, string>) {
+    if (runInFlightRef.current) return;
+    runInFlightRef.current = true;
     setRunDialogOpen(false);
     setNodes((nds) => nds.map((n) =>
       n.type === 'start' ? { ...n, data: { ...n.data, testInput: input } } : n,
@@ -1454,6 +1492,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       showToast(err instanceof Error ? err.message : 'Run failed', 'error');
     } finally {
       setIsRunning(false);
+      runInFlightRef.current = false;
     }
   }
 
@@ -1542,6 +1581,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         shareOpen={shareOpen}
         commentsOpen={commentsOpen}
         evalsOpen={evalsOpen}
+        chatPreviewOpen={chatPreviewOpen}
         canUndo={canUndo}
         canRedo={canRedo}
         autoSave={autoSave}
@@ -1564,6 +1604,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         onShare={() => void openShare()}
         onComments={() => void openComments()}
         onEvals={() => void openEvals()}
+        onChatPreview={() => void openChatPreview()}
         onExport={handleExport}
         onImport={handleImport}
       />
@@ -1867,10 +1908,12 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         <BottomPanel
           nodes={nodes}
           nodeResults={nodeResults}
+          streamingTokens={streamingTokens}
           validationState={validationState}
           runStatus={runStatus}
           workspaceId={workspaceId}
           podId={podId}
+          workflowId={workflowId}
           token={authToken}
           onRetryNode={handleRetryNode}
           executionOutput={executionOutput}
@@ -1879,10 +1922,10 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
         {/* Node config panel (right side) */}
         <div
-          className={`shrink-0 overflow-hidden transition-all duration-200${selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen ? ' border-l border-border' : ''}`}
-          style={{ width: selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen ? 340 : 0 }}
+          className={`shrink-0 overflow-hidden transition-all duration-200${selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen ? ' border-l border-border' : ''}`}
+          style={{ width: selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen ? 340 : 0 }}
         >
-          {selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && (
+          {selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen && (
             <NodePanel
               node={selectedNode}
               nodes={nodes}
@@ -2029,6 +2072,22 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
                 ) ?? []
               }
               workflowNodes={workflowNodeMetas}
+            />
+          )}
+        </div>
+
+        {/* Chat Preview panel */}
+        <div
+          className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${chatPreviewOpen ? ' border-l border-border' : ''}`}
+          style={{ width: chatPreviewOpen ? 400 : 0 }}
+        >
+          {chatPreviewOpen && authToken && (
+            <ChatPreviewPanel
+              workspaceId={workspaceId}
+              podId={podId}
+              workflowId={workflowId}
+              token={authToken}
+              onClose={() => setChatPreviewOpen(false)}
             />
           )}
         </div>

@@ -173,9 +173,11 @@ function NodeStatusIcon({ status }: { status: string }) {
 
 function GanttTimeline({
   execution,
+  logs,
   nodeMap,
 }: {
   execution: Execution;
+  logs: ExecutionLog[];
   nodeMap: Map<string, WorkflowNode>;
 }) {
   const nodeResults = execution.nodeResults ?? {};
@@ -184,23 +186,47 @@ function GanttTimeline({
     ? new Date(execution.finishedAt).getTime()
     : Date.now();
 
-  const rows = Object.entries(nodeResults)
-    .map(([nodeId, result]) => {
-      const nodeDef = nodeMap.get(nodeId);
-      const name =
-        nodeDef?.data?.nodeName ?? nodeDef?.data?.name ?? nodeDef?.data?.label ?? nodeDef?.type ?? nodeId;
-      const endMs = result.completedAt ? new Date(result.completedAt).getTime() : null;
-      const durMs = result.durationMs ?? null;
-      const startMs = endMs && durMs ? endMs - durMs : null;
-      return { nodeId, name, status: result.status, startMs, endMs, durMs };
-    })
-    .filter((r) => r.startMs != null || r.endMs != null);
+  // Build timing map: start with log-derived data (always present), then let
+  // nodeResults overwrite with more-precise values where available.
+  const timingMap = new Map<string, { nodeId: string; name: string; status: string; startMs: number | null; endMs: number | null; durMs: number | null }>();
 
-  if (!execStart || rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">No timing data available.</p>;
+  for (const log of logs) {
+    if (!log.nodeId || log.durationMs == null) continue;
+    const endMs = new Date(log.timestamp).getTime();
+    const durMs = log.durationMs;
+    const startMs = durMs > 0 ? endMs - durMs : endMs;
+    const nodeDef = nodeMap.get(log.nodeId);
+    const name = nodeDef?.data?.nodeName ?? nodeDef?.data?.name ?? nodeDef?.data?.label ?? nodeDef?.type ?? log.nodeId;
+    timingMap.set(log.nodeId, {
+      nodeId: log.nodeId,
+      name,
+      status: log.level === 'error' ? 'failed' : 'completed',
+      startMs,
+      endMs,
+      durMs,
+    });
   }
 
-  const totalMs = Math.max(execEnd - execStart, 1);
+  for (const [nodeId, result] of Object.entries(nodeResults)) {
+    const nodeDef = nodeMap.get(nodeId);
+    const name = nodeDef?.data?.nodeName ?? nodeDef?.data?.name ?? nodeDef?.data?.label ?? nodeDef?.type ?? nodeId;
+    const endMs = result.completedAt ? new Date(result.completedAt).getTime() : (timingMap.get(nodeId)?.endMs ?? null);
+    const durMs = result.durationMs ?? (timingMap.get(nodeId)?.durMs ?? null);
+    const startMs = endMs != null && durMs != null ? endMs - durMs : (timingMap.get(nodeId)?.startMs ?? null);
+    if (endMs != null || startMs != null) {
+      timingMap.set(nodeId, { nodeId, name, status: result.status, startMs, endMs, durMs });
+    }
+  }
+
+  const rows = Array.from(timingMap.values()).filter((r) => r.endMs != null || r.startMs != null);
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">No timing data available. Make sure log level is set to Info or Debug.</p>;
+  }
+
+  const effectiveStart = execStart ?? Math.min(...rows.map((r) => r.startMs ?? r.endMs ?? Date.now()));
+
+  const totalMs = Math.max(execEnd - effectiveStart, 1);
 
   const STATUS_BAR: Record<string, string> = {
     completed: 'bg-green-500',
@@ -234,7 +260,7 @@ function GanttTimeline({
       {/* Rows */}
       <div className="space-y-1.5">
         {rows.map(({ nodeId, name, status, startMs, endMs, durMs }) => {
-          const barLeft = startMs ? ((startMs - execStart) / totalMs) * 100 : 0;
+          const barLeft = startMs != null ? ((startMs - effectiveStart) / totalMs) * 100 : 0;
           const barWidth = durMs ? (durMs / totalMs) * 100 : 1;
           const barColor = STATUS_BAR[status] ?? 'bg-muted-foreground/30';
 
@@ -336,7 +362,8 @@ function NodeTimeline({
           result?.output != null ||
           result?.error ||
           (result?.toolCallLog?.length ?? 0) > 0 ||
-          (result?.tokenUsage != null);
+          (result?.tokenUsage != null) ||
+          nodeLogs.length > 0;
 
         return (
           <Collapsible key={nodeId} disabled={!hasDetails}>
@@ -992,7 +1019,7 @@ export default function ExecutionDetailPage() {
         {timelineView === 'list' ? (
           <NodeTimeline execution={execution} logs={logs} nodeMap={nodeMap} />
         ) : (
-          <GanttTimeline execution={execution} nodeMap={nodeMap} />
+          <GanttTimeline execution={execution} logs={logs} nodeMap={nodeMap} />
         )}
       </div>
 

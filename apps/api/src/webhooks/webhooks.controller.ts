@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -27,13 +28,19 @@ import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuditService } from '../audit/audit.service';
+import type { User } from '@linea/db';
 
 @ApiTags('Webhooks')
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/pods/:podId/webhooks')
 export class WebhooksController {
-  constructor(private readonly service: WebhooksService) {}
+  constructor(
+    private readonly service: WebhooksService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Post()
   @RequireRole('editor')
@@ -42,8 +49,22 @@ export class WebhooksController {
   })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  create(@Param('podId') podId: string, @Body() dto: CreateWebhookDto) {
-    return this.service.create(podId, dto);
+  async create(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @CurrentUser() user: User,
+    @Body() dto: CreateWebhookDto,
+  ) {
+    const webhook = await this.service.create(podId, dto);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'webhook.create',
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+      metadata: { workflowId: dto.workflowId },
+    });
+    return webhook;
   }
 
   @Get()
@@ -54,6 +75,29 @@ export class WebhooksController {
     return this.service.findAll(podId);
   }
 
+  @Patch(':id/rotate')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Rotate a webhook signing secret (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  async rotate(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    const result = await this.service.rotate(podId, id);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'webhook.rotate',
+      resourceType: 'webhook',
+      resourceId: id,
+    });
+    return result;
+  }
+
   @Delete(':id')
   @HttpCode(204)
   @RequireRole('editor')
@@ -61,8 +105,20 @@ export class WebhooksController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  delete(@Param('podId') podId: string, @Param('id') id: string) {
-    return this.service.delete(podId, id);
+  async delete(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    await this.service.delete(podId, id);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'webhook.delete',
+      resourceType: 'webhook',
+      resourceId: id,
+    });
   }
 }
 

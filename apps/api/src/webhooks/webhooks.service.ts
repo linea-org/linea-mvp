@@ -57,6 +57,20 @@ export class WebhooksService {
       .where(eq(webhooks.podId, podId));
   }
 
+  async rotate(podId: string, id: string) {
+    const [row] = await this.db
+      .select({ id: webhooks.id })
+      .from(webhooks)
+      .where(and(eq(webhooks.id, id), eq(webhooks.podId, podId)))
+      .limit(1);
+
+    if (!row) throw new NotFoundException(`Webhook ${id} not found`);
+
+    const secretToken = randomBytes(24).toString('hex');
+    await this.db.update(webhooks).set({ secretToken }).where(eq(webhooks.id, id));
+    return { secretToken };
+  }
+
   async delete(podId: string, id: string) {
     const [row] = await this.db
       .select({ id: webhooks.id })

@@ -23,6 +23,17 @@ const TRIGGERS: { value: TriggerType; label: string; icon: IconSvgElement; descr
   { value: 'schedule', label: 'Schedule', icon: ClockIcon,           description: 'Runs on a cron schedule' },
 ];
 
+const EXTRACTION_MODELS = [
+  { value: '', label: 'Auto (server picks cheapest available)' },
+  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 — fast, cheap' },
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini — fast, cheap' },
+  { value: 'gpt-4o', label: 'GPT-4o' },
+  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash — fast, cheap' },
+  { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (Groq) — cheapest' },
+  { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq)' },
+];
+
 const CRON_PRESETS = [
   { label: 'Every 5 min',    value: '*/5 * * * *'  },
   { label: 'Every 15 min',   value: '*/15 * * * *' },
@@ -94,6 +105,7 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
   const testInput = (data.testInput as Record<string, string>) ?? {};
   const cronExpression: string = (data.cronExpression as string) ?? '0 9 * * *';
   const cronTimezone: string = (data.cronTimezone as string) ?? 'UTC';
+  const extractionModel: string = (data.extractionModel as string) ?? '';
 
   function update(index: number, field: keyof InputVar, value: unknown) {
     onUpdate({ inputVariables: vars.map((v, i) => (i === index ? { ...v, [field]: value } : v)) });
@@ -264,6 +276,25 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Extraction model — shown when there are input variables (public API enrichment) */}
+      {(triggerType === 'manual' || triggerType === 'webhook') && (
+        <div className="space-y-1.5 border-t border-border pt-3">
+          <Label>Input Extraction Model</Label>
+          <NativeSelect
+            value={extractionModel}
+            onChange={(e) => onUpdate({ extractionModel: e.target.value })}
+            className="w-full"
+          >
+            {EXTRACTION_MODELS.map((m) => (
+              <NativeSelectOption key={m.value} value={m.value}>{m.label}</NativeSelectOption>
+            ))}
+          </NativeSelect>
+          <p className="text-[10px] text-muted-foreground">
+            Used when the public API receives a natural-language message and needs to extract typed input variables from it.
+          </p>
         </div>
       )}
 

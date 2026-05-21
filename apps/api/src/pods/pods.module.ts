@@ -3,8 +3,10 @@ import { PodsService } from './pods.service';
 import { PodsController } from './pods.controller';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
+  imports: [AuditModule],
   providers: [PodsService, PodGuard, RoleGuard],
   controllers: [PodsController],
   exports: [PodsService, PodGuard, RoleGuard],

@@ -8,7 +8,7 @@ import {
   WebhookIcon, ClockIcon, CloudUploadIcon, CheckmarkCircle01Icon,
   Download04Icon, Upload04Icon, GitBranchIcon, Share01Icon,
   UndoIcon, RedoIcon, AlignSelectionIcon, AlarmClockIcon, BubbleChatIcon,
-  KeyboardIcon, Cancel01Icon, TestTube01Icon,
+  KeyboardIcon, Cancel01Icon, TestTube01Icon, Message01Icon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
@@ -35,6 +35,7 @@ interface ToolbarProps {
   shareOpen: boolean;
   commentsOpen: boolean;
   evalsOpen: boolean;
+  chatPreviewOpen: boolean;
   isDeployed: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -54,6 +55,7 @@ interface ToolbarProps {
   onShare: () => void;
   onComments: () => void;
   onEvals: () => void;
+  onChatPreview: () => void;
   onExport: () => void;
   onImport: () => void;
   onUndo: () => void;
@@ -256,11 +258,11 @@ const STATUS_COLOR: Record<string, string> = {
 /* ------------------------------------------------------------------ */
 export function Toolbar({
   workflowName, isSaving, isRunning, isGenerating, runStatus, validationState,
-  deployPanelOpen, historyOpen, versionsOpen, shareOpen, commentsOpen, evalsOpen,
+  deployPanelOpen, historyOpen, versionsOpen, shareOpen, commentsOpen, evalsOpen, chatPreviewOpen,
   isDeployed, canUndo, canRedo, autoSave,
   token, workspaceId, podId, workflowId,
   onSave, onRun, onDeployPanel, onBack, onNameChange, onGenerate,
-  onHistory, onVersions, onShare, onComments, onEvals,
+  onHistory, onVersions, onShare, onComments, onEvals, onChatPreview,
   onExport, onImport, onUndo, onRedo, onAutoLayout, onAutoSaveToggle,
 }: ToolbarProps) {
   const [editingName, setEditingName] = useState(false);
@@ -403,6 +405,13 @@ export function Toolbar({
             description="Define and run evals against this workflow"
             onClick={onEvals}
             active={evalsOpen}
+          />
+          <TBtn
+            icon={Message01Icon}
+            label="Chat Preview"
+            description="Test your workflow in a conversational interface"
+            onClick={onChatPreview}
+            active={chatPreviewOpen}
           />
           <TBtn
             icon={Upload04Icon}

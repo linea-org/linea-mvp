@@ -30,4 +30,12 @@ export class ChatDto {
   @ValidateNested()
   @Type(() => ChatContextDto)
   context?: ChatContextDto;
+
+  @IsString()
+  @IsOptional()
+  model?: string;
+
+  @IsString()
+  @IsOptional()
+  threadId?: string;
 }

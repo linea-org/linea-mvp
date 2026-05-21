@@ -3,10 +3,11 @@ import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 import { ExecutionsService } from './executions.service';
 import { ExecutionsController } from './executions.controller';
 import { NodesController } from './nodes.controller';
-import { ExecutionEventsService } from './execution-events.service';
+import { ExecutionEventsService, EXEC_EVENTS_REDIS } from './execution-events.service';
 import { ExecutionProcessor } from './queue/execution.processor';
 import { CheckpointCleanupProcessor, CLEANUP_QUEUE } from './queue/checkpoint-cleanup.processor';
 import { LangGraphService } from './engine/langgraph.service';
@@ -41,6 +42,14 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
     BullModule.registerQueue({ name: CLEANUP_QUEUE }),
   ],
   providers: [
+    {
+      provide: EXEC_EVENTS_REDIS,
+      useFactory: (config: ConfigService) => {
+        const url = config.get<string>('REDIS_URL');
+        return url ? new Redis(url) : new Redis({ host: 'localhost', port: 6379 });
+      },
+      inject: [ConfigService],
+    },
     ExecutionsService,
     ExecutionEventsService,
     ExecutionProcessor,
@@ -52,7 +61,7 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
     CheckpointerService,
   ],
   controllers: [ExecutionsController, NodesController],
-  exports: [ExecutionsService, NodeExecutorService],
+  exports: [ExecutionsService, NodeExecutorService, MemoryService, CheckpointerService],
 })
 export class ExecutionsModule implements OnModuleInit {
   constructor(

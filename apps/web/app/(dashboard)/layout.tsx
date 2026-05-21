@@ -703,7 +703,7 @@ function NotificationBell() {
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="data-[side=right]:w-[420px] data-[side=right]:sm:max-w-[420px] flex flex-col p-0" showCloseButton={false}>
+        <SheetContent side="right" className="data-[side=right]:w-[420px] data-[side=right]:sm:max-w-[420px] flex flex-col p-0 overflow-hidden" showCloseButton={false}>
           <SheetHeader className="flex-row items-center justify-between px-4 py-3 border-b shrink-0">
             <div className="flex items-center gap-2">
               <SheetTitle className="text-sm">Notifications</SheetTitle>
@@ -746,7 +746,7 @@ function NotificationBell() {
             ))}
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             {loadingNotifs && notifications.length === 0 ? (
               <div className="flex flex-col gap-2 p-4">
                 {[1, 2, 3].map((i) => (

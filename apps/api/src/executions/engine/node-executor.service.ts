@@ -46,6 +46,7 @@ export interface NodeInput {
   workflowId?: string;
   threadId?: string;
   supervisorModelOverride?: string;
+  onToken?: (delta: string) => void;
 }
 
 export interface NodeOutput {
@@ -204,6 +205,7 @@ export class NodeExecutorService {
     workspaceId,
     workflowId,
     threadId,
+    onToken,
   }: NodeInput): Promise<NodeOutput> {
     const nodeData = substituteInValue(rawNodeData, state) as Record<
       string,
@@ -277,7 +279,7 @@ export class NodeExecutorService {
           };
         }
 
-        const raw = await executeAgentNode(data, state, resolvedKeys, ltmCtx);
+        const raw = await executeAgentNode(data, state, resolvedKeys, ltmCtx, onToken);
         return { result: raw, isAgentOutput: true };
       }
 

@@ -85,6 +85,7 @@ function matchesDateFilter(createdAt: string, filter: string): boolean {
 }
 
 const ACTIVE_STATUSES = new Set(['running', 'queued', 'suspended']);
+const PAGE_SIZE = 20;
 
 export default function ExecutionsPage() {
   const { podId } = useParams<{ podId: string }>();
@@ -100,6 +101,7 @@ export default function ExecutionsPage() {
   const [search, setSearch] = useState('');
   const [actioning, setActioning] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
 
@@ -197,6 +199,9 @@ export default function ExecutionsPage() {
     (dateFilter !== 'all' ? 1 : 0) +
     (search ? 1 : 0);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -212,7 +217,7 @@ export default function ExecutionsPage() {
               className="h-8 w-52 pl-8 text-xs"
               placeholder="Search workflows, IDs…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
           {/* Date filter pills */}
@@ -220,7 +225,7 @@ export default function ExecutionsPage() {
             {DATE_FILTERS.map((f) => (
               <button
                 key={f.value}
-                onClick={() => setDateFilter(f.value)}
+                onClick={() => { setDateFilter(f.value); setPage(1); }}
                 className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                   dateFilter === f.value
                     ? 'bg-primary text-primary-foreground'
@@ -234,7 +239,7 @@ export default function ExecutionsPage() {
 
           {/* Workflow filter */}
           {workflows.length > 0 && (
-            <Select value={workflowFilter} onValueChange={setWorkflowFilter}>
+            <Select value={workflowFilter} onValueChange={(v) => { setWorkflowFilter(v); setPage(1); }}>
               <SelectTrigger className="w-44">
                 <SelectValue placeholder="All workflows" />
               </SelectTrigger>
@@ -248,7 +253,7 @@ export default function ExecutionsPage() {
           )}
 
           {/* Status filter */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
@@ -268,7 +273,7 @@ export default function ExecutionsPage() {
               variant="ghost"
               size="sm"
               className="text-xs text-muted-foreground"
-              onClick={() => { setStatusFilter('all'); setWorkflowFilter('all'); setDateFilter('all'); setSearch(''); }}
+              onClick={() => { setStatusFilter('all'); setWorkflowFilter('all'); setDateFilter('all'); setSearch(''); setPage(1); }}
             >
               Clear {activeFilterCount > 1 ? `${activeFilterCount} filters` : 'filter'}
             </Button>
@@ -298,7 +303,7 @@ export default function ExecutionsPage() {
               variant="outline"
               size="sm"
               className="mt-4 text-xs"
-              onClick={() => { setStatusFilter('all'); setWorkflowFilter('all'); setDateFilter('all'); setSearch(''); }}
+              onClick={() => { setStatusFilter('all'); setWorkflowFilter('all'); setDateFilter('all'); setSearch(''); setPage(1); }}
             >
               Clear filters
             </Button>
@@ -306,10 +311,6 @@ export default function ExecutionsPage() {
         </div>
       ) : (
         <>
-          <p className="text-xs text-muted-foreground">
-            {filtered.length} execution{filtered.length !== 1 ? 's' : ''}
-            {activeFilterCount > 0 ? ' matching filters' : ''}
-          </p>
           <Table>
             <TableHeader>
               <TableRow>
@@ -322,7 +323,7 @@ export default function ExecutionsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((ex) => (
+              {paginated.map((ex) => (
                 <TableRow
                   key={ex.id}
                   className="cursor-pointer"
@@ -367,6 +368,22 @@ export default function ExecutionsPage() {
               ))}
             </TableBody>
           </Table>
+          {filtered.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-t border-border px-1 pt-3">
+              <span className="text-xs text-muted-foreground">
+                Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <span className="px-2 text-xs text-muted-foreground">{page} / {totalPages}</span>
+                <Button size="sm" variant="outline" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

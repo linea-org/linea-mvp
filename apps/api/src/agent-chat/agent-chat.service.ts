@@ -1,12 +1,26 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
 import { eq } from 'drizzle-orm';
+import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import type { DrizzleDB } from '@linea/db';
-import { secrets, pods, workflows } from '@linea/db';
+import { pods, workflows } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { SecretsService } from '../secrets/secrets.service';
+import { ExecutionsService } from '../executions/executions.service';
+import { MemoryService } from '../executions/engine/memory.service';
+import { CheckpointerService } from '../executions/engine/checkpointer.service';
+import { createModelClient } from '../executions/engine/models/client.factory';
+import { MODEL_REGISTRY } from '../executions/engine/models/registry';
+import type {
+  ModelApiKeys,
+  ChatMessage as ModelChatMessage,
+  NormalizedToolCall,
+  ModelClient,
+} from '../executions/engine/models/client.factory';
+import type { ToolDefinition } from '../executions/engine/tools/definitions';
 import type { ChatDto } from './dto/chat.dto';
+
+// ─── System prompt ────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are Linea's built-in AI assistant. Linea is a visual workflow automation platform (like n8n, Make.com, or Zapier) where automations are built by connecting nodes on a canvas.
 
@@ -57,33 +71,40 @@ const SYSTEM_PROMPT = `You are Linea's built-in AI assistant. Linea is a visual 
 3. Plan the automation clearly, node by node
 4. Use create_workflow to build it (set realistic node positions)
 5. If missing secrets: list exactly which ones to add and where (Settings → Secrets)
+6. Use run_workflow to test an existing workflow — pass input: { message: "..." } for chat-style workflows
+7. Use save_to_memory to remember user preferences, names, or facts across conversations
 
 Be direct, clear, and structured. Use emoji section headers for readability.`;
 
-const TOOLS: Anthropic.Tool[] = [
+// ─── Tools ────────────────────────────────────────────────────────────────────
+
+const AGENT_TOOLS: ToolDefinition[] = [
   {
     name: 'check_workspace_secrets',
     description: 'Check which API keys and secrets are configured in this workspace. Returns secret names (not values).',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    parameters: { type: 'object', properties: {}, required: [] },
+    approval: 'never',
   },
   {
     name: 'list_pods',
     description: 'List all pods (projects/environments) in this workspace.',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    parameters: { type: 'object', properties: {}, required: [] },
+    approval: 'never',
   },
   {
     name: 'list_workflows',
     description: 'List all workflows in a specific pod.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: { pod_id: { type: 'string', description: 'The pod ID to list workflows for' } },
       required: ['pod_id'],
     },
+    approval: 'never',
   },
   {
     name: 'create_workflow',
     description: 'Create a new workflow in a pod. Provide a complete node/edge definition.',
-    input_schema: {
+    parameters: {
       type: 'object',
       properties: {
         pod_id: { type: 'string', description: 'Pod ID to create the workflow in' },
@@ -92,107 +113,254 @@ const TOOLS: Anthropic.Tool[] = [
         definition: {
           type: 'object',
           description: 'Workflow definition with nodes and edges arrays',
-          properties: {
-            nodes: { type: 'array' },
-            edges: { type: 'array' },
-          },
+          properties: { nodes: { type: 'array' }, edges: { type: 'array' } },
           required: ['nodes', 'edges'],
         },
       },
       required: ['pod_id', 'name', 'definition'],
     },
+    approval: 'never',
+  },
+  {
+    name: 'run_workflow',
+    description: 'Trigger a workflow execution and wait for its result (up to 60 seconds). For chatbot workflows pass input: { message: "..." }. Returns output on success, or an error.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pod_id: { type: 'string', description: 'Pod ID that owns the workflow' },
+        workflow_id: { type: 'string', description: 'Workflow ID to execute' },
+        input: { type: 'object', description: 'Input variables', properties: {}, required: [] },
+      },
+      required: ['pod_id', 'workflow_id'],
+    },
+    approval: 'never',
+  },
+  {
+    name: 'save_to_memory',
+    description: 'Persist a piece of information so you can recall it in future conversations with this user. Use for names, preferences, context, or any fact worth remembering long-term.',
+    parameters: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Short descriptive key, e.g. "user_name" or "preferred_language"' },
+        value: { type: 'string', description: 'The information to remember' },
+      },
+      required: ['key', 'value'],
+    },
+    approval: 'never',
   },
 ];
 
+const PROVIDER_KEY_MAP: Partial<Record<string, keyof ModelApiKeys>> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  groq: 'GROQ_API_KEY',
+  google: 'GOOGLE_API_KEY',
+  xai: 'XAI_API_KEY',
+};
+
+// ─── LangGraph state ──────────────────────────────────────────────────────────
+
+const AgentStateAnnotation = Annotation.Root({
+  // REPLACE reducer: each invoke passes the full message history, so we always
+  // want the latest snapshot rather than appending to a stale checkpoint.
+  messages: Annotation<ModelChatMessage[]>({
+    reducer: (_, r) => r,
+    default: () => [],
+  }),
+  pendingTools: Annotation<NormalizedToolCall[] | null>({
+    reducer: (_, r) => r,
+    default: () => null,
+  }),
+});
+
+type AgentStateType = typeof AgentStateAnnotation.State;
+
+// ─── Async event channel ──────────────────────────────────────────────────────
+
+function createEventChannel() {
+  const DONE = Symbol('done');
+  const queue: Array<object | symbol> = [];
+  let resolver: (() => void) | null = null;
+
+  const push = (item: object | symbol) => {
+    queue.push(item);
+    const r = resolver;
+    resolver = null;
+    r?.();
+  };
+
+  async function* read(): AsyncGenerator<object> {
+    while (true) {
+      while (queue.length > 0) {
+        const item = queue.shift()!;
+        if (item === DONE) return;
+        yield item as object;
+      }
+      await new Promise<void>((r) => { resolver = r; });
+    }
+  }
+
+  return { emit: (evt: object) => push(evt), done: () => push(DONE), read };
+}
+
+// ─── Service ──────────────────────────────────────────────────────────────────
+
 @Injectable()
 export class AgentChatService {
-  private readonly anthropic: Anthropic;
-
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly config: ConfigService,
     private readonly secretsService: SecretsService,
-  ) {
-    this.anthropic = new Anthropic({
-      apiKey: this.config.get<string>('ANTHROPIC_API_KEY') ?? '',
-    });
-  }
+    private readonly executionsService: ExecutionsService,
+    private readonly memoryService: MemoryService,
+    private readonly checkpointerService: CheckpointerService,
+  ) {}
 
   async *chat(workspaceId: string, dto: ChatDto): AsyncIterable<object> {
-    const messages: Anthropic.MessageParam[] = dto.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    const threadId = dto.threadId ?? `agent-chat-${workspaceId}-${Date.now()}`;
 
-    let continueLoop = true;
-    while (continueLoop) {
-      const stream = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT + (dto.context?.podId ? `\n\nActive pod: ${dto.context.podId}${dto.context.podName ? ` (${dto.context.podName})` : ''}` : ''),
-        tools: TOOLS,
-        messages,
-        stream: true,
+    // Load workspace API keys (fall back to server env vars)
+    const [anthropicKey, openaiKey, groqKey, googleKey, xaiKey, sessionMemory] = await Promise.all([
+      this.memoryService.loadApiKey(workspaceId, 'anthropic'),
+      this.memoryService.loadApiKey(workspaceId, 'openai'),
+      this.memoryService.loadApiKey(workspaceId, 'groq'),
+      this.memoryService.loadApiKey(workspaceId, 'google'),
+      this.memoryService.loadApiKey(workspaceId, 'xai'),
+      this.memoryService.loadForExecution(workspaceId, undefined, threadId),
+    ]);
+
+    const apiKeys: ModelApiKeys = {
+      ANTHROPIC_API_KEY: anthropicKey ?? this.config.get<string>('ANTHROPIC_API_KEY'),
+      OPENAI_API_KEY: openaiKey ?? this.config.get<string>('OPENAI_API_KEY'),
+      GROQ_API_KEY: groqKey ?? this.config.get<string>('GROQ_API_KEY'),
+      GOOGLE_API_KEY: googleKey ?? this.config.get<string>('GOOGLE_API_KEY'),
+      XAI_API_KEY: xaiKey ?? this.config.get<string>('XAI_API_KEY'),
+    };
+
+    // Resolve model — validate provider key is available
+    let modelDef = dto.model ? MODEL_REGISTRY[dto.model] : null;
+    modelDef ??= MODEL_REGISTRY['claude-sonnet-4-6'];
+
+    const requiredKey = PROVIDER_KEY_MAP[modelDef.provider];
+    if (requiredKey && !apiKeys[requiredKey] && modelDef.provider !== 'ollama') {
+      const fallback = Object.values(MODEL_REGISTRY)
+        .filter((m) => !m.useCases.includes('embedding') && (
+          m.provider === 'ollama' ||
+          (PROVIDER_KEY_MAP[m.provider] != null && apiKeys[PROVIDER_KEY_MAP[m.provider]!] != null)
+        ))
+        .sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input)[0];
+      if (fallback) modelDef = fallback;
+    }
+
+    // Inject session memory into system prompt when available
+    const memorySection =
+      sessionMemory && Object.keys(sessionMemory).length > 0
+        ? '\n\n## What you remember about this user\n' +
+          Object.entries(sessionMemory)
+            .map(([k, v]) => `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+            .join('\n')
+        : '';
+
+    const system =
+      SYSTEM_PROMPT +
+      memorySection +
+      (dto.context?.podId
+        ? `\n\nActive pod: ${dto.context.podId}${dto.context.podName ? ` (${dto.context.podName})` : ''}`
+        : '');
+
+    const client = createModelClient(modelDef.id, modelDef.provider, apiKeys);
+
+    const initialMessages: ModelChatMessage[] = [
+      { role: 'system', content: system },
+      ...dto.messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    ];
+
+    // Build async event channel — nodes push events, generator yields them
+    const channel = createEventChannel();
+    const self = this;
+
+    const graph = new StateGraph(AgentStateAnnotation)
+      .addNode('callModel', async (state: AgentStateType, config: any) => {
+        const { _emit, _client } = config.configurable as {
+          _emit: typeof channel.emit;
+          _client: ModelClient;
+        };
+
+        const result = await _client(state.messages, {
+          maxTokens: 4096,
+          tools: AGENT_TOOLS,
+          toolChoice: 'auto',
+          onToken: (delta: string) => _emit({ type: 'text_delta', delta }),
+        });
+
+        if (result.toolCalls?.length && result.stopReason === 'tool_use') {
+          return {
+            messages: [{ role: 'assistant' as const, content: result.text, toolCalls: result.toolCalls }],
+            pendingTools: result.toolCalls,
+          };
+        }
+
+        return {
+          messages: [{ role: 'assistant' as const, content: result.text }],
+          pendingTools: null,
+        };
+      })
+      .addNode('callTools', async (state: AgentStateType, config: any) => {
+        const { _emit, _workspaceId, _dto, _threadId } = config.configurable as {
+          _emit: typeof channel.emit;
+          _workspaceId: string;
+          _dto: ChatDto;
+          _threadId: string;
+        };
+
+        // Execute all tool calls in parallel — no interrupts in agent-chat
+        const results = await Promise.all(
+          (state.pendingTools ?? []).map(async (tc) => {
+            _emit({ type: 'step_start', id: tc.id, name: tc.name });
+            _emit({ type: 'tool_call', id: tc.id, name: tc.name, input: tc.arguments });
+            const result = await self.executeTool(_workspaceId, _threadId, tc.name, tc.arguments, _dto);
+            _emit({ type: 'tool_result', id: tc.id, name: tc.name, result });
+            return { tc, result };
+          }),
+        );
+
+        const newMsgs: ModelChatMessage[] = results.map(({ tc, result }) => ({
+          role: 'tool' as const,
+          content: JSON.stringify(result),
+          toolCallId: tc.id,
+        }));
+
+        return { messages: newMsgs, pendingTools: null };
+      })
+      .addEdge(START, 'callModel' as any)
+      .addConditionalEdges('callModel' as any, (state: AgentStateType) =>
+        (state.pendingTools?.length ?? 0) > 0 ? 'callTools' : END,
+      )
+      .addEdge('callTools' as any, 'callModel' as any)
+      .compile({ checkpointer: this.checkpointerService.checkpointer });
+
+    graph
+      .invoke(
+        { messages: initialMessages, pendingTools: null },
+        {
+          configurable: {
+            thread_id: threadId,
+            _emit: channel.emit,
+            _client: client,
+            _workspaceId: workspaceId,
+            _dto: dto,
+            _threadId: threadId,
+          },
+        },
+      )
+      .then(() => channel.done())
+      .catch((err: unknown) => {
+        channel.emit({ type: 'error', error: err instanceof Error ? err.message : String(err) });
+        channel.done();
       });
 
-      let currentText = '';
-      const toolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
-      let currentToolId = '';
-      let currentToolName = '';
-      let currentToolInput = '';
-      let stopReason: string | null = null;
-
-      for await (const event of stream) {
-        if (event.type === 'content_block_start') {
-          if (event.content_block.type === 'tool_use') {
-            currentToolId = event.content_block.id;
-            currentToolName = event.content_block.name;
-            currentToolInput = '';
-          }
-        } else if (event.type === 'content_block_delta') {
-          if (event.delta.type === 'text_delta') {
-            currentText += event.delta.text;
-            yield { type: 'text_delta', delta: event.delta.text };
-          } else if (event.delta.type === 'input_json_delta') {
-            currentToolInput += event.delta.partial_json;
-          }
-        } else if (event.type === 'content_block_stop') {
-          if (currentToolName) {
-            let parsedInput: Record<string, unknown> = {};
-            try { parsedInput = JSON.parse(currentToolInput) as Record<string, unknown>; } catch { /* ignore */ }
-            toolUses.push({ id: currentToolId, name: currentToolName, input: parsedInput });
-            yield { type: 'tool_call', id: currentToolId, name: currentToolName, input: parsedInput };
-            currentToolName = '';
-            currentToolInput = '';
-          }
-        } else if (event.type === 'message_delta') {
-          stopReason = event.delta.stop_reason ?? null;
-        }
-      }
-
-      // Build the assistant message for history
-      const assistantContent: Anthropic.ContentBlockParam[] = [];
-      if (currentText) assistantContent.push({ type: 'text', text: currentText });
-      for (const tu of toolUses) {
-        assistantContent.push({ type: 'tool_use', id: tu.id, name: tu.name, input: tu.input });
-      }
-
-      if (assistantContent.length > 0) {
-        messages.push({ role: 'assistant', content: assistantContent });
-      }
-
-      if (stopReason === 'tool_use' && toolUses.length > 0) {
-        // Execute tools and add results
-        const toolResults: Anthropic.ToolResultBlockParam[] = [];
-        for (const tu of toolUses) {
-          const result = await this.executeTool(workspaceId, tu.name, tu.input, dto);
-          yield { type: 'tool_result', id: tu.id, name: tu.name, result };
-          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) });
-        }
-        messages.push({ role: 'user', content: toolResults });
-      } else {
-        continueLoop = false;
-      }
+    for await (const evt of channel.read()) {
+      yield evt;
     }
 
     yield { type: 'done' };
@@ -200,6 +368,7 @@ export class AgentChatService {
 
   private async executeTool(
     workspaceId: string,
+    threadId: string,
     name: string,
     input: Record<string, unknown>,
     dto: ChatDto,
@@ -230,21 +399,64 @@ export class AgentChatService {
 
       case 'create_workflow': {
         const podId = input['pod_id'] as string;
-        const name = input['name'] as string;
+        const wfName = input['name'] as string;
         const description = (input['description'] as string | undefined) ?? null;
         const definition = input['definition'] as { nodes: unknown[]; edges: unknown[] };
 
         const [created] = await this.db
           .insert(workflows)
-          .values({
-            podId,
-            name,
-            description,
-            definition: definition as any,
-          })
+          .values({ podId, name: wfName, description, definition: definition as any })
           .returning({ id: workflows.id, name: workflows.name });
 
         return { success: true, workflowId: created?.id, name: created?.name };
+      }
+
+      case 'run_workflow': {
+        const podId = input['pod_id'] as string;
+        const wfId = input['workflow_id'] as string;
+        const wfInput = (input['input'] as Record<string, unknown>) ?? {};
+
+        const [pod] = await this.db
+          .select({ workspaceId: pods.workspaceId })
+          .from(pods)
+          .where(eq(pods.id, podId))
+          .limit(1);
+        const resolvedWorkspaceId = pod?.workspaceId ?? workspaceId;
+
+        let ex: { id: string; status: string };
+        try {
+          ex = await this.executionsService.createFromTrigger(podId, resolvedWorkspaceId, wfId, 'sdk', wfInput);
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : 'Failed to start execution' };
+        }
+
+        const deadline = Date.now() + 60_000;
+        while (Date.now() < deadline) {
+          await new Promise<void>((r) => setTimeout(r, 2_000));
+          const current = await this.executionsService.findOne(podId, ex.id);
+          if (current.status === 'completed')
+            return { success: true, executionId: ex.id, output: (current.output as Record<string, unknown>)?.['result'] ?? current.output };
+          if (current.status === 'failed')
+            return { success: false, executionId: ex.id, error: current.error ?? 'Execution failed' };
+          if (current.status === 'suspended')
+            return { success: false, executionId: ex.id, error: 'Workflow paused waiting for human input — cannot complete from agent context' };
+        }
+        return { success: false, executionId: ex.id, error: 'Timed out after 60 seconds' };
+      }
+
+      case 'save_to_memory': {
+        const key = input['key'] as string;
+        const value = input['value'] as string;
+        await this.memoryService.writeEntry(
+          workspaceId,
+          undefined,
+          threadId,
+          'thread',
+          undefined,
+          key,
+          value,
+        );
+        return { success: true, key, message: `Remembered: ${key}` };
       }
 
       default:

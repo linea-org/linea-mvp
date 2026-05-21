@@ -225,6 +225,20 @@ export class KnowledgeService {
   ) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
+    let queryEmbedding: number[] | null = null;
+    try {
+      const vec = await this.embeddingService.embed(dto.query);
+      const isZero = vec.every((v) => v === 0);
+      if (!isZero) queryEmbedding = vec;
+    } catch {
+      // fall through to keyword search
+    }
+
+    const results = await this.vectorSearch(kbId, queryEmbedding, dto.query, dto.limit ?? 20);
+
+    // vectorSearch returns { content, metadata } — re-select with id/createdAt when falling back
+    if (queryEmbedding && results.length > 0) return results;
+
     return this.db
       .select({
         id: knowledgeEntries.id,
@@ -239,6 +253,6 @@ export class KnowledgeService {
           ilike(knowledgeEntries.content, `%${dto.query}%`),
         ),
       )
-      .limit(dto.limit);
+      .limit(dto.limit ?? 20);
   }
 }

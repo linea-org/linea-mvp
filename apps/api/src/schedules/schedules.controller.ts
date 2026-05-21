@@ -22,21 +22,41 @@ import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuditService } from '../audit/audit.service';
+import type { User } from '@linea/db';
 
 @ApiTags('Schedules')
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/pods/:podId/schedules')
 export class SchedulesController {
-  constructor(private readonly service: SchedulesService) {}
+  constructor(
+    private readonly service: SchedulesService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Post()
   @RequireRole('editor')
   @ApiOperation({ summary: 'Create a cron schedule (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  create(@Param('podId') podId: string, @Body() dto: CreateScheduleDto) {
-    return this.service.create(podId, dto);
+  async create(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @CurrentUser() user: User,
+    @Body() dto: CreateScheduleDto,
+  ) {
+    const schedule = await this.service.create(podId, dto);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'schedule.create',
+      resourceType: 'schedule',
+      resourceId: schedule.id,
+      metadata: { workflowId: dto.workflowId, cronExpr: dto.cronExpr },
+    });
+    return schedule;
   }
 
   @Get()
@@ -68,7 +88,19 @@ export class SchedulesController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  delete(@Param('podId') podId: string, @Param('id') id: string) {
-    return this.service.delete(podId, id);
+  async delete(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    await this.service.delete(podId, id);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'schedule.delete',
+      resourceType: 'schedule',
+      resourceId: id,
+    });
   }
 }

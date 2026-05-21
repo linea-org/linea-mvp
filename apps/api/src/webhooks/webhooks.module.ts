@@ -8,9 +8,10 @@ import {
 } from './webhooks.controller';
 import { ExecutionsModule } from '../executions/executions.module';
 import { PodsModule } from '../pods/pods.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [ExecutionsModule, PodsModule, ConfigModule],
+  imports: [ExecutionsModule, PodsModule, ConfigModule, AuditModule],
   providers: [
     {
       provide: WEBHOOK_REDIS,

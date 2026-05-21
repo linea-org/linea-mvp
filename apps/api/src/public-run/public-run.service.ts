@@ -5,12 +5,37 @@ import type { DrizzleDB } from '@linea/db';
 import { workflows, pods, executions } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { ExecutionsService } from '../executions/executions.service';
+import { MemoryService } from '../executions/engine/memory.service';
+import { createModelClient } from '../executions/engine/models/client.factory';
+import { MODEL_REGISTRY } from '../executions/engine/models/registry';
+import type { ModelApiKeys } from '../executions/engine/models/client.factory';
+import type { ModelProvider } from '../executions/engine/models/registry';
+
+/* ─── Input Enrichment Helpers ───────────────────────────────────────────── */
+
+/** Scan a workflow definition for all {{input.X}} variable references. */
+function extractInputVars(definition: unknown): string[] {
+  const json = JSON.stringify(definition ?? {});
+  const matches = [...json.matchAll(/\{\{input\.([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g)];
+  return [...new Set(matches.map((m) => m[1]!))];
+}
+
+/** Find a natural-language message field in an input object. */
+function findMessageField(input: Record<string, unknown>): string | null {
+  for (const key of ['message', 'prompt', 'text', 'query', 'content']) {
+    if (typeof input[key] === 'string' && (input[key] as string).trim()) {
+      return input[key] as string;
+    }
+  }
+  return null;
+}
 
 @Injectable()
 export class PublicRunService {
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly executionsService: ExecutionsService,
+    private readonly memoryService: MemoryService,
   ) {}
 
   async getSchema(workflowId: string) {
@@ -62,6 +87,7 @@ export class PublicRunService {
         apiEnabled: workflows.apiEnabled,
         apiVisibility: workflows.apiVisibility,
         apiKey: workflows.apiKey,
+        definition: workflows.definition,
         workspaceId: pods.workspaceId,
       })
       .from(workflows)
@@ -86,15 +112,141 @@ export class PublicRunService {
       throw new ForbiddenException('This workflow is not accessible via the public API');
     }
 
+    // ── Smart input enrichment ───────────────────────────────────────────
+    const enrichedInput = await this.enrichInput(input, row.definition, row.workspaceId);
+    if ('status' in enrichedInput && enrichedInput.status === 'needs_input') {
+      return enrichedInput; // return guidance response instead of creating execution
+    }
+
     const execution = await this.executionsService.createFromTrigger(
       row.podId,
       row.workspaceId,
       row.id,
       'manual',
-      input,
+      enrichedInput as Record<string, unknown>,
     );
 
     return { executionId: execution.id, status: execution.status };
+  }
+
+  private async enrichInput(
+    input: Record<string, unknown>,
+    definition: unknown,
+    workspaceId: string,
+  ): Promise<Record<string, unknown> | { status: 'needs_input'; message: string; requiredFields: Array<{ name: string }> }> {
+    const requiredVars = extractInputVars(definition);
+    if (requiredVars.length === 0) return input;
+
+    const missingVars = requiredVars.filter(
+      (v) => !(v in input) || input[v] === null || input[v] === undefined || input[v] === '',
+    );
+    if (missingVars.length === 0) return input;
+
+    // Read extraction model preference from the start node
+    const def = definition as { nodes?: Array<{ type: string; data?: Record<string, unknown> }> };
+    const startNode = def?.nodes?.find((n) => n.type === 'start');
+    const extractionModel = startNode?.data?.extractionModel as string | undefined;
+
+    // Try LLM extraction from any message-like field
+    const messageText = findMessageField(input);
+    if (messageText) {
+      const extracted = await this.extractVarsWithModel(messageText, missingVars, workspaceId, extractionModel);
+      const enriched = { ...input, ...extracted };
+      const stillMissing = missingVars.filter(
+        (v) => !(v in enriched) || enriched[v] === null || enriched[v] === undefined || enriched[v] === '',
+      );
+      if (stillMissing.length === 0) return enriched;
+      // Partial extraction: some resolved, some still missing
+      if (Object.keys(extracted).length > 0) {
+        return {
+          status: 'needs_input',
+          message: `I understood part of your request but still need a few more details to run this workflow:\n\n${stillMissing.map((v) => `• **${v}**: please provide this value`).join('\n')}\n\nExample: send your request with ${stillMissing.map((v) => `"${v}": "..."`).join(', ')} in the request body.`,
+          requiredFields: stillMissing.map((v) => ({ name: v })),
+        };
+      }
+    }
+
+    // No message field or extraction returned nothing — explain what's needed
+    const fieldList = missingVars.map((v) => `• **${v}**`).join('\n');
+    return {
+      status: 'needs_input',
+      message: `To run this workflow, please provide the following ${missingVars.length === 1 ? 'field' : 'fields'} in your request:\n\n${fieldList}\n\nSend a JSON body with these fields and try again.`,
+      requiredFields: missingVars.map((v) => ({ name: v })),
+    };
+  }
+
+  private async extractVarsWithModel(
+    message: string,
+    missingVars: string[],
+    workspaceId: string,
+    preferredModelId?: string,
+  ): Promise<Record<string, string>> {
+    // Load workspace API keys for all providers in parallel
+    const [anthropicKey, openaiKey, groqKey, googleKey] = await Promise.all([
+      this.memoryService.loadApiKey(workspaceId, 'anthropic'),
+      this.memoryService.loadApiKey(workspaceId, 'openai'),
+      this.memoryService.loadApiKey(workspaceId, 'groq'),
+      this.memoryService.loadApiKey(workspaceId, 'google'),
+    ]);
+
+    const apiKeys: ModelApiKeys = {
+      ANTHROPIC_API_KEY: anthropicKey,
+      OPENAI_API_KEY: openaiKey,
+      GROQ_API_KEY: groqKey,
+      GOOGLE_API_KEY: googleKey,
+    };
+
+    // Build candidate list — preferred model first, then cheap fallbacks
+    const candidates: Array<{ modelId: string; provider: ModelProvider }> = [];
+
+    if (preferredModelId) {
+      const modelDef = MODEL_REGISTRY[preferredModelId];
+      if (modelDef) candidates.push({ modelId: modelDef.id, provider: modelDef.provider });
+    }
+
+    // Cheap/fast fallbacks in preference order
+    if (anthropicKey) candidates.push({ modelId: 'claude-haiku-4-5', provider: 'anthropic' });
+    if (groqKey) candidates.push({ modelId: 'llama-3.1-8b-instant', provider: 'groq' });
+    if (openaiKey) candidates.push({ modelId: 'gpt-4o-mini', provider: 'openai' });
+    if (googleKey) candidates.push({ modelId: 'gemini-2.0-flash', provider: 'google' });
+    // Ollama is always available as last resort (local, no key required)
+    candidates.push({ modelId: 'llama3.2', provider: 'ollama' });
+
+    // Deduplicate while preserving order
+    const seen = new Set<string>();
+    const uniqueCandidates = candidates.filter((c) => {
+      if (seen.has(c.modelId)) return false;
+      seen.add(c.modelId);
+      return true;
+    });
+
+    const prompt = `Extract structured data from the user message below.
+
+Required fields to extract: ${missingVars.map((v) => `"${v}"`).join(', ')}
+
+User message: "${message}"
+
+Rules:
+- For "url" or any URL-like field: extract any full URL starting with http:// or https://
+- For "email": extract any email address
+- For "number" or "count": extract numeric values as strings
+- If a field clearly cannot be determined, omit it from the response
+- Return ONLY valid JSON with the extracted fields, nothing else`;
+
+    for (const { modelId, provider } of uniqueCandidates) {
+      try {
+        const client = createModelClient(modelId, provider, apiKeys);
+        const { text } = await client([{ role: 'user', content: prompt }], {
+          maxTokens: 256,
+          temperature: 0,
+        });
+        const clean = text.replace(/```json?\n?|```/g, '').trim();
+        return JSON.parse(clean) as Record<string, string>;
+      } catch {
+        // try next candidate
+      }
+    }
+    return {};
   }
 
   async getExecutionStatus(workflowId: string, executionId: string, providedApiKey?: string) {

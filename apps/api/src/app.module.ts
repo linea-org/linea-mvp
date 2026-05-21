@@ -35,6 +35,7 @@ import { CommentsModule } from './comments/comments.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { BillingModule } from './billing/billing.module';
 import { ModelsModule } from './models/models.module';
+import { AuditModule } from './audit/audit.module';
 import { ClerkAuthGuard } from './auth/guards/clerk-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -99,6 +100,7 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
     UploadsModule,
     BillingModule,
     ModelsModule,
+    AuditModule,
   ],
   controllers: [ClerkWebhookController],
   providers: [

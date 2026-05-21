@@ -50,7 +50,15 @@ export async function executeHTTPNode(
   const url = substituteVariables(nodeData.url || nodeData.httpUrl || '', state);
   const method: string = nodeData.method || nodeData.httpMethod || 'GET';
 
-  if (!url) throw new Error('HTTP node: URL is required');
+  if (!url) throw new Error('HTTP node: URL is required — set the URL field in the node configuration');
+
+  // If substituteVariables left a template placeholder it means the referenced variable doesn't exist
+  const unresolved = url.match(/\{\{[^}]+\}\}/);
+  if (unresolved) {
+    throw new Error(
+      `HTTP node: URL contains unresolved variable ${unresolved[0]} — ensure the variable exists in the workflow state`,
+    );
+  }
 
   await assertSafeUrl(url);
 

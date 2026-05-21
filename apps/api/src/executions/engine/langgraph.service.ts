@@ -47,6 +47,8 @@ export type NodeUpdateCallback = (
   durationMs?: number,
 ) => void | Promise<void>;
 
+export type AgentTokenCallback = (nodeId: string, delta: string) => void;
+
 export const WorkflowStateAnnotation = Annotation.Root({
   variables: Annotation<Record<string, any>>({
     reducer: (l, r) => ({ ...l, ...r }),
@@ -106,6 +108,7 @@ export class LangGraphService {
     checkpointer?: BaseCheckpointSaver,
     workflowId?: string,
     threadId?: string,
+    onAgentToken?: AgentTokenCallback,
   ) {
     const saver = checkpointer ?? new MemorySaver();
     const builder = new StateGraph(WorkflowStateAnnotation);
@@ -134,6 +137,7 @@ export class LangGraphService {
           workflowId,
           threadId,
           supervisorModelOverride,
+          onAgentToken,
         ),
       );
     }
@@ -196,6 +200,7 @@ export class LangGraphService {
     workflowId?: string,
     threadId?: string,
     supervisorModelOverride?: string,
+    onAgentToken?: AgentTokenCallback,
   ) {
     const nodeType = node.data?.nodeType || node.type;
 
@@ -318,6 +323,7 @@ export class LangGraphService {
           workflowId,
           threadId,
           supervisorModelOverride,
+          onToken: onAgentToken ? (delta) => onAgentToken(node.id, delta) : undefined,
         });
 
         const durationMs = Date.now() - nodeStart;
@@ -413,6 +419,7 @@ export class LangGraphService {
       variables: Record<string, any>;
       nodeResults: Record<string, any>;
     },
+    onAgentToken?: AgentTokenCallback,
   ): AsyncGenerator<typeof WorkflowStateAnnotation.State> {
     const graph = this.buildGraph(
       definition,
@@ -421,6 +428,7 @@ export class LangGraphService {
       checkpointer,
       workflowId,
       threadId,
+      onAgentToken,
     );
     const config = { configurable: { thread_id: threadId } };
 
@@ -466,6 +474,7 @@ export class LangGraphService {
     workspaceId: string,
     checkpointer: BaseCheckpointSaver,
     workflowId?: string,
+    onAgentToken?: AgentTokenCallback,
   ) {
     return this.resumeStream(
       definition,
@@ -475,6 +484,7 @@ export class LangGraphService {
       workspaceId,
       checkpointer,
       workflowId,
+      onAgentToken,
     );
   }
 
@@ -486,6 +496,7 @@ export class LangGraphService {
     workspaceId: string,
     checkpointer: BaseCheckpointSaver,
     workflowId?: string,
+    onAgentToken?: AgentTokenCallback,
   ): AsyncGenerator<typeof WorkflowStateAnnotation.State> {
     const graph = this.buildGraph(
       definition,
@@ -494,6 +505,7 @@ export class LangGraphService {
       checkpointer,
       workflowId,
       threadId,
+      onAgentToken,
     );
     const config = { configurable: { thread_id: threadId } };
     const command = new Command({ resume: resumeValue });

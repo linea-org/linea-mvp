@@ -107,6 +107,10 @@ export class ExecutionProcessor extends WorkerHost {
         });
       };
 
+      const onAgentToken = (nodeId: string, delta: string) => {
+        this.events.emit(executionId, { type: 'agent_token', nodeId, delta });
+      };
+
       let finalState: any;
 
       if (isResume) {
@@ -118,6 +122,7 @@ export class ExecutionProcessor extends WorkerHost {
           workspaceId,
           checkpointer,
           workflowId,
+          onAgentToken,
         );
         for await (const state of stream) finalState = state;
       } else {
@@ -137,6 +142,7 @@ export class ExecutionProcessor extends WorkerHost {
           initialMemory,
           workflowId,
           preloadedState,
+          onAgentToken,
         );
         for await (const state of stream) finalState = state;
       }

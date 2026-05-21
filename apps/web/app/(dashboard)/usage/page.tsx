@@ -94,10 +94,13 @@ export default function UsagePage() {
   const [period, setPeriod] = useState<Period>('7d');
   const [data, setData] = useState<MetricsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (wsLoading || !activeWorkspace) return;
     setLoading(true);
+    setLoadError(null);
 
     async function load() {
       const token = await getToken();
@@ -108,15 +111,16 @@ export default function UsagePage() {
           `/workspaces/${activeWorkspace.id}/metrics?period=${period}`,
         );
         setData(result);
-      } catch {
+      } catch (err) {
         setData(null);
+        setLoadError(err instanceof Error ? err.message : 'Failed to load usage data');
       } finally {
         setLoading(false);
       }
     }
 
     void load();
-  }, [activeWorkspace, wsLoading, period, getToken]);
+  }, [activeWorkspace, wsLoading, period, getToken, retryCount]);
 
   const tokens = data?.tokens;
   const totalCost = tokens ? calcCost(tokens.totalInputTokens, tokens.totalOutputTokens) : null;
@@ -154,90 +158,87 @@ export default function UsagePage() {
           </div>
           <Skeleton className="h-48 rounded-xl" />
         </div>
-      ) : !hasTokenData ? (
+      ) : loadError ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
           <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-muted">
             <HugeiconsIcon icon={Analytics02Icon} className="size-7 text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium">No token usage yet</p>
-          <p className="mt-1.5 text-xs text-muted-foreground max-w-xs">
-            Token usage is tracked when workflows with AI agent nodes are executed. Run a workflow to see usage here.
-          </p>
-          <Link
-            href="/metrics"
+          <p className="text-sm font-medium">Failed to load usage data</p>
+          <p className="mt-1.5 text-xs text-muted-foreground max-w-xs">{loadError}</p>
+          <button
+            onClick={() => setRetryCount(c => c + 1)}
             className="mt-5 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
           >
-            View execution metrics
-            <HugeiconsIcon icon={ArrowRight01Icon} className="size-3.5" />
-          </Link>
+            Retry
+          </button>
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Summary cards */}
+          {/* Summary cards — always shown */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <BigStat
               label="Total tokens"
-              value={formatTokens(tokens.totalTokens)}
-              sub={`${formatTokens(tokens.totalInputTokens)} in + ${formatTokens(tokens.totalOutputTokens)} out`}
+              value={hasTokenData ? formatTokens(tokens!.totalTokens) : '—'}
+              sub={hasTokenData ? `${formatTokens(tokens!.totalInputTokens)} in + ${formatTokens(tokens!.totalOutputTokens)} out` : 'No AI agent executions yet'}
             />
             <BigStat
               label="Estimated cost"
-              value={formatCost(totalCost!)}
-              sub={`Based on Sonnet 4.6 pricing`}
+              value={hasTokenData ? formatCost(totalCost!) : '—'}
+              sub="Based on Sonnet 4.6 pricing"
             />
             <BigStat
               label="Executions"
-              value={data.executions.total.toLocaleString()}
-              sub={`${data.executions.successRate ?? '—'}% success rate`}
+              value={(data?.executions.total ?? 0).toLocaleString()}
+              sub={data?.executions.successRate != null ? `${data.executions.successRate}% success rate` : 'No completed runs yet'}
             />
           </div>
 
-          {/* Token breakdown */}
-          <div className="rounded-xl border bg-card p-5 space-y-4">
-            <p className="text-sm font-semibold">Token breakdown</p>
-            <TokenBar
-              label="Input tokens"
-              value={tokens.totalInputTokens}
-              max={tokens.totalTokens}
-              color="bg-blue-500"
-            />
-            <TokenBar
-              label="Output tokens"
-              value={tokens.totalOutputTokens}
-              max={tokens.totalTokens}
-              color="bg-violet-500"
-            />
-            <div className="border-t pt-3 mt-2 space-y-1.5 text-xs text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Input cost ({formatTokens(tokens.totalInputTokens)} × $3/1M)</span>
-                <span className="font-medium text-foreground">
-                  {formatCost((tokens.totalInputTokens / 1_000_000) * INPUT_COST_PER_M)}
+          {/* Token breakdown — only when token data exists */}
+          {hasTokenData && tokens ? (
+            <>
+              <div className="rounded-xl border bg-card p-5 space-y-4">
+                <p className="text-sm font-semibold">Token breakdown</p>
+                <TokenBar label="Input tokens" value={tokens.totalInputTokens} max={tokens.totalTokens} color="bg-blue-500" />
+                <TokenBar label="Output tokens" value={tokens.totalOutputTokens} max={tokens.totalTokens} color="bg-violet-500" />
+                <div className="border-t pt-3 mt-2 space-y-1.5 text-xs text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Input cost ({formatTokens(tokens.totalInputTokens)} × $3/1M)</span>
+                    <span className="font-medium text-foreground">
+                      {formatCost((tokens.totalInputTokens / 1_000_000) * INPUT_COST_PER_M)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Output cost ({formatTokens(tokens.totalOutputTokens)} × $15/1M)</span>
+                    <span className="font-medium text-foreground">
+                      {formatCost((tokens.totalOutputTokens / 1_000_000) * OUTPUT_COST_PER_M)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 font-medium text-foreground">
+                    <span>Total estimated</span>
+                    <span>{formatCost(totalCost!)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-dashed px-4 py-3 text-xs text-muted-foreground flex items-start gap-2">
+                <HugeiconsIcon icon={Invoice03Icon} className="size-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Cost estimates use Claude Sonnet 4.6 pricing ($3/1M input, $15/1M output). Actual cost varies by model.
+                  Haiku is ~20x cheaper; Opus is ~5x more expensive than Sonnet.
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span>Output cost ({formatTokens(tokens.totalOutputTokens)} × $15/1M)</span>
-                <span className="font-medium text-foreground">
-                  {formatCost((tokens.totalOutputTokens / 1_000_000) * OUTPUT_COST_PER_M)}
-                </span>
-              </div>
-              <div className="flex justify-between border-t pt-2 font-medium text-foreground">
-                <span>Total estimated</span>
-                <span>{formatCost(totalCost!)}</span>
-              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-dashed px-5 py-8 text-center">
+              <HugeiconsIcon icon={Analytics02Icon} className="size-6 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-medium">No token usage yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Token usage is tracked when workflows with AI agent nodes are executed.
+              </p>
             </div>
-          </div>
-
-          {/* Pricing note */}
-          <div className="rounded-lg border border-dashed px-4 py-3 text-xs text-muted-foreground flex items-start gap-2">
-            <HugeiconsIcon icon={Invoice03Icon} className="size-3.5 mt-0.5 shrink-0" />
-            <span>
-              Cost estimates use Claude Sonnet 4.6 pricing ($3/1M input, $15/1M output). Actual cost varies by model.
-              Haiku is ~20x cheaper; Opus is ~5x more expensive than Sonnet.
-            </span>
-          </div>
+          )}
 
           {/* Per-workflow usage */}
-          {data.topWorkflows.length > 0 && (
+          {(data?.topWorkflows?.length ?? 0) > 0 && (
             <div className="space-y-3">
               <p className="text-sm font-semibold">By workflow</p>
               <div className="rounded-xl border overflow-hidden">
@@ -251,7 +252,7 @@ export default function UsagePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {data.topWorkflows.map((wf) => {
+                    {(data?.topWorkflows ?? []).map((wf) => {
                       const wfTokens = wf.tokens;
                       return (
                         <tr key={wf.workflowId} className="hover:bg-muted/30 transition-colors">
