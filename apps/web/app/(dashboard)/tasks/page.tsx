@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -601,10 +602,12 @@ function AttachMenu({
 }
 
 /* ─── Main Page ──────────────────────────────────────────────────────────── */
-export default function TasksPage() {
+function TasksPageInner() {
   const { getToken } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const { activePod } = usePod();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -656,12 +659,28 @@ export default function TasksPage() {
           dbId: r.id,
           title: r.title,
           createdAt: new Date(r.createdAt).getTime(),
-          messages: r.messages as Message[],
+          messages: (r.messages ?? []) as Message[],
         })));
       } catch { /* ignore */ }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace?.id]);
+
+  // Auto-load session from URL ?s=<threadId> once sessions are available
+  useEffect(() => {
+    const sid = searchParams.get('s');
+    if (!sid || sessions.length === 0) return;
+    const match = sessions.find((s) => s.id === sid);
+    if (match && match.id !== sessionId) {
+      abortRef.current?.abort();
+      setMessages((match.messages ?? []).map((m) => ({ ...m, streaming: false })));
+      setSessionId(match.id);
+      setIsStreaming(false);
+      setAttachments([]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, searchParams]);
+
   useEffect(() => { if (hasMessages) bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, hasMessages]);
   useEffect(() => {
     if (!slashOpen) return;
@@ -718,13 +737,15 @@ export default function TasksPage() {
     abortRef.current?.abort();
     setMessages([]); setInput(''); setAttachments([]);
     setSessionId(`s-${Date.now()}`); setIsStreaming(false);
+    router.push('/tasks', { scroll: false });
     setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
   function loadSession(s: Session) {
     abortRef.current?.abort();
-    setMessages(s.messages.map((m) => ({ ...m, streaming: false })));
+    setMessages((s.messages ?? []).map((m) => ({ ...m, streaming: false })));
     setSessionId(s.id); setIsStreaming(false); setAttachments([]);
+    router.push(`/tasks?s=${encodeURIComponent(s.id)}`, { scroll: false });
   }
 
   async function deleteSession(id: string) {
@@ -997,7 +1018,14 @@ export default function TasksPage() {
       ));
     } finally {
       setMessages((prev) => {
-        const next = prev.map((m) => m.id === assistantId ? { ...m, streaming: false } : m);
+        const next = prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          // Resolve any tool calls that never got a result (stream died mid-call)
+          const toolCalls = (m.toolCalls ?? []).map((tc) =>
+            tc.result !== undefined ? tc : { ...tc, result: { error: 'Stream ended before result was received' } },
+          );
+          return { ...m, streaming: false, toolCalls };
+        });
         const firstMsg = prev.find((m) => m.role === 'user')?.content ?? '';
         void upsertSession(next, sessionId, firstMsg);
         return next;
@@ -1331,5 +1359,13 @@ export default function TasksPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function TasksPage() {
+  return (
+    <Suspense>
+      <TasksPageInner />
+    </Suspense>
   );
 }

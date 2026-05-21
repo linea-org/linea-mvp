@@ -400,9 +400,13 @@ export default function KnowledgeBaseDetailPage() {
   }
 
   async function handleIngestSelected() {
-    if (!activeWorkspace || selectedUrls.size === 0) return;
+    if (!activeWorkspace?.id || !kbId || selectedUrls.size === 0) return;
     const token = await getToken();
     if (!token) return;
+
+    // Capture IDs now — React state can change during the async loop
+    const wsId = activeWorkspace.id;
+    const kbIdSnapshot = kbId;
 
     const urls = [...selectedUrls];
     setWebsitePhase('ingesting');
@@ -416,7 +420,7 @@ export default function KnowledgeBaseDetailPage() {
       urls.map(async (url) => {
         try {
           const res = await fetch(
-            `/api/proxy/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}/entries/url`,
+            `/api/proxy/workspaces/${wsId}/knowledge-bases/${kbIdSnapshot}/entries/url`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -429,7 +433,7 @@ export default function KnowledgeBaseDetailPage() {
           } else {
             // Fallback: store as reference entry
             const entry = await api.post<Entry>(
-              `/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}/entries`,
+              `/workspaces/${wsId}/knowledge-bases/${kbIdSnapshot}/entries`,
               { content: `[Website] ${url}`, metadata: { source: 'website', url } },
             );
             setEntries((prev) => [entry, ...prev]);
