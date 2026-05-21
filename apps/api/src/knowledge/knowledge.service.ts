@@ -178,7 +178,23 @@ export class KnowledgeService {
         this.logger.warn(`Vector search failed, falling back to keyword search: ${err}`);
       }
     }
-    // Keyword fallback
+    // FTS fallback — uses GIN index on to_tsvector('english', content)
+    if (query.trim()) {
+      try {
+        const ftsRows = await this.db.execute(sql`
+          SELECT content, metadata
+          FROM knowledge_entries
+          WHERE knowledge_base_id = ${kbId}
+            AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+          LIMIT ${limit}
+        `);
+        const ftsResults = Array.from(ftsRows) as Array<{ content: string; metadata: Record<string, unknown> }>;
+        if (ftsResults.length > 0) return ftsResults;
+      } catch {
+        // FTS unavailable — fall through to LIKE
+      }
+    }
+    // LIKE as last resort
     return this.db
       .select({ content: knowledgeEntries.content, metadata: knowledgeEntries.metadata })
       .from(knowledgeEntries)
@@ -239,6 +255,22 @@ export class KnowledgeService {
     // vectorSearch returns { content, metadata } — re-select with id/createdAt when falling back
     if (queryEmbedding && results.length > 0) return results;
 
+    if (dto.query.trim()) {
+      try {
+        const ftsRows = await this.db.execute(sql`
+          SELECT id, content, metadata, created_at AS "createdAt"
+          FROM knowledge_entries
+          WHERE knowledge_base_id = ${kbId}
+            AND to_tsvector('english', content) @@ plainto_tsquery('english', ${dto.query})
+          ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${dto.query})) DESC
+          LIMIT ${dto.limit ?? 20}
+        `);
+        const ftsResults = Array.from(ftsRows) as Array<{ id: string; content: string; metadata: Record<string, unknown>; createdAt: Date }>;
+        if (ftsResults.length > 0) return ftsResults;
+      } catch {
+        // FTS unavailable — fall through to LIKE
+      }
+    }
     return this.db
       .select({
         id: knowledgeEntries.id,

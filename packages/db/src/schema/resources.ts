@@ -5,6 +5,7 @@ import {
   integer,
   boolean,
   numeric,
+  bigint,
   pgEnum,
   unique,
 } from 'drizzle-orm/pg-core';
@@ -44,6 +45,8 @@ export const resourceQuotas = pgTable('resource_quotas', {
   executionsPerMonth: integer('executions_per_month').default(500).notNull(),
   executionsUsed: integer('executions_used').default(0).notNull(),
   burstMinutesUsed: numeric('burst_minutes_used', { precision: 10, scale: 2 }).default('0').notNull(),
+  tokensPerMonth: bigint('tokens_per_month', { mode: 'number' }).default(10_000_000).notNull(),
+  tokensUsedMonth: bigint('tokens_used_month', { mode: 'number' }).default(0).notNull(),
   resetAt: timestamp('reset_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
