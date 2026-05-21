@@ -36,6 +36,7 @@ export interface WorkflowEdge {
 export interface WorkflowDefinition {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  settings?: { supervisorModel?: string; [k: string]: unknown };
 }
 
 export type NodeUpdateCallback = (
@@ -43,7 +44,10 @@ export type NodeUpdateCallback = (
   status: 'running' | 'completed' | 'failed' | 'suspended',
   output?: any,
   error?: string,
-) => void;
+  durationMs?: number,
+) => void | Promise<void>;
+
+export type AgentTokenCallback = (nodeId: string, delta: string) => void;
 
 export const WorkflowStateAnnotation = Annotation.Root({
   variables: Annotation<Record<string, any>>({
@@ -104,9 +108,11 @@ export class LangGraphService {
     checkpointer?: BaseCheckpointSaver,
     workflowId?: string,
     threadId?: string,
+    onAgentToken?: AgentTokenCallback,
   ) {
     const saver = checkpointer ?? new MemorySaver();
     const builder = new StateGraph(WorkflowStateAnnotation);
+    const supervisorModelOverride = definition.settings?.supervisorModel;
 
     const validIds = new Set(definition.nodes.map((n) => n.id));
     const edgesBySource = new Map<string, WorkflowEdge[]>();
@@ -120,7 +126,7 @@ export class LangGraphService {
 
     for (const node of definition.nodes) {
       const nodeType = node.data?.nodeType || node.type;
-      if (nodeType === 'note') continue;
+      if (nodeType === 'note' || nodeType === 'frame') continue;
       builder.addNode(
         node.id,
         this.createNodeFn(
@@ -130,6 +136,8 @@ export class LangGraphService {
           checkpointer,
           workflowId,
           threadId,
+          supervisorModelOverride,
+          onAgentToken,
         ),
       );
     }
@@ -139,12 +147,15 @@ export class LangGraphService {
     for (const [sourceId, edges] of edgesBySource) {
       const sourceNode = definition.nodes.find((n) => n.id === sourceId);
       const sourceType = sourceNode?.data?.nodeType || sourceNode?.type;
-      if (!sourceNode || sourceType === 'note') continue;
+      if (!sourceNode || sourceType === 'note' || sourceType === 'frame') continue;
 
       if (
         sourceType === 'if-else' ||
         sourceType === 'if / else' ||
-        sourceType === 'router'
+        sourceType === 'router' ||
+        sourceType === 'approval' ||
+        sourceType === 'evaluator' ||
+        sourceType === 'guardrails'
       ) {
         if (!conditionals.has(sourceId)) {
           const pathMap: Record<string, string> = {};
@@ -185,10 +196,11 @@ export class LangGraphService {
     node: WorkflowNode,
     onNodeUpdate: NodeUpdateCallback,
     workspaceId: string,
-
     _checkpointer?: BaseCheckpointSaver,
     workflowId?: string,
     threadId?: string,
+    supervisorModelOverride?: string,
+    onAgentToken?: AgentTokenCallback,
   ) {
     const nodeType = node.data?.nodeType || node.type;
 
@@ -211,6 +223,7 @@ export class LangGraphService {
         const subThreadId = `sub:${workflowId}:${randomBytes(8).toString('hex')}`;
 
         onNodeUpdate(node.id, 'running');
+        const subStart = Date.now();
 
         let subOutput: unknown = null;
         const gen = this.stream(
@@ -225,11 +238,12 @@ export class LangGraphService {
           subOutput = (s as any)?.variables?.lastOutput ?? null;
         }
 
+        const subDurationMs = Date.now() - subStart;
         const nodeKey =
           (node.data?.nodeName as string) ||
           (node.data?.name as string) ||
           node.id;
-        onNodeUpdate(node.id, 'completed', subOutput);
+        onNodeUpdate(node.id, 'completed', subOutput, undefined, subDurationMs);
 
         return {
           variables: {
@@ -262,7 +276,7 @@ export class LangGraphService {
       // Fast-forward: if this node was pre-loaded from a replay, skip re-execution
       const preloaded = state.nodeResults?.[node.id];
       if (preloaded?.__preloaded) {
-        onNodeUpdate(node.id, 'completed', preloaded.output);
+        onNodeUpdate(node.id, 'completed', preloaded.output, undefined, 0);
         const nodeKey = node.data?.nodeName || node.data?.name || node.id;
         return {
           variables: {
@@ -284,6 +298,7 @@ export class LangGraphService {
       }
 
       onNodeUpdate(node.id, 'running');
+      const nodeStart = Date.now();
 
       const workflowState: WorkflowState = {
         variables: state.variables,
@@ -307,21 +322,11 @@ export class LangGraphService {
           workspaceId,
           workflowId,
           threadId,
+          supervisorModelOverride,
+          onToken: onAgentToken ? (delta) => onAgentToken(node.id, delta) : undefined,
         });
 
-        // Approval gate node (non-agent)
-        if (
-          result &&
-          typeof result === 'object' &&
-          '__pendingApproval' in result
-        ) {
-          onNodeUpdate(node.id, 'suspended', result);
-          interrupt({
-            type: 'approval',
-            nodeId: node.id,
-            message: result.message,
-          });
-        }
+        const durationMs = Date.now() - nodeStart;
 
         let actualOutput = result;
         let chatUpdates: any[] = [];
@@ -344,7 +349,7 @@ export class LangGraphService {
         }
 
         const nodeKey = node.data?.nodeName || node.data?.name || node.id;
-        onNodeUpdate(node.id, 'completed', actualOutput);
+        onNodeUpdate(node.id, 'completed', actualOutput, undefined, durationMs);
 
         return {
           variables: {
@@ -363,6 +368,7 @@ export class LangGraphService {
               output: actualOutput,
               toolCallLog,
               completedAt: new Date().toISOString(),
+              durationMs,
             },
           },
           pendingAuth: null,
@@ -371,8 +377,9 @@ export class LangGraphService {
       } catch (error) {
         // Let LangGraph's runner handle interrupts — don't log them as failures
         if (isGraphInterrupt(error)) throw error;
+        const durationMs = Date.now() - nodeStart;
         const msg = error instanceof Error ? error.message : String(error);
-        onNodeUpdate(node.id, 'failed', undefined, msg);
+        onNodeUpdate(node.id, 'failed', undefined, msg, durationMs);
         throw error;
       }
     };
@@ -392,6 +399,9 @@ export class LangGraphService {
 
       const output = result.output;
       if (nodeType === 'router') return output?.branch ?? 'none';
+      if (nodeType === 'approval') return output?.__approvalDecision ?? 'approved';
+      if (nodeType === 'evaluator') return output?.passed === true ? 'passed' : 'failed';
+      if (nodeType === 'guardrails') return output?.passed === true ? 'pass' : 'block';
       return output?.branch ?? 'else';
     };
   }
@@ -409,6 +419,7 @@ export class LangGraphService {
       variables: Record<string, any>;
       nodeResults: Record<string, any>;
     },
+    onAgentToken?: AgentTokenCallback,
   ): AsyncGenerator<typeof WorkflowStateAnnotation.State> {
     const graph = this.buildGraph(
       definition,
@@ -417,6 +428,7 @@ export class LangGraphService {
       checkpointer,
       workflowId,
       threadId,
+      onAgentToken,
     );
     const config = { configurable: { thread_id: threadId } };
 
@@ -462,6 +474,7 @@ export class LangGraphService {
     workspaceId: string,
     checkpointer: BaseCheckpointSaver,
     workflowId?: string,
+    onAgentToken?: AgentTokenCallback,
   ) {
     return this.resumeStream(
       definition,
@@ -471,6 +484,7 @@ export class LangGraphService {
       workspaceId,
       checkpointer,
       workflowId,
+      onAgentToken,
     );
   }
 
@@ -482,6 +496,7 @@ export class LangGraphService {
     workspaceId: string,
     checkpointer: BaseCheckpointSaver,
     workflowId?: string,
+    onAgentToken?: AgentTokenCallback,
   ): AsyncGenerator<typeof WorkflowStateAnnotation.State> {
     const graph = this.buildGraph(
       definition,
@@ -490,6 +505,7 @@ export class LangGraphService {
       checkpointer,
       workflowId,
       threadId,
+      onAgentToken,
     );
     const config = { configurable: { thread_id: threadId } };
     const command = new Command({ resume: resumeValue });

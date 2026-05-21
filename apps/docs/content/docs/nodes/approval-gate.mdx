@@ -1,0 +1,75 @@
+---
+title: Approval Gate Node
+description: Pause a workflow execution and wait for a human to approve or reject before continuing.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+# Approval Gate Node
+
+The `approval-gate` node suspends execution and waits for a human decision. Use it to add human-in-the-loop checkpoints before high-stakes actions.
+
+## Configuration Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `message` | string | Context message shown to the approver in the dashboard (supports `{{}}`) |
+
+## How It Works
+
+<Steps>
+<Step>
+### Execution reaches the approval-gate node
+
+The LangGraph engine calls `interrupt()`, which suspends the graph. The execution `status` changes to `suspended` in the database.
+</Step>
+<Step>
+### Approver is notified
+
+The dashboard displays the suspended execution with the configured `message` and Approve / Reject buttons.
+</Step>
+<Step>
+### Human responds
+
+Via the dashboard (**Executions → [id] → Approve / Reject**) or directly via:
+
+```
+PATCH /workspaces/:wId/pods/:podId/executions/:id/respond
+```
+
+with body:
+
+```json
+{ "approved": true }
+```
+
+or
+
+```json
+{ "approved": false, "reason": "Not authorized" }
+```
+</Step>
+<Step>
+### Execution resumes or fails
+
+- **Approved**: workflow continues from where it was suspended
+- **Rejected**: execution is marked `failed` with the rejection reason
+</Step>
+</Steps>
+
+## Output
+
+On approval, `lastOutput` is unchanged — the approval gate is transparent to data flow.
+
+<Callout type="info">
+  Suspended executions timeout after **10 minutes** of SSE inactivity (the stream disconnects). The execution record remains in `suspended` state in the database indefinitely until a response is submitted. There is no automatic timeout on the suspension itself.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "message": "About to send email to {{input.recipientEmail}}. Approve to proceed."
+}
+```

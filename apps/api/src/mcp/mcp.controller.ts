@@ -36,10 +36,7 @@ export class McpController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('workspaceId') workspaceId: string,
-    @Param('id') id: string,
-  ) {
+  findOne(@Param('workspaceId') workspaceId: string, @Param('id') id: string) {
     return this.service.findOne(workspaceId, id);
   }
 
@@ -56,10 +53,7 @@ export class McpController {
   @Delete(':id')
   @HttpCode(204)
   @RequireRole('editor')
-  delete(
-    @Param('workspaceId') workspaceId: string,
-    @Param('id') id: string,
-  ) {
+  delete(@Param('workspaceId') workspaceId: string, @Param('id') id: string) {
     return this.service.delete(workspaceId, id);
   }
 }

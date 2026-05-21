@@ -29,12 +29,17 @@ import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import { ListWorkflowsDto } from './dto/list-workflows.dto';
 import { ListTemplatesDto } from './dto/list-templates.dto';
 import { GenerateWorkflowDto } from './dto/generate-workflow.dto';
+import { PublishTemplateDto, UpdateTemplateDto } from './dto/publish-template.dto';
+import { UpdateLogSettingsDto } from './dto/log-settings.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
+import { GlobalAdminGuard } from '../common/guards/global-admin.guard';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('Workflows')
 @ApiBearerAuth()
@@ -44,6 +49,7 @@ export class WorkflowsController {
   constructor(
     private readonly service: WorkflowsService,
     private readonly generateService: GenerateWorkflowService,
+    private readonly auditService: AuditService,
   ) {}
 
   @Post()
@@ -51,20 +57,34 @@ export class WorkflowsController {
   @ApiOperation({ summary: 'Create a workflow (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  create(
+  async create(
+    @Param('workspaceId') workspaceId: string,
     @Param('podId') podId: string,
     @CurrentUser() user: User,
     @Body() dto: CreateWorkflowDto,
   ) {
-    return this.service.create(podId, user.id, dto);
+    const result = await this.service.create(podId, user.id, dto);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'workflow.create',
+      resourceType: 'workflow',
+      resourceId: result.id,
+      resourceName: result.name,
+    });
+    return result;
   }
 
   @Get()
   @ApiOperation({ summary: 'List workflows' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  findAll(@Param('podId') podId: string, @Query() query: ListWorkflowsDto) {
-    return this.service.findAll(podId, query);
+  findAll(
+    @Param('podId') podId: string,
+    @Query() query: ListWorkflowsDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.service.findAll(podId, query, user.id);
   }
 
   @Get(':id')
@@ -98,8 +118,45 @@ export class WorkflowsController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  delete(@Param('podId') podId: string, @Param('id') id: string) {
-    return this.service.delete(podId, id);
+  async delete(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    const result = await this.service.delete(podId, id);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'workflow.delete',
+      resourceType: 'workflow',
+      resourceId: id,
+    });
+    return result;
+  }
+
+  @Post(':id/presence')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Upsert presence and return other active users' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  upsertPresence(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.upsertPresence(id, user.id);
+  }
+
+  @Post(':id/duplicate')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Duplicate a workflow (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  duplicate(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.service.duplicate(podId, id, user.id);
   }
 
   @Post(':id/deploy')
@@ -110,6 +167,16 @@ export class WorkflowsController {
   @ApiParam({ name: 'id' })
   deploy(@Param('podId') podId: string, @Param('id') id: string) {
     return this.service.deploy(podId, id);
+  }
+
+  @Post(':id/undeploy')
+  @RequireRole('admin')
+  @ApiOperation({ summary: 'Unpublish a deployed workflow (admin+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  undeploy(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.undeploy(podId, id);
   }
 
   @Get(':id/versions')
@@ -133,6 +200,22 @@ export class WorkflowsController {
     @Param('version', ParseIntPipe) version: number,
   ) {
     return this.service.getVersion(podId, id, version);
+  }
+
+  @Post(':id/versions/:version/restore')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Restore workflow to a previous version' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  @ApiParam({ name: 'version', type: Number })
+  restoreVersion(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @Param('version', ParseIntPipe) version: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.service.restoreVersion(podId, id, version, user.id);
   }
 
   @Patch(':id/star')
@@ -169,6 +252,94 @@ export class WorkflowsController {
     return this.service.restore(podId, id);
   }
 
+  @Delete(':id/permanent')
+  @HttpCode(204)
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Permanently delete a trashed workflow (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  hardDelete(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.hardDelete(podId, id);
+  }
+
+  @Patch(':id/template')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Mark or unmark a workflow as a pod template (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  setTemplate(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @Body() body: { isTemplate: boolean },
+  ) {
+    return this.service.setTemplate(podId, id, body.isTemplate);
+  }
+
+  @Post(':id/favorite')
+  @HttpCode(204)
+  @RequireRole('viewer')
+  @ApiOperation({ summary: 'Add a workflow to personal favorites' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  favoriteWorkflow(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.favoriteWorkflow(user.id, id);
+  }
+
+  @Delete(':id/favorite')
+  @HttpCode(204)
+  @RequireRole('viewer')
+  @ApiOperation({ summary: 'Remove a workflow from personal favorites' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  unfavoriteWorkflow(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.unfavoriteWorkflow(user.id, id);
+  }
+
+  @Get('me/favorites')
+  @RequireRole('viewer')
+  @ApiOperation({ summary: 'Get IDs of workflows favorited by current user in this pod' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  getWorkflowFavoriteIds(
+    @Param('podId') podId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.service.getWorkflowFavoriteIds(user.id, podId);
+  }
+
+  @Post(':id/publish')
+  @RequireRole('admin')
+  @ApiOperation({ summary: 'Publish a workflow to the public gallery (workspace admin+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  publishToGallery(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Body() dto: PublishTemplateDto,
+  ) {
+    return this.service.publishToGallery(podId, id, user.id, dto);
+  }
+
+  @Patch(':id/log-settings')
+  @RequireRole('admin')
+  @ApiOperation({ summary: 'Update log collection settings for a workflow (admin+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  updateLogSettings(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateLogSettingsDto,
+  ) {
+    return this.service.updateLogSettings(podId, id, dto);
+  }
+
   @Post('from-template/:templateId')
   @RequireRole('editor')
   @ApiOperation({ summary: 'Clone a template into this pod (editor+)' })
@@ -186,7 +357,9 @@ export class WorkflowsController {
   @Post(':id/generate')
   @SkipThrottle()
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Generate workflow from natural language (SSE stream, editor+)' })
+  @ApiOperation({
+    summary: 'Generate workflow from natural language (SSE stream, editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
@@ -204,7 +377,7 @@ export class WorkflowsController {
     const abort = new AbortController();
     req.on('close', () => abort.abort());
 
-    const gen = this.generateService.generate(dto.prompt, abort.signal);
+    const gen = this.generateService.generate(dto.prompt, abort.signal, dto.canvasContext, dto.history);
     try {
       for await (const event of gen) {
         if (abort.signal.aborted) break;
@@ -238,5 +411,44 @@ export class TemplatesController {
   @ApiQuery({ name: 'featured', required: false })
   listTemplates(@Query() query: ListTemplatesDto) {
     return this.service.listTemplates(query);
+  }
+
+  @Get('me/upvoted')
+  @UseGuards(ClerkAuthGuard)
+  @ApiOperation({ summary: 'Get template IDs the current user has upvoted' })
+  getUserUpvotedIds(@CurrentUser() user: User) {
+    return this.service.getUserUpvotedTemplateIds(user.id);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single template (increments view count)' })
+  @ApiParam({ name: 'id' })
+  getTemplate(@Param('id') id: string) {
+    return this.service.getTemplate(id, true);
+  }
+
+  @Post(':id/upvote')
+  @UseGuards(ClerkAuthGuard)
+  @ApiOperation({ summary: 'Toggle upvote on a template' })
+  @ApiParam({ name: 'id' })
+  toggleUpvote(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.service.toggleTemplateUpvote(user.id, id);
+  }
+
+  @Patch(':id')
+  @UseGuards(ClerkAuthGuard, GlobalAdminGuard)
+  @ApiOperation({ summary: 'Update a gallery template (platform admin only)' })
+  @ApiParam({ name: 'id' })
+  updateTemplate(@Param('id') id: string, @Body() dto: UpdateTemplateDto) {
+    return this.service.updateGalleryTemplate(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(ClerkAuthGuard, GlobalAdminGuard)
+  @ApiOperation({ summary: 'Delete a gallery template (platform admin only)' })
+  @ApiParam({ name: 'id' })
+  deleteTemplate(@Param('id') id: string) {
+    return this.service.deleteGalleryTemplate(id);
   }
 }

@@ -9,7 +9,12 @@ import {
   HttpCode,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { KnowledgeService } from './knowledge.service';
 import { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
 import { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto';
@@ -18,20 +23,39 @@ import { SearchEntriesDto } from './dto/search-entries.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { RoleGuard } from '../common/guards/role.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuditService } from '../audit/audit.service';
+import type { User } from '@linea/db';
 
 @ApiTags('Knowledge')
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/knowledge-bases')
 export class KnowledgeController {
-  constructor(private readonly service: KnowledgeService) {}
+  constructor(
+    private readonly service: KnowledgeService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Post()
   @RequireRole('editor')
   @ApiOperation({ summary: 'Create a knowledge base (editor+)' })
   @ApiParam({ name: 'workspaceId' })
-  create(@Param('workspaceId') workspaceId: string, @Body() dto: CreateKnowledgeBaseDto) {
-    return this.service.createBase(workspaceId, dto);
+  async create(
+    @Param('workspaceId') workspaceId: string,
+    @CurrentUser() user: User,
+    @Body() dto: CreateKnowledgeBaseDto,
+  ) {
+    const kb = await this.service.createBase(workspaceId, dto);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'kb.create',
+      resourceType: 'knowledge_base',
+      resourceId: kb.id,
+      resourceName: kb.name,
+    });
+    return kb;
   }
 
   @Get()
@@ -65,11 +89,26 @@ export class KnowledgeController {
   @Delete(':id')
   @HttpCode(204)
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Delete a knowledge base and all its entries (editor+)' })
+  @ApiOperation({
+    summary: 'Delete a knowledge base and all its entries (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
-  delete(@Param('workspaceId') workspaceId: string, @Param('id') id: string) {
-    return this.service.deleteBase(workspaceId, id);
+  async delete(
+    @Param('workspaceId') workspaceId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    const kb = await this.service.getBase(workspaceId, id);
+    await this.service.deleteBase(workspaceId, id);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'kb.delete',
+      resourceType: 'knowledge_base',
+      resourceId: id,
+      resourceName: kb.name,
+    });
   }
 
   // ─── Entries ────────────────────────────────────────────────────────────────
@@ -91,7 +130,10 @@ export class KnowledgeController {
   @ApiOperation({ summary: 'List entries in a knowledge base' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
-  listEntries(@Param('workspaceId') workspaceId: string, @Param('id') kbId: string) {
+  listEntries(
+    @Param('workspaceId') workspaceId: string,
+    @Param('id') kbId: string,
+  ) {
     return this.service.listEntries(workspaceId, kbId);
   }
 
@@ -111,7 +153,10 @@ export class KnowledgeController {
   }
 
   @Post(':id/search')
-  @ApiOperation({ summary: 'Search entries by text (semantic search when embeddings available)' })
+  @ApiOperation({
+    summary:
+      'Search entries by text (semantic search when embeddings available)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
   search(

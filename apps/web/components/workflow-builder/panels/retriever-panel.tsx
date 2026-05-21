@@ -3,9 +3,10 @@
 import { useRef } from 'react';
 import type { Node } from '@xyflow/react';
 import { Input } from '@linea/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
 import { Label } from '@linea/ui/components/label';
 import { VariableChips } from '../variable-picker';
+import { ModelPicker } from '../model-picker';
 
 interface RetrieverPanelProps {
   data: Record<string, unknown>;
@@ -53,28 +54,50 @@ export function RetrieverPanel({ data, onUpdate, nodes = [], nodeId }: Retriever
 
       <div className="space-y-1.5">
         <Label htmlFor="retriever-topk">Top-K results</Label>
-        <NativeSelect
-          id="retriever-topk"
+        <Select
           value={String((data.topK as number) ?? 5)}
-          onChange={(e) => onUpdate({ topK: Number(e.target.value) })}
-          className="w-full"
+          onValueChange={(v) => onUpdate({ topK: Number(v) })}
         >
-          {[3, 5, 10, 20].map((k) => (
-            <NativeSelectOption key={k} value={String(k)}>{k}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger id="retriever-topk" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[3, 5, 10, 20].map((k) => (
+              <SelectItem key={k} value={String(k)}>{k}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="retriever-output">Output key</Label>
-        <Input
-          id="retriever-output"
-          value={(data.outputKey as string) ?? 'results'}
-          onChange={(e) => onUpdate({ outputKey: e.target.value })}
-          placeholder="results"
+        <Label>Embedding model</Label>
+        <ModelPicker
+          value={(data.embeddingModel as string) ?? 'text-embedding-3-small'}
+          onValueChange={(v) => onUpdate({ embeddingModel: v })}
+          embeddingOnly
         />
         <p className="text-[11px] text-muted-foreground">
-          Retrieved documents are stored under this key in the workflow state.
+          Used to convert the query into a vector for similarity search. Must match the model used when the knowledge base was indexed.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="retriever-output">Output format</Label>
+        <Select
+          value={(data.outputField as string) ?? 'documents'}
+          onValueChange={(v) => onUpdate({ outputField: v })}
+        >
+          <SelectTrigger id="retriever-output" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="documents">Documents (array with metadata)</SelectItem>
+            <SelectItem value="text">Text (concatenated string)</SelectItem>
+            <SelectItem value="full">Full (documents + count + query)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          Controls what shape this node outputs to downstream nodes.
         </p>
       </div>
     </div>

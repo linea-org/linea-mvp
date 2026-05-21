@@ -21,6 +21,8 @@ export interface CompletionOptions {
   signal?: AbortSignal;
   tools?: ToolDefinition[];
   toolChoice?: 'auto' | 'required' | 'none';
+  /** Called with each text token as it streams. When provided, clients use their streaming API. */
+  onToken?: (delta: string) => void;
 }
 
 export interface CompletionResult {
@@ -33,8 +35,10 @@ export interface CompletionResult {
 export type ModelApiKeys = {
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
+  XAI_API_KEY?: string;
   GROQ_API_KEY?: string;
   GOOGLE_API_KEY?: string;
+  OLLAMA_BASE_URL?: string;
 };
 
 export type ModelClient = (
@@ -52,6 +56,8 @@ export function createModelClient(
       return createAnthropicClient(modelId, apiKeys.ANTHROPIC_API_KEY);
     case 'openai':
       return createOpenAIClient(modelId, apiKeys.OPENAI_API_KEY);
+    case 'xai':
+      return createOpenAIClient(modelId, apiKeys.XAI_API_KEY, 'https://api.x.ai/v1');
     case 'groq':
       return createOpenAIClient(
         modelId,
@@ -60,6 +66,12 @@ export function createModelClient(
       );
     case 'google':
       return createGoogleClient(modelId, apiKeys.GOOGLE_API_KEY);
+    case 'ollama':
+      return createOpenAIClient(
+        modelId,
+        'ollama',
+        apiKeys.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1',
+      );
     default:
       throw new Error(`Unsupported provider: ${String(provider)}`);
   }
@@ -77,7 +89,6 @@ function createAnthropicClient(modelId: string, apiKey?: string): ModelClient {
     const systemMsg = messages.find((m) => m.role === 'system');
     const chatMsgs = messages.filter((m) => m.role !== 'system');
 
-    // Convert our normalized messages to Anthropic format
     const anthropicMsgs: any[] = chatMsgs.map((m) => {
       if (m.role === 'tool') {
         return {
@@ -113,12 +124,10 @@ function createAnthropicClient(modelId: string, apiKey?: string): ModelClient {
       input_schema: t.parameters,
     }));
 
-    const response = await client.messages.create({
+    const msgParams: any = {
       model: modelId,
       max_tokens: opts.maxTokens ?? 4096,
-      ...(opts.temperature !== undefined
-        ? { temperature: opts.temperature }
-        : {}),
+      ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
       ...(systemMsg ? { system: systemMsg.content } : {}),
       messages: anthropicMsgs,
       ...(anthropicTools?.length ? { tools: anthropicTools } : {}),
@@ -132,19 +141,28 @@ function createAnthropicClient(modelId: string, apiKey?: string): ModelClient {
                   : undefined,
           }
         : {}),
-    });
+    };
+
+    let response: any;
+    if (opts.onToken) {
+      const stream = (client.messages as any).stream(msgParams);
+      stream.on('text', opts.onToken);
+      response = await stream.finalMessage();
+    } else {
+      response = await client.messages.create(msgParams);
+    }
 
     const text = response.content
-      .filter((b) => b.type === 'text')
-      .map((b) => (b as any).text as string)
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text as string)
       .join('');
 
     const toolCalls: NormalizedToolCall[] = response.content
-      .filter((b) => b.type === 'tool_use')
-      .map((b) => ({
-        id: (b as any).id,
-        name: (b as any).name,
-        arguments: (b as any).input ?? {},
+      .filter((b: any) => b.type === 'tool_use')
+      .map((b: any) => ({
+        id: b.id,
+        name: b.name,
+        arguments: b.input ?? {},
       }));
 
     const stopReason =
@@ -166,7 +184,7 @@ function createAnthropicClient(modelId: string, apiKey?: string): ModelClient {
   };
 }
 
-// ─── OpenAI / Groq ────────────────────────────────────────────────────────────
+// ─── OpenAI / Groq / xAI / Ollama ────────────────────────────────────────────
 
 function createOpenAIClient(
   modelId: string,
@@ -181,7 +199,6 @@ function createOpenAIClient(
 
     const isReasoningModel = /^o[1-9]/.test(modelId);
 
-    // Convert our normalized messages to OpenAI format
     const openAIMsgs: any[] = messages.map((m) => {
       if (m.role === 'tool') {
         return { role: 'tool', content: m.content, tool_call_id: m.toolCallId };
@@ -212,33 +229,68 @@ function createOpenAIClient(
       },
     }));
 
-    const response = await client.chat.completions.create(
-      {
-        model: modelId,
-        messages: openAIMsgs,
-        ...(isReasoningModel
-          ? {}
-          : {
-              max_tokens: opts.maxTokens ?? 4096,
-              temperature: opts.temperature ?? 0.7,
-            }),
-        ...(opts.jsonMode && !isReasoningModel
-          ? { response_format: { type: 'json_object' } }
-          : {}),
-        ...(openAITools?.length ? { tools: openAITools } : {}),
-        ...(opts.toolChoice && openAITools?.length
-          ? {
-              tool_choice:
-                opts.toolChoice === 'auto'
-                  ? 'auto'
-                  : opts.toolChoice === 'required'
-                    ? 'required'
-                    : 'none',
-            }
-          : {}),
-      },
-      { signal: opts.signal },
-    );
+    const baseParams: any = {
+      model: modelId,
+      messages: openAIMsgs,
+      ...(isReasoningModel
+        ? {}
+        : {
+            max_tokens: opts.maxTokens ?? 4096,
+            temperature: opts.temperature ?? 0.7,
+          }),
+      ...(opts.jsonMode && !isReasoningModel
+        ? { response_format: { type: 'json_object' } }
+        : {}),
+      ...(openAITools?.length ? { tools: openAITools } : {}),
+      ...(opts.toolChoice && openAITools?.length
+        ? {
+            tool_choice:
+              opts.toolChoice === 'auto'
+                ? 'auto'
+                : opts.toolChoice === 'required'
+                  ? 'required'
+                  : 'none',
+          }
+        : {}),
+    };
+
+    if (opts.onToken) {
+      const stream: any = await client.chat.completions.create(
+        { ...baseParams, stream: true },
+        { signal: opts.signal },
+      );
+      let text = '';
+      const tcMap: Record<number, { id: string; name: string; args: string }> = {};
+      let finishReason: string | null = null;
+      for await (const chunk of stream) {
+        const choice = chunk.choices[0];
+        if (!choice) continue;
+        if (choice.finish_reason) finishReason = choice.finish_reason;
+        const delta = choice.delta;
+        if (delta.content) { opts.onToken(delta.content); text += delta.content; }
+        for (const tc of (delta.tool_calls ?? [])) {
+          const idx = tc.index ?? 0;
+          if (!tcMap[idx]) tcMap[idx] = { id: '', name: '', args: '' };
+          const e = tcMap[idx]!;
+          if (tc.id) e.id = tc.id;
+          if (tc.function?.name) e.name += tc.function.name;
+          if (tc.function?.arguments) e.args += tc.function.arguments;
+        }
+      }
+      const toolCalls: NormalizedToolCall[] = Object.values(tcMap)
+        .filter((tc) => tc.name)
+        .map((tc) => ({ id: tc.id, name: tc.name, arguments: JSON.parse(tc.args || '{}') }));
+      const stopReason =
+        finishReason === 'tool_calls' ? 'tool_use' : finishReason === 'length' ? 'max_tokens' : 'end_turn';
+      return {
+        text,
+        toolCalls: toolCalls.length ? toolCalls : undefined,
+        stopReason,
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
+    }
+
+    const response = await client.chat.completions.create(baseParams, { signal: opts.signal });
 
     const choice = response.choices[0];
     const text = choice.message.content ?? '';
@@ -337,6 +389,28 @@ function createGoogleClient(modelId: string, apiKey?: string): ModelClient {
         ...(opts.jsonMode ? { responseMimeType: 'application/json' } : {}),
       },
     });
+
+    if (opts.onToken) {
+      const streamResult = await chat.sendMessageStream(lastMsg);
+      let text = '';
+      for await (const chunk of streamResult.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) { opts.onToken(chunkText); text += chunkText; }
+      }
+      const response = await streamResult.response;
+      const usage = response.usageMetadata;
+      const toolCalls: NormalizedToolCall[] = (response.functionCalls() ?? []).map((fc, i) => ({
+        id: `google_fc_${i}`,
+        name: fc.name,
+        arguments: fc.args as Record<string, any>,
+      }));
+      return {
+        text,
+        toolCalls: toolCalls.length ? toolCalls : undefined,
+        stopReason: toolCalls.length ? 'tool_use' : 'end_turn',
+        usage: { inputTokens: usage?.promptTokenCount ?? 0, outputTokens: usage?.candidatesTokenCount ?? 0 },
+      };
+    }
 
     const result = await chat.sendMessage(lastMsg);
     const response = result.response;

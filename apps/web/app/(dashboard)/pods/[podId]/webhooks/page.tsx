@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
-import { Skeleton } from '@linea/ui/components/skeleton';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
+import { Skeleton } from '@linea/ui/components/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -50,9 +50,13 @@ import {
   Delete01Icon,
   Add01Icon,
   CheckmarkSquare01Icon,
+  Search01Icon,
+  RefreshIcon,
+  Loading01Icon,
 } from '@hugeicons/core-free-icons';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+const PAGE_SIZE = 10;
 
 interface Webhook {
   id: string;
@@ -86,6 +90,44 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
+function TablePagination({
+  page,
+  totalPages,
+  total,
+  pageSize,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  if (total === 0) return null;
+  return (
+    <div className="flex items-center justify-between border-t border-border px-1 pt-3">
+      <span className="text-xs text-muted-foreground">
+        Showing {start}–{end} of {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <Button size="sm" variant="outline" disabled={page === 1} onClick={onPrev}>
+          Previous
+        </Button>
+        <span className="px-2 text-xs text-muted-foreground">
+          {page} / {totalPages}
+        </span>
+        <Button size="sm" variant="outline" disabled={page === totalPages} onClick={onNext}>
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function WebhooksPage() {
   const { podId } = useParams<{ podId: string }>();
   const { getToken } = useAuth();
@@ -95,7 +137,11 @@ export default function WebhooksPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [newSecret, setNewSecret] = useState<{ webhookId: string; secret: string } | null>(null);
+  const [revealSecret, setRevealSecret] = useState<{ webhookId: string; secret: string } | null>(null);
+  const [search, setSearch] = useState('');
+  const [workflowFilter, setWorkflowFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
 
   const webhooksKey = ['webhooks', activeWorkspace?.id, podId];
   const workflowsKey = ['workflows', activeWorkspace?.id, podId];
@@ -113,15 +159,15 @@ export default function WebhooksPage() {
 
   const { data: workflows = [], isFetching: fetchingWorkflows } = useQuery({
     queryKey: workflowsKey,
-    enabled: createOpen && !!activeWorkspace,
+    enabled: !!activeWorkspace && !wsLoading,
     queryFn: async () => {
       const token = await getToken();
       if (!token) return [];
       const api = createApiClient(token);
-      const res = await api.get<{ workflows: Workflow[] }>(
+      const res = await api.get<Workflow[]>(
         `/workspaces/${activeWorkspace!.id}/pods/${podId}/workflows`,
       );
-      return res.workflows;
+      return (Array.isArray(res) ? res : ((res as any)?.workflows ?? [])) as Workflow[];
     },
   });
 
@@ -139,7 +185,7 @@ export default function WebhooksPage() {
       void queryClient.invalidateQueries({ queryKey: webhooksKey });
       setCreateOpen(false);
       setSelectedWorkflowId('');
-      setNewSecret({ webhookId: created.id, secret: created.secretToken });
+      setRevealSecret({ webhookId: created.id, secret: created.secretToken });
     },
   });
 
@@ -156,8 +202,54 @@ export default function WebhooksPage() {
     },
   });
 
+  async function handleRotate(id: string) {
+    setRotatingId(id);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      const result = await api.patch<{ secretToken: string }>(
+        `/workspaces/${activeWorkspace!.id}/pods/${podId}/webhooks/${id}/rotate`,
+        {},
+      );
+      setRevealSecret({ webhookId: id, secret: result.secretToken });
+    } finally {
+      setRotatingId(null);
+    }
+  }
+
   function triggerUrl(id: string) {
     return `${API_BASE}/webhooks/${id}/trigger`;
+  }
+
+  function workflowName(id: string) {
+    return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + '…';
+  }
+
+  const filtered = useMemo(() => {
+    let list = Array.isArray(webhooks) ? webhooks : [];
+    if (workflowFilter !== 'all') {
+      list = list.filter((wh) => wh.workflowId === workflowFilter);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((wh) => workflowName(wh.workflowId).toLowerCase().includes(q));
+    }
+    return list;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webhooks, workflows, workflowFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  function handleSearchChange(v: string) {
+    setSearch(v);
+    setPage(1);
+  }
+
+  function handleWorkflowFilterChange(v: string) {
+    setWorkflowFilter(v);
+    setPage(1);
   }
 
   return (
@@ -170,11 +262,38 @@ export default function WebhooksPage() {
         </Button>
       </div>
 
+      {/* Search + filter bar */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-xs">
+          <HugeiconsIcon
+            icon={Search01Icon}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none"
+          />
+          <Input
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search by workflow name…"
+            className="pl-8 h-8 text-sm"
+          />
+        </div>
+        <Select value={workflowFilter} onValueChange={handleWorkflowFilterChange}>
+          <SelectTrigger className="h-8 text-sm w-48">
+            <SelectValue placeholder="All workflows" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All workflows</SelectItem>
+            {workflows.map((wf) => (
+              <SelectItem key={wf.id} value={wf.id}>{wf.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {isLoading || wsLoading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
         </div>
-      ) : webhooks.length === 0 ? (
+      ) : filtered.length === 0 && webhooks.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
             <HugeiconsIcon icon={LinkSquare01Icon} className="size-6 text-muted-foreground" />
@@ -187,47 +306,77 @@ export default function WebhooksPage() {
             Add webhook
           </Button>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
+          <p className="text-sm text-muted-foreground">No webhooks match your filters.</p>
+        </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Trigger URL</TableHead>
-              <TableHead>Workflow</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="w-16" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {webhooks.map((wh) => (
-              <TableRow key={wh.id}>
-                <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <code className="text-xs text-muted-foreground truncate max-w-xs">
-                      {triggerUrl(wh.id)}
-                    </code>
-                    <CopyButton value={triggerUrl(wh.id)} />
-                  </div>
-                </TableCell>
-                <TableCell className="text-sm font-mono text-muted-foreground">
-                  {wh.workflowId.slice(0, 8)}…
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {new Date(wh.createdAt).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="size-8 p-0 text-destructive hover:text-destructive"
-                    onClick={() => setDeleteTarget(wh.id)}
-                  >
-                    <HugeiconsIcon icon={Delete01Icon} className="size-4" />
-                  </Button>
-                </TableCell>
+        <div className="space-y-3">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Trigger URL</TableHead>
+                <TableHead>Workflow</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="w-28" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {paginated.map((wh) => (
+                <TableRow key={wh.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <code className="text-xs text-muted-foreground truncate max-w-xs">
+                        {triggerUrl(wh.id)}
+                      </code>
+                      <CopyButton value={triggerUrl(wh.id)} />
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-foreground">
+                    {workflowName(wh.workflowId)}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {new Date(wh.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                        onClick={() => void handleRotate(wh.id)}
+                        disabled={rotatingId === wh.id}
+                        title="Rotate signing secret"
+                      >
+                        <HugeiconsIcon
+                          icon={rotatingId === wh.id ? Loading01Icon : RefreshIcon}
+                          className={`size-3.5 ${rotatingId === wh.id ? 'animate-spin' : ''}`}
+                        />
+                        Rotate
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="size-7 p-0 text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(wh.id)}
+                      >
+                        <HugeiconsIcon icon={Delete01Icon} className="size-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={filtered.length}
+            pageSize={PAGE_SIZE}
+            onPrev={() => setPage((p) => p - 1)}
+            onNext={() => setPage((p) => p + 1)}
+          />
+        </div>
       )}
 
       {/* Create dialog */}
@@ -272,11 +421,15 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Secret reveal dialog */}
-      <Dialog open={!!newSecret} onOpenChange={() => setNewSecret(null)}>
+      {/* Secret reveal dialog — shown after create or rotate */}
+      <Dialog open={!!revealSecret} onOpenChange={() => setRevealSecret(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Webhook created</DialogTitle>
+            <DialogTitle>
+              {revealSecret && webhooks.some((w) => w.id === revealSecret.webhookId && w.createdAt)
+                ? 'Signing secret rotated'
+                : 'Webhook created'}
+            </DialogTitle>
             <DialogDescription>
               Copy your signing secret now — it won&apos;t be shown again.
             </DialogDescription>
@@ -287,10 +440,10 @@ export default function WebhooksPage() {
               <div className="flex items-center gap-2">
                 <Input
                   readOnly
-                  value={newSecret ? triggerUrl(newSecret.webhookId) : ''}
+                  value={revealSecret ? triggerUrl(revealSecret.webhookId) : ''}
                   className="font-mono text-xs"
                 />
-                {newSecret && <CopyButton value={triggerUrl(newSecret.webhookId)} />}
+                {revealSecret && <CopyButton value={triggerUrl(revealSecret.webhookId)} />}
               </div>
             </div>
             <div className="space-y-1.5">
@@ -298,18 +451,19 @@ export default function WebhooksPage() {
               <div className="flex items-center gap-2">
                 <Input
                   readOnly
-                  value={newSecret?.secret ?? ''}
+                  value={revealSecret?.secret ?? ''}
                   className="font-mono text-xs"
                 />
-                {newSecret && <CopyButton value={newSecret.secret} />}
+                {revealSecret && <CopyButton value={revealSecret.secret} />}
               </div>
               <p className="text-xs text-muted-foreground">
-                Verify incoming requests by checking the <code className="text-xs">x-linea-signature</code> header.
+                Verify incoming requests by checking the{' '}
+                <code className="text-xs">x-linea-signature</code> header.
               </p>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setNewSecret(null)}>Done</Button>
+            <Button onClick={() => setRevealSecret(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

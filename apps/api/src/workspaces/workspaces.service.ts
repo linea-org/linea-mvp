@@ -32,8 +32,8 @@ function assertMinRole(
   membership: WorkspaceMember,
   minimum: 'owner' | 'admin' | 'editor',
 ) {
-  const level = ROLE_LEVEL[membership.role] ?? 0;       // unknown role → 0 (no access)
-  const minLevel = ROLE_LEVEL[minimum] ?? Infinity;     // unknown minimum → deny
+  const level = ROLE_LEVEL[membership.role] ?? 0; // unknown role → 0 (no access)
+  const minLevel = ROLE_LEVEL[minimum] ?? Infinity; // unknown minimum → deny
   if (level < minLevel) {
     throw new ForbiddenException(
       `This action requires the '${minimum}' role or higher`,
@@ -249,7 +249,8 @@ export class WorkspacesService {
       .limit(1);
 
     if (!row) throw new NotFoundException('Invite not found or already used');
-    if (row.expiresAt < new Date()) throw new BadRequestException('Invite has expired');
+    if (row.expiresAt < new Date())
+      throw new BadRequestException('Invite has expired');
 
     return {
       workspaceId: row.workspaceId,
@@ -272,15 +273,13 @@ export class WorkspacesService {
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    await this.db
-      .insert(workspaceInvites)
-      .values({
-        workspaceId,
-        email: dto.email,
-        role: dto.role,
-        tokenHash,
-        expiresAt,
-      });
+    await this.db.insert(workspaceInvites).values({
+      workspaceId,
+      email: dto.email,
+      role: dto.role,
+      tokenHash,
+      expiresAt,
+    });
 
     // Return the raw token once — it is never stored and cannot be recovered from the hash
     return { email: dto.email, role: dto.role, token: rawToken, expiresAt };
@@ -340,7 +339,9 @@ export class WorkspacesService {
       .where(eq(users.id, userId))
       .limit(1);
     if (!user || user.email !== invite.email) {
-      throw new ForbiddenException('This invite was sent to a different email address');
+      throw new ForbiddenException(
+        'This invite was sent to a different email address',
+      );
     }
 
     const existingMembership = await this.db
@@ -374,7 +375,11 @@ export class WorkspacesService {
 
   // ─── Clerk org sync ────────────────────────────────────────────────────────
 
-  async upsertFromClerkOrg(org: { id: string; name: string; slug: string | null }) {
+  async upsertFromClerkOrg(org: {
+    id: string;
+    name: string;
+    slug: string | null;
+  }) {
     const slug = org.slug ?? this.generateSlug(org.name);
 
     const [existing] = await this.db
@@ -400,7 +405,11 @@ export class WorkspacesService {
     return created;
   }
 
-  async addMemberFromClerk(clerkOrgId: string, clerkUserId: string, clerkRole: string) {
+  async addMemberFromClerk(
+    clerkOrgId: string,
+    clerkUserId: string,
+    clerkRole: string,
+  ) {
     const [workspace] = await this.db
       .select({ id: workspaces.id })
       .from(workspaces)
@@ -417,7 +426,10 @@ export class WorkspacesService {
 
     if (!user) return; // user not yet synced — skip
 
-    const CLERK_ROLE_MAP: Record<string, 'owner' | 'admin' | 'editor' | 'viewer'> = {
+    const CLERK_ROLE_MAP: Record<
+      string,
+      'owner' | 'admin' | 'editor' | 'viewer'
+    > = {
       'org:admin': 'admin',
       'org:member': 'editor',
       'org:viewer': 'viewer',

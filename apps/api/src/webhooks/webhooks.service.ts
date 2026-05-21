@@ -16,7 +16,7 @@ import type { CreateWebhookDto } from './dto/create-webhook.dto';
 export const WEBHOOK_REDIS = 'WEBHOOK_REDIS';
 
 const REPLAY_WINDOW_SECONDS = 300; // 5 minutes
-const NONCE_TTL_SECONDS = 600;     // must be > REPLAY_WINDOW_SECONDS
+const NONCE_TTL_SECONDS = 600; // must be > REPLAY_WINDOW_SECONDS
 
 @Injectable()
 export class WebhooksService {
@@ -33,7 +33,8 @@ export class WebhooksService {
       .where(and(eq(workflows.id, dto.workflowId), eq(workflows.podId, podId)))
       .limit(1);
 
-    if (!wf) throw new NotFoundException(`Workflow ${dto.workflowId} not found`);
+    if (!wf)
+      throw new NotFoundException(`Workflow ${dto.workflowId} not found`);
 
     const secretToken = randomBytes(24).toString('hex');
 
@@ -56,6 +57,20 @@ export class WebhooksService {
       .where(eq(webhooks.podId, podId));
   }
 
+  async rotate(podId: string, id: string) {
+    const [row] = await this.db
+      .select({ id: webhooks.id })
+      .from(webhooks)
+      .where(and(eq(webhooks.id, id), eq(webhooks.podId, podId)))
+      .limit(1);
+
+    if (!row) throw new NotFoundException(`Webhook ${id} not found`);
+
+    const secretToken = randomBytes(24).toString('hex');
+    await this.db.update(webhooks).set({ secretToken }).where(eq(webhooks.id, id));
+    return { secretToken };
+  }
+
   async delete(podId: string, id: string) {
     const [row] = await this.db
       .select({ id: webhooks.id })
@@ -68,11 +83,22 @@ export class WebhooksService {
     await this.db.delete(webhooks).where(eq(webhooks.id, id));
   }
 
-  async trigger(id: string, signature: string, timestamp: string, rawBody: Buffer, body: Record<string, unknown>) {
+  async trigger(
+    id: string,
+    signature: string,
+    timestamp: string,
+    rawBody: Buffer,
+    body: Record<string, unknown>,
+  ) {
     // Timestamp window check — prevents delayed replay attacks
     const ts = parseInt(timestamp, 10);
-    if (!Number.isFinite(ts) || Math.abs(Math.floor(Date.now() / 1000) - ts) > REPLAY_WINDOW_SECONDS) {
-      throw new UnauthorizedException('Webhook timestamp out of allowed 5-minute window');
+    if (
+      !Number.isFinite(ts) ||
+      Math.abs(Math.floor(Date.now() / 1000) - ts) > REPLAY_WINDOW_SECONDS
+    ) {
+      throw new UnauthorizedException(
+        'Webhook timestamp out of allowed 5-minute window',
+      );
     }
 
     const [row] = await this.db
@@ -90,17 +116,28 @@ export class WebhooksService {
 
     if (!row) throw new NotFoundException(`Webhook ${id} not found`);
 
-    const sigHex = createHmac('sha256', row.secretToken).update(rawBody).digest('hex');
+    const sigHex = createHmac('sha256', row.secretToken)
+      .update(rawBody)
+      .digest('hex');
     const expected = `sha256=${sigHex}`;
     const expectedBuf = Buffer.from(expected);
     const signatureBuf = Buffer.from(signature ?? '');
-    if (expectedBuf.length !== signatureBuf.length || !timingSafeEqual(expectedBuf, signatureBuf)) {
+    if (
+      expectedBuf.length !== signatureBuf.length ||
+      !timingSafeEqual(expectedBuf, signatureBuf)
+    ) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
     // Nonce check — prevents exact-request replay within the time window
     const nonceKey = `webhook-nonce:${id}:${ts}:${sigHex}`;
-    const stored = await this.redis.set(nonceKey, '1', 'EX', NONCE_TTL_SECONDS, 'NX');
+    const stored = await this.redis.set(
+      nonceKey,
+      '1',
+      'EX',
+      NONCE_TTL_SECONDS,
+      'NX',
+    );
     if (stored === null) {
       throw new UnauthorizedException('Webhook replay detected');
     }

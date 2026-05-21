@@ -16,6 +16,7 @@ export interface SupervisorContext {
   retryCount: number;
   maxRetries: number;
   state: Pick<WorkflowState, 'variables'>;
+  modelOverride?: string;
 }
 
 export interface SupervisorDecision {
@@ -34,6 +35,7 @@ export class ExecutionSupervisor {
     this.apiKeys = {
       ANTHROPIC_API_KEY: config.get('ANTHROPIC_API_KEY'),
       OPENAI_API_KEY: config.get('OPENAI_API_KEY'),
+      XAI_API_KEY: config.get('XAI_API_KEY'),
       GROQ_API_KEY: config.get('GROQ_API_KEY'),
       GOOGLE_API_KEY: config.get('GOOGLE_API_KEY'),
     };
@@ -59,6 +61,37 @@ export class ExecutionSupervisor {
       return {
         action: 'abort',
         reason: 'Authentication failure — check API keys',
+      };
+    }
+
+    if (
+      ctx.error?.includes('request size limit') ||
+      ctx.error?.includes('Request too large') ||
+      ctx.error?.includes('too large') ||
+      ctx.error?.includes('context length') ||
+      ctx.error?.includes('context_length_exceeded') ||
+      ctx.error?.includes('maximum context') ||
+      ctx.error?.includes('tokens') && ctx.error?.includes('limit') ||
+      ctx.error?.includes('413')
+    ) {
+      return {
+        action: 'abort',
+        reason: 'Input exceeds model context limit — reduce input size or use a model with a larger context window',
+      };
+    }
+
+    if (
+      ctx.error?.includes('Invalid URL') ||
+      ctx.error?.includes('URL is required') ||
+      ctx.error?.includes('unresolved variable') ||
+      ctx.error?.includes('Failed to parse URL') ||
+      ctx.error?.includes('URL scheme') ||
+      ctx.error?.includes('private/internal address') ||
+      ctx.error?.includes('Could not resolve hostname')
+    ) {
+      return {
+        action: 'abort',
+        reason: ctx.error ?? 'Invalid or missing URL — check the URL field in the node configuration',
       };
     }
 
@@ -99,7 +132,8 @@ export class ExecutionSupervisor {
   }
 
   private async askModel(ctx: SupervisorContext): Promise<SupervisorDecision> {
-    const modelDef = getModelOrDefault(this.supervisorModelId, 'fast');
+    const modelId = ctx.modelOverride ?? this.supervisorModelId;
+    const modelDef = getModelOrDefault(modelId, 'fast');
     const client = createModelClient(
       modelDef.id,
       modelDef.provider,

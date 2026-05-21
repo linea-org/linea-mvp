@@ -1,0 +1,75 @@
+---
+title: Retriever Node
+description: Search a workspace knowledge base and return matching document snippets.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Retriever Node
+
+The `retriever` node queries a workspace knowledge base and returns the most relevant entries for a given search query.
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `knowledgeBaseId` | string | — | ID of the knowledge base to search |
+| `query` | string | `lastOutput` | Search query (supports `{{}}` substitution) |
+| `topK` | number | `5` | Maximum number of results to return |
+| `outputField` | `documents` \| `text` \| `full` | `documents` | How to return results |
+
+<Callout type="warn">
+  The retriever currently uses `ilike` keyword text search against `knowledge_entries.content` — **not** vector/semantic search. The `embedding` column exists in the schema but is not yet populated on entry insert. Semantic retrieval is planned for a future release.
+</Callout>
+
+## Output
+
+### `documents` (default)
+
+```json
+{
+  "documents": [
+    { "content": "...", "metadata": { "source": "policy.pdf" } }
+  ],
+  "count": 2,
+  "query": "refund policy"
+}
+```
+
+### `text`
+
+Returns only the concatenated text of all matching entries, separated by `\n\n---\n\n`. Useful for injecting directly into an agent prompt.
+
+### `full`
+
+Returns the same object as `documents` mode with the additional `text` field included.
+
+## Wiring Pattern
+
+A common pattern is to feed retriever output directly into an agent node:
+
+```
+[start] → [retriever] → [agent]
+```
+
+In the agent's `instructions`:
+
+```
+Use the following context to answer the question.
+
+Context:
+{{lastOutput.text}}
+
+Question: {{input.question}}
+```
+
+## Example Config
+
+```json
+{
+  "knowledgeBaseId": "kb_abc123",
+  "query": "{{input.question}}",
+  "topK": 5,
+  "outputField": "text"
+}
+```

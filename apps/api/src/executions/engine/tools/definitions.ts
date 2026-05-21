@@ -37,7 +37,11 @@ export const BUILTIN_TOOLS: Record<string, ToolDefinition> = {
     parameters: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: 'Short descriptive name for this memory (e.g. "user_preference", "last_result")' },
+        key: {
+          type: 'string',
+          description:
+            'Short descriptive name for this memory (e.g. "user_preference", "last_result")',
+        },
         value: {
           type: 'string',
           description: 'Value to store (plain text or JSON string)',
@@ -57,7 +61,8 @@ export const BUILTIN_TOOLS: Record<string, ToolDefinition> = {
       properties: {
         query: {
           type: 'string',
-          description: 'What you want to recall — described in natural language',
+          description:
+            'What you want to recall — described in natural language',
         },
         topK: {
           type: 'number',

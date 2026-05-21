@@ -72,7 +72,7 @@ export default function GeneralSettingsPage() {
   if (wsLoading) return <Skeleton className="h-40 w-full" />;
 
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="space-y-6">
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="ws-name">Workspace name</Label>

@@ -1,17 +1,37 @@
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import {
-  Injectable,
-  Inject,
-  NotFoundException,
-} from '@nestjs/common';
-import { and, eq, ilike, sql, count, desc, isNull, isNotNull } from 'drizzle-orm';
+  and,
+  eq,
+  ilike,
+  sql,
+  count,
+  desc,
+  isNull,
+  isNotNull,
+  gt,
+  ne,
+} from 'drizzle-orm';
+import { randomBytes } from 'crypto';
 import type { SQL } from 'drizzle-orm';
 import type { DrizzleDB, NewWorkflow } from '@linea/db';
-import { workflows, workflowVersions, templates } from '@linea/db';
+import {
+  workflows,
+  workflowVersions,
+  templates,
+  workflowFavorites,
+  templateUpvotes,
+  webhooks,
+  workflowPresence,
+  users,
+} from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
+import { SchedulesService } from '../schedules/schedules.service';
 import type { CreateWorkflowDto } from './dto/create-workflow.dto';
 import type { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import type { ListWorkflowsDto } from './dto/list-workflows.dto';
 import type { ListTemplatesDto } from './dto/list-templates.dto';
+import type { PublishTemplateDto, UpdateTemplateDto } from './dto/publish-template.dto';
+import type { UpdateLogSettingsDto } from './dto/log-settings.dto';
 
 const SECRET_NODE_FIELDS = ['accessToken', 'apiKey', 'secretToken', 'password'];
 
@@ -32,7 +52,10 @@ function redactNodeSecrets(definition: unknown): unknown {
 
 @Injectable()
 export class WorkflowsService {
-  constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DB_TOKEN) private readonly db: DrizzleDB,
+    private readonly schedulesService: SchedulesService,
+  ) {}
 
   async create(podId: string, userId: string, dto: CreateWorkflowDto) {
     const [workflow] = await this.db
@@ -41,7 +64,9 @@ export class WorkflowsService {
         podId,
         name: dto.name,
         description: dto.description ?? null,
-        definition: redactNodeSecrets(dto.definition ?? { nodes: [], edges: [] }) as NewWorkflow['definition'],
+        definition: redactNodeSecrets(
+          dto.definition ?? { nodes: [], edges: [] },
+        ) as NewWorkflow['definition'],
         isTemplate: dto.isTemplate ?? false,
         isPublic: dto.isPublic ?? false,
         createdBy: userId,
@@ -51,7 +76,7 @@ export class WorkflowsService {
     return workflow;
   }
 
-  async findAll(podId: string, query: ListWorkflowsDto) {
+  async findAll(podId: string, query: ListWorkflowsDto, userId: string) {
     const conditions = [eq(workflows.podId, podId)];
 
     if (query.trashed) {
@@ -60,9 +85,31 @@ export class WorkflowsService {
       conditions.push(isNull(workflows.deletedAt));
     }
 
-    if (query.isTemplate !== undefined) conditions.push(eq(workflows.isTemplate, query.isTemplate));
+    if (query.isTemplate !== undefined)
+      conditions.push(eq(workflows.isTemplate, query.isTemplate));
     if (query.starred) conditions.push(eq(workflows.starred, true));
-    if (query.search) conditions.push(ilike(workflows.name, `%${query.search}%`));
+    if (query.search)
+      conditions.push(ilike(workflows.name, `%${query.search}%`));
+
+    if (query.favorited) {
+      const favIds = await this.db
+        .select({ workflowId: workflowFavorites.workflowId })
+        .from(workflowFavorites)
+        .where(
+          and(
+            eq(workflowFavorites.userId, userId),
+            eq(workflows.podId, podId),
+          ),
+        )
+        .innerJoin(workflows, eq(workflowFavorites.workflowId, workflows.id));
+
+      const ids = favIds.map((r) => r.workflowId);
+      if (ids.length === 0) {
+        return { workflows: [], meta: { page: query.page, limit: query.limit, total: 0 } };
+      }
+      const { inArray } = await import('drizzle-orm');
+      conditions.push(inArray(workflows.id, ids));
+    }
 
     const [{ total }] = await this.db
       .select({ total: count() })
@@ -77,7 +124,10 @@ export class WorkflowsService {
       .limit(query.limit)
       .offset(query.offset);
 
-    return { workflows: rows, meta: { page: query.page, limit: query.limit, total: total ?? 0 } };
+    return {
+      workflows: rows,
+      meta: { page: query.page, limit: query.limit, total: total ?? 0 },
+    };
   }
 
   async findOne(podId: string, id: string) {
@@ -91,10 +141,16 @@ export class WorkflowsService {
     return workflow;
   }
 
-  async update(podId: string, id: string, userId: string, dto: UpdateWorkflowDto) {
+  async update(
+    podId: string,
+    id: string,
+    userId: string,
+    dto: UpdateWorkflowDto,
+  ) {
     const existing = await this.findOne(podId, id);
 
-    if (dto.definition) {
+    const shouldVersion = dto.definition && !dto.skipVersion;
+    if (shouldVersion) {
       await this.db.insert(workflowVersions).values({
         workflowId: id,
         version: existing.version,
@@ -103,16 +159,27 @@ export class WorkflowsService {
       });
     }
 
+    const { skipVersion: _skip, ...dtoFields } = dto;
+    void _skip;
     const [updated] = await this.db
       .update(workflows)
       .set({
-        ...dto,
-        definition: dto.definition ? redactNodeSecrets(dto.definition) as NewWorkflow['definition'] : undefined,
-        version: dto.definition ? existing.version + 1 : existing.version,
+        ...dtoFields,
+        definition: dto.definition
+          ? (redactNodeSecrets(dto.definition) as NewWorkflow['definition'])
+          : undefined,
+        version: shouldVersion ? existing.version + 1 : existing.version,
         updatedAt: new Date(),
       })
       .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .returning();
+
+    if (dto.definition) {
+      await Promise.all([
+        this.schedulesService.syncWorkflowSchedule(podId, id, dto.definition),
+        this.syncWorkflowWebhook(podId, id, dto.definition),
+      ]);
+    }
 
     return updated;
   }
@@ -123,7 +190,8 @@ export class WorkflowsService {
       .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
       .returning();
 
-    if (!deleted.length) throw new NotFoundException(`Workflow ${id} not found`);
+    if (!deleted.length)
+      throw new NotFoundException(`Workflow ${id} not found`);
   }
 
   async deploy(podId: string, id: string) {
@@ -137,6 +205,40 @@ export class WorkflowsService {
     return updated;
   }
 
+  async undeploy(podId: string, id: string) {
+    const [updated] = await this.db
+      .update(workflows)
+      .set({ deployedAt: null, updatedAt: new Date() })
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
+      .returning();
+
+    if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
+    return updated;
+  }
+
+  private async syncWorkflowWebhook(
+    podId: string,
+    workflowId: string,
+    definition: unknown,
+  ): Promise<void> {
+    const nodes: any[] = (definition as any)?.nodes ?? [];
+    const startNode = nodes.find((n: any) => n.type === 'start');
+    const triggerType = startNode?.data?.triggerType as string | undefined;
+
+    if (triggerType === 'webhook') {
+      const [existing] = await this.db
+        .select({ id: webhooks.id })
+        .from(webhooks)
+        .where(eq(webhooks.workflowId, workflowId))
+        .limit(1);
+
+      if (!existing) {
+        const secretToken = randomBytes(24).toString('hex');
+        await this.db.insert(webhooks).values({ podId, workflowId, secretToken });
+      }
+    }
+  }
+
   async star(podId: string, id: string, starred: boolean) {
     const [updated] = await this.db
       .update(workflows)
@@ -148,11 +250,41 @@ export class WorkflowsService {
     return updated;
   }
 
+  async duplicate(podId: string, id: string, userId: string) {
+    const [original] = await this.db
+      .select()
+      .from(workflows)
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId)))
+      .limit(1);
+    if (!original) throw new NotFoundException(`Workflow ${id} not found`);
+
+    const [copy] = await this.db
+      .insert(workflows)
+      .values({
+        podId,
+        name: `Copy of ${original.name}`,
+        description: original.description,
+        definition: original.definition as NewWorkflow['definition'],
+        isTemplate: false,
+        isPublic: false,
+        createdBy: userId,
+      } satisfies Partial<NewWorkflow> as NewWorkflow)
+      .returning();
+
+    return copy;
+  }
+
   async trash(podId: string, id: string) {
     const [updated] = await this.db
       .update(workflows)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
+      .where(
+        and(
+          eq(workflows.id, id),
+          eq(workflows.podId, podId),
+          isNull(workflows.deletedAt),
+        ),
+      )
       .returning();
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
@@ -163,10 +295,17 @@ export class WorkflowsService {
     const [updated] = await this.db
       .update(workflows)
       .set({ deletedAt: null, updatedAt: new Date() })
-      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNotNull(workflows.deletedAt)))
+      .where(
+        and(
+          eq(workflows.id, id),
+          eq(workflows.podId, podId),
+          isNotNull(workflows.deletedAt),
+        ),
+      )
       .returning();
 
-    if (!updated) throw new NotFoundException(`Workflow ${id} not found in trash`);
+    if (!updated)
+      throw new NotFoundException(`Workflow ${id} not found in trash`);
     return updated;
   }
 
@@ -191,11 +330,41 @@ export class WorkflowsService {
     const [ver] = await this.db
       .select()
       .from(workflowVersions)
-      .where(and(eq(workflowVersions.workflowId, workflowId), eq(workflowVersions.version, version)))
+      .where(
+        and(
+          eq(workflowVersions.workflowId, workflowId),
+          eq(workflowVersions.version, version),
+        ),
+      )
       .limit(1);
 
     if (!ver) throw new NotFoundException(`Version ${version} not found`);
     return ver;
+  }
+
+  async restoreVersion(podId: string, workflowId: string, version: number, userId: string) {
+    const ver = await this.getVersion(podId, workflowId, version);
+    const existing = await this.findOne(podId, workflowId);
+
+    // Snapshot the current state before overwriting
+    await this.db.insert(workflowVersions).values({
+      workflowId,
+      version: existing.version,
+      definition: existing.definition,
+      createdBy: userId,
+    });
+
+    const [updated] = await this.db
+      .update(workflows)
+      .set({
+        definition: ver.definition as NewWorkflow['definition'],
+        version: existing.version + 1,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(workflows.id, workflowId), eq(workflows.podId, podId)))
+      .returning();
+
+    return updated;
   }
 
   async createFromTemplate(podId: string, userId: string, templateId: string) {
@@ -205,7 +374,8 @@ export class WorkflowsService {
       .where(eq(templates.id, templateId))
       .limit(1);
 
-    if (!template) throw new NotFoundException(`Template ${templateId} not found`);
+    if (!template)
+      throw new NotFoundException(`Template ${templateId} not found`);
 
     let definition: NewWorkflow['definition'];
     let description: string | null = template.description ?? null;
@@ -217,7 +387,8 @@ export class WorkflowsService {
         .where(eq(workflows.id, template.workflowId))
         .limit(1);
 
-      if (!sourceWorkflow) throw new NotFoundException('Template workflow not found');
+      if (!sourceWorkflow)
+        throw new NotFoundException('Template workflow not found');
       definition = sourceWorkflow.definition;
       description = sourceWorkflow.description ?? description;
     } else if (template.definition) {
@@ -247,9 +418,236 @@ export class WorkflowsService {
     return cloned;
   }
 
+  async hardDelete(podId: string, id: string): Promise<void> {
+    const [workflow] = await this.db
+      .select()
+      .from(workflows)
+      .where(
+        and(eq(workflows.id, id), eq(workflows.podId, podId), isNotNull(workflows.deletedAt)),
+      )
+      .limit(1);
+
+    if (!workflow)
+      throw new NotFoundException(`Workflow ${id} not found in trash`);
+
+    await this.db.delete(workflows).where(eq(workflows.id, id));
+  }
+
+  async setTemplate(podId: string, id: string, isTemplate: boolean) {
+    const [updated] = await this.db
+      .update(workflows)
+      .set({ isTemplate, updatedAt: new Date() })
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
+      .returning();
+
+    if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
+    return updated;
+  }
+
+  async publishToGallery(
+    podId: string,
+    workflowId: string,
+    userId: string,
+    dto: PublishTemplateDto,
+  ) {
+    const workflow = await this.findOne(podId, workflowId);
+
+    const [template] = await this.db
+      .insert(templates)
+      .values({
+        name: dto.name ?? workflow.name,
+        description: dto.description ?? workflow.description,
+        category: dto.category,
+        featured: dto.featured ?? false,
+        thumbnailUrl: dto.thumbnailUrl ?? null,
+        workflowId: workflow.id,
+        definition: workflow.definition,
+        publishedBy: userId,
+        downloads: 0,
+      })
+      .returning();
+
+    return template;
+  }
+
+  async getTemplate(id: string, incrementView = false) {
+    const [template] = await this.db
+      .select()
+      .from(templates)
+      .where(eq(templates.id, id))
+      .limit(1);
+
+    if (!template) throw new NotFoundException(`Template ${id} not found`);
+
+    if (incrementView) {
+      this.incrementTemplateViews(id);
+    }
+
+    return template;
+  }
+
+  async updateGalleryTemplate(id: string, dto: UpdateTemplateDto) {
+    const [updated] = await this.db
+      .update(templates)
+      .set({ ...dto, updatedAt: new Date() })
+      .where(eq(templates.id, id))
+      .returning();
+
+    if (!updated) throw new NotFoundException(`Template ${id} not found`);
+    return updated;
+  }
+
+  async deleteGalleryTemplate(id: string): Promise<void> {
+    const deleted = await this.db
+      .delete(templates)
+      .where(eq(templates.id, id))
+      .returning();
+
+    if (!deleted.length) throw new NotFoundException(`Template ${id} not found`);
+  }
+
+  // ─── Workflow favorites (per-user bookmarks) ─────────────────────────────
+
+  async favoriteWorkflow(userId: string, workflowId: string): Promise<void> {
+    await this.db
+      .insert(workflowFavorites)
+      .values({ userId, workflowId })
+      .onConflictDoNothing();
+  }
+
+  async unfavoriteWorkflow(userId: string, workflowId: string): Promise<void> {
+    await this.db
+      .delete(workflowFavorites)
+      .where(
+        and(
+          eq(workflowFavorites.userId, userId),
+          eq(workflowFavorites.workflowId, workflowId),
+        ),
+      );
+  }
+
+  async getWorkflowFavoriteIds(userId: string, podId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ workflowId: workflowFavorites.workflowId })
+      .from(workflowFavorites)
+      .innerJoin(workflows, eq(workflowFavorites.workflowId, workflows.id))
+      .where(
+        and(eq(workflowFavorites.userId, userId), eq(workflows.podId, podId)),
+      );
+
+    return rows.map((r) => r.workflowId);
+  }
+
+  // ─── Template upvotes + views ─────────────────────────────────────────────
+
+  incrementTemplateViews(id: string): void {
+    void this.db
+      .update(templates)
+      .set({ views: sql`views + 1` })
+      .where(eq(templates.id, id));
+  }
+
+  async toggleTemplateUpvote(
+    userId: string,
+    templateId: string,
+  ): Promise<{ upvoted: boolean; upvotes: number }> {
+    const [existing] = await this.db
+      .select()
+      .from(templateUpvotes)
+      .where(
+        and(
+          eq(templateUpvotes.userId, userId),
+          eq(templateUpvotes.templateId, templateId),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      await this.db
+        .delete(templateUpvotes)
+        .where(eq(templateUpvotes.id, existing.id));
+      const [t] = await this.db
+        .update(templates)
+        .set({ upvotes: sql`GREATEST(upvotes - 1, 0)`, updatedAt: new Date() })
+        .where(eq(templates.id, templateId))
+        .returning({ upvotes: templates.upvotes });
+      return { upvoted: false, upvotes: t?.upvotes ?? 0 };
+    } else {
+      await this.db.insert(templateUpvotes).values({ userId, templateId });
+      const [t] = await this.db
+        .update(templates)
+        .set({ upvotes: sql`upvotes + 1`, updatedAt: new Date() })
+        .where(eq(templates.id, templateId))
+        .returning({ upvotes: templates.upvotes });
+      return { upvoted: true, upvotes: t?.upvotes ?? 0 };
+    }
+  }
+
+  async updateLogSettings(
+    podId: string,
+    id: string,
+    dto: UpdateLogSettingsDto,
+  ) {
+    const [updated] = await this.db
+      .update(workflows)
+      .set({
+        logLevel: dto.logLevel,
+        logRetentionDays: dto.logRetentionDays ?? null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
+      .returning();
+
+    if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
+    return updated;
+  }
+
+  async getUserUpvotedTemplateIds(userId: string): Promise<string[]> {
+    try {
+      const rows = await this.db
+        .select({ templateId: templateUpvotes.templateId })
+        .from(templateUpvotes)
+        .where(eq(templateUpvotes.userId, userId));
+
+      return rows.map((r) => r.templateId);
+    } catch {
+      return [];
+    }
+  }
+
+  async upsertPresence(workflowId: string, userId: string) {
+    await this.db
+      .insert(workflowPresence)
+      .values({ workflowId, userId, lastSeenAt: new Date() })
+      .onConflictDoUpdate({
+        target: [workflowPresence.workflowId, workflowPresence.userId],
+        set: { lastSeenAt: new Date() },
+      });
+
+    const cutoff = new Date(Date.now() - 60_000);
+    return this.db
+      .select({
+        userId: workflowPresence.userId,
+        name: users.name,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+        lastSeenAt: workflowPresence.lastSeenAt,
+      })
+      .from(workflowPresence)
+      .leftJoin(users, eq(workflowPresence.userId, users.id))
+      .where(
+        and(
+          eq(workflowPresence.workflowId, workflowId),
+          ne(workflowPresence.userId, userId),
+          gt(workflowPresence.lastSeenAt, cutoff),
+        ),
+      );
+  }
+
   async listTemplates(query: ListTemplatesDto) {
     const conditions: SQL[] = [];
-    if (query.search) conditions.push(ilike(templates.name, `%${query.search}%`));
+    if (query.search)
+      conditions.push(ilike(templates.name, `%${query.search}%`));
     if (query.category) conditions.push(eq(templates.category, query.category));
     if (query.featured) conditions.push(eq(templates.featured, true));
 
@@ -261,8 +659,11 @@ export class WorkflowsService {
         category: templates.category,
         featured: templates.featured,
         downloads: templates.downloads,
+        views: templates.views,
+        upvotes: templates.upvotes,
         thumbnailUrl: templates.thumbnailUrl,
         workflowId: templates.workflowId,
+        publishedBy: templates.publishedBy,
         createdAt: templates.createdAt,
       })
       .from(templates)

@@ -128,38 +128,76 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export class GenerateWorkflowService {
   private readonly logger = new Logger(GenerateWorkflowService.name);
 
-  async *generate(rawPrompt: string, signal?: AbortSignal): AsyncGenerator<GenerateEvent> {
+  async *generate(
+    rawPrompt: string,
+    signal?: AbortSignal,
+    canvasContext?: { nodeCount: number; nodeTypes: string[]; nodeLabels: string[] },
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  ): AsyncGenerator<GenerateEvent> {
     const apiKey = process.env['ANTHROPIC_API_KEY'];
     if (!apiKey) {
-      yield { type: 'error', message: 'ANTHROPIC_API_KEY is not configured on this server.' };
+      yield {
+        type: 'error',
+        message: 'ANTHROPIC_API_KEY is not configured on this server.',
+      };
       return;
     }
 
     if (signal?.aborted) return;
 
-    // Wrap user input in explicit delimiters to prevent prompt injection
     const MAX_PROMPT_LENGTH = 2000;
     const prompt = rawPrompt.slice(0, MAX_PROMPT_LENGTH);
-    const safeUserContent = `<user_request>\n${prompt}\n</user_request>\n\nBased solely on the user request above, produce the workflow plan JSON.`;
+
+    // Build canvas context string for the planner
+    let canvasCtxStr = '';
+    if (canvasContext && canvasContext.nodeCount > 0) {
+      canvasCtxStr = `\n<current_canvas>\nThe canvas currently has ${canvasContext.nodeCount} node(s): ${canvasContext.nodeTypes.join(', ')}.\nNode labels: ${canvasContext.nodeLabels.join(', ')}.\nYou may extend, modify, or replace the existing workflow based on the user request.\n</current_canvas>`;
+    }
+
+    const safeUserContent = `<user_request>\n${prompt}\n</user_request>${canvasCtxStr}\n\nBased on the user request above, produce the workflow plan JSON.`;
+
+    // Build message history for planner (last 3 turns for context, excluding latest)
+    const plannerHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    if (history && history.length > 0) {
+      const recent = history.slice(-6); // last 3 turns (user+assistant pairs)
+      for (const msg of recent) {
+        plannerHistory.push({ role: msg.role, content: msg.content.slice(0, 500) });
+      }
+    }
 
     const client = new Anthropic({ apiKey });
 
     // ── Phase 1: Planner sub-agent ────────────────────────────────────────
-    yield { type: 'progress', message: 'Planner is designing the workflow structure…' };
+    yield {
+      type: 'progress',
+      message: 'Planner is designing the workflow structure…',
+    };
 
     let plan: {
       name: string;
       description: string;
-      steps: Array<{ id: string; type: string; label: string; description: string; depends_on: string[] }>;
+      steps: Array<{
+        id: string;
+        type: string;
+        label: string;
+        description: string;
+        depends_on: string[];
+      }>;
     };
 
     try {
-      const plannerResponse = await client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system: PLANNER_SYSTEM,
-        messages: [{ role: 'user', content: safeUserContent }],
-      }, { signal });
+      const plannerResponse = await client.messages.create(
+        {
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          system: PLANNER_SYSTEM,
+          messages: [
+            ...plannerHistory,
+            { role: 'user', content: safeUserContent },
+          ],
+        },
+        { signal },
+      );
 
       const planText =
         plannerResponse.content.find((c) => c.type === 'text')?.text ?? '{}';
@@ -173,24 +211,29 @@ export class GenerateWorkflowService {
     }
 
     if (signal?.aborted) return;
-    this.logger.log(`Planner produced plan with ${plan.steps?.length ?? 0} steps`);
+    this.logger.log(
+      `Planner produced plan with ${plan.steps?.length ?? 0} steps`,
+    );
     yield {
       type: 'progress',
-      message: `Plan ready: ${plan.steps?.length ?? 0} nodes — configuring each one…`,
+      message: `Plan ready: ${plan.steps?.length ?? 0} nodes — building the workflow…`,
     };
 
     // ── Phase 2: Builder sub-agent ────────────────────────────────────────
     let definition: { nodes: GeneratedNode[]; edges: GeneratedEdge[] };
 
     try {
-      const builderPrompt = `<user_request>\n${prompt}\n</user_request>\n\nPlan:\n${JSON.stringify(plan, null, 2)}\n\nBuild the full workflow definition JSON for the plan above.`;
+      const builderPrompt = `<user_request>\n${prompt}\n</user_request>${canvasCtxStr}\n\nPlan:\n${JSON.stringify(plan, null, 2)}\n\nBuild the full workflow definition JSON for the plan above.`;
 
-      const builderResponse = await client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        system: BUILDER_SYSTEM,
-        messages: [{ role: 'user', content: builderPrompt }],
-      }, { signal });
+      const builderResponse = await client.messages.create(
+        {
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4096,
+          system: BUILDER_SYSTEM,
+          messages: [{ role: 'user', content: builderPrompt }],
+        },
+        { signal },
+      );
 
       const defText =
         builderResponse.content.find((c) => c.type === 'text')?.text ?? '{}';
@@ -204,7 +247,10 @@ export class GenerateWorkflowService {
     }
 
     if (!Array.isArray(definition.nodes) || !Array.isArray(definition.edges)) {
-      yield { type: 'error', message: 'Builder returned an invalid workflow structure.' };
+      yield {
+        type: 'error',
+        message: 'Builder returned an invalid workflow structure.',
+      };
       return;
     }
 
@@ -217,7 +263,10 @@ export class GenerateWorkflowService {
     }
 
     // ── Stream nodes one by one ────────────────────────────────────────────
-    yield { type: 'progress', message: `Adding ${definition.nodes.length} nodes to canvas…` };
+    yield {
+      type: 'progress',
+      message: `Adding ${definition.nodes.length} nodes to canvas…`,
+    };
 
     for (const node of definition.nodes) {
       yield { type: 'node_added', node };

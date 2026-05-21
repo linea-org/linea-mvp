@@ -13,14 +13,22 @@ export interface WorkflowState {
 }
 
 // Keys that can be reached from {{...}} expressions — never expose secrets or internal state
-const ALLOWED_STATE_ROOTS = new Set(['variables', 'nodeResults', 'loopResults']);
+const ALLOWED_STATE_ROOTS = new Set([
+  'variables',
+  'nodeResults',
+  'loopResults',
+]);
 
 // Block prototype-chain property names regardless of depth
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
-export function substituteInValue(value: unknown, state: WorkflowState): unknown {
+export function substituteInValue(
+  value: unknown,
+  state: WorkflowState,
+): unknown {
   if (typeof value === 'string') return substituteVariables(value, state);
-  if (Array.isArray(value)) return value.map((v) => substituteInValue(v, state));
+  if (Array.isArray(value))
+    return value.map((v) => substituteInValue(v, state));
   if (value !== null && typeof value === 'object') {
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
@@ -58,7 +66,7 @@ function evaluateExpression(expression: string, state: WorkflowState): any {
 
   // parts[0] must be 'state', parts[1] must be an allowed root
   if (parts[0] !== 'state') return undefined;
-  if (parts.length > 1 && !ALLOWED_STATE_ROOTS.has(parts[1]!)) return undefined;
+  if (parts.length > 1 && !ALLOWED_STATE_ROOTS.has(parts[1])) return undefined;
 
   // Walk the path — block prototype-pollution keys at every level
   let current: any = { state };
@@ -68,8 +76,8 @@ function evaluateExpression(expression: string, state: WorkflowState): any {
 
     const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
     if (arrayMatch) {
-      const key = arrayMatch[1]!;
-      const idx = parseInt(arrayMatch[2]!);
+      const key = arrayMatch[1];
+      const idx = parseInt(arrayMatch[2]);
       if (FORBIDDEN_KEYS.has(key)) return undefined;
       current = current[key]?.[idx];
     } else {

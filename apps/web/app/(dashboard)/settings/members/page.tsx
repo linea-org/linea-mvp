@@ -191,7 +191,7 @@ export default function MembersPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-2xl">
+    <div className="space-y-8">
       {/* Members */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">

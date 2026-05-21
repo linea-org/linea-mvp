@@ -1,0 +1,75 @@
+---
+title: GitHub Node
+description: Create issues, comment on issues, list issues, or open pull requests via the GitHub REST API.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# GitHub Node
+
+The `github` node interacts with GitHub repositories via the REST API using a Personal Access Token.
+
+## Credential Setup
+
+Store your Personal Access Token in workspace secrets under the name **`GITHUB_TOKEN`**.
+
+Required scopes: `repo` (full repository access) or at minimum `issues:write` for issue operations and `pull_requests:write` for PRs.
+
+## Configuration Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `action` | `create_issue` \| `comment_issue` \| `list_issues` \| `create_pr` | Operation to perform |
+| `owner` | string | Repository owner (user or org name, supports `{{}}`) |
+| `repo` | string | Repository name (supports `{{}}`) |
+| `title` | string | Issue or PR title (required for `create_issue`, `create_pr`) |
+| `body` | string | Issue body, comment text, or PR description (supports `{{}}`) |
+| `labels` | string | Comma-separated label names for `create_issue` |
+| `issueNumber` | number | Issue number (required for `comment_issue`) |
+| `head` | string | Head branch for `create_pr` |
+| `base` | string | Base branch for `create_pr` |
+
+`owner` and `repo` are required for all actions.
+
+## Actions
+
+### `create_issue`
+
+Creates a new issue. `title` is required.
+
+Output: `{ "number": 42, "url": "https://github.com/owner/repo/issues/42" }`
+
+### `comment_issue`
+
+Adds a comment to an existing issue. `issueNumber` and `body` are required.
+
+Output: `{ "id": 123456, "url": "https://github.com/owner/repo/issues/42#issuecomment-123456" }`
+
+### `list_issues`
+
+Returns up to 50 open issues.
+
+Output: `{ "issues": [{ "number": 42, "title": "Bug report", "state": "open", "url": "..." }] }`
+
+### `create_pr`
+
+Opens a pull request. `title`, `head`, and `base` are required.
+
+Output: `{ "number": 7, "url": "https://github.com/owner/repo/pull/7" }`
+
+<Callout type="info">
+  The GitHub API version used is `2022-11-28`. Tokens are sent as `Authorization: Bearer` headers.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "action": "create_issue",
+  "owner": "{{input.orgName}}",
+  "repo": "{{input.repoName}}",
+  "title": "Automated report: {{lastOutput.title}}",
+  "body": "{{lastOutput.body}}",
+  "labels": "automated,report"
+}
+```

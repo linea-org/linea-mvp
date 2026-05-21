@@ -8,6 +8,8 @@ export default defineConfig({
   dbCredentials: {
     url: process.env['DATABASE_URL']!,
   },
+  // Exclude LangGraph checkpoint tables — managed by @langchain/langgraph, not Drizzle
+  tablesFilter: ['!checkpoint_migrations', '!checkpoint_blobs', '!checkpoints', '!checkpoint_writes'],
   verbose: true,
   strict: true,
 });

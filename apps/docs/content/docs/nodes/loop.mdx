@@ -1,0 +1,77 @@
+---
+title: Loop Node
+description: Iterate over an array variable, optionally transforming each item with a Jexl expression.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Loop Node
+
+The `loop` node iterates over an array from the workflow state, applies an optional Jexl transform to each item, and emits the collected results.
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `arrayPath` | string | — | Dot-path (or `{{}}` expression) pointing to the array in `variables` |
+| `itemTransform` | string | — | Optional Jexl expression evaluated per item. `item` is bound to the current element. |
+| `maxIterations` | number | `100` | Maximum items to process (extra items are silently dropped) |
+
+## How `arrayPath` Resolves
+
+The path is resolved against `state.variables`:
+
+- `"lastOutput"` → `variables.lastOutput`
+- `"myList"` → `variables.myList`
+- `"lastOutput.items"` → `variables.lastOutput.items`
+- `"{{lastOutput.results}}"` → same as above, with `{{}}` stripped
+
+If the resolved value is not an array, it is wrapped as a single-item array `[value]`.
+
+## Output
+
+```json
+{
+  "results": [...],   // transformed items (or original if no transform)
+  "total": 5,         // count of results
+  "items": [...]      // original items (before transform)
+}
+```
+
+The `results` array is also stored as `loopResults` in the LangGraph state and emitted as `lastOutput`.
+
+## Item Transform
+
+`itemTransform` is a Jexl expression evaluated for each element with `item` in scope:
+
+```
+item.name
+item.price * 1.1
+item + " (processed)"
+```
+
+<Callout type="info">
+  The transform runs in a `vm` sandbox with a 1-second timeout per item. If the expression throws, the original item is returned unchanged.
+</Callout>
+
+## Example Config — Extract names from an array
+
+```json
+{
+  "arrayPath": "lastOutput.users",
+  "itemTransform": "item.name",
+  "maxIterations": 50
+}
+```
+
+Input: `{ "users": [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }] }`
+Output: `{ "results": ["Alice", "Bob"], "total": 2, "items": [...] }`
+
+## Example Config — Passthrough (no transform)
+
+```json
+{
+  "arrayPath": "lastOutput",
+  "maxIterations": 100
+}
+```

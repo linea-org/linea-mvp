@@ -5,7 +5,7 @@ import { workspaces } from './workspaces';
 import { users } from './users';
 import { workflows } from './workflows';
 
-export const memoryScopeEnum = pgEnum('memory_scope', ['thread', 'workflow', 'user']);
+export const memoryScopeEnum = pgEnum('memory_scope', ['thread', 'workflow', 'user', 'session']);
 export const memorySourceEnum = pgEnum('memory_source', ['manual', 'extracted', 'ingested']);
 export const memoryFactTypeEnum = pgEnum('memory_fact_type', ['fact', 'preference', 'event', 'profile', 'system']);
 
@@ -23,6 +23,7 @@ export const memories = pgTable('memories', {
   source: memorySourceEnum('source').default('manual').notNull(),
   factType: memoryFactTypeEnum('fact_type'),
   eventDate: timestamp('event_date', { withTimezone: true }),
+  sessionKey: text('session_key'),
   supersededById: uuid('superseded_by_id'),
   confidence: real('confidence').default(1.0).notNull(),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),

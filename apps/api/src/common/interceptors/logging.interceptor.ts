@@ -10,6 +10,9 @@ import type { Request } from 'express';
 
 const SLOW_REQUEST_MS = 2000;
 
+// SSE and notification streams are expected to be long-lived — skip slow warning
+const STREAMING_PATH_RE = /\/(events|stream)(\/|$)/;
+
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger('HTTP');
@@ -22,7 +25,7 @@ export class LoggingInterceptor implements NestInterceptor {
       tap({
         next: () => {
           const ms = Date.now() - start;
-          if (ms > SLOW_REQUEST_MS) {
+          if (ms > SLOW_REQUEST_MS && !STREAMING_PATH_RE.test(req.path)) {
             this.logger.warn(`Slow: ${req.method} ${req.path} ${ms}ms`, {
               requestId: req.headers['x-request-id'],
               ms,

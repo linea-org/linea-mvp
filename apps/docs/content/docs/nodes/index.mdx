@@ -1,0 +1,98 @@
+---
+title: Node Reference
+description: Overview of all node types in the Linea workflow engine, with links to per-node documentation.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Node Reference
+
+Every workflow is a directed graph of **nodes** connected by **edges**. Each node type has a specific purpose — from running LLM inference to sending Slack messages to branching based on a condition.
+
+## Variable Substitution
+
+All string fields in node configuration support `{{variableName}}` substitution:
+
+| Syntax | Resolves to |
+|---|---|
+| `{{input.field}}` | Field from the trigger input payload |
+| `{{nodeName}}` | Output of a previous node (by name or ID) |
+| `{{lastOutput}}` | Output of the most recently completed node |
+| `{{nodeResults.nodeId.output}}` | Deep-access a specific node result |
+| `{{variables.myVar}}` | Any variable in the LangGraph state |
+
+Substitution is performed recursively — nested references like `{{input.data.items.0.name}}` work as expected.
+
+<Callout type="info">
+  Variable substitution is available in all string fields of all node types. Object fields (e.g. `httpHeaders` entries) have their string values substituted individually.
+</Callout>
+
+## Node Categories
+
+### Core
+
+| Node | Description |
+|---|---|
+| [Start](/docs/nodes/start) | Entry point — initializes state from trigger input |
+| [End](/docs/nodes/end) | Terminal node — marks execution complete |
+
+### AI
+
+| Node | Description |
+|---|---|
+| [Agent](/docs/nodes/agent) | LLM node with tool use, structured output, and long-term memory |
+| [Memory](/docs/nodes/memory) | Read or clear in-workflow key-value memory |
+
+### Logic
+
+| Node | Description |
+|---|---|
+| [If-Else](/docs/nodes/if-else) | Branch on a boolean Jexl expression |
+| [Router](/docs/nodes/router) | Multi-branch routing via prioritized conditions |
+
+### Tools
+
+| Node | Description |
+|---|---|
+| [HTTP](/docs/nodes/http) | Make HTTP requests to external APIs |
+| [MCP](/docs/nodes/mcp) | Invoke Model Context Protocol server tools |
+
+### Data
+
+| Node | Description |
+|---|---|
+| [Transform](/docs/nodes/transform) | Reshape variables with a Jexl expression |
+| [Extract](/docs/nodes/extract) | Scrape web content via Firecrawl or native fetch |
+| [Retriever](/docs/nodes/retriever) | Search a workspace knowledge base |
+| [Code](/docs/nodes/code) | Sandboxed JS execution (currently disabled) |
+
+### Flow
+
+| Node | Description |
+|---|---|
+| [Loop](/docs/nodes/loop) | Iterate over an array with optional per-item transform |
+| [Subworkflow](/docs/nodes/subworkflow) | Call another workflow synchronously |
+
+### Safety
+
+| Node | Description |
+|---|---|
+| [Guardrails](/docs/nodes/guardrails) | PII, jailbreak, and harmful content detection |
+| [Approval Gate](/docs/nodes/approval-gate) | Human-in-the-loop checkpoint |
+
+### Integrations
+
+All integration nodes require the corresponding secret stored in **Settings → Credentials**.
+
+| Node | Credential | Description |
+|---|---|---|
+| [Slack](/docs/nodes/slack) | `SLACK_TOKEN` | Send messages or DMs, list channels |
+| [GitHub](/docs/nodes/github) | `GITHUB_TOKEN` | Issues, comments, pull requests |
+| [Notion](/docs/nodes/notion) | `NOTION_TOKEN` | Pages, blocks, database queries |
+| [Gmail](/docs/nodes/gmail) | `GMAIL_TOKEN` | Send and read emails |
+
+### Misc
+
+| Node | Description |
+|---|---|
+| [Note](/docs/nodes/note) | Canvas annotation — no runtime effect |

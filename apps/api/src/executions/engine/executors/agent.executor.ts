@@ -52,6 +52,7 @@ export async function executeAgentNode(
   state: WorkflowState,
   apiKeys: ModelApiKeys,
   ltmCtx?: LongTermMemoryContext,
+  onToken?: (delta: string) => void,
 ): Promise<AgentResult> {
   const modelDef = getModelOrDefault(nodeData.model, 'balanced');
   const client = createModelClient(modelDef.id, modelDef.provider, apiKeys);
@@ -178,6 +179,7 @@ export async function executeAgentNode(
         temperature,
         tools: tools.length ? tools : undefined,
         toolChoice: tools.length ? 'auto' : undefined,
+        onToken,
       },
     );
 
@@ -208,110 +210,73 @@ export async function executeAgentNode(
       toolCalls: response.toolCalls,
     });
 
-    for (const toolCall of response.toolCalls) {
-      const toolDef = tools.find((t) => t.name === toolCall.name);
+    // Determine if this batch contains any interrupt-triggering calls.
+    // ask_human and approval-required tools use interrupt() which requires
+    // deterministic sequential re-execution — those batches stay sequential.
+    const hasInterruptingTool = response.toolCalls.some(
+      (tc) =>
+        tc.name === 'ask_human' ||
+        (tools.find((t) => t.name === tc.name) != null &&
+          toolNeedsApproval(tools.find((t) => t.name === tc.name)!, tc.arguments)),
+    );
 
-      // ── ask_human: always pause, let the user answer ───────────────────────
-      if (toolCall.name === 'ask_human') {
-        const question = toolCall.arguments['question'] as string;
-        const choices = toolCall.arguments['choices'] as string[] | undefined;
+    if (hasInterruptingTool) {
+      // ── Sequential path: required for interrupt() correctness ──────────────
+      for (const toolCall of response.toolCalls) {
+        const toolDef = tools.find((t) => t.name === toolCall.name);
 
-        // interrupt() suspends on first run, returns the resume value on re-run
-        const humanResponse = interrupt({
-          type: 'ask_human',
-          question,
-          choices,
-          nodeId: nodeData._nodeId,
-          step,
-        });
-
-        const answer = humanResponse?.answer ?? '(no response)';
-        messages.push({
-          role: 'tool',
-          content: answer,
-          toolCallId: toolCall.id,
-        });
-        toolCallLog.push({
-          step,
-          name: 'ask_human',
-          args: toolCall.arguments,
-          result: answer,
-        });
-        continue;
-      }
-
-      // ── Tools that need human approval ────────────────────────────────────
-      if (toolDef && toolNeedsApproval(toolDef, toolCall.arguments)) {
-        const decision = interrupt({
-          type: 'tool_approval',
-          toolName: toolCall.name,
-          toolArgs: toolCall.arguments,
-          nodeId: nodeData._nodeId,
-          step,
-          summary: buildApprovalSummary(toolCall),
-        });
-
-        if (!decision?.approved) {
-          const denial = decision?.reason ?? 'User denied this action';
-          messages.push({
-            role: 'tool',
-            content: `Action denied: ${denial}`,
-            toolCallId: toolCall.id,
-          });
-          toolCallLog.push({
+        if (toolCall.name === 'ask_human') {
+          const question = toolCall.arguments['question'] as string;
+          const choices = toolCall.arguments['choices'] as string[] | undefined;
+          const humanResponse = interrupt({
+            type: 'ask_human',
+            question,
+            choices,
+            nodeId: nodeData._nodeId,
             step,
-            name: toolCall.name,
-            args: toolCall.arguments,
-            result: { denied: true, reason: denial },
           });
+          const answer = humanResponse?.answer ?? '(no response)';
+          messages.push({ role: 'tool', content: answer, toolCallId: toolCall.id });
+          toolCallLog.push({ step, name: 'ask_human', args: toolCall.arguments, result: answer });
           continue;
         }
-      }
 
-      // ── Execute the tool ──────────────────────────────────────────────────
-      const toolResult = await executeTool(toolCall, state, toolCtx);
-
-      // Capture variable writes
-      if (
-        toolResult.output &&
-        typeof toolResult.output === 'object' &&
-        '__writeVariable' in (toolResult.output as any)
-      ) {
-        const { name, value } = (toolResult.output as any).__writeVariable;
-        if (name && !FORBIDDEN_KEYS.has(String(name))) {
-          variableUpdates[name] = value;
+        if (toolDef && toolNeedsApproval(toolDef, toolCall.arguments)) {
+          const decision = interrupt({
+            type: 'tool_approval',
+            toolName: toolCall.name,
+            toolArgs: toolCall.arguments,
+            nodeId: nodeData._nodeId,
+            step,
+            summary: buildApprovalSummary(toolCall),
+          });
+          if (!decision?.approved) {
+            const denial = decision?.reason ?? 'User denied this action';
+            messages.push({ role: 'tool', content: `Action denied: ${denial}`, toolCallId: toolCall.id });
+            toolCallLog.push({ step, name: toolCall.name, args: toolCall.arguments, result: { denied: true, reason: denial } });
+            continue;
+          }
         }
+
+        const toolResult = await executeTool(toolCall, state, toolCtx);
+        captureToolSideEffects(toolResult, variableUpdates, memoryUpdates, state);
+        const resultContent = toolResult.error ? `Error: ${toolResult.error}` : JSON.stringify(toolResult.output ?? null);
+        messages.push({ role: 'tool', content: resultContent, toolCallId: toolCall.id });
+        toolCallLog.push({ step, name: toolCall.name, args: toolCall.arguments, result: toolResult.output });
       }
-
-      // Capture memory writes — also update state.memory so memory_search sees them immediately
-      if (
-        toolResult.output &&
-        typeof toolResult.output === 'object' &&
-        '__memoryWrite' in (toolResult.output as any)
-      ) {
-        const { key, value } = (toolResult.output as any).__memoryWrite;
-        if (key && !FORBIDDEN_KEYS.has(String(key))) {
-          memoryUpdates[key] = value;
-          if (!state.memory) state.memory = {};
-          state.memory[key] = value;
-        }
+    } else {
+      // ── Parallel path: all tools in this batch are safe to run concurrently ─
+      const settled = await Promise.all(
+        response.toolCalls.map((tc) => executeTool(tc, state, toolCtx)),
+      );
+      for (let i = 0; i < response.toolCalls.length; i++) {
+        const toolCall = response.toolCalls[i]!;
+        const toolResult = settled[i]!;
+        captureToolSideEffects(toolResult, variableUpdates, memoryUpdates, state);
+        const resultContent = toolResult.error ? `Error: ${toolResult.error}` : JSON.stringify(toolResult.output ?? null);
+        messages.push({ role: 'tool', content: resultContent, toolCallId: toolCall.id });
+        toolCallLog.push({ step, name: toolCall.name, args: toolCall.arguments, result: toolResult.output });
       }
-
-      const resultContent = toolResult.error
-        ? `Error: ${toolResult.error}`
-        : JSON.stringify(toolResult.output ?? null);
-
-      messages.push({
-        role: 'tool',
-        content: resultContent,
-        toolCallId: toolCall.id,
-      });
-      toolCallLog.push({
-        step,
-        name: toolCall.name,
-        args: toolCall.arguments,
-        result: toolResult.output,
-      });
     }
   }
 
@@ -349,15 +314,11 @@ function buildResult(
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }));
 
-  let finalValue: string | unknown = hitMaxSteps
-    ? `${text}\n\n[Note: reached maximum steps limit]`
-    : text;
-
-  // Parse structured output if a schema was requested
-  if (structuredSchema && typeof finalValue === 'string') {
+  // Parse structured output before appending any notes — otherwise JSON.parse fails
+  let finalValue: unknown = text;
+  if (structuredSchema && typeof text === 'string') {
     try {
-      // Strip markdown code fences if present
-      const cleaned = finalValue
+      const cleaned = text
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/\s*```$/, '')
         .trim();
@@ -365,6 +326,10 @@ function buildResult(
     } catch {
       // Leave as text if parsing fails
     }
+  }
+
+  if (hitMaxSteps && typeof finalValue === 'string') {
+    finalValue = `${finalValue}\n\n[Note: reached maximum steps limit]`;
   }
 
   return {
@@ -416,6 +381,29 @@ function trimToTokenBudget(
   }
 
   return [...system, ...rest];
+}
+
+function captureToolSideEffects(
+  toolResult: Awaited<ReturnType<typeof executeTool>>,
+  variableUpdates: Record<string, unknown>,
+  memoryUpdates: Record<string, unknown>,
+  state: WorkflowState,
+): void {
+  if (toolResult.output && typeof toolResult.output === 'object') {
+    const out = toolResult.output as any;
+    if ('__writeVariable' in out) {
+      const { name, value } = out.__writeVariable;
+      if (name && !FORBIDDEN_KEYS.has(String(name))) variableUpdates[name] = value;
+    }
+    if ('__memoryWrite' in out) {
+      const { key, value } = out.__memoryWrite;
+      if (key && !FORBIDDEN_KEYS.has(String(key))) {
+        memoryUpdates[key] = value;
+        if (!state.memory) state.memory = {};
+        state.memory[key] = value;
+      }
+    }
+  }
 }
 
 function buildApprovalSummary(toolCall: NormalizedToolCall): string {

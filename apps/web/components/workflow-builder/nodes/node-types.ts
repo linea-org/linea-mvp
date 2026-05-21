@@ -1,4 +1,4 @@
-import { CustomNode, NoteNode, StartNode, EndNode } from './custom-node';
+import { CustomNode, NoteNode, StartNode, EndNode, FrameNode } from './custom-node';
 
 export const nodeTypes = {
   start: StartNode,
@@ -16,10 +16,18 @@ export const nodeTypes = {
   guardrails: CustomNode,
   code: CustomNode,
   loop: CustomNode,
+  parallel: CustomNode,
+  wait: CustomNode,
+  variables: CustomNode,
+  evaluator: CustomNode,
   subworkflow: CustomNode,
   slack: CustomNode,
   github: CustomNode,
   notion: CustomNode,
   gmail: CustomNode,
+  filter: CustomNode,
+  merge: CustomNode,
+  datetime: CustomNode,
   note: NoteNode,
+  frame: FrameNode,
 } as const;

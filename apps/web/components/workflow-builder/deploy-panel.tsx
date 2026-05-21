@@ -1,0 +1,693 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  Cancel01Icon, Copy01Icon, Add01Icon, Delete01Icon, Loading01Icon,
+  CheckmarkCircle01Icon, Alert01Icon, RefreshIcon, EyeIcon, ViewOffIcon,
+  CloudUploadIcon, LinkSquare02Icon, AiBrain01Icon, LockIcon, InternetIcon,
+} from '@hugeicons/core-free-icons';
+import { createApiClient } from '@/lib/api';
+import { Button } from '@linea/ui/components/button';
+import { Switch } from '@linea/ui/components/switch';
+import { Label } from '@linea/ui/components/label';
+import { Separator } from '@linea/ui/components/separator';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@linea/ui/components/select';
+
+/* ─── Shared types ────────────────────────────────────────────────── */
+interface Webhook {
+  id: string;
+  workflowId: string;
+  createdAt: string;
+}
+
+interface ApiConfig {
+  apiEnabled: boolean;
+  apiVisibility: 'api_key' | 'public';
+  apiKey: string | null;
+}
+
+interface PanelProps {
+  workspaceId: string;
+  podId: string;
+  workflowId: string;
+  token: string;
+  isDeployed: boolean;
+  deployedAt: string | null;
+  onDeploy: () => Promise<void>;
+  onUndeploy: () => Promise<void>;
+  onClose: () => void;
+}
+
+const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+const TRIGGER_BASE = `${API_BASE}/v1/webhooks`;
+
+/* ─── Deployment section ──────────────────────────────────────────── */
+function DeploySection({
+  isDeployed, deployedAt, onDeploy, onUndeploy,
+  workspaceId, podId, workflowId, token,
+}: Pick<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'workspaceId' | 'podId' | 'workflowId' | 'token'>) {
+  const [deploying, setDeploying] = useState(false);
+  const [undeploying, setUndeploying] = useState(false);
+  const [apiConfig, setApiConfig] = useState<ApiConfig | null>(null);
+  const [apiSaving, setApiSaving] = useState(false);
+
+  useEffect(() => { void fetchApiConfig(); }, []);
+
+  async function fetchApiConfig() {
+    try {
+      const api = createApiClient(token);
+      const data = await api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
+      setApiConfig(data);
+    } catch { /* non-critical */ }
+  }
+
+  async function updateApiConfig(patch: Partial<ApiConfig>) {
+    if (!apiConfig) return;
+    const next = { ...apiConfig, ...patch };
+    setApiConfig(next);
+    setApiSaving(true);
+    try {
+      const api = createApiClient(token);
+      const updated = await api.patch<ApiConfig>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`,
+        { apiEnabled: next.apiEnabled, apiVisibility: next.apiVisibility },
+      );
+      setApiConfig(updated);
+    } catch { setApiConfig(apiConfig); } finally { setApiSaving(false); }
+  }
+
+  async function handleDeploy() {
+    setDeploying(true);
+    try { await onDeploy(); } finally { setDeploying(false); }
+  }
+
+  async function handleUndeploy() {
+    setUndeploying(true);
+    try { await onUndeploy(); } finally { setUndeploying(false); }
+  }
+
+  return (
+    <div className="space-y-3 p-4">
+      {/* Status card */}
+      <div className={`flex items-start gap-3 rounded-lg border p-3 ${
+        isDeployed
+          ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
+          : 'border-border bg-muted/30'
+      }`}>
+        <div className={`mt-0.5 size-2 shrink-0 rounded-full ${isDeployed ? 'bg-green-500' : 'bg-muted-foreground/40'}`} />
+        <div className="min-w-0 flex-1">
+          <p className={`text-xs font-semibold ${isDeployed ? 'text-green-700 dark:text-green-300' : 'text-muted-foreground'}`}>
+            {isDeployed ? 'Live' : 'Not deployed'}
+          </p>
+          {isDeployed && deployedAt ? (
+            <p className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">
+              Last deployed {new Date(deployedAt).toLocaleString()}
+            </p>
+          ) : (
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Deploy to activate scheduled and webhook triggers.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          className="flex-1"
+          onClick={() => void handleDeploy()}
+          disabled={deploying || undeploying}
+        >
+          <HugeiconsIcon
+            icon={deploying ? Loading01Icon : CloudUploadIcon}
+            className={`size-3.5 ${deploying ? 'animate-spin' : ''}`}
+          />
+          {isDeployed ? 'Re-deploy' : 'Save & Deploy'}
+        </Button>
+        {isDeployed && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={() => void handleUndeploy()}
+            disabled={undeploying || deploying}
+          >
+            <HugeiconsIcon
+              icon={undeploying ? Loading01Icon : LinkSquare02Icon}
+              className={`size-3.5 ${undeploying ? 'animate-spin' : ''}`}
+            />
+            Unpublish
+          </Button>
+        )}
+      </div>
+
+      {isDeployed && (
+        <p className="text-[10px] text-muted-foreground">
+          Unpublishing disables all triggers. Existing executions are not affected.
+        </p>
+      )}
+
+      {/* REST API visibility — surfaced prominently */}
+      {apiConfig !== null && (
+        <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <HugeiconsIcon
+                icon={apiConfig.apiEnabled ? (apiConfig.apiVisibility === 'public' ? InternetIcon : LockIcon) : LockIcon}
+                className={`size-3.5 shrink-0 ${apiConfig.apiEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+              />
+              <div>
+                <p className="text-xs font-medium">REST API access</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {apiConfig.apiEnabled
+                    ? apiConfig.apiVisibility === 'api_key'
+                      ? 'Protected by API key'
+                      : 'Public — anyone with the URL can trigger'
+                    : 'Disabled'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={apiConfig.apiEnabled}
+              onCheckedChange={(v) => void updateApiConfig({ apiEnabled: v })}
+              disabled={apiSaving}
+            />
+          </div>
+
+          {apiConfig.apiEnabled && (
+            <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+              {(['api_key', 'public'] as const).map((val) => (
+                <label
+                  key={val}
+                  className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-[11px] transition-colors ${
+                    apiConfig.apiVisibility === val
+                      ? 'border-primary/40 bg-primary/8 text-foreground'
+                      : 'border-border hover:border-primary/20 text-muted-foreground'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="api-visibility-deploy"
+                    value={val}
+                    checked={apiConfig.apiVisibility === val}
+                    onChange={() => void updateApiConfig({ apiVisibility: val })}
+                    className="sr-only"
+                  />
+                  <HugeiconsIcon
+                    icon={val === 'api_key' ? LockIcon : InternetIcon}
+                    className="size-3 shrink-0"
+                  />
+                  <span className="font-medium">{val === 'api_key' ? 'API key' : 'Public'}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Webhook tab ─────────────────────────────────────────────────── */
+function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const workflowWebhooks = webhooks.filter((w) => w.workflowId === workflowId);
+
+  useEffect(() => { void fetchWebhooks(); }, []);
+
+  async function fetchWebhooks() {
+    try {
+      const api = createApiClient(token);
+      const data = await api.get<Webhook[]>(`/workspaces/${workspaceId}/pods/${podId}/webhooks`);
+      setWebhooks(data);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  }
+
+  async function createWebhook() {
+    setCreating(true);
+    try {
+      const api = createApiClient(token);
+      const created = await api.post<Webhook>(
+        `/workspaces/${workspaceId}/pods/${podId}/webhooks`,
+        { workflowId },
+      );
+      setWebhooks((prev) => [...prev, created]);
+    } catch { /* ignore */ } finally { setCreating(false); }
+  }
+
+  async function deleteWebhook(id: string) {
+    try {
+      const api = createApiClient(token);
+      await api.delete(`/workspaces/${workspaceId}/pods/${podId}/webhooks/${id}`);
+      setWebhooks((prev) => prev.filter((w) => w.id !== id));
+    } catch { /* ignore */ }
+  }
+
+  function copy(text: string, id: string) {
+    void navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
+        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        Loading…
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 p-3">
+      {workflowWebhooks.length === 0 ? (
+        <>
+          <div className="rounded-lg border border-dashed p-4 text-center space-y-1.5">
+            <p className="text-xs font-medium">No webhook yet</p>
+            <p className="text-[11px] text-muted-foreground">Create a webhook to trigger this workflow from external systems.</p>
+          </div>
+          <Button size="sm" className="w-full" onClick={() => void createWebhook()} disabled={creating}>
+            <HugeiconsIcon icon={creating ? Loading01Icon : Add01Icon} className={creating ? 'animate-spin' : ''} />
+            Create Webhook
+          </Button>
+        </>
+      ) : (
+        <>
+          {workflowWebhooks.map((wh) => {
+            const triggerUrl = `${TRIGGER_BASE}/${wh.id}/trigger`;
+            return (
+              <div key={wh.id} className="space-y-2 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    ID: {wh.id.slice(0, 8)}…
+                  </span>
+                  <Button size="icon-xs" variant="ghost" className="text-muted-foreground hover:text-red-500" onClick={() => void deleteWebhook(wh.id)}>
+                    <HugeiconsIcon icon={Delete01Icon} />
+                  </Button>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-medium text-muted-foreground">Trigger URL</p>
+                  <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1.5">
+                    <code className="flex-1 truncate text-[11px] font-mono">{triggerUrl}</code>
+                    <button onClick={() => copy(triggerUrl, wh.id)} className="shrink-0 text-muted-foreground hover:text-foreground" title="Copy URL">
+                      <HugeiconsIcon icon={copied === wh.id ? CheckmarkCircle01Icon : Copy01Icon} className={`size-3.5 ${copied === wh.id ? 'text-green-500' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Created {new Date(wh.createdAt).toLocaleDateString()}</p>
+              </div>
+            );
+          })}
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-900 dark:bg-amber-950/30">
+            <div className="flex items-start gap-2">
+              <HugeiconsIcon icon={Alert01Icon} className="size-3.5 shrink-0 mt-0.5 text-amber-600" />
+              <div className="space-y-0.5">
+                <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-200">HMAC Signing Required</p>
+                <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                  Include <code className="font-mono">x-linea-signature</code> (sha256=…) and <code className="font-mono">x-webhook-timestamp</code> (Unix seconds, ±5 min).
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─── REST API tab ────────────────────────────────────────────────── */
+function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const [config, setConfig] = useState<ApiConfig>({ apiEnabled: false, apiVisibility: 'api_key', apiKey: null });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [keyVisible, setKeyVisible] = useState(false);
+
+  const endpointUrl = `${API_BASE}/v1/run/${workflowId}`;
+
+  useEffect(() => { void fetchConfig(); }, []);
+
+  async function fetchConfig() {
+    setLoading(true);
+    try {
+      const api = createApiClient(token);
+      const data = await api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
+      setConfig(data);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  }
+
+  async function updateConfig(patch: Partial<ApiConfig>) {
+    const next = { ...config, ...patch };
+    setConfig(next);
+    setSaving(true);
+    try {
+      const api = createApiClient(token);
+      const updated = await api.patch<ApiConfig>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`,
+        { apiEnabled: next.apiEnabled, apiVisibility: next.apiVisibility },
+      );
+      setConfig(updated);
+    } catch { setConfig(config); } finally { setSaving(false); }
+  }
+
+  async function rotateKey() {
+    setRotating(true);
+    try {
+      const api = createApiClient(token);
+      const res = await api.post<{ apiKey: string }>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api/rotate-key`,
+        {},
+      );
+      setConfig((c) => ({ ...c, apiKey: res.apiKey }));
+    } catch { /* ignore */ } finally { setRotating(false); }
+  }
+
+  function copyText(text: string, key: string) {
+    void navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  const curlCommand = config.apiVisibility === 'api_key'
+    ? `curl -X POST "${endpointUrl}" \\\n  -H "x-api-key: ${config.apiKey ?? '<YOUR_API_KEY>'}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"key": "value"}'`
+    : `curl -X POST "${endpointUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"key": "value"}'`;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
+        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        Loading…
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="cursor-pointer">Enable REST endpoint</Label>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Expose this workflow as an HTTP endpoint</p>
+        </div>
+        <Switch checked={config.apiEnabled} onCheckedChange={(v) => void updateConfig({ apiEnabled: v })} disabled={saving} />
+      </div>
+
+      {config.apiEnabled && (
+        <>
+          <Separator />
+
+          <div className="space-y-2">
+            <Label>Access control</Label>
+            <div className="space-y-1.5">
+              {(['api_key', 'public'] as const).map((val) => (
+                <label key={val} className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-2.5 hover:bg-muted/40 transition-colors">
+                  <input
+                    type="radio"
+                    name="rest-visibility-dp"
+                    value={val}
+                    checked={config.apiVisibility === val}
+                    onChange={() => void updateConfig({ apiVisibility: val })}
+                    className="mt-0.5 shrink-0"
+                  />
+                  <div>
+                    <p className="text-xs font-medium">
+                      {val === 'api_key' ? 'API key (recommended)' : 'Public'}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {val === 'api_key'
+                        ? 'Callers must pass x-api-key or Authorization: Bearer'
+                        : 'Anyone with the URL can trigger this workflow'}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-1.5">
+            <Label>Endpoint URL</Label>
+            <div className="flex items-center gap-1.5">
+              <code className="flex-1 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-[10px] font-mono break-all select-all">{endpointUrl}</code>
+              <button onClick={() => copyText(endpointUrl, 'url')} className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background hover:bg-muted/50 transition-colors" title="Copy URL">
+                <HugeiconsIcon icon={Copy01Icon} className="size-3.5" />
+              </button>
+            </div>
+            {copied === 'url' && <p className="text-[10px] text-green-600">Copied!</p>}
+          </div>
+
+          {config.apiVisibility === 'api_key' && (
+            <div className="space-y-2">
+              <Label>API key</Label>
+              {config.apiKey ? (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <code className="flex-1 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-[10px] font-mono break-all select-all">
+                      {keyVisible ? config.apiKey : `${config.apiKey.slice(0, 8)}${'•'.repeat(Math.max(0, config.apiKey.length - 8))}`}
+                    </code>
+                    <button onClick={() => setKeyVisible((v) => !v)} className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background hover:bg-muted/50 transition-colors" title={keyVisible ? 'Hide' : 'Show'}>
+                      <HugeiconsIcon icon={keyVisible ? ViewOffIcon : EyeIcon} className="size-3.5" />
+                    </button>
+                    <button onClick={() => copyText(config.apiKey!, 'key')} className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background hover:bg-muted/50 transition-colors" title="Copy">
+                      <HugeiconsIcon icon={Copy01Icon} className="size-3.5" />
+                    </button>
+                  </div>
+                  {copied === 'key' && <p className="text-[10px] text-green-600">Copied!</p>}
+                  <Button size="sm" variant="outline" onClick={() => void rotateKey()} disabled={rotating} className="w-full text-xs">
+                    <HugeiconsIcon icon={rotating ? Loading01Icon : RefreshIcon} className={`size-3.5 ${rotating ? 'animate-spin' : ''}`} />
+                    Rotate key
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground">Rotating invalidates the current key immediately.</p>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => void rotateKey()} disabled={rotating} className="w-full text-xs">
+                  <HugeiconsIcon icon={rotating ? Loading01Icon : RefreshIcon} className={`size-3.5 ${rotating ? 'animate-spin' : ''}`} />
+                  Generate API key
+                </Button>
+              )}
+            </div>
+          )}
+
+          <Separator />
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>cURL example</Label>
+              <button onClick={() => copyText(curlCommand, 'curl')} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                <HugeiconsIcon icon={Copy01Icon} className="size-3" />
+                Copy
+              </button>
+            </div>
+            <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 p-2.5 text-[10px] font-mono leading-relaxed whitespace-pre-wrap break-all">{curlCommand}</pre>
+            {copied === 'curl' && <p className="text-[10px] text-green-600">Copied!</p>}
+          </div>
+
+          <div className="rounded-md border border-border bg-muted/20 p-2.5 space-y-1.5">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Response</p>
+            <pre className="text-[10px] font-mono text-foreground/70">{`{ "executionId": "...", "status": "queued" }`}</pre>
+            <p className="text-[10px] text-muted-foreground">Poll for results:</p>
+            <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 p-2 text-[10px] font-mono whitespace-pre-wrap break-all">
+              {config.apiVisibility === 'api_key'
+                ? `GET ${endpointUrl}/executions/<executionId>\n  -H "x-api-key: ${config.apiKey ?? '<YOUR_API_KEY>'}"`
+                : `GET ${endpointUrl}/executions/<executionId>`}
+            </pre>
+            <pre className="text-[10px] font-mono text-foreground/70">{`{ "executionId": "...", "status": "completed", "output": ... }`}</pre>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─── Supervisor model options ────────────────────────────────────── */
+const SUPERVISOR_MODELS = [
+  { id: 'claude-haiku-4-5',             label: 'Claude Haiku 4.5 (default — fast)',    provider: 'anthropic' },
+  { id: 'claude-sonnet-4-6',            label: 'Claude Sonnet 4.6 (balanced)',          provider: 'anthropic' },
+  { id: 'claude-opus-4-7',              label: 'Claude Opus 4.7 (most capable)',        provider: 'anthropic' },
+  { id: 'gpt-4o-mini',                  label: 'GPT-4o Mini (fast)',                    provider: 'openai'    },
+  { id: 'gpt-4o',                       label: 'GPT-4o (balanced)',                     provider: 'openai'    },
+  { id: 'llama-3.1-8b-instant',         label: 'Llama 3.1 8B Instant (Groq)',          provider: 'groq'      },
+  { id: 'llama-3.3-70b-versatile',      label: 'Llama 3.3 70B (Groq)',                 provider: 'groq'      },
+  { id: 'gemini-2.0-flash',             label: 'Gemini 2.0 Flash (Google)',             provider: 'google'    },
+] as const;
+
+/* ─── Settings tab ────────────────────────────────────────────────── */
+function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const [supervisorModel, setSupervisorModel] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => { void fetchSettings(); }, []);
+
+  async function fetchSettings() {
+    try {
+      const api = createApiClient(token);
+      const wf = await api.get<{ definition?: { settings?: { supervisorModel?: string } } }>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
+      );
+      setSupervisorModel(wf.definition?.settings?.supervisorModel ?? '');
+    } catch { /* ignore */ } finally { setLoading(false); }
+  }
+
+  async function save(model: string) {
+    setSupervisorModel(model);
+    setSaving(true);
+    try {
+      const api = createApiClient(token);
+      /* Fetch current definition to avoid overwriting other settings */
+      const wf = await api.get<{ definition?: Record<string, unknown> }>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
+      );
+      const currentDef = wf.definition ?? {};
+      const currentSettings = (currentDef.settings as Record<string, unknown>) ?? {};
+      await api.patch(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
+        { definition: { ...currentDef, settings: { ...currentSettings, supervisorModel: model || null } } },
+      );
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { /* ignore */ } finally { setSaving(false); }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
+        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        Loading…
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 p-4">
+      {/* Supervisor model */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <HugeiconsIcon icon={AiBrain01Icon} className="size-4 text-primary shrink-0" />
+          <div>
+            <Label>Supervisor model</Label>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              LLM used for error-recovery decisions when a node fails. Fast + cheap models work best.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select
+            value={supervisorModel || '__default__'}
+            onValueChange={(v) => void save(v === '__default__' ? '' : v)}
+            disabled={saving}
+          >
+            <SelectTrigger className="flex-1 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__default__">Platform default (Haiku 4.5)</SelectItem>
+              {SUPERVISOR_MODELS.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {saving && <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin text-muted-foreground shrink-0" />}
+          {saved && <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-3.5 text-green-500 shrink-0" />}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="rounded-md border border-border/50 bg-muted/20 p-3 space-y-1.5">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">About the supervisor</p>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          The supervisor is only invoked when a node fails. It assesses whether to retry, skip, or abort — then explains its reasoning in the execution log.
+          On the happy path it costs nothing.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main panel ──────────────────────────────────────────────────── */
+type Tab = 'webhook' | 'rest' | 'settings';
+
+export function DeployPanel({
+  workspaceId, podId, workflowId, token,
+  isDeployed, deployedAt, onDeploy, onUndeploy, onClose,
+}: PanelProps) {
+  const [activeTab, setActiveTab] = useState<Tab>('webhook');
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'webhook',  label: 'Webhook'  },
+    { id: 'rest',     label: 'REST API' },
+    { id: 'settings', label: 'Settings' },
+  ];
+
+  return (
+    <div className="flex h-full flex-col bg-background">
+      {/* Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
+        <div>
+          <p className="text-sm font-semibold">Deploy & Publish</p>
+          <p className="text-[11px] text-muted-foreground">Deployment and trigger configuration</p>
+        </div>
+        <Button size="icon-sm" variant="ghost" onClick={onClose}>
+          <HugeiconsIcon icon={Cancel01Icon} />
+        </Button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Deploy section */}
+        <DeploySection
+          isDeployed={isDeployed}
+          deployedAt={deployedAt}
+          onDeploy={onDeploy}
+          onUndeploy={onUndeploy}
+          workspaceId={workspaceId}
+          podId={podId}
+          workflowId={workflowId}
+          token={token}
+        />
+
+        <Separator />
+
+        {/* Triggers section */}
+        <div className="px-4 pt-3 pb-1">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">Triggers</p>
+        </div>
+
+        {/* Tab bar */}
+        <div className="flex border-b border-border">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                activeTab === tab.id
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'webhook' ? (
+          <WebhookTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} token={token} />
+        ) : activeTab === 'rest' ? (
+          <RestApiTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} token={token} />
+        ) : (
+          <SettingsTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} token={token} />
+        )}
+      </div>
+    </div>
+  );
+}

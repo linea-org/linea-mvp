@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   HttpCode,
   UseGuards,
   Sse,
@@ -19,9 +20,10 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
-import { Observable, map, takeUntil, timer } from 'rxjs';
+import { Observable, map, takeUntil, timer, from, concat, of, filter } from 'rxjs';
 import { ExecutionsService } from './executions.service';
 import { ExecutionEventsService } from './execution-events.service';
+import type { BusEntry } from './execution-events.service';
 import { CreateExecutionDto } from './dto/create-execution.dto';
 import { ListExecutionsDto } from './dto/list-executions.dto';
 import { ApproveExecutionDto } from './dto/approve-execution.dto';
@@ -62,10 +64,7 @@ export class ExecutionsController {
   @ApiOperation({ summary: 'List executions' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  findAll(
-    @Param('podId') podId: string,
-    @Query() query: ListExecutionsDto,
-  ) {
+  findAll(@Param('podId') podId: string, @Query() query: ListExecutionsDto) {
     return this.service.findAll(podId, query);
   }
 
@@ -93,12 +92,55 @@ export class ExecutionsController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  async stream(@Param('podId') podId: string, @Param('id') id: string): Promise<Observable<MessageEvent>> {
-    // Verify the execution belongs to this pod before subscribing — prevents IDOR
-    await this.service.findOne(podId, id);
-    return this.events.forExecution(id).pipe(
-      map((event) => ({ data: event }) as MessageEvent),
+  async stream(
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @Headers('last-event-id') lastEventId?: string,
+  ): Promise<Observable<MessageEvent>> {
+    const execution = await this.service.findOne(podId, id);
+
+    const toMsg = (entry: BusEntry): MessageEvent =>
+      ({ data: entry.event, id: entry.streamId }) as MessageEvent;
+
+    // Terminal states: emit final event immediately (fast-path for reconnects too)
+    if (execution.status === 'completed') {
+      const event = {
+        type: 'execution_complete',
+        output: (execution.output as any)?.result ?? execution.output,
+      };
+      return of({ data: event } as MessageEvent);
+    }
+    if (execution.status === 'failed') {
+      return of({ data: { type: 'execution_failed', error: execution.error } } as MessageEvent);
+    }
+
+    // Subscribe to live events BEFORE fetching replay so no events are missed
+    // during the async Redis read. Events that fire in this window are buffered
+    // locally and deduped against the replay results.
+    const liveBuffer: BusEntry[] = [];
+    const bufferSub = this.events.forExecution(id).subscribe((e) => liveBuffer.push(e));
+
+    const replayItems = lastEventId ? await this.events.replayFrom(id, lastEventId) : [];
+    bufferSub.unsubscribe();
+
+    const replayedIds = new Set(replayItems.map((r) => r.streamId));
+    const uniqueBuffer = liveBuffer.filter((e) => !replayedIds.has(e.streamId));
+
+    const status$ = of({
+      data: { type: 'execution_status', status: execution.status },
+    } as MessageEvent);
+
+    const live$ = this.events.forExecution(id).pipe(
+      filter((e) => !replayedIds.has(e.streamId)),
+      map(toMsg),
       takeUntil(timer(10 * 60 * 1000)),
+    );
+
+    return concat(
+      from(replayItems.map(toMsg)),
+      from(uniqueBuffer.map(toMsg)),
+      status$,
+      live$,
     );
   }
 
@@ -132,7 +174,9 @@ export class ExecutionsController {
 
   @Post(':id/replay')
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Replay an execution, optionally from a specific node (editor+)' })
+  @ApiOperation({
+    summary: 'Replay an execution, optionally from a specific node (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })

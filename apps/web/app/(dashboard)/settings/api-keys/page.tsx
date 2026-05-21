@@ -7,7 +7,9 @@ import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
+import { Badge } from '@linea/ui/components/badge';
 import { Skeleton } from '@linea/ui/components/skeleton';
+import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +22,9 @@ interface ApiKey {
   id: string;
   label: string | null;
   lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  status: 'active' | 'expired';
   createdAt: string;
 }
 
@@ -30,6 +35,7 @@ export default function ApiKeysPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [label, setLabel] = useState('');
+  const [expiresIn, setExpiresIn] = useState<'30d' | '90d' | '365d' | 'never'>('never');
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
 
@@ -51,6 +57,7 @@ export default function ApiKeysPage() {
     if (wsLoading) return;
     if (!activeWorkspace) { setLoading(false); return; }
     void loadKeys();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace, wsLoading]);
 
   async function handleCreate() {
@@ -62,10 +69,13 @@ export default function ApiKeysPage() {
       const api = createApiClient(token);
       const result = await api.post<ApiKey & { key: string }>(
         `/workspaces/${activeWorkspace.id}/api-keys`,
-        { label: label.trim() || undefined },
+        { label: label.trim() || undefined, expiresIn: expiresIn === 'never' ? undefined : expiresIn },
       );
       setNewKey(result.key);
-      setKeys((prev) => [...prev, { id: result.id, label: result.label, lastUsedAt: result.lastUsedAt, createdAt: result.createdAt }]);
+      setKeys((prev) => [...prev, {
+        id: result.id, label: result.label, lastUsedAt: result.lastUsedAt,
+        expiresAt: result.expiresAt, revokedAt: null, status: 'active', createdAt: result.createdAt,
+      }]);
     } finally {
       setCreating(false);
     }
@@ -80,12 +90,19 @@ export default function ApiKeysPage() {
     setKeys((prev) => prev.filter((k) => k.id !== id));
   }
 
+  function closeDialog() {
+    setDialogOpen(false);
+    setNewKey(null);
+    setLabel('');
+    setExpiresIn('never');
+  }
+
   if (wsLoading || loading) {
     return <div className="space-y-2">{[1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-medium">API Keys</h2>
@@ -103,10 +120,21 @@ export default function ApiKeysPage() {
           {keys.map((k) => (
             <div key={k.id} className="flex items-center gap-3 px-4 py-3">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{k.label ?? 'Unnamed key'}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">{k.label ?? 'Unnamed key'}</p>
+                  <Badge
+                    variant={k.status === 'active' ? 'default' : 'destructive'}
+                    className={k.status === 'active'
+                      ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400 text-[10px] px-1.5 py-0'
+                      : 'text-[10px] px-1.5 py-0'}
+                  >
+                    {k.status}
+                  </Badge>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Created {new Date(k.createdAt).toLocaleDateString()}
                   {k.lastUsedAt ? ` · Last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : ' · Never used'}
+                  {k.expiresAt ? ` · Expires ${new Date(k.expiresAt).toLocaleDateString()}` : ''}
                 </p>
               </div>
               <Button
@@ -122,7 +150,7 @@ export default function ApiKeysPage() {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setNewKey(null); setLabel(''); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); else setDialogOpen(true); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create API key</DialogTitle>
@@ -155,11 +183,24 @@ export default function ApiKeysPage() {
                   onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label>Expiry</Label>
+                <NativeSelect
+                  value={expiresIn}
+                  onChange={(e) => setExpiresIn(e.target.value as typeof expiresIn)}
+                  className="h-9 text-sm"
+                >
+                  <NativeSelectOption value="never">Never</NativeSelectOption>
+                  <NativeSelectOption value="30d">30 days</NativeSelectOption>
+                  <NativeSelectOption value="90d">90 days</NativeSelectOption>
+                  <NativeSelectOption value="365d">1 year</NativeSelectOption>
+                </NativeSelect>
+              </div>
             </div>
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setDialogOpen(false); setNewKey(null); setLabel(''); }}>
+            <Button variant="outline" onClick={closeDialog}>
               {newKey ? 'Done' : 'Cancel'}
             </Button>
             {!newKey && (

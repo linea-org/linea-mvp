@@ -20,7 +20,9 @@ export class PodGuard implements CanActivate {
   constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const req = context.switchToHttp().getRequest<PodRequest & { params: Record<string, string> }>();
+    const req = context
+      .switchToHttp()
+      .getRequest<PodRequest & { params: Record<string, string> }>();
     const workspaceId = req.params['workspaceId'];
     const podId = req.params['podId'];
 

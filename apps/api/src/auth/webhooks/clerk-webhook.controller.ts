@@ -128,7 +128,9 @@ export class ClerkWebhookController {
         data.role,
       );
     } catch (err) {
-      this.logger.warn(`Failed to add member for org ${data.organization.id}: ${err}`);
+      this.logger.warn(
+        `Failed to add member for org ${data.organization.id}: ${err}`,
+      );
     }
   }
 
@@ -139,7 +141,9 @@ export class ClerkWebhookController {
         data.public_user_data.user_id,
       );
     } catch (err) {
-      this.logger.warn(`Failed to remove member for org ${data.organization.id}: ${err}`);
+      this.logger.warn(
+        `Failed to remove member for org ${data.organization.id}: ${err}`,
+      );
     }
   }
 }

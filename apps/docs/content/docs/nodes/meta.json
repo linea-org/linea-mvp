@@ -1,0 +1,27 @@
+{
+  "title": "Nodes",
+  "pages": [
+    "index",
+    "start",
+    "end",
+    "agent",
+    "memory",
+    "if-else",
+    "router",
+    "http",
+    "mcp",
+    "transform",
+    "extract",
+    "retriever",
+    "code",
+    "loop",
+    "subworkflow",
+    "guardrails",
+    "approval-gate",
+    "note",
+    "slack",
+    "github",
+    "notion",
+    "gmail"
+  ]
+}

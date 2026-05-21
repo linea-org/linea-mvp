@@ -1,30 +1,47 @@
 ---
 title: Executions
-description: How workflow runs are created, processed, and tracked.
+description: How workflow runs are created, queued, processed, and tracked in real time.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Executions
 
-An **Execution** is a single run of a workflow. It tracks status, timing, input/output, and error information across its steps.
+An **Execution** is a single run of a workflow. It tracks status, timing, node-level results, input/output, and the LangGraph checkpoint needed to resume suspended runs.
 
 ## Schema
 
 ```typescript
 executions: {
   id: uuid PK
-  workspaceId: uuid FK → workspaces  // kept for engine performance
-  spaceId: uuid FK → spaces (set null on delete)
+  workspaceId: uuid FK → workspaces      // denormalized for worker performance
+  podId: uuid FK → pods (set null on delete)
   workflowId: uuid FK → workflows (set null on delete)
-  status: enum('pending','running','completed','failed','cancelled')
-  triggeredBy: enum('manual','schedule','webhook','api')
+  status: enum('queued','running','suspended','completed','failed','cancelled')
+  triggeredBy: enum('manual','schedule','webhook','sdk')
   input: jsonb          // trigger payload
-  output: jsonb | null  // final result
-  error: text | null
+  output: jsonb | null  // final result (lastOutput at end node)
+  error: text | null    // error message on failure
+  nodeResults: jsonb    // per-node { status, output, error, durationMs } map
+  variables: jsonb      // LangGraph state snapshot
+  checkpoint: jsonb     // LangGraph checkpoint for resume after suspension
+  threadId: text        // for multi-turn conversations
+  queueJobId: text      // BullMQ job ID
   startedAt: timestamp | null
-  completedAt: timestamp | null
+  finishedAt: timestamp | null
   createdAt: timestamp
+}
+
+execution_logs: {
+  id: uuid PK
+  executionId: uuid FK → executions (cascade delete)
+  nodeId: text
+  level: enum('debug','info','warn','error')
+  message: text
+  data: jsonb           // { output, error }
+  durationMs: integer | null
+  attempt: integer
+  timestamp: timestamp
 }
 ```
 
@@ -36,89 +53,150 @@ sequenceDiagram
   participant S as ExecutionsService
   participant DB as Database
   participant Q as BullMQ
-  participant W as Worker
+  participant W as ExecutionProcessor
 
-  T->>S: createFromTrigger(spaceId, workflowId, input)
-  S->>DB: INSERT execution status=pending
-  S->>Q: enqueue executionId + workspaceId
+  T->>S: createFromTrigger(podId, workspaceId, workflowId, input)
+  S->>DB: INSERT execution status=queued
+  S->>Q: enqueue { executionId, workspaceId }
   Q-->>W: job picked up
   W->>DB: UPDATE status=running, startedAt=now()
-  W->>W: process steps
-  alt success
-    W->>DB: UPDATE status=completed, output=result
-  else failure
-    W->>DB: UPDATE status=failed, error=message
+  W->>W: run LangGraph engine (node by node)
+  W-->>SSE: emit node_update events
+  alt completed
+    W->>DB: UPDATE status=completed, output=lastOutput, finishedAt=now()
+  else failed
+    W->>DB: UPDATE status=failed, error=message, finishedAt=now()
+  else suspended (approval-gate / ask_human)
+    W->>DB: UPDATE status=suspended, checkpoint=state
   end
 ```
 
-## BullMQ Integration
+## BullMQ Queue
 
-The execution engine uses a dedicated BullMQ queue (`executions`). The `ExecutionsWorker` processes jobs asynchronously with configurable concurrency.
+Executions run asynchronously via a dedicated BullMQ queue named `executions`.
 
 ```typescript
 // Job payload
-interface ExecutionJob {
+interface ExecutionJobData {
   executionId: string
-  workspaceId: string   // pre-loaded to avoid JOIN on every job
+  workspaceId: string   // pre-loaded to avoid JOIN overhead in the worker
 }
 ```
 
-`workspaceId` is stored directly on `executions` so the worker never needs to JOIN through `spaces` to resolve API keys or resource quotas.
+`workspaceId` is stored directly on the `executions` row so the worker never needs to JOIN through `pods` or `workspaces` to resolve credentials.
+
+## Status Transitions
+
+```
+queued → running → completed
+                → failed
+                → suspended → running (on resume)
+         running → cancelled (best-effort)
+```
+
+<Callout type="warn">
+  Cancellation is only reliable for executions in `queued` status. Once the worker has picked up the job (`running`), cancellation is best-effort and depends on where the engine is in the node graph.
+</Callout>
 
 ## Triggers
 
+### Manual
+
+`POST /workspaces/:wId/pods/:podId/executions`
+
+```json
+{ "workflowId": "wf_abc123", "input": { "key": "value" } }
+```
+
+Requires `editor` role or above.
+
 ### Schedule
 
-`SchedulesService.fireDueSchedules()` runs on a cron tick, JOINs `spaces` to get `workspaceId`, and calls `createFromTrigger(spaceId, workspaceId, workflowId, 'schedule', {})`.
+`SchedulesService.fireDueSchedules()` runs on a cron tick and calls `createFromTrigger(podId, workspaceId, workflowId, 'schedule', {})`.
 
 ### Webhook
 
-`WebhooksService.trigger(webhookId, payload)` fetches the webhook row, JOINs `spaces` for `workspaceId`, and calls `createFromTrigger(spaceId, workspaceId, workflowId, 'webhook', payload)`.
+`WebhooksService.trigger(webhookId, payload)` fetches the webhook row and calls `createFromTrigger` with the incoming HTTP payload.
 
-### Manual / API
+### SDK
 
-Direct call to `POST /workspaces/:wId/spaces/:sId/executions` with optional `input` payload.
+The TypeScript SDK calls `POST /executions` with `triggeredBy: 'sdk'`. See the [SDK docs](/docs/modules/sdk).
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/workspaces/:wId/spaces/:sId/executions` | List (supports `?status=`, `?workflowId=`) |
-| `POST` | `/workspaces/:wId/spaces/:sId/executions` | Trigger manually |
-| `GET` | `/workspaces/:wId/spaces/:sId/executions/:id` | Get execution detail |
-| `POST` | `/workspaces/:wId/spaces/:sId/executions/:id/cancel` | Cancel pending execution |
-
-## Status Transitions
-
-```
-pending → running → completed
-                 → failed
-         running → cancelled (best-effort)
-```
-
-<Callout type="warn">
-  Cancellation only works reliably for executions in `pending` status. Once a worker has started processing (`running`), cancellation is a best-effort signal.
-</Callout>
+| `POST` | `/workspaces/:wId/pods/:podId/executions` | Trigger manually (editor+) |
+| `GET` | `/workspaces/:wId/pods/:podId/executions` | List (supports `?status=`, `?workflowId=`) |
+| `GET` | `/workspaces/:wId/pods/:podId/executions/:id` | Get execution detail |
+| `GET` | `/workspaces/:wId/pods/:podId/executions/:id/logs` | Get structured logs |
+| `GET` | `/workspaces/:wId/pods/:podId/executions/:id/events` | SSE stream (see below) |
+| `PATCH` | `/workspaces/:wId/pods/:podId/executions/:id/respond` | Respond to suspended execution |
+| `PATCH` | `/workspaces/:wId/pods/:podId/executions/:id/approve` | Approve suspended execution |
+| `POST` | `/workspaces/:wId/pods/:podId/executions/:id/replay` | Replay from the start or from a specific node |
+| `DELETE` | `/workspaces/:wId/pods/:podId/executions/:id` | Cancel execution (editor+) |
 
 ## SSE Event Streaming
 
-Running executions emit Server-Sent Events on:
+`GET /workspaces/:wId/pods/:podId/executions/:id/events`
 
-```
-GET /workspaces/:wId/spaces/:sId/executions/:id/events
-```
-
-Events are JSON objects with the following shapes:
+The SSE stream emits one event per node state change. The stream auto-closes after **10 minutes**.
 
 ```typescript
-{ type: 'node_update'; nodeId: string; status: 'running'|'completed'|'failed'|'suspended'; output?: unknown; error?: string }
-{ type: 'execution_complete'; status: string; output: unknown }
+// node_update: emitted as each node starts, completes, fails, or suspends
+{
+  type: 'node_update'
+  nodeId: string
+  status: 'running' | 'completed' | 'failed' | 'suspended'
+  output?: unknown      // present when status === 'completed'
+  error?: string        // present when status === 'failed'
+  durationMs?: number
+}
+
+// execution_complete: emitted when the end node is reached
+{ type: 'execution_complete'; status: 'completed'; output: unknown }
+
+// execution_failed: emitted on unrecoverable error
 { type: 'execution_failed'; error: string }
+
+// execution_suspended: emitted when an approval-gate or ask_human fires
 { type: 'execution_suspended'; interrupt: unknown }
 ```
 
-Use the TypeScript SDK to consume this stream — see [TypeScript SDK](/docs/modules/sdk).
+Use the TypeScript SDK's `streamEvents()` to consume this — it handles reconnection automatically. See [TypeScript SDK](/docs/modules/sdk).
+
+## Resuming Suspended Executions
+
+When an execution is suspended (status `suspended`), resume it by submitting a response:
+
+```
+PATCH /workspaces/:wId/pods/:podId/executions/:id/respond
+```
+
+```json
+{ "approved": true }
+```
+
+or with a reason for rejection:
+
+```json
+{ "approved": false, "reason": "Not authorized to proceed" }
+```
+
+The LangGraph checkpoint stored in `execution.checkpoint` is used to resume the graph from exactly the point it was interrupted.
+
+## Replay
+
+```
+POST /workspaces/:wId/pods/:podId/executions/:id/replay
+```
+
+```json
+{ "fromNodeId": "node_abc" }
+```
+
+Omit `fromNodeId` to replay from the beginning with the original input.
 
 ## Frontend
 
-The executions page lives at `/spaces/[spaceId]/executions`. It displays a table with live status badges and links to individual execution detail pages at `/spaces/[spaceId]/executions/[id]`. The detail page includes an "Open in builder" button that navigates directly to the workflow builder.
+Executions are visible at the pod level in the dashboard. The detail page includes a live node graph that highlights each node as it runs, a log stream, and Approve/Reject buttons for suspended executions.

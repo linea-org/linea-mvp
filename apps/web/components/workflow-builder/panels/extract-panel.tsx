@@ -3,9 +3,10 @@
 import { useRef } from 'react';
 import type { Node } from '@xyflow/react';
 import { Input } from '@linea/ui/components/input';
-import { Textarea } from '@linea/ui/components/textarea';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
 import { Label } from '@linea/ui/components/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@linea/ui/components/select';
 import { VariableChips } from '../variable-picker';
 
 interface ExtractPanelProps {
@@ -15,11 +16,10 @@ interface ExtractPanelProps {
   nodeId?: string;
 }
 
-const outputOptions = [
-  { value: 'full',     label: 'Full response' },
+const OUTPUT_OPTIONS = [
   { value: 'text',     label: 'Text only' },
   { value: 'markdown', label: 'Markdown' },
-  { value: 'json',     label: 'JSON parsed' },
+  { value: 'full',     label: 'Full response (all fields)' },
 ];
 
 export function ExtractPanel({ data, onUpdate, nodes = [], nodeId }: ExtractPanelProps) {
@@ -37,9 +37,6 @@ export function ExtractPanel({ data, onUpdate, nodes = [], nodeId }: ExtractPane
           onChange={(e) => onUpdate({ url: e.target.value })}
           placeholder="https://example.com or {{input.url}}"
         />
-        <p className="text-[11px] text-muted-foreground">
-          Supports variable substitution. Uses Firecrawl if API key is set, otherwise native fetch.
-        </p>
         <VariableChips
           nodes={nodes}
           currentNodeId={nodeId}
@@ -47,42 +44,29 @@ export function ExtractPanel({ data, onUpdate, nodes = [], nodeId }: ExtractPane
           onChange={(v) => onUpdate({ url: v })}
           fieldRef={urlRef}
         />
+        <p className="text-[11px] text-muted-foreground">
+          Supports variable substitution. Uses Firecrawl if API key is configured, otherwise native fetch.
+        </p>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="extract-selector">CSS selector (optional)</Label>
-        <Input
-          id="extract-selector"
-          value={(data.selector as string) ?? ''}
-          onChange={(e) => onUpdate({ selector: e.target.value })}
-          placeholder="article, .content, #main"
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="extract-output">Output format</Label>
-        <NativeSelect
-          id="extract-output"
+        <Label>Output format</Label>
+        <Select
           value={(data.outputFormat as string) ?? 'text'}
-          onChange={(e) => onUpdate({ outputFormat: e.target.value })}
-          className="w-full"
+          onValueChange={(v) => onUpdate({ outputFormat: v })}
         >
-          {outputOptions.map((o) => (
-            <NativeSelectOption key={o.value} value={o.value}>{o.label}</NativeSelectOption>
-          ))}
-        </NativeSelect>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="extract-headers">Custom headers (JSON, optional)</Label>
-        <Textarea
-          id="extract-headers"
-          rows={3}
-          value={(data.headers as string) ?? ''}
-          onChange={(e) => onUpdate({ headers: e.target.value })}
-          placeholder={'{\n  "Authorization": "Bearer {{secret.token}}"\n}'}
-          className="resize-y font-mono text-[11px]"
-        />
+          <SelectTrigger className="h-9 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {OUTPUT_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          <strong>Full response</strong> includes title, url, html, text, and markdown fields.
+        </p>
       </div>
     </div>
   );

@@ -18,7 +18,7 @@ export function VariableChips({
   fieldRef,
 }: VariableChipsProps) {
   const candidates = nodes.filter(
-    (n) => n.id !== currentNodeId && n.type !== 'note' && n.type !== 'end',
+    (n) => n.id !== currentNodeId && n.type !== 'note' && n.type !== 'end' && n.type !== 'frame',
   );
   if (candidates.length === 0) return null;
 

@@ -6,7 +6,7 @@ import { useWorkspace } from '@/contexts/workspace-context';
 import { createApiClient } from '@/lib/api';
 import { Input } from '@linea/ui/components/input';
 import { Textarea } from '@linea/ui/components/textarea';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
 import { Label } from '@linea/ui/components/label';
 
 interface McpPanelProps {
@@ -16,7 +16,7 @@ interface McpPanelProps {
 
 interface McpServer { id: string; name: string; url: string }
 
-const outputFieldOptions = [
+const OUTPUT_OPTIONS = [
   { value: 'full',     label: 'Full response' },
   { value: 'text',     label: 'Text only' },
   { value: 'json',     label: 'JSON parsed' },
@@ -42,21 +42,25 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
     void load();
   }, [activeWorkspace, getToken]);
 
+  const selectedServerId = (data.mcpServerId as string) ?? '';
+
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="mcp-server">MCP Server</Label>
-        <NativeSelect
-          id="mcp-server"
-          value={(data.mcpServerId as string) ?? ''}
-          onChange={(e) => onUpdate({ mcpServerId: e.target.value })}
-          className="w-full"
+        <Label>MCP Server</Label>
+        <Select
+          value={selectedServerId || undefined}
+          onValueChange={(v) => onUpdate({ mcpServerId: v })}
         >
-          <NativeSelectOption value="">— select a server —</NativeSelectOption>
-          {servers.map((s) => (
-            <NativeSelectOption key={s.id} value={s.id}>{s.name}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="— select a server —" />
+          </SelectTrigger>
+          <SelectContent>
+            {servers.map((s) => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {servers.length === 0 && (
           <p className="text-[11px] text-muted-foreground">
             No MCP servers connected. Add one in Settings → Connections.
@@ -75,17 +79,20 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="mcp-output">Output field</Label>
-        <NativeSelect
-          id="mcp-output"
+        <Label>Output field</Label>
+        <Select
           value={(data.outputField as string) ?? 'full'}
-          onChange={(e) => onUpdate({ outputField: e.target.value })}
-          className="w-full"
+          onValueChange={(v) => onUpdate({ outputField: v })}
         >
-          {outputFieldOptions.map((o) => (
-            <NativeSelectOption key={o.value} value={o.value}>{o.label}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {OUTPUT_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-1.5">

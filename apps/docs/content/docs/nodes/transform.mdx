@@ -1,0 +1,63 @@
+---
+title: Transform Node
+description: Reshape workflow variables using a Jexl expression evaluated against the current state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Transform Node
+
+The `transform` node evaluates a [Jexl](https://github.com/TomFrost/Jexl) expression to compute a new value from the current workflow state. The result becomes `lastOutput` for the next node.
+
+## Configuration Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `transformScript` | string | Jexl expression to evaluate (primary field) |
+| `transformation` | string | Alias for `transformScript` (legacy) |
+
+If neither is set, the expression defaults to `lastOutput` (passthrough).
+
+## Expression Context
+
+| Variable | Value |
+|---|---|
+| `input` | `variables.lastOutput` — output of the previous node |
+| `lastOutput` | `variables.lastOutput` — same as `input` |
+| `variables` | Full workflow variables dictionary |
+
+## Expression Examples
+
+```
+input.items.length
+lastOutput.score * 100
+variables.count + 1
+input.name + " - processed"
+```
+
+<Callout type="warn">
+  The transform node uses **Jexl**, not JavaScript. It does not support `return`, arrow functions, `map()`, `filter()`, assignments, or other JS-specific syntax. For full code execution, use the **Agent** node with the `run_javascript` tool enabled (requires human approval), or the **Code** node once Pod VM infrastructure is available.
+</Callout>
+
+## Output
+
+The result of the expression is set as `lastOutput` and passed to downstream nodes.
+
+## Example Config — Extract a field
+
+```json
+{
+  "transformScript": "input.data.title"
+}
+```
+
+Input: `{ "data": { "title": "Hello World", "body": "..." } }`
+Output: `"Hello World"`
+
+## Example Config — Arithmetic
+
+```json
+{
+  "transformScript": "lastOutput.count * 2 + 1"
+}
+```

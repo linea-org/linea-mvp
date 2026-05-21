@@ -1,0 +1,66 @@
+---
+title: Memory Node
+description: Read, retrieve, or clear in-workflow key-value memory scoped to the current thread or execution.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Memory Node
+
+The `memory` node operates on the in-workflow key-value store that is part of the LangGraph state. It is distinct from the long-term database-backed memory system (see [Memory System](/docs/modules/memory)).
+
+## What It Does
+
+The memory node reads from or clears `state.memory` — a dictionary that persists within a single execution thread. Agent nodes can write to this dictionary via the `memory_store` tool.
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `memoryMode` | `smart` \| `retrieve` \| `clear` | `retrieve` | Operation to perform |
+| `memoryScope` | `thread` \| `workflow` \| `user` | `thread` | Scope label (informational for `clear`) |
+| `memoryQuery` | string | `""` | Keyword filter for `retrieve` mode |
+| `memoryTopK` | number | `5` | Maximum results to return in `retrieve` mode |
+| `memoryAgentId` | string | — | Attribution tag stored alongside writes |
+
+## Modes
+
+### `retrieve`
+
+Searches `state.memory` for keys/values matching `memoryQuery` (case-insensitive substring match). Returns up to `memoryTopK` results:
+
+```json
+{
+  "memories": [
+    { "key": "user_preference", "value": "dark mode", "text": "dark mode" }
+  ],
+  "count": 1,
+  "query": "preference"
+}
+```
+
+### `clear`
+
+Returns `{ "__clearMemory": true, "scope": "thread" }` — signals the LangGraph reducer to wipe the in-flight memory dictionary. The actual wipe happens in the state reducer.
+
+### `smart`
+
+Passthrough mode — returns the current memory snapshot for an upstream agent to reason about:
+
+```json
+{ "memory": { "key": "value", ... }, "count": 2 }
+```
+
+<Callout type="info">
+  For persistent, cross-execution memory backed by pgvector, use the `enableLongTermMemory` flag on the **Agent** node and the `memory_store` / `memory_search` built-in tools. The Memory node only operates on ephemeral within-execution state.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "memoryMode": "retrieve",
+  "memoryQuery": "user preference",
+  "memoryTopK": 3
+}
+```

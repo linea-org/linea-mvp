@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -27,24 +28,43 @@ import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuditService } from '../audit/audit.service';
+import type { User } from '@linea/db';
 
 @ApiTags('Webhooks')
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/pods/:podId/webhooks')
 export class WebhooksController {
-  constructor(private readonly service: WebhooksService) {}
+  constructor(
+    private readonly service: WebhooksService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Post()
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Create a webhook trigger for a workflow (editor+)' })
+  @ApiOperation({
+    summary: 'Create a webhook trigger for a workflow (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
-  create(
+  async create(
+    @Param('workspaceId') workspaceId: string,
     @Param('podId') podId: string,
+    @CurrentUser() user: User,
     @Body() dto: CreateWebhookDto,
   ) {
-    return this.service.create(podId, dto);
+    const webhook = await this.service.create(podId, dto);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'webhook.create',
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+      metadata: { workflowId: dto.workflowId },
+    });
+    return webhook;
   }
 
   @Get()
@@ -55,6 +75,29 @@ export class WebhooksController {
     return this.service.findAll(podId);
   }
 
+  @Patch(':id/rotate')
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Rotate a webhook signing secret (editor+)' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  async rotate(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    const result = await this.service.rotate(podId, id);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'webhook.rotate',
+      resourceType: 'webhook',
+      resourceId: id,
+    });
+    return result;
+  }
+
   @Delete(':id')
   @HttpCode(204)
   @RequireRole('editor')
@@ -62,8 +105,20 @@ export class WebhooksController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
-  delete(@Param('podId') podId: string, @Param('id') id: string) {
-    return this.service.delete(podId, id);
+  async delete(
+    @Param('workspaceId') workspaceId: string,
+    @Param('podId') podId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    await this.service.delete(podId, id);
+    void this.auditService.log({
+      workspaceId,
+      actorId: user.id,
+      action: 'webhook.delete',
+      resourceType: 'webhook',
+      resourceId: id,
+    });
   }
 }
 
@@ -74,10 +129,22 @@ export class WebhookTriggerController {
 
   @Post(':id/trigger')
   @Public()
-  @ApiOperation({ summary: 'Trigger a workflow via webhook (public, requires x-linea-signature + x-webhook-timestamp)' })
+  @ApiOperation({
+    summary:
+      'Trigger a workflow via webhook (public, requires x-linea-signature + x-webhook-timestamp)',
+  })
   @ApiParam({ name: 'id' })
-  @ApiHeader({ name: 'x-linea-signature', required: true, description: 'HMAC-SHA256 signature: sha256=<hex>' })
-  @ApiHeader({ name: 'x-webhook-timestamp', required: true, description: 'Unix timestamp in seconds (request must be within 5 minutes of server time)' })
+  @ApiHeader({
+    name: 'x-linea-signature',
+    required: true,
+    description: 'HMAC-SHA256 signature: sha256=<hex>',
+  })
+  @ApiHeader({
+    name: 'x-webhook-timestamp',
+    required: true,
+    description:
+      'Unix timestamp in seconds (request must be within 5 minutes of server time)',
+  })
   trigger(
     @Param('id') id: string,
     @Headers('x-linea-signature') signature: string,
@@ -85,9 +152,14 @@ export class WebhookTriggerController {
     @Req() req: RawBodyRequest<Request>,
     @Body() body: Record<string, unknown>,
   ) {
-    if (!signature) throw new UnauthorizedException('Missing x-linea-signature header');
-    if (!timestamp) throw new UnauthorizedException('Missing x-webhook-timestamp header');
-    if (!req.rawBody) throw new UnauthorizedException('Raw body unavailable — cannot verify signature');
+    if (!signature)
+      throw new UnauthorizedException('Missing x-linea-signature header');
+    if (!timestamp)
+      throw new UnauthorizedException('Missing x-webhook-timestamp header');
+    if (!req.rawBody)
+      throw new UnauthorizedException(
+        'Raw body unavailable — cannot verify signature',
+      );
     return this.service.trigger(id, signature, timestamp, req.rawBody, body);
   }
 }

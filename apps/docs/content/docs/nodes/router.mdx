@@ -1,0 +1,60 @@
+---
+title: Router Node
+description: Multi-branch routing node that evaluates a list of Jexl conditions and routes to the first matching branch.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Router Node
+
+The `router` node evaluates a prioritized list of conditions and routes execution to the first branch whose condition is `true`. If no condition matches, the fallback branch `none` is taken.
+
+## Configuration Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `routes` | array | Ordered list of `{ id, label, condition }` route objects |
+
+Each route object:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Unique branch identifier — must match the edge's source handle |
+| `label` | string | Human-readable label shown on the canvas |
+| `condition` | string | Jexl expression evaluated against current state |
+
+## Output
+
+```json
+{ "branch": "high_priority", "label": "High Priority" }
+```
+
+If no route matches:
+
+```json
+{ "branch": "none" }
+```
+
+## Expression Context
+
+Same as [if-else](/docs/nodes/if-else): `input`, `lastOutput`, `variables`.
+
+## Wiring
+
+Each outgoing edge must set its **source handle** to the `id` of the corresponding route. Add a `none` edge as a fallback to handle the no-match case.
+
+<Callout type="info">
+  Routes are evaluated in order. The first matching route wins. If you need mutual exclusion, order your conditions from most specific to least specific.
+</Callout>
+
+## Example Config
+
+```json
+{
+  "routes": [
+    { "id": "critical",  "label": "Critical",  "condition": "lastOutput.severity == 'critical'" },
+    { "id": "high",      "label": "High",       "condition": "lastOutput.severity == 'high'" },
+    { "id": "low",       "label": "Low / Info", "condition": "true" }
+  ]
+}
+```

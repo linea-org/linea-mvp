@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 
 export const APP_REDIS = 'APP_REDIS';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { LoggerModule } from 'nestjs-pino';
 import { ConfigModule } from './config/config.module';
 import { ConfigService } from '@nestjs/config';
@@ -26,6 +27,15 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SecretsModule } from './secrets/secrets.module';
 import { McpModule } from './mcp/mcp.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { QuotasModule } from './quotas/quotas.module';
+import { OAuthModule } from './oauth/oauth.module';
+import { PublicRunModule } from './public-run/public-run.module';
+import { AgentChatModule } from './agent-chat/agent-chat.module';
+import { CommentsModule } from './comments/comments.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { BillingModule } from './billing/billing.module';
+import { ModelsModule } from './models/models.module';
+import { AuditModule } from './audit/audit.module';
 import { ClerkAuthGuard } from './auth/guards/clerk-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -37,20 +47,20 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
 @Module({
   imports: [
     ConfigModule,
-    ThrottlerModule.forRoot([
-      {
-        // General API — 300 requests per minute per workspace (or IP)
-        name: 'default',
-        ttl: 60_000,
-        limit: 300,
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL');
+        const redis = redisUrl ? new Redis(redisUrl) : new Redis({ host: 'localhost', port: 6379 });
+        return {
+          throttlers: [
+            { name: 'default', ttl: 60_000, limit: 300 },
+            { name: 'execution', ttl: 60_000, limit: 60 },
+          ],
+          storage: new ThrottlerStorageRedisService(redis),
+        };
       },
-      {
-        // Execution triggers — 60 per minute per workspace
-        name: 'execution',
-        ttl: 60_000,
-        limit: 60,
-      },
-    ]),
+    }),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
@@ -82,6 +92,15 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
     SecretsModule,
     McpModule,
     MetricsModule,
+    QuotasModule,
+    OAuthModule,
+    PublicRunModule,
+    AgentChatModule,
+    CommentsModule,
+    UploadsModule,
+    BillingModule,
+    ModelsModule,
+    AuditModule,
   ],
   controllers: [ClerkWebhookController],
   providers: [
@@ -89,7 +108,9 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
       provide: APP_REDIS,
       useFactory: (config: ConfigService) => {
         const url = config.get<string>('REDIS_URL');
-        return url ? new Redis(url) : new Redis({ host: 'localhost', port: 6379 });
+        return url
+          ? new Redis(url)
+          : new Redis({ host: 'localhost', port: 6379 });
       },
       inject: [ConfigService],
     },

@@ -26,4 +26,10 @@ export class ListWorkflowsDto extends PaginationDto {
   @IsBoolean()
   @Transform(({ value }) => value === 'true' || value === true)
   starred?: boolean;
+
+  @ApiPropertyOptional({ description: 'Show only workflows favorited by the current user' })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  favorited?: boolean;
 }

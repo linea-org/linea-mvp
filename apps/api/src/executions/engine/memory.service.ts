@@ -3,8 +3,15 @@ import { and, eq, or, sql } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
-import { memories, apiKeys, mcpServers, secrets } from '@linea/db';
+import { memories, apiKeys, mcpServers, secrets, oauthConnections } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
+
+const PROVIDER_TO_SECRET: Record<string, string> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  groq: 'GROQ_API_KEY',
+  google: 'GOOGLE_API_KEY',
+};
 
 @Injectable()
 export class MemoryService {
@@ -35,17 +42,16 @@ export class MemoryService {
     workspaceId: string,
     workflowId: string | undefined,
     threadId: string,
+    sessionKey?: string,
   ): Promise<Record<string, any>> {
     try {
       const scopeFilters = [
         and(eq(memories.scope, 'thread'), eq(memories.threadId, threadId)),
         ...(workflowId
-          ? [
-              and(
-                eq(memories.scope, 'workflow'),
-                eq(memories.workflowId, workflowId),
-              ),
-            ]
+          ? [and(eq(memories.scope, 'workflow'), eq(memories.workflowId, workflowId))]
+          : []),
+        ...(workflowId && sessionKey
+          ? [and(eq(memories.scope, 'session'), eq(memories.workflowId, workflowId), eq(memories.sessionKey, sessionKey))]
           : []),
       ];
 
@@ -54,21 +60,16 @@ export class MemoryService {
         .from(memories)
         .where(and(eq(memories.workspaceId, workspaceId), or(...scopeFilters)));
 
-      // Merge all rows — later rows (workflow then thread) take precedence
-      const sorted = [
-        ...rows.filter((r) => r.scope === 'workflow'),
-        ...rows.filter((r) => r.scope === 'thread'),
-      ];
+      // Merge: workflow → session → thread (later takes precedence)
+      const priority = { workflow: 0, session: 1, thread: 2, user: 1 } as Record<string, number>;
+      const sorted = [...rows].sort((a, b) => (priority[a.scope] ?? 0) - (priority[b.scope] ?? 0));
 
       let merged: Record<string, any> = {};
       for (const row of sorted) {
         try {
           const parsed = JSON.parse(row.content);
-          if (parsed && typeof parsed === 'object')
-            merged = { ...merged, ...parsed };
-        } catch {
-          // skip unparseable rows
-        }
+          if (parsed && typeof parsed === 'object') merged = { ...merged, ...parsed };
+        } catch { /* skip */ }
       }
       return merged;
     } catch (err) {
@@ -86,16 +87,9 @@ export class MemoryService {
     if (!memory || Object.keys(memory).length === 0) return;
 
     try {
-      // Delete old thread-scoped entry for this thread, then insert fresh
       await this.db
         .delete(memories)
-        .where(
-          and(
-            eq(memories.workspaceId, workspaceId),
-            eq(memories.scope, 'thread'),
-            eq(memories.threadId, threadId),
-          ),
-        );
+        .where(and(eq(memories.workspaceId, workspaceId), eq(memories.scope, 'thread'), eq(memories.threadId, threadId)));
 
       await this.db.insert(memories).values({
         workspaceId,
@@ -106,6 +100,154 @@ export class MemoryService {
       });
     } catch (err) {
       this.logger.warn(`Failed to save memory for thread ${threadId}: ${err}`);
+    }
+  }
+
+  /**
+   * Explicit write from a Memory node in write mode.
+   * Session scope uses sessionKey for per-caller isolation (B2B pattern).
+   */
+  async writeEntry(
+    workspaceId: string,
+    workflowId: string | undefined,
+    threadId: string,
+    scope: 'thread' | 'session' | 'workflow',
+    sessionKey: string | undefined,
+    key: string,
+    value: unknown,
+  ): Promise<void> {
+    try {
+      const content = JSON.stringify({ [key]: value });
+
+      const matchConditions = [
+        eq(memories.workspaceId, workspaceId),
+        eq(memories.scope, scope),
+        sql`${memories.metadata}->>'memoryKey' = ${key}`,
+      ];
+      if (scope === 'thread') matchConditions.push(eq(memories.threadId, threadId));
+      if (scope === 'workflow' && workflowId) matchConditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'session' && workflowId && sessionKey) {
+        matchConditions.push(eq(memories.workflowId, workflowId));
+        matchConditions.push(eq(memories.sessionKey, sessionKey));
+      }
+
+      await this.db.delete(memories).where(and(...matchConditions));
+
+      await this.db.insert(memories).values({
+        workspaceId,
+        workflowId: workflowId ?? null,
+        threadId,
+        sessionKey: scope === 'session' ? (sessionKey ?? null) : null,
+        scope,
+        content,
+        source: 'manual',
+        metadata: { memoryKey: key, value },
+      });
+    } catch (err) {
+      this.logger.warn(`writeEntry failed for key "${key}": ${err}`);
+    }
+  }
+
+  /**
+   * Explicit delete of a keyed memory entry.
+   */
+  async deleteEntry(
+    workspaceId: string,
+    workflowId: string | undefined,
+    threadId: string,
+    scope: 'thread' | 'session' | 'workflow',
+    sessionKey: string | undefined,
+    key: string,
+  ): Promise<void> {
+    try {
+      const matchConditions = [
+        eq(memories.workspaceId, workspaceId),
+        eq(memories.scope, scope),
+        sql`${memories.metadata}->>'memoryKey' = ${key}`,
+      ];
+      if (scope === 'thread') matchConditions.push(eq(memories.threadId, threadId));
+      if (scope === 'workflow' && workflowId) matchConditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'session' && workflowId && sessionKey) {
+        matchConditions.push(eq(memories.workflowId, workflowId));
+        matchConditions.push(eq(memories.sessionKey, sessionKey));
+      }
+
+      await this.db.delete(memories).where(and(...matchConditions));
+    } catch (err) {
+      this.logger.warn(`deleteEntry failed for key "${key}": ${err}`);
+    }
+  }
+
+  /**
+   * Delete all memory entries for the given scope. Called by the Memory node's clear mode.
+   */
+  async clearEntries(
+    workspaceId: string,
+    workflowId: string | undefined,
+    threadId: string,
+    scope: 'thread' | 'session' | 'workflow',
+    sessionKey: string | undefined,
+  ): Promise<void> {
+    try {
+      const conditions: ReturnType<typeof eq>[] = [
+        eq(memories.workspaceId, workspaceId),
+        eq(memories.scope, scope),
+      ];
+      if (scope === 'thread') conditions.push(eq(memories.threadId, threadId));
+      if (scope === 'workflow' && workflowId) conditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'session' && workflowId && sessionKey) {
+        conditions.push(eq(memories.workflowId, workflowId));
+        conditions.push(eq(memories.sessionKey, sessionKey));
+      }
+      await this.db.delete(memories).where(and(...conditions));
+    } catch (err) {
+      this.logger.warn(`clearEntries failed for scope "${scope}": ${err}`);
+    }
+  }
+
+  /**
+   * Read keyed entries for retrieve mode (keyword match on content).
+   */
+  async readEntries(
+    workspaceId: string,
+    workflowId: string | undefined,
+    threadId: string,
+    scope: 'thread' | 'session' | 'workflow',
+    sessionKey: string | undefined,
+    query: string,
+    topK: number,
+  ): Promise<Array<{ key: string; value: unknown }>> {
+    try {
+      const matchConditions = [
+        eq(memories.workspaceId, workspaceId),
+        eq(memories.scope, scope),
+      ];
+      if (scope === 'thread') matchConditions.push(eq(memories.threadId, threadId));
+      if (scope === 'workflow' && workflowId) matchConditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'session' && workflowId && sessionKey) {
+        matchConditions.push(eq(memories.workflowId, workflowId));
+        matchConditions.push(eq(memories.sessionKey, sessionKey));
+      }
+
+      const rows = await this.db
+        .select({ content: memories.content, metadata: memories.metadata })
+        .from(memories)
+        .where(and(...matchConditions))
+        .orderBy(sql`${memories.updatedAt} DESC`)
+        .limit(topK * 4);
+
+      const q = query.toLowerCase();
+      const filtered = q
+        ? rows.filter((r) => r.content.toLowerCase().includes(q) || JSON.stringify(r.metadata).toLowerCase().includes(q))
+        : rows;
+
+      return filtered.slice(0, topK).map((r) => ({
+        key: String((r.metadata as Record<string, unknown> | null)?.memoryKey ?? r.content.split(':')[0] ?? ''),
+        value: (r.metadata as Record<string, unknown> | null)?.value ?? r.content,
+      }));
+    } catch (err) {
+      this.logger.warn(`readEntries failed: ${err}`);
+      return [];
     }
   }
 
@@ -127,8 +269,11 @@ export class MemoryService {
         )
         .limit(1);
 
-      if (!row) return undefined;
-      return this.decrypt(row.keyEncrypted);
+      if (row) return this.decrypt(row.keyEncrypted);
+      // Fall back to secrets table (BYOK stored via settings page)
+      const secretName = PROVIDER_TO_SECRET[provider];
+      if (secretName) return this.loadSecret(workspaceId, secretName);
+      return undefined;
     } catch (err) {
       this.logger.warn(
         `Failed to load API key for provider ${provider} in workspace ${workspaceId}: ${err}`,
@@ -159,6 +304,42 @@ export class MemoryService {
       );
       return undefined;
     }
+  }
+
+  // ─── OAuth token resolution ───────────────────────────────────────────────
+  // Tries the OAuth connections table first; falls back to the plain secrets table.
+  async resolveIntegrationToken(
+    workspaceId: string,
+    provider: string,
+    secretName: string,
+  ): Promise<string | undefined> {
+    try {
+      const [row] = await this.db
+        .select({
+          accessTokenEncrypted: oauthConnections.accessTokenEncrypted,
+          expiresAt: oauthConnections.expiresAt,
+        })
+        .from(oauthConnections)
+        .where(
+          and(
+            eq(oauthConnections.workspaceId, workspaceId),
+            eq(oauthConnections.provider, provider),
+          ),
+        )
+        .limit(1);
+
+      if (row) {
+        const expired = row.expiresAt && row.expiresAt < new Date();
+        if (!expired) {
+          return this.decrypt(row.accessTokenEncrypted);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`OAuth lookup failed for ${provider}: ${err}`);
+    }
+
+    // Fall back to manually stored secret
+    return this.loadSecret(workspaceId, secretName);
   }
 
   // ─── MCP server resolution ────────────────────────────────────────────────
@@ -197,19 +378,36 @@ export class MemoryService {
 
   // ─── Long-term memory (vector-backed, cross-execution) ───────────────────
 
+  /**
+   * Generate a 1536-d embedding using the given model and API key.
+   * Returns null when the model/key is unavailable — callers fall back to text search.
+   * Non-OpenAI models (Google/Ollama) output wrong dimensions for our schema and also return null.
+   */
   async generateEmbedding(
     text: string,
-    openaiKey: string | undefined,
+    apiKey: string | undefined,
+    modelId = 'text-embedding-3-small',
   ): Promise<number[] | null> {
-    if (!openaiKey) return null;
+    // Google and Ollama models output 768/1024d which doesn't match the 1536d pgvector column
+    if (modelId === 'text-embedding-004' || modelId === 'nomic-embed-text' || modelId === 'mxbai-embed-large') {
+      this.logger.warn(
+        `Embedding model ${modelId} outputs dimensions incompatible with 1536d pgvector column — falling back to text search`,
+      );
+      return null;
+    }
+    if (!apiKey) return null;
     try {
+      const supportsReduction = modelId === 'text-embedding-3-small' || modelId === 'text-embedding-3-large';
+      const body: Record<string, unknown> = { model: modelId, input: text };
+      if (supportsReduction) body['dimensions'] = 1536;
+
       const resp = await fetch('https://api.openai.com/v1/embeddings', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${openaiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ model: 'text-embedding-3-small', input: text }),
+        body: JSON.stringify(body),
       });
       const json = (await resp.json()) as {
         data?: [{ embedding: number[] }];
@@ -238,7 +436,7 @@ export class MemoryService {
   ): Promise<void> {
     try {
       const content = `${key}: ${value}`;
-      const embedding = await this.generateEmbedding(content, openaiKey);
+      const embedding = await this.generateEmbedding(content, openaiKey, 'text-embedding-3-small');
 
       // Upsert: delete existing entry for this key+scope, then insert fresh
       await this.db
@@ -275,7 +473,7 @@ export class MemoryService {
     openaiKey: string | undefined,
   ): Promise<Array<{ key: string; value: unknown; score: number }>> {
     try {
-      const queryEmbedding = await this.generateEmbedding(query, openaiKey);
+      const queryEmbedding = await this.generateEmbedding(query, openaiKey, 'text-embedding-3-small');
 
       if (queryEmbedding) {
         // Vector similarity search using pgvector <=> (cosine distance)

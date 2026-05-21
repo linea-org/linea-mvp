@@ -1,0 +1,47 @@
+---
+title: Code Node
+description: Sandboxed JavaScript execution node — currently disabled pending Pod VM infrastructure.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Code Node
+
+The `code` node is designed to execute arbitrary JavaScript in an isolated environment. It is **currently disabled** while Pod VM infrastructure (Kata Containers / Firecracker) is being provisioned.
+
+<Callout type="warn">
+  **Code node execution is disabled.** Invoking this node will immediately fail the execution with: `"Code node execution is currently disabled. Arbitrary code execution requires a dedicated Pod VM for safe sandboxing."`
+
+  Use the **Agent** node with the `run_javascript` tool as an interim solution (requires human approval per run).
+</Callout>
+
+## Planned Configuration
+
+Once enabled, the node will accept:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `code` | string | — | JavaScript to execute. `input` is bound to `lastOutput`. Must assign to `output`. |
+| `language` | `javascript` | `javascript` | Language (only JavaScript planned initially) |
+| `timeoutMs` | number | `5000` | Execution timeout |
+
+## Planned Example
+
+```javascript
+const lines = input.split('\n');
+output = lines.map(l => l.trim()).filter(Boolean);
+```
+
+## Alternative: Agent + `run_javascript` Tool
+
+Until the Code node is available, enable the `run_javascript` built-in tool on an Agent node:
+
+```json
+{
+  "model": "claude-haiku-4-5-20251001",
+  "instructions": "Run this transformation: {{input.codeRequest}}",
+  "tools": ["run_javascript"]
+}
+```
+
+Note that `run_javascript` always requires human approval due to the `approval: 'always'` policy.

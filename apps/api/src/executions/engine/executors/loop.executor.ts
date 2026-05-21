@@ -7,9 +7,14 @@ export interface LoopNodeData {
   maxIterations?: number;
 }
 
-function resolveByPath(variables: Record<string, unknown>, path: string): unknown {
+function resolveByPath(
+  variables: Record<string, unknown>,
+  path: string,
+): unknown {
   const clean = path.trim().replace(/^\{\{(.+?)\}\}$/, '$1');
-  return clean.split('.').reduce((cur: unknown, k) => (cur as any)?.[k], variables);
+  return clean
+    .split('.')
+    .reduce((cur: unknown, k) => (cur as any)?.[k], variables);
 }
 
 export function executeLoopNode(
@@ -20,7 +25,17 @@ export function executeLoopNode(
 
   let items: unknown[] = [];
   if (nodeData.arrayPath?.trim()) {
-    const resolved = resolveByPath(state.variables, nodeData.arrayPath);
+    let resolved = resolveByPath(state.variables, nodeData.arrayPath);
+
+    // substituteInValue may have already resolved the path to a JSON string (e.g. "[1,2,3]")
+    // Try to parse it as JSON if path resolution returned nothing
+    if (resolved === undefined) {
+      const trimmed = nodeData.arrayPath.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try { resolved = JSON.parse(trimmed); } catch { /* keep undefined */ }
+      }
+    }
+
     if (Array.isArray(resolved)) {
       items = resolved.slice(0, maxIterations);
     } else if (resolved !== undefined && resolved !== null) {
@@ -37,10 +52,18 @@ export function executeLoopNode(
         const sandbox: Record<string, unknown> = {
           item,
           result: undefined,
-          JSON, Math, Object, Array, String, Number, Boolean,
+          JSON,
+          Math,
+          Object,
+          Array,
+          String,
+          Number,
+          Boolean,
         };
         const ctx = createContext(sandbox);
-        const script = new Script(`result = (function() { return (${expr}); })()`);
+        const script = new Script(
+          `result = (function() { return (${expr}); })()`,
+        );
         script.runInContext(ctx, { timeout: 1000 });
         return sandbox['result'];
       } catch {

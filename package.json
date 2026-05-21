@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "turbo build",
-    "dev": "turbo dev",
+    "dev": "turbo dev --filter=!docs",
     "dev:api": "pnpm --filter=@linea/api dev",
     "dev:web": "pnpm --filter=@linea/web dev",
     "dev:docs": "pnpm --filter=@linea/docs dev",
@@ -47,7 +47,10 @@
       "hono": ">=4.12.16",
       "brace-expansion@1": "1.1.13",
       "uuid@>=11 <11.1.1": "11.1.1",
-      "tmp": "0.2.4"
+      "tmp": "0.2.4",
+      "esbuild": ">=0.25.0",
+      "ip-address": ">=9.0.5",
+      "ajv": ">=6.12.6"
     }
   },
   "packageManager": "pnpm@9.15.9",

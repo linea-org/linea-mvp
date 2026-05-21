@@ -1,11 +1,13 @@
 ---
 title: Knowledge Bases
-description: Workspace-scoped document stores with vector search.
+description: Workspace-scoped document stores with keyword search and planned vector search upgrade.
 ---
+
+import { Callout } from 'fumadocs-ui/components/callout';
 
 # Knowledge Bases
 
-Knowledge Bases are **workspace-scoped** document collections. Unlike memories (which are created from agent interactions), knowledge bases hold static reference material: documentation, policy documents, product specs, etc.
+Knowledge Bases are **workspace-scoped** document collections. Unlike memories (which are created from agent interactions), knowledge bases hold static reference material: documentation, policy documents, product specs, FAQ content, etc.
 
 ## Schema
 
@@ -23,21 +25,26 @@ knowledge_entries: {
   id: uuid PK
   knowledgeBaseId: uuid FK → knowledge_bases (cascade delete)
   content: text
-  embedding: vector(1536)
-  metadata: jsonb    // { source, page, author, ... }
+  embedding: vector(1536)   // column exists; NOT populated on insert yet
+  metadata: jsonb           // { source, page, author, ... }
   createdAt: timestamp
 }
 ```
+
+<Callout type="warn">
+  The `embedding` column exists in the schema but is **never populated** when entries are inserted. Search is currently `ilike` keyword matching only. Semantic/vector search is planned for a future release.
+</Callout>
 
 ## Difference from Memories
 
 | | Memories | Knowledge Entries |
 |---|---|---|
-| Scope | Workspace + optional thread/workflow/user | Workspace (via knowledge base) |
-| Created by | Agent interactions | Manual ingestion / import |
-| Deduplication | Semantic superseding | None (duplicates allowed) |
+| Scope | Workspace + optional thread/workflow/user scope | Workspace-wide (via knowledge base) |
+| Created by | Agent interactions and explicit ingest | Manual insert or bulk import |
+| Deduplication | Semantic superseding (pgvector threshold 0.88) | None — duplicates are allowed |
 | Profiling | `factType` grouping | Not applicable |
 | Mutation | Superseded, not edited | Immutable after insert |
+| Search | Hybrid pgvector + ilike | ilike keyword only (embeddings planned) |
 
 ## API Endpoints
 
@@ -47,15 +54,15 @@ knowledge_entries: {
 | `POST` | `/workspaces/:wId/knowledge` | Create knowledge base |
 | `GET` | `/workspaces/:wId/knowledge/:id` | Get base with entry count |
 | `PATCH` | `/workspaces/:wId/knowledge/:id` | Update name/description |
-| `DELETE` | `/workspaces/:wId/knowledge/:id` | Delete base + all entries |
-| `GET` | `/workspaces/:wId/knowledge/:id/entries` | List entries |
+| `DELETE` | `/workspaces/:wId/knowledge/:id` | Delete base and all entries |
+| `GET` | `/workspaces/:wId/knowledge/:id/entries` | List entries (paginated) |
 | `POST` | `/workspaces/:wId/knowledge/:id/entries` | Add entry |
 | `DELETE` | `/workspaces/:wId/knowledge/:id/entries/:eId` | Remove entry |
 | `POST` | `/workspaces/:wId/knowledge/:id/search` | Search entries |
 
 ## Search
 
-The search endpoint currently uses `ilike` keyword matching. It is designed to be upgraded to pgvector cosine search once embeddings are generated on entry insert: the `embedding` column is already present in the schema.
+Search uses `ilike` case-insensitive substring matching against `content`:
 
 ```typescript
 // Current implementation
@@ -65,6 +72,29 @@ The search endpoint currently uses `ilike` keyword matching. It is designed to b
 ))
 ```
 
+Search request body:
+
+```json
+{ "query": "refund policy", "limit": 10 }
+```
+
+**Planned upgrade**: populate `embedding` on entry insert using `text-embedding-3-small`, then switch to pgvector cosine similarity search. The column is already present and indexed.
+
+## Using Knowledge in Workflows
+
+The [Retriever node](/docs/nodes/retriever) searches a knowledge base from within a workflow. Configure it with:
+
+```json
+{
+  "knowledgeBaseId": "kb_abc123",
+  "query": "{{input.question}}",
+  "topK": 5,
+  "outputField": "text"
+}
+```
+
+The retriever uses the same `ilike` search as the REST endpoint. The `knowledgeBaseId` field (not `namespaceId`) is the correct identifier.
+
 ## Frontend
 
-The knowledge UI is at `/knowledge`. It lists all bases in the active workspace. Selecting a base opens an entry list with search. Knowledge bases span all spaces: they are workspace-wide shared resources.
+The knowledge UI is at `/knowledge`. It lists all bases in the active workspace. Selecting a base opens an entry list with inline search. Knowledge bases are workspace-wide shared resources — all pods and workflows in the workspace have access.

@@ -1,0 +1,328 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { createApiClient } from '@/lib/api';
+import { Button } from '@linea/ui/components/button';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  BookOpen01Icon,
+  Search01Icon,
+  ArrowDown01Icon,
+  WorkflowSquare01Icon,
+  FlowCircleIcon,
+  Settings01Icon,
+  UserMultiple02Icon,
+  Key01Icon,
+  CheckmarkCircle01Icon,
+  Cancel01Icon,
+  Add01Icon,
+  Delete01Icon,
+  Edit01Icon,
+} from '@hugeicons/core-free-icons';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@linea/ui/components/select';
+
+interface AuditLog {
+  id: string;
+  actorId: string;
+  actorEmail: string;
+  actorName: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  resourceName: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+type Period = '24h' | '7d' | '30d' | 'all';
+
+const PERIODS: { label: string; value: Period }[] = [
+  { label: '24h', value: '24h' },
+  { label: '7 days', value: '7d' },
+  { label: '30 days', value: '30d' },
+  { label: 'All time', value: 'all' },
+];
+
+const RESOURCE_TYPES = [
+  { label: 'All resources', value: 'all' },
+  { label: 'Workflow', value: 'workflow' },
+  { label: 'Execution', value: 'execution' },
+  { label: 'Pod', value: 'pod' },
+  { label: 'Workspace', value: 'workspace' },
+  { label: 'Member', value: 'member' },
+  { label: 'API Key', value: 'api_key' },
+  { label: 'Schedule', value: 'schedule' },
+  { label: 'Webhook', value: 'webhook' },
+];
+
+function actionIcon(action: string) {
+  if (action.includes('create') || action.includes('add')) return { icon: Add01Icon, color: 'text-green-500' };
+  if (action.includes('delete') || action.includes('remove')) return { icon: Delete01Icon, color: 'text-red-500' };
+  if (action.includes('update') || action.includes('edit') || action.includes('patch')) return { icon: Edit01Icon, color: 'text-blue-500' };
+  if (action.includes('cancel') || action.includes('fail')) return { icon: Cancel01Icon, color: 'text-red-500' };
+  if (action.includes('complete') || action.includes('success')) return { icon: CheckmarkCircle01Icon, color: 'text-green-500' };
+  return { icon: BookOpen01Icon, color: 'text-muted-foreground' };
+}
+
+function resourceIcon(type: string) {
+  switch (type) {
+    case 'workflow': return WorkflowSquare01Icon;
+    case 'execution': return FlowCircleIcon;
+    case 'workspace': return Settings01Icon;
+    case 'member': return UserMultiple02Icon;
+    case 'api_key': return Key01Icon;
+    default: return BookOpen01Icon;
+  }
+}
+
+function formatAction(action: string): string {
+  return action
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function timeLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = Date.now();
+  const diff = now - d.getTime();
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export default function AuditPage() {
+  const { getToken } = useAuth();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
+  const [period, setPeriod] = useState<Period>('7d');
+  const [resourceType, setResourceType] = useState('all');
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (wsLoading || !activeWorkspace) return;
+    setLoading(true);
+    setUnavailable(false);
+
+    async function load() {
+      const token = await getToken();
+      if (!token || !activeWorkspace) return;
+      try {
+        const api = createApiClient(token);
+        const params = new URLSearchParams();
+        if (period !== 'all') params.set('period', period);
+        if (resourceType !== 'all') params.set('resourceType', resourceType);
+        const data = await api.get<AuditLog[]>(
+          `/workspaces/${activeWorkspace.id}/audit-logs?${params.toString()}`,
+        );
+        setLogs(data ?? []);
+      } catch (err: unknown) {
+        const status = (err as { status?: number })?.status;
+        if (status === 404 || status === 501) {
+          setUnavailable(true);
+          setLogs([]);
+        } else {
+          setLogs([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void load();
+  }, [activeWorkspace, wsLoading, period, resourceType, getToken]);
+
+  const filtered = logs.filter((l) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      l.action.toLowerCase().includes(q) ||
+      (l.actorEmail ?? '').toLowerCase().includes(q) ||
+      (l.actorName ?? '').toLowerCase().includes(q) ||
+      (l.resourceName ?? '').toLowerCase().includes(q) ||
+      l.resourceType.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-semibold">Audit Log</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Track who changed what across your workspace</p>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <HugeiconsIcon
+            icon={Search01Icon}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none"
+          />
+          <input
+            type="text"
+            placeholder="Search actions, users…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full h-9 rounded-md border border-input bg-transparent pl-8 pr-3 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
+
+        {/* Resource type */}
+        <Select value={resourceType} onValueChange={setResourceType}>
+          <SelectTrigger className="w-40 h-9 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {RESOURCE_TYPES.map((r) => (
+              <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Period */}
+        <div className="flex gap-0.5 rounded-lg border p-0.5">
+          {PERIODS.map(({ label, value }) => (
+            <button
+              key={value}
+              onClick={() => setPeriod(value)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                period === value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {(search || resourceType !== 'all' || period !== '7d') && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-9"
+            onClick={() => { setSearch(''); setResourceType('all'); setPeriod('7d'); }}
+          >
+            Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Content */}
+      {loading || wsLoading ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+        </div>
+      ) : unavailable ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
+          <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-muted">
+            <HugeiconsIcon icon={BookOpen01Icon} className="size-6 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium">Audit log not available</p>
+          <p className="mt-1.5 text-xs text-muted-foreground max-w-sm">
+            The audit log API endpoint is not yet implemented. Enable audit logging in your API configuration to start capturing events.
+          </p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+          <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
+            <HugeiconsIcon icon={BookOpen01Icon} className="size-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium">
+            {search ? 'No matching events' : 'No audit events yet'}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {search ? 'Try adjusting your search or filters.' : 'Workspace changes will be recorded here.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">{filtered.length} event{filtered.length !== 1 ? 's' : ''}</p>
+          <div className="rounded-xl border overflow-hidden divide-y divide-border/50">
+            {filtered.map((log) => {
+              const { icon: ActionIcon, color } = actionIcon(log.action);
+              const ResIcon = resourceIcon(log.resourceType);
+              const isExpanded = expanded === log.id;
+              const hasMetadata = log.metadata && Object.keys(log.metadata).length > 0;
+
+              return (
+                <div key={log.id}>
+                  <button
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30 ${hasMetadata ? 'cursor-pointer' : 'cursor-default'}`}
+                    onClick={() => hasMetadata && setExpanded(isExpanded ? null : log.id)}
+                    disabled={!hasMetadata}
+                  >
+                    {/* Action icon */}
+                    <span className={`shrink-0 ${color}`}>
+                      <HugeiconsIcon icon={ActionIcon} className="size-4" />
+                    </span>
+
+                    {/* Action + resource */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-medium">{formatAction(log.action)}</span>
+                        {log.resourceName && (
+                          <>
+                            <span className="text-muted-foreground/40 text-xs">on</span>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <HugeiconsIcon icon={ResIcon} className="size-3" />
+                              {log.resourceName}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-muted-foreground">
+                          {log.actorName ?? log.actorEmail}
+                        </span>
+                        {log.actorName && (
+                          <span className="text-xs text-muted-foreground/50">{log.actorEmail}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Time + expand */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {timeLabel(log.createdAt)}
+                      </span>
+                      {hasMetadata && (
+                        <HugeiconsIcon
+                          icon={ArrowDown01Icon}
+                          className={`size-3.5 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        />
+                      )}
+                    </div>
+                  </button>
+
+                  {isExpanded && log.metadata && (
+                    <div className="border-t bg-muted/20 px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Details</p>
+                      <pre className="text-xs text-muted-foreground overflow-auto max-h-40 font-mono">
+                        {JSON.stringify(log.metadata, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

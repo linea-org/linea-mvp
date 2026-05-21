@@ -1,5 +1,19 @@
-import { Controller, Get, Post, Delete, Body, Param, HttpCode, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  HttpCode,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { SecretsService } from './secrets.service';
 import { CreateSecretDto } from './dto/create-secret.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
@@ -36,10 +50,7 @@ export class SecretsController {
   @ApiOperation({ summary: 'Delete a secret (admin+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'id' })
-  delete(
-    @Param('workspaceId') workspaceId: string,
-    @Param('id') id: string,
-  ) {
+  delete(@Param('workspaceId') workspaceId: string, @Param('id') id: string) {
     return this.service.delete(workspaceId, id);
   }
 }

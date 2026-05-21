@@ -1,64 +1,99 @@
 import type { WorkflowState } from '../variable-substitution';
+import type { MemoryService } from '../memory.service';
 
 export interface MemoryNodeData {
-  memoryMode?: 'smart' | 'retrieve' | 'clear';
-  memoryScope?: 'thread' | 'workflow' | 'user';
-  memoryQuery?: string;   // retrieve mode — what to search
-  memoryTopK?: number;    // retrieve mode — how many results
-  memoryAgentId?: string; // attribution tag
+  memoryMode?: 'smart' | 'retrieve' | 'write' | 'delete' | 'clear';
+  memoryScope?: 'thread' | 'workflow' | 'session';
+  memoryKey?: string;
+  memoryValue?: string; // write mode — supports {{variable}} (already substituted by caller)
+  memoryQuery?: string; // retrieve mode — keyword filter
+  memoryTopK?: number;  // retrieve mode — max results
+  memorySessionKey?: string; // session scope — resolved caller identifier
 }
 
-/**
- * Execute a memory node.
- *
- * - retrieve: returns matching entries from state.memory as an array
- * - clear:    signals the runner to wipe the relevant scope
- * - smart:    LLM-managed; the agent executor handles this via tool calls.
- *             At the node level we just pass through and let the caller handle it.
- */
-export function executeMemoryNode(
+export interface MemoryExecutorContext {
+  workspaceId: string;
+  workflowId?: string;
+  threadId: string;
+  service: MemoryService;
+}
+
+export async function executeMemoryNode(
   nodeData: MemoryNodeData,
   state: WorkflowState,
-): unknown {
+  ctx?: MemoryExecutorContext,
+): Promise<unknown> {
   const mode = nodeData.memoryMode ?? 'retrieve';
-  const memory = state.memory ?? {};
+  const scope = (nodeData.memoryScope ?? 'thread') as 'thread' | 'workflow' | 'session';
 
-  switch (mode) {
-    case 'retrieve': {
+  // Legacy fallback: no context → operate on in-memory state only
+  if (!ctx) {
+    const memory = state.memory ?? {};
+    if (mode === 'retrieve') {
       const query = (nodeData.memoryQuery ?? '').toLowerCase();
       const topK = nodeData.memoryTopK ?? 5;
-
       const entries = Object.entries(memory).map(([key, value]) => ({
         key,
         value,
         text: typeof value === 'string' ? value : JSON.stringify(value),
       }));
-
       const matches = query
-        ? entries.filter(
-            (e) =>
-              e.key.toLowerCase().includes(query) ||
-              e.text.toLowerCase().includes(query),
-          )
+        ? entries.filter((e) => e.key.toLowerCase().includes(query) || e.text.toLowerCase().includes(query))
         : entries;
-
       const top = matches.slice(0, topK);
+      return { memories: top, count: top.length, query };
+    }
+    if (mode === 'clear') {
+      return { __clearMemory: true, scope };
+    }
+    return { memory, count: Object.keys(memory).length };
+  }
 
-      return {
-        memories: top,
-        count: top.length,
-        query,
-      };
+  const { workspaceId, workflowId, threadId, service } = ctx;
+  const sessionKey = nodeData.memorySessionKey?.trim() || undefined;
+
+  // Session scope without an isolation key leaks memory across all callers
+  if (scope === 'session' && !sessionKey) {
+    return {
+      error: 'Session scope requires a non-empty memorySessionKey. Without it all callers share the same memory namespace.',
+    };
+  }
+
+  switch (mode) {
+    case 'write': {
+      const key = (nodeData.memoryKey ?? '').trim();
+      if (!key) return { error: 'memoryKey is required for write mode' };
+      let value: unknown = nodeData.memoryValue;
+      try {
+        value = JSON.parse(nodeData.memoryValue ?? '');
+      } catch { /* keep as string */ }
+      await service.writeEntry(workspaceId, workflowId, threadId, scope, sessionKey, key, value);
+      return { written: true, key, scope };
     }
 
-    case 'clear':
-      // Signal to the LangGraph reducer to wipe memory
-      return { __clearMemory: true, scope: nodeData.memoryScope ?? 'thread' };
+    case 'delete': {
+      const key = (nodeData.memoryKey ?? '').trim();
+      if (!key) return { error: 'memoryKey is required for delete mode' };
+      await service.deleteEntry(workspaceId, workflowId, threadId, scope, sessionKey, key);
+      return { deleted: true, key, scope };
+    }
+
+    case 'retrieve': {
+      const query = nodeData.memoryQuery ?? '';
+      const topK = nodeData.memoryTopK ?? 5;
+      const entries = await service.readEntries(workspaceId, workflowId, threadId, scope, sessionKey, query, topK);
+      return { memories: entries, count: entries.length, query };
+    }
+
+    case 'clear': {
+      await service.clearEntries(workspaceId, workflowId, threadId, scope, sessionKey);
+      return { cleared: true, scope };
+    }
 
     case 'smart':
-    default:
-      // smart mode is managed by the agent executor via tool calls
-      // Return current memory snapshot for the agent to reason about
+    default: {
+      const memory = state.memory ?? {};
       return { memory, count: Object.keys(memory).length };
+    }
   }
 }
