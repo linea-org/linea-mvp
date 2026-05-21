@@ -190,6 +190,24 @@ export async function executeAgentNode(
 
     // ── No tool calls — agent has a final answer ─────────────────────────────
     if (!response.toolCalls?.length || response.stopReason === 'end_turn') {
+      // Validate JSON when structured output is required; retry once on failure
+      if (structuredSchema) {
+        const parsed = tryParseJson(response.text);
+        if (parsed !== null) {
+          return buildResult(parsed as unknown as string, totalUsage, messages, variableUpdates, memoryUpdates, toolCallLog, modelDef, false, null);
+        }
+        // Parsing failed — push a correction turn and continue if steps remain
+        if (step < maxSteps - 1) {
+          messages.push({ role: 'assistant', content: response.text });
+          messages.push({
+            role: 'user',
+            content:
+              'Your response was not valid JSON. Respond with ONLY a valid JSON object matching the required schema. No explanation, no code fences, no extra text.',
+          });
+          continue;
+        }
+        // Out of steps — fall through and return raw text
+      }
       return buildResult(
         response.text,
         totalUsage,
@@ -299,6 +317,18 @@ export async function executeAgentNode(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function tryParseJson(text: string): unknown {
+  try {
+    const cleaned = text
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim();
+    return JSON.parse(cleaned);
+  } catch {
+    return null;
+  }
+}
+
 function buildResult(
   text: string,
   usage: { input_tokens: number; output_tokens: number; total_tokens: number },
@@ -314,19 +344,7 @@ function buildResult(
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }));
 
-  // Parse structured output before appending any notes — otherwise JSON.parse fails
   let finalValue: unknown = text;
-  if (structuredSchema && typeof text === 'string') {
-    try {
-      const cleaned = text
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```$/, '')
-        .trim();
-      finalValue = JSON.parse(cleaned);
-    } catch {
-      // Leave as text if parsing fails
-    }
-  }
 
   if (hitMaxSteps && typeof finalValue === 'string') {
     finalValue = `${finalValue}\n\n[Note: reached maximum steps limit]`;
