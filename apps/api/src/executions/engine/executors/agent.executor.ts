@@ -1,10 +1,13 @@
 import { interrupt } from '@langchain/langgraph';
-import { getModelOrDefault } from '../models/registry';
+import { getModelOrDefault, MODEL_REGISTRY } from '../models/registry';
+import type { ModelDefinition, ModelProvider } from '../models/registry';
 import { createModelClient } from '../models/client.factory';
 import type {
   ChatMessage,
   NormalizedToolCall,
   ModelApiKeys,
+  ModelClient,
+  CompletionOptions,
 } from '../models/client.factory';
 import type { WorkflowState } from '../variable-substitution';
 import { substituteVariables } from '../variable-substitution';
@@ -14,6 +17,94 @@ import type { ToolExecutorContext } from '../tools/tool-executor';
 
 const DEFAULT_MAX_STEPS = 10;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+// ─── Provider fallback helpers ────────────────────────────────────────────────
+
+function hasApiKey(provider: ModelProvider, apiKeys: ModelApiKeys): boolean {
+  if (provider === 'ollama') return true;
+  const map: Record<string, keyof ModelApiKeys> = {
+    anthropic: 'ANTHROPIC_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    xai: 'XAI_API_KEY',
+    groq: 'GROQ_API_KEY',
+    google: 'GOOGLE_API_KEY',
+  };
+  return Boolean(apiKeys[map[provider]]);
+}
+
+/** Returns up to 2 fallback models from other providers, ordered by tier closeness then cost. */
+function buildFallbackChain(
+  primary: ModelDefinition,
+  apiKeys: ModelApiKeys,
+): Array<{ def: ModelDefinition; client: ModelClient }> {
+  const tierRank: Record<string, number> = { fast: 0, balanced: 1, powerful: 2, reasoning: 3 };
+  const primaryRank = tierRank[primary.tier] ?? 1;
+
+  const candidates = Object.values(MODEL_REGISTRY)
+    .filter(
+      (m) =>
+        m.id !== primary.id &&
+        !m.capabilities.embedding &&
+        m.capabilities.functionCalling &&
+        hasApiKey(m.provider, apiKeys),
+    )
+    .sort((a, b) => {
+      const tierDiff =
+        Math.abs((tierRank[a.tier] ?? 1) - primaryRank) -
+        Math.abs((tierRank[b.tier] ?? 1) - primaryRank);
+      if (tierDiff !== 0) return tierDiff;
+      return a.costPer1mTokens.input - b.costPer1mTokens.input;
+    })
+    .slice(0, 2);
+
+  const result: Array<{ def: ModelDefinition; client: ModelClient }> = [];
+  for (const def of candidates) {
+    try {
+      result.push({ def, client: createModelClient(def.id, def.provider, apiKeys) });
+    } catch {
+      // Skip — shouldn't happen since we checked hasApiKey, but guard anyway
+    }
+  }
+  return result;
+}
+
+function isProviderError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    /API key|not configured|authentication|401/i.test(msg) ||
+    /quota|rate.?limit|overload|unavailable|503|529/i.test(msg)
+  );
+}
+
+/**
+ * Call the active client; on provider-level errors rotate to the next fallback.
+ * Updates `activeRef.def` and `activeRef.client` in place when switching.
+ */
+async function callWithFallback(
+  messages: ChatMessage[],
+  opts: CompletionOptions,
+  activeRef: { def: ModelDefinition; client: ModelClient },
+  fallbacks: Array<{ def: ModelDefinition; client: ModelClient }>,
+  fallbackIdx: { v: number },
+): Promise<ReturnType<ModelClient>> {
+  try {
+    return await activeRef.client(messages, opts);
+  } catch (err) {
+    if (!isProviderError(err)) throw err;
+    while (fallbackIdx.v < fallbacks.length) {
+      const next = fallbacks[fallbackIdx.v++]!;
+      activeRef.def = next.def;
+      activeRef.client = next.client;
+      try {
+        return await activeRef.client(messages, opts);
+      } catch (fallbackErr) {
+        if (!isProviderError(fallbackErr)) throw fallbackErr;
+        // continue to next fallback
+      }
+    }
+    throw err; // all fallbacks exhausted
+  }
+}
 
 export interface AgentResult {
   __agentValue: string;
@@ -55,7 +146,19 @@ export async function executeAgentNode(
   onToken?: (delta: string) => void,
 ): Promise<AgentResult> {
   const modelDef = getModelOrDefault(nodeData.model, 'balanced');
-  const client = createModelClient(modelDef.id, modelDef.provider, apiKeys);
+
+  // Build active client + fallback chain. Primary may fail immediately (missing key).
+  const fallbacks = buildFallbackChain(modelDef, apiKeys);
+  const fallbackIdx = { v: 0 };
+  const activeRef: { def: ModelDefinition; client: ModelClient } = (() => {
+    try {
+      return { def: modelDef, client: createModelClient(modelDef.id, modelDef.provider, apiKeys) };
+    } catch (err) {
+      if (!isProviderError(err) || fallbacks.length === 0) throw err;
+      const first = fallbacks[fallbackIdx.v++]!;
+      return { def: first.def, client: first.client };
+    }
+  })();
 
   const maxSteps: number = nodeData.maxSteps ?? DEFAULT_MAX_STEPS;
   const toolNames: string[] = nodeData.tools ?? [];
@@ -172,8 +275,8 @@ export async function executeAgentNode(
     // the LLM makes the same choices so it hits the same interrupt() call.
     const temperature = tools.length > 0 ? 0 : (nodeData.temperature ?? 0.7);
 
-    const response = await client(
-      trimToTokenBudget(messages, modelDef.contextWindow, budgetPct),
+    const response = await callWithFallback(
+      trimToTokenBudget(messages, activeRef.def.contextWindow, budgetPct),
       {
         maxTokens: nodeData.maxTokens ?? 4096,
         temperature,
@@ -181,6 +284,9 @@ export async function executeAgentNode(
         toolChoice: tools.length ? 'auto' : undefined,
         onToken,
       },
+      activeRef,
+      fallbacks,
+      fallbackIdx,
     );
 
     totalUsage.input_tokens += response.usage.inputTokens;
@@ -194,7 +300,7 @@ export async function executeAgentNode(
       if (structuredSchema) {
         const parsed = tryParseJson(response.text);
         if (parsed !== null) {
-          return buildResult(parsed as unknown as string, totalUsage, messages, variableUpdates, memoryUpdates, toolCallLog, modelDef, false, null);
+          return buildResult(parsed as unknown as string, totalUsage, messages, variableUpdates, memoryUpdates, toolCallLog, activeRef.def, false, null);
         }
         // Parsing failed — push a correction turn and continue if steps remain
         if (step < maxSteps - 1) {
@@ -215,7 +321,7 @@ export async function executeAgentNode(
         variableUpdates,
         memoryUpdates,
         toolCallLog,
-        modelDef,
+        activeRef.def,
         false,
         structuredSchema,
       );
@@ -309,7 +415,7 @@ export async function executeAgentNode(
     variableUpdates,
     memoryUpdates,
     toolCallLog,
-    modelDef,
+    activeRef.def,
     true,
     structuredSchema,
   );
