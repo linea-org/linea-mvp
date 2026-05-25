@@ -33,9 +33,10 @@ const migrationsDir = join(__dirname, 'migrations');
 // Read the drizzle-kit journal to know which migrations exist
 const journal = JSON.parse(readFileSync(join(migrationsDir, 'meta', '_journal.json'), 'utf-8'));
 
-// Create the drizzle migrations tracking table (drizzle-kit migrate also creates this)
+// Create the drizzle schema + tracking table (drizzle-kit migrate also creates these)
+await db`CREATE SCHEMA IF NOT EXISTS drizzle`;
 await db`
-  CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+  CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
     id SERIAL PRIMARY KEY,
     hash text NOT NULL,
     created_at bigint
@@ -53,7 +54,7 @@ for (const entry of journal.entries) {
   const hash = createHash('sha256').update(content).digest('hex');
 
   const [existing] = await db`
-    SELECT id FROM __drizzle_migrations WHERE hash = ${hash}
+    SELECT id FROM drizzle.__drizzle_migrations WHERE hash = ${hash}
   `;
 
   if (existing) {
@@ -61,7 +62,7 @@ for (const entry of journal.entries) {
     skipped++;
   } else {
     await db`
-      INSERT INTO __drizzle_migrations (hash, created_at)
+      INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
       VALUES (${hash}, ${entry.when})
     `;
     console.log(`  ✓ marked as applied: ${entry.tag}`);
