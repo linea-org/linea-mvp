@@ -16,7 +16,6 @@
     "db:push": "turbo db:push --filter=@linea/db",
     "db:generate": "turbo db:generate --filter=@linea/db",
     "db:migrate": "pnpm --filter=@linea/db db:migrate",
-    "db:baseline": "pnpm --filter=@linea/db db:baseline",
     "db:studio": "turbo db:studio --filter=@linea/db",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
