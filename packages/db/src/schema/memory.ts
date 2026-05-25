@@ -42,6 +42,27 @@ export const memorySessions = pgTable('memory_sessions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * Per-knowledge-base RAG settings.
+ * Priority: per-node override → kbSettings → wsSettings → system default
+ */
+export interface KnowledgeBaseSettings {
+  /** Overrides workspace-level embedding model (must be an OpenAI 1536d model) */
+  embeddingModel?: string;
+  /** Max chars per chunk (default: 1800 ≈ 512 tokens) */
+  chunkSize?: number;
+  /** Overlap chars between adjacent chunks (default: 360 = 20%) */
+  chunkOverlap?: number;
+  /** Minimum cosine similarity for vector hits (default: 0.75) */
+  similarityThreshold?: number;
+  /** Phase 3: opt-in Cohere Rerank v3.5 (retrieve top-rerankTopK, return top-K) */
+  enableRerank?: boolean;
+  /** Phase 3: candidates passed to reranker (default: 50) */
+  rerankTopK?: number;
+  /** Phase 3: fetch neighboring chunks (X-1, X, X+1) for richer context */
+  expandContext?: boolean;
+}
+
 export const knowledgeBases = pgTable('knowledge_bases', {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id')
@@ -49,6 +70,8 @@ export const knowledgeBases = pgTable('knowledge_bases', {
     .notNull(),
   name: text('name').notNull(),
   description: text('description'),
+  /** Per-KB RAG settings — see KnowledgeBaseSettings */
+  settings: jsonb('settings').$type<KnowledgeBaseSettings>().default({}).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -64,6 +87,10 @@ export const knowledgeEntries = pgTable('knowledge_entries', {
   sourceId: text('source_id'),
   chunkIndex: integer('chunk_index'),
   totalChunks: integer('total_chunks'),
+  /** SHA-256 of content — used for deduplication before insert */
+  contentHash: text('content_hash'),
+  /** Ingestion lifecycle: pending → embedding → indexed | failed */
+  status: text('status').default('indexed').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -94,3 +121,6 @@ export type KnowledgeBase = typeof knowledgeBases.$inferSelect;
 export type NewKnowledgeBase = typeof knowledgeBases.$inferInsert;
 export type KnowledgeEntry = typeof knowledgeEntries.$inferSelect;
 export type NewKnowledgeEntry = typeof knowledgeEntries.$inferInsert;
+
+/** Valid values for knowledgeEntries.status */
+export type KnowledgeEntryStatus = 'pending' | 'embedding' | 'indexed' | 'failed';

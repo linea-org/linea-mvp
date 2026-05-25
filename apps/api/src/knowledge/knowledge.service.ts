@@ -1,6 +1,7 @@
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
 import { and, eq, count, desc, sql } from 'drizzle-orm';
-import type { DrizzleDB, NewKnowledgeBase, NewKnowledgeEntry } from '@linea/db';
+import { createHash } from 'node:crypto';
+import type { DrizzleDB, NewKnowledgeBase, NewKnowledgeEntry, KnowledgeBaseSettings } from '@linea/db';
 import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { EmbeddingService } from '../memory/embedding.service';
@@ -27,6 +28,7 @@ export class KnowledgeService {
         workspaceId,
         name: dto.name,
         description: dto.description ?? null,
+        settings: dto.settings ?? {},
       } satisfies Partial<NewKnowledgeBase> as NewKnowledgeBase)
       .returning();
     return kb;
@@ -136,17 +138,47 @@ export class KnowledgeService {
   async addEntry(workspaceId: string, kbId: string, dto: CreateEntryDto) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
-    // Load workspace RAG settings (chunk size / overlap)
-    const [ws] = await this.db
-      .select({ settings: workspaces.settings })
-      .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .limit(1);
-    const wsSettings = ws?.settings ?? {};
-    const CHUNK_SIZE = wsSettings.ragChunkSize ?? 1000;
-    const CHUNK_OVERLAP = wsSettings.ragChunkOverlap ?? 200;
-    const chunks = this.splitIntoChunks(dto.content, CHUNK_SIZE, CHUNK_OVERLAP);
+    // Load workspace + KB settings in parallel — 3-level cascade:
+    //   per-node override → kbSettings → wsSettings → system default
+    const [[ws], [kb]] = await Promise.all([
+      this.db
+        .select({ settings: workspaces.settings })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1),
+      this.db
+        .select({ settings: knowledgeBases.settings })
+        .from(knowledgeBases)
+        .where(eq(knowledgeBases.id, kbId))
+        .limit(1),
+    ]);
 
+    const wsSettings = ws?.settings ?? {};
+    const kbSettings: KnowledgeBaseSettings = kb?.settings ?? {};
+
+    // Settings cascade: KB → workspace → system default
+    const CHUNK_SIZE   = kbSettings.chunkSize   ?? wsSettings.ragChunkSize   ?? 1000;
+    const CHUNK_OVERLAP = kbSettings.chunkOverlap ?? wsSettings.ragChunkOverlap ?? 200;
+
+    // ── Deduplication: skip if whole-document hash already exists in this KB ──
+    const contentHash = createHash('sha256').update(dto.content).digest('hex');
+    const [existing] = await this.db
+      .select({ id: knowledgeEntries.id })
+      .from(knowledgeEntries)
+      .where(
+        and(
+          eq(knowledgeEntries.knowledgeBaseId, kbId),
+          eq(knowledgeEntries.contentHash, contentHash),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      this.logger.debug(`Duplicate content detected for KB ${kbId}, skipping insert`);
+      return existing;
+    }
+
+    const chunks = this.splitIntoChunks(dto.content, CHUNK_SIZE, CHUNK_OVERLAP);
     const sourceId = chunks.length > 1 ? crypto.randomUUID() : null;
     const totalChunks = chunks.length > 1 ? chunks.length : null;
 
@@ -154,6 +186,9 @@ export class KnowledgeService {
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]!;
+      const chunkHash = chunks.length > 1
+        ? createHash('sha256').update(chunk).digest('hex')
+        : contentHash;
 
       let embedding: number[] | undefined;
       try {
@@ -174,6 +209,8 @@ export class KnowledgeService {
           sourceId,
           chunkIndex: chunks.length > 1 ? i : null,
           totalChunks,
+          contentHash: chunkHash,
+          status: 'indexed',
         } satisfies Partial<NewKnowledgeEntry> as NewKnowledgeEntry)
         .returning();
 
@@ -278,6 +315,15 @@ export class KnowledgeService {
   ) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
+    // Load KB settings to apply per-KB similarity threshold
+    const [kb] = await this.db
+      .select({ settings: knowledgeBases.settings })
+      .from(knowledgeBases)
+      .where(eq(knowledgeBases.id, kbId))
+      .limit(1);
+    const kbSettings: KnowledgeBaseSettings = kb?.settings ?? {};
+    const similarityThreshold = kbSettings.similarityThreshold ?? 0.75;
+
     let queryEmbedding: number[] | null = null;
     try {
       const vec = await this.embeddingService.embed(dto.query);
@@ -287,7 +333,7 @@ export class KnowledgeService {
       // fall through to keyword search
     }
 
-    const results = await this.vectorSearch(kbId, queryEmbedding, dto.query, dto.limit ?? 20);
+    const results = await this.vectorSearch(kbId, queryEmbedding, dto.query, dto.limit ?? 20, similarityThreshold);
     return results;
   }
 }
