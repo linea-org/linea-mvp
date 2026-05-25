@@ -9,6 +9,7 @@ import { SecretsService } from '../secrets/secrets.service';
 import { ExecutionsService } from '../executions/executions.service';
 import { MemoryService } from '../executions/engine/memory.service';
 import { CheckpointerService } from '../executions/engine/checkpointer.service';
+import { McpService } from '../mcp/mcp.service';
 import { createModelClient } from '../executions/engine/models/client.factory';
 import { MODEL_REGISTRY } from '../executions/engine/models/registry';
 import type {
@@ -75,6 +76,7 @@ const SYSTEM_PROMPT = `You are Linea's built-in AI assistant. Linea is a visual 
 7. Use save_to_memory to remember user preferences, names, or facts across conversations
 8. Use list_executions / get_execution to inspect recent runs and debug failures
 9. Use list_schedules to show what's scheduled in a pod
+10. Use list_mcp_servers / call_mcp_tool to interact with any MCP server configured in the workspace
 
 Be direct, clear, and structured. Use emoji section headers for readability.`;
 
@@ -189,6 +191,29 @@ const AGENT_TOOLS: ToolDefinition[] = [
     },
     approval: 'never',
   },
+  {
+    name: 'list_mcp_servers',
+    description: 'List all MCP (Model Context Protocol) servers configured in this workspace. Returns id, name, and url for each server.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    approval: 'never',
+  },
+  {
+    name: 'call_mcp_tool',
+    description: 'Call a tool on a configured MCP server. First use list_mcp_servers to find available servers, then call a specific tool with parameters.',
+    parameters: {
+      type: 'object',
+      properties: {
+        server_id: { type: 'string', description: 'MCP server ID (from list_mcp_servers)' },
+        tool_name: { type: 'string', description: 'Name of the tool to call on the MCP server' },
+        parameters: {
+          type: 'object',
+          description: 'Tool parameters as key-value pairs',
+        },
+      },
+      required: ['server_id', 'tool_name'],
+    },
+    approval: 'never',
+  },
 ];
 
 const PROVIDER_KEY_MAP: Partial<Record<string, keyof ModelApiKeys>> = {
@@ -255,6 +280,7 @@ export class AgentChatService {
     private readonly executionsService: ExecutionsService,
     private readonly memoryService: MemoryService,
     private readonly checkpointerService: CheckpointerService,
+    private readonly mcpService: McpService,
   ) {}
 
   async *chat(workspaceId: string, dto: ChatDto): AsyncIterable<object> {
@@ -561,6 +587,60 @@ export class AgentChatService {
           .orderBy(schedules.nextRunAt);
 
         return { schedules: rows, count: rows.length };
+      }
+
+      case 'list_mcp_servers': {
+        const servers = await this.mcpService.findAll(workspaceId);
+        return {
+          servers: servers.map((s) => ({ id: s.id, name: s.name, url: s.url, hasToken: s.hasToken })),
+          count: servers.length,
+        };
+      }
+
+      case 'call_mcp_tool': {
+        const serverId = input['server_id'] as string;
+        const toolName = input['tool_name'] as string;
+        const params = (input['parameters'] as Record<string, unknown>) ?? {};
+
+        let serverInfo: { url: string; accessToken: string | null };
+        try {
+          serverInfo = await this.mcpService.getServerForCall(workspaceId, serverId);
+        } catch {
+          return { error: `MCP server ${serverId} not found in this workspace` };
+        }
+
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (serverInfo.accessToken) headers['Authorization'] = `Bearer ${serverInfo.accessToken}`;
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30_000);
+
+        try {
+          const res = await fetch(serverInfo.url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'tools/call',
+              params: { name: toolName, arguments: params },
+            }),
+            signal: controller.signal,
+          });
+
+          if (!res.ok) {
+            const text = await res.text();
+            return { error: `MCP server returned ${res.status}: ${text.slice(0, 200)}` };
+          }
+
+          const json = (await res.json()) as { result?: unknown; error?: { message: string } };
+          if (json.error) return { error: `MCP tool error: ${json.error.message}` };
+          return { success: true, result: json.result };
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : 'MCP call failed' };
+        } finally {
+          clearTimeout(timer);
+        }
       }
 
       default:
