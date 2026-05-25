@@ -6,9 +6,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { workspaceId: string; kbId: string } },
+  { params }: { params: Promise<{ workspaceId: string; kbId: string }> },
 ) {
-  if (!UUID_RE.test(params.workspaceId) || !UUID_RE.test(params.kbId)) {
+  const { workspaceId, kbId } = await params;
+
+  if (!UUID_RE.test(workspaceId) || !UUID_RE.test(kbId)) {
     return NextResponse.json({ error: 'Invalid workspace or knowledge base ID' }, { status: 400 });
   }
 
