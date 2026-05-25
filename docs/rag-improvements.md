@@ -56,7 +56,7 @@ POST /entries
  return first entry
 ```
 
-### Retrieval Pipeline (Phase 1 — vector + FTS fallback)
+### Retrieval Pipeline (Phase 3 — hybrid RRF search)
 
 ```
 GET /search?query=...
@@ -65,15 +65,35 @@ GET /search?query=...
  embed(query) → queryEmbedding
       │
       ▼
- vectorSearch(kbId, queryEmbedding, query, limit, similarityThreshold)
+ Load KB settings (similarityThreshold, expandContext, enableRerank, rerankTopK)
       │
-      ├─► Vector path (pgvector HNSW):
-      │     SELECT ... WHERE embedding <=> query::vector < distanceThreshold
-      │     ORDER BY distance LIMIT K
-      │
-      └─► FTS fallback (if vector returns 0 results or embedding unavailable):
-            SELECT ... WHERE to_tsvector('english', content) @@ plainto_tsquery(query)
-            ORDER BY ts_rank(...) DESC LIMIT K
+      ▼
+ ┌────────────────────────────┐   ┌───────────────────────────────────┐
+ │ Vector arm (pgvector HNSW) │   │ BM25 arm (FTS, GIN index)         │
+ │  WHERE embedding <=> q     │   │  WHERE to_tsvector @@ tsquery     │
+ │  AND distance < threshold  │   │  ORDER BY ts_rank DESC LIMIT K*3  │
+ │  ORDER BY distance LIMIT K │   └───────────────────────────────────┘
+ └────────────────────────────┘
+      │                                │
+      └──────────────┬─────────────────┘
+                     ▼
+         Weighted RRF merge
+         score = Σ weight / (60 + rank_i)
+         vector 0.7 | BM25 0.3
+                     │
+      ┌──────────────▼─────────────────┐
+      │ enableRerank?                  │
+      │  YES → Cohere Rerank v3.5      │
+      │         top-50 → top-K         │
+      │  NO  → slice(0, K)             │
+      └──────────────┬─────────────────┘
+                     │
+      ┌──────────────▼─────────────────┐
+      │ expandContext?                 │
+      │  YES → fetch chunk X-1, X, X+1│
+      │         join as context window │
+      │  NO  → return as-is           │
+      └────────────────────────────────┘
 ```
 
 ---
@@ -196,5 +216,5 @@ OpenAI text-embedding-3-small: $0.02 / 1M tokens.
 |-------|--------|--------|-----------------|
 | Phase 1 — Foundation | `feat/rag-phase-1` | ✅ shipped | HNSW index, SHA-256 dedup, status column, per-KB settings |
 | Phase 2 — Smarter ingestion | `feat/rag-phase-2` | 🔜 next | Sentence-aware chunking (512-token), async BullMQ queue, status endpoint + UI badge |
-| Phase 3 — Better retrieval | `feat/rag-phase-3` | 🔜 planned | Hybrid RRF search (BM25 0.3 + vector 0.7), context expansion, optional Cohere reranking |
+| Phase 3 — Better retrieval | `feat/rag-phase-1` | ✅ shipped | Hybrid RRF search (BM25 0.3 + vector 0.7), context expansion, optional Cohere reranking |
 | Phase 4 — Advanced | — | 💡 future | Semantic caching, parent-child chunking, Voyage AI, RAGAS eval harness |

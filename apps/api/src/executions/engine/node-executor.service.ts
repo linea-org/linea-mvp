@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isGraphInterrupt, interrupt } from '@langchain/langgraph';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { WorkflowState } from './variable-substitution';
 import { substituteInValue } from './variable-substitution';
 import { MODEL_REGISTRY } from './models/registry';
@@ -33,9 +33,8 @@ import { executeDatetimeNode } from './executors/datetime.executor';
 import { ExecutionSupervisor } from './supervisor';
 import { MemoryService } from './memory.service';
 import type { ModelApiKeys } from './models/client.factory';
-import type { DrizzleDB } from '@linea/db';
-import type { WorkspaceSettings } from '@linea/db';
-import { knowledgeEntries, workspaces } from '@linea/db';
+import type { DrizzleDB, KnowledgeBaseSettings, WorkspaceSettings } from '@linea/db';
+import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 
 export interface NodeInput {
@@ -385,50 +384,150 @@ export class NodeExecutorService {
         const queryEmbedding = await this.memoryService.generateEmbedding(resolvedQuery, embApiKey, embModelId);
 
         const wsSettings = await this.loadWorkspaceSettings(workspaceId);
-        const similarityThreshold = (nodeData.similarityThreshold as number | undefined)
-          ?? wsSettings.ragSimilarityThreshold
-          ?? 0.75;
-
-        // Convert minimum cosine similarity → cosine distance for pgvector's <=> operator.
-        // <=> returns distance (0=identical), so: distance < (1 - minSimilarity).
-        const distanceThreshold = 1 - similarityThreshold;
 
         const r = await executeRetrieverNode(nodeData, state, {
           query: async (q, kbId, topK) => {
-            if (queryEmbedding) {
-              try {
-                const embLiteral = `[${queryEmbedding.join(',')}]`;
-                const rows = await this.db.execute(sql`
-                  SELECT content, metadata
-                  FROM knowledge_entries
-                  WHERE knowledge_base_id = ${kbId}
-                    AND embedding IS NOT NULL
-                    AND (embedding <=> ${embLiteral}::vector) < ${distanceThreshold}
-                  ORDER BY embedding <=> ${embLiteral}::vector
-                  LIMIT ${topK}
-                `);
-                const results = Array.from(rows) as Array<{ content: string; metadata: unknown }>;
-                if (results.length > 0) return results;
-              } catch {
-                /* pgvector unavailable — fall through to FTS */
+            // ── 3-level settings cascade ───────────────────────────────────────
+            //   nodeData.[setting] → kbSettings.[setting] → wsSettings → system default
+            const [kbRow] = await this.db
+              .select({ settings: knowledgeBases.settings })
+              .from(knowledgeBases)
+              .where(eq(knowledgeBases.id, kbId))
+              .limit(1);
+            const kbSettings = (kbRow?.settings ?? {}) as KnowledgeBaseSettings;
+
+            const similarityThreshold =
+              (nodeData.similarityThreshold as number | undefined)
+              ?? kbSettings.similarityThreshold
+              ?? wsSettings.ragSimilarityThreshold
+              ?? 0.75;
+            const distanceThreshold = 1 - similarityThreshold;
+
+            const expandContext = (nodeData.expandContext as boolean | undefined) ?? kbSettings.expandContext ?? false;
+            const enableRerank  = (nodeData.enableRerank  as boolean | undefined) ?? kbSettings.enableRerank  ?? false;
+            const rerankTopK    = (nodeData.rerankTopK    as number  | undefined) ?? kbSettings.rerankTopK    ?? 50;
+            const candidateK    = enableRerank ? rerankTopK : topK * 3;
+
+            type RagHit = { id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null };
+
+            // ── Run vector + FTS in parallel ───────────────────────────────────
+            const [vectorHits, ftsHits] = await Promise.all([
+              // Vector arm (pgvector HNSW)
+              queryEmbedding
+                ? (async (): Promise<RagHit[]> => {
+                    try {
+                      const embLiteral = `[${queryEmbedding.join(',')}]`;
+                      const rows = await this.db.execute(sql`
+                        SELECT id, content, metadata,
+                               source_id AS "sourceId", chunk_index AS "chunkIndex"
+                        FROM knowledge_entries
+                        WHERE knowledge_base_id = ${kbId}
+                          AND embedding IS NOT NULL
+                          AND status = 'indexed'
+                          AND (embedding <=> ${embLiteral}::vector) < ${distanceThreshold}
+                        ORDER BY embedding <=> ${embLiteral}::vector
+                        LIMIT ${candidateK}
+                      `);
+                      return Array.from(rows) as RagHit[];
+                    } catch { return []; }
+                  })()
+                : Promise.resolve([]),
+
+              // BM25 arm (PostgreSQL FTS, GIN index from migration 0003)
+              (async (): Promise<RagHit[]> => {
+                try {
+                  const rows = await this.db.execute(sql`
+                    SELECT id, content, metadata,
+                           source_id AS "sourceId", chunk_index AS "chunkIndex"
+                    FROM knowledge_entries
+                    WHERE knowledge_base_id = ${kbId}
+                      AND status = 'indexed'
+                      AND to_tsvector('english', content) @@ plainto_tsquery('english', ${q})
+                    ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${q})) DESC
+                    LIMIT ${candidateK}
+                  `);
+                  return Array.from(rows) as RagHit[];
+                } catch { return []; }
+              })(),
+            ]);
+
+            if (vectorHits.length === 0 && ftsHits.length === 0) return [];
+
+            // ── Reciprocal Rank Fusion — vector 0.7, BM25 0.3 ────────────────
+            // score = Σ weight / (60 + rank_i)   k=60 is the standard RRF constant
+            const scores = new Map<string, number>();
+            const docMap = new Map<string, RagHit>();
+
+            const applyRrf = (hits: RagHit[], weight: number) =>
+              hits.forEach((h, i) => {
+                scores.set(h.id, (scores.get(h.id) ?? 0) + weight / (60 + i));
+                docMap.set(h.id, h);
+              });
+
+            applyRrf(vectorHits, 0.7);
+            applyRrf(ftsHits, 0.3);
+
+            const merged = [...scores.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, enableRerank ? rerankTopK : topK)
+              .map(([id]) => docMap.get(id)!);
+
+            // ── Optional Cohere Rerank v3.5 — top-50 → top-K ─────────────────
+            let ranked = merged;
+            if (enableRerank) {
+              const cohereKey = await this.memoryService.loadApiKey(workspaceId, 'cohere');
+              if (cohereKey) {
+                try {
+                  const resp = await fetch('https://api.cohere.ai/v1/rerank', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${cohereKey}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      model: 'rerank-v3.5',
+                      query: q,
+                      documents: merged.map((d) => d.content),
+                      top_n: topK,
+                    }),
+                    signal: AbortSignal.timeout(10_000),
+                  });
+                  if (resp.ok) {
+                    const json = await resp.json() as { results: Array<{ index: number }> };
+                    ranked = json.results.map((r) => merged[r.index]!);
+                  }
+                } catch (err) {
+                  this.logger.warn(`Cohere rerank failed, using RRF order: ${err}`);
+                  ranked = merged.slice(0, topK);
+                }
+              } else {
+                ranked = merged.slice(0, topK);
               }
+            } else {
+              ranked = merged.slice(0, topK);
             }
-            // Full-text search fallback
-            try {
-              const rows = await this.db.execute(sql`
-                SELECT content, metadata
-                FROM knowledge_entries
-                WHERE knowledge_base_id = ${kbId}
-                  AND to_tsvector('english', content) @@ plainto_tsquery('english', ${q})
-                ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${q})) DESC
-                LIMIT ${topK}
-              `);
-              const results = Array.from(rows) as Array<{ content: string; metadata: unknown }>;
-              if (results.length > 0) return results;
-            } catch {
-              /* FTS unavailable */
+
+            // ── Optional context expansion — fetch chunk X-1 and X+1 ─────────
+            if (!expandContext) {
+              return ranked.map(({ content, metadata }) => ({ content, metadata }));
             }
-            return [];
+
+            return Promise.all(
+              ranked.map(async (h) => {
+                if (!h.sourceId || h.chunkIndex === null) return { content: h.content, metadata: h.metadata };
+                try {
+                  const neighbors = await this.db
+                    .select({ content: knowledgeEntries.content, chunkIndex: knowledgeEntries.chunkIndex })
+                    .from(knowledgeEntries)
+                    .where(and(
+                      eq(knowledgeEntries.sourceId, h.sourceId),
+                      inArray(knowledgeEntries.chunkIndex, [h.chunkIndex - 1, h.chunkIndex, h.chunkIndex + 1]),
+                    ))
+                    .orderBy(knowledgeEntries.chunkIndex);
+                  const combined = neighbors.map((n) => n.content).join('\n');
+                  return { content: combined || h.content, metadata: h.metadata };
+                } catch {
+                  return { content: h.content, metadata: h.metadata };
+                }
+              }),
+            );
           },
         });
         return { result: r, isAgentOutput: false };
