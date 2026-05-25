@@ -38,6 +38,7 @@ export class QuotasService {
         .update(resourceQuotas)
         .set({
           executionsUsed: 0,
+          tokensUsedMonth: 0,
           burstMinutesUsed: '0',
           resetAt: this.nextMonthReset(),
           updatedAt: new Date(),
@@ -52,13 +53,20 @@ export class QuotasService {
         `Execution quota exceeded (${quota.executionsUsed}/${quota.executionsPerMonth} this month)`,
       );
     }
+
+    if (quota.tokensUsedMonth >= quota.tokensPerMonth) {
+      throw new ForbiddenException(
+        `Token quota exceeded (${quota.tokensUsedMonth.toLocaleString()}/${quota.tokensPerMonth.toLocaleString()} tokens this month)`,
+      );
+    }
   }
 
-  async incrementUsed(workspaceId: string): Promise<void> {
+  async incrementUsed(workspaceId: string, tokensConsumed = 0): Promise<void> {
     await this.db
       .update(resourceQuotas)
       .set({
         executionsUsed: sql`executions_used + 1`,
+        tokensUsedMonth: sql`tokens_used_month + ${tokensConsumed}`,
         updatedAt: new Date(),
       })
       .where(eq(resourceQuotas.workspaceId, workspaceId));

@@ -252,7 +252,7 @@ export class ExecutionProcessor extends WorkerHost {
           output: finalOutput,
         });
 
-        void this.quotas.incrementUsed(workspaceId);
+        void this.quotas.incrementUsed(workspaceId, usage?.total_tokens ?? 0);
 
         if (userId) {
           void this.notifications.create(
