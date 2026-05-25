@@ -1,7 +1,7 @@
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
 import { and, eq, count, desc, sql } from 'drizzle-orm';
 import type { DrizzleDB, NewKnowledgeBase, NewKnowledgeEntry } from '@linea/db';
-import { knowledgeBases, knowledgeEntries } from '@linea/db';
+import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { EmbeddingService } from '../memory/embedding.service';
 import type { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
@@ -136,8 +136,15 @@ export class KnowledgeService {
   async addEntry(workspaceId: string, kbId: string, dto: CreateEntryDto) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
-    const CHUNK_SIZE = 1000;
-    const CHUNK_OVERLAP = 200;
+    // Load workspace RAG settings (chunk size / overlap)
+    const [ws] = await this.db
+      .select({ settings: workspaces.settings })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+    const wsSettings = ws?.settings ?? {};
+    const CHUNK_SIZE = wsSettings.ragChunkSize ?? 1000;
+    const CHUNK_OVERLAP = wsSettings.ragChunkOverlap ?? 200;
     const chunks = this.splitIntoChunks(dto.content, CHUNK_SIZE, CHUNK_OVERLAP);
 
     const sourceId = chunks.length > 1 ? crypto.randomUUID() : null;
@@ -195,12 +202,16 @@ export class KnowledgeService {
     if (queryEmbedding) {
       try {
         const embLiteral = `[${queryEmbedding.join(',')}]`;
+        // similarityThreshold is a minimum cosine similarity (0–1, higher = stricter).
+        // pgvector's <=> operator returns cosine DISTANCE (0=identical, 2=opposite).
+        // Convert: distance < (1 - minSimilarity).
+        const distanceThreshold = 1 - similarityThreshold;
         const rows = await this.db.execute(sql`
           SELECT content, metadata
           FROM knowledge_entries
           WHERE knowledge_base_id = ${kbId}
             AND embedding IS NOT NULL
-            AND (embedding <=> ${embLiteral}::vector) < ${similarityThreshold}
+            AND (embedding <=> ${embLiteral}::vector) < ${distanceThreshold}
           ORDER BY embedding <=> ${embLiteral}::vector
           LIMIT ${limit}
         `);

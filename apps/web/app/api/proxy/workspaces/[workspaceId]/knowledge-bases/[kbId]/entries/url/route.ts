@@ -53,7 +53,7 @@ export async function POST(
 
   // Save via backend
   const backendRes = await fetch(
-    `${API_BASE}/workspaces/${params.workspaceId}/knowledge-bases/${params.kbId}/entries`,
+    `${API_BASE}/workspaces/${workspaceId}/knowledge-bases/${kbId}/entries`,
     {
       method: 'POST',
       headers: {

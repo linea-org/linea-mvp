@@ -235,7 +235,7 @@ export default function ModelPreferencesPage() {
               onChange={(e) => setRagThreshold(e.target.value)}
               className="font-mono text-sm"
             />
-            <p className="text-[10px] text-muted-foreground">0.0–1.0. Lower = stricter (0.75 default)</p>
+            <p className="text-[10px] text-muted-foreground">0.0–1.0. Higher = stricter (0.75 default)</p>
           </div>
 
           <div className="space-y-1">

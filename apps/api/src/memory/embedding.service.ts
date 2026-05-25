@@ -37,9 +37,10 @@ export class EmbeddingService {
   ): Promise<number[]> {
     const key = apiKeyOverride ?? this.defaultApiKey;
 
-    // Determine provider from model id prefix / well-known names
-    const isOllama = !modelId.startsWith('text-embedding') && !modelId.startsWith('nomic') === false
-      || modelId === 'nomic-embed-text' || modelId === 'mxbai-embed-large';
+    // Determine provider from model id prefix / well-known names.
+    // Ollama models output non-1536d vectors — fall back to keyword search.
+    const isOllama = modelId === 'nomic-embed-text' || modelId === 'mxbai-embed-large'
+      || (!modelId.startsWith('text-embedding') && !modelId.startsWith('ada-'));
     const isGoogle = modelId === 'text-embedding-004';
 
     if (isGoogle || isOllama) {

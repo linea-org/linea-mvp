@@ -389,6 +389,10 @@ export class NodeExecutorService {
           ?? wsSettings.ragSimilarityThreshold
           ?? 0.75;
 
+        // Convert minimum cosine similarity → cosine distance for pgvector's <=> operator.
+        // <=> returns distance (0=identical), so: distance < (1 - minSimilarity).
+        const distanceThreshold = 1 - similarityThreshold;
+
         const r = await executeRetrieverNode(nodeData, state, {
           query: async (q, kbId, topK) => {
             if (queryEmbedding) {
@@ -399,7 +403,7 @@ export class NodeExecutorService {
                   FROM knowledge_entries
                   WHERE knowledge_base_id = ${kbId}
                     AND embedding IS NOT NULL
-                    AND (embedding <=> ${embLiteral}::vector) < ${similarityThreshold}
+                    AND (embedding <=> ${embLiteral}::vector) < ${distanceThreshold}
                   ORDER BY embedding <=> ${embLiteral}::vector
                   LIMIT ${topK}
                 `);
