@@ -33,10 +33,13 @@ interface KnowledgeBase {
   description: string | null;
 }
 
+type EntryStatus = 'pending' | 'embedding' | 'indexed' | 'failed';
+
 interface Entry {
   id: string;
   content: string;
   metadata: Record<string, unknown>;
+  status: EntryStatus;
   createdAt: string;
 }
 
@@ -223,6 +226,36 @@ export default function KnowledgeBaseDetailPage() {
     setDiscoveredUrls([]);
     setSelectedUrls(new Set());
   }
+
+  // Poll status for any entries that are still pending/embedding
+  useEffect(() => {
+    const inflight = entries.filter((e) => e.status === 'pending' || e.status === 'embedding');
+    if (inflight.length === 0 || !activeWorkspace) return;
+
+    const interval = setInterval(async () => {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      await Promise.allSettled(
+        inflight.map(async (entry) => {
+          try {
+            const updated = await api.get<{ id: string; status: EntryStatus }>(
+              `/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}/entries/${entry.id}/status`,
+            );
+            if (updated.status !== entry.status) {
+              setEntries((prev) =>
+                prev.map((e) => (e.id === entry.id ? { ...e, status: updated.status } : e)),
+              );
+            }
+          } catch {
+            // silently skip — entry may have been deleted
+          }
+        }),
+      );
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [entries, activeWorkspace, kbId, getToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     if (!activeWorkspace) return;
@@ -840,11 +873,29 @@ export default function KnowledgeBaseDetailPage() {
                   return (
                     <div key={entry.id} className="group flex items-start gap-3 px-4 py-4 hover:bg-muted/30 transition-colors">
                       <div className="flex-1 min-w-0 space-y-1.5">
-                        {/* Source badge */}
+                        {/* Source badge + status indicator */}
                         <div className="flex items-center gap-2">
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${sourceColor}`}>
                             {sourceLabel}
                           </span>
+                          {/* Ingestion status badge */}
+                          {entry.status === 'pending' && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                              <HugeiconsIcon icon={Loading02Icon} className="size-3 animate-spin" />
+                              Queued
+                            </span>
+                          )}
+                          {entry.status === 'embedding' && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                              <HugeiconsIcon icon={Loading02Icon} className="size-3 animate-spin" />
+                              Embedding…
+                            </span>
+                          )}
+                          {entry.status === 'failed' && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 px-2 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+                              Failed
+                            </span>
+                          )}
                           {filename && (
                             <span className="text-[11px] text-muted-foreground truncate font-mono">{filename}</span>
                           )}
