@@ -11,34 +11,34 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | authenticated | Create a workspace (creator becomes owner) |
-| GET | `/` | authenticated | List workspaces the current user is a member of |
-| GET | `/:id` | viewer+ | Get a workspace |
-| PATCH | `/:id` | admin+ | Update name or slug |
-| DELETE | `/:id` | owner | Delete workspace and all its data |
+| POST | `/` | authenticated | Create a workspace. Body: `{ name, slug }`. Creator is assigned `owner` role. Returns created workspace. |
+| GET | `/` | authenticated | List workspaces the current user belongs to. Returns array with current user's role per workspace. |
+| GET | `/:id` | viewer+ | Get a workspace. Returns `{ id, name, slug, settings }`. |
+| PATCH | `/:id` | admin+ | Update workspace. Body: `{ name?, slug? }`. Returns updated workspace. |
+| DELETE | `/:id` | owner | Delete workspace and cascade all data. Returns 204. |
 
 ### Settings
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| GET | `/:id/settings` | viewer+ | Get workspace AI settings (default model, RAG config, etc.) |
-| PATCH | `/:id/settings` | admin+ | Update workspace AI settings |
+| GET | `/:id/settings` | viewer+ | Get workspace AI settings. Returns `WorkspaceSettings` JSONB: default model, `ragChunkSize`, `ragSimilarityThreshold`, etc. |
+| PATCH | `/:id/settings` | admin+ | Update workspace AI settings. Body: partial `WorkspaceSettings`. Returns updated settings. |
 
 ### Members
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| GET | `/:id/members` | viewer+ | List members with roles |
-| PATCH | `/:id/members/:userId` | admin+ | Change a member's role |
-| DELETE | `/:id/members/:userId` | admin+ | Remove a member |
+| GET | `/:id/members` | viewer+ | List members. Returns `[{ userId, email, name, role }]`. |
+| PATCH | `/:id/members/:userId` | admin+ | Change a member's role. Body: `{ role: WorkspaceMemberRole }`. Returns updated member. |
+| DELETE | `/:id/members/:userId` | admin+ | Remove a member. Returns 204. Blocked if removing last owner. |
 
 ### Invites
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/:id/invites` | admin+ | Create an email invite link |
-| GET | `/:id/invites` | admin+ | List pending invites |
-| DELETE | `/:id/invites/:inviteId` | admin+ | Revoke a pending invite |
+| POST | `/:id/invites` | admin+ | Create an email invite. Body: `{ email, role }`. Returns invite with signed token link. |
+| GET | `/:id/invites` | admin+ | List pending invites. Returns `[{ id, email, role, expiresAt, createdAt }]`. |
+| DELETE | `/:id/invites/:inviteId` | admin+ | Revoke a pending invite. Returns 204. |
 
 ## Key Types
 
@@ -64,6 +64,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Invite acceptance endpoint**: the accept-invite flow is handled by the Clerk auth webhook, so there's no REST endpoint to accept or decline an invite directly
+- **Workspace transfer**: no `POST /:id/transfer` to change ownership to another member
+- **Settings schema exposure**: no `GET /:id/settings/schema` to document which fields are valid — clients must know the `WorkspaceSettings` type out-of-band
 
 ## Status
 

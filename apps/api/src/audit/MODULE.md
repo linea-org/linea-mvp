@@ -9,7 +9,7 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| GET | `/` | admin+ | List audit log entries (filterable by action, actor, resource, date range) |
+| GET | `/` | admin+ | List audit log entries. Query: `{ action?, actorId?, resourceType?, resourceId?, from?, to?, cursor?, limit? }`. Returns paginated `AuditLog[]`. |
 
 ## Key Types
 
@@ -28,6 +28,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Export**: no `GET /export` (CSV/JSON) for compliance reporting — admins must paginate manually
+- **Coverage**: only `KnowledgeModule` and `WorkflowsModule` call `AuditService.log`; modules like `SecretsModule`, `MembersModule`, and `OAuthModule` are not audited
+- **Retention policy**: no auto-purge after N days; log grows unbounded
 
 ## Status
 

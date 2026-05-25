@@ -9,15 +9,15 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | admin+ | Create a webhook (returns trigger URL + secret) |
-| GET | `/` | viewer+ | List webhooks for the pod |
-| DELETE | `/:id` | admin+ | Delete a webhook |
+| POST | `/` | admin+ | Create a webhook. Body: `{ workflowId, label? }`. Returns `{ id, triggerUrl, secretToken }` — `secretToken` only returned on creation. |
+| GET | `/` | viewer+ | List webhooks for the pod. Returns `[{ id, label, workflowId, triggerUrl, createdAt }]` — `secretToken` never returned after creation. |
+| DELETE | `/:id` | admin+ | Delete a webhook. Returns 204. |
 
 ## Inbound trigger (no auth prefix)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/webhooks/trigger/:secretToken` | HMAC signature | Trigger the associated workflow; validates `X-Linea-Signature` header |
+| POST | `/webhooks/trigger/:secretToken` | HMAC signature | Trigger the associated workflow. Header: `X-Linea-Signature: sha256=<hmac>`. Body: arbitrary JSON passed as workflow `input`. Returns `{ executionId }` or 401 if signature invalid. |
 
 ## Business Logic
 
@@ -33,6 +33,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Secret rotation**: no `POST /:id/rotate` to generate a new `secretToken` without deleting the webhook
+- **Delivery history**: no `GET /:id/deliveries` to inspect past trigger attempts and their HTTP responses
+- **Signature algorithm choice**: only HMAC-SHA256 is supported; no option to accept unsigned requests for low-security use cases
 
 ## Status
 

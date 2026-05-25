@@ -9,11 +9,11 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| GET | `/providers` | viewer+ | List supported OAuth providers |
-| GET | `/connections` | viewer+ | List active OAuth connections for the workspace |
-| POST | `/:provider/authorize` | admin+ | Start OAuth flow — returns redirect URL |
-| GET | `/:provider/callback` | public | OAuth callback — exchanges code for tokens |
-| DELETE | `/connections/:id` | admin+ | Disconnect an OAuth connection |
+| GET | `/providers` | viewer+ | List supported OAuth providers. Returns `[{ id, name, scopes }]`. |
+| GET | `/connections` | viewer+ | List active OAuth connections. Returns `[{ id, provider, connectedAt, scopes }]`; tokens never exposed. |
+| POST | `/:provider/authorize` | admin+ | Start OAuth flow. Body: `{ redirectUri? }`. Returns `{ authorizationUrl }` to redirect the user. |
+| GET | `/:provider/callback` | public | OAuth callback. Query: `{ code, state }`. Exchanges code, stores encrypted tokens. Redirects to app. |
+| DELETE | `/connections/:id` | admin+ | Disconnect an OAuth connection. Deletes stored tokens. Returns 204. |
 
 ## Business Logic
 
@@ -28,6 +28,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Manual token refresh**: no `POST /connections/:id/refresh` to force a token refresh; refresh happens transparently only during workflow execution
+- **Scope re-authorization**: no way to expand scopes on an existing connection — user must disconnect and reconnect
+- **Connection health check**: no `GET /connections/:id/status` to verify token is still valid without running a workflow
 
 ## Status
 

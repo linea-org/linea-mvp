@@ -9,7 +9,7 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/` | authenticated | List all available models with provider, capabilities, and context window |
+| GET | `/` | authenticated | List all available models. Returns static registry: `[{ id, provider, name, contextWindow, capabilities[] }]`. |
 
 ## Business Logic
 
@@ -19,6 +19,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Workspace model availability**: all models are global — there's no mechanism to restrict which models a workspace can use based on their plan
+- **Pricing info**: no `pricing` field (tokens-per-dollar) in the registry — clients can't estimate cost before running
+- **Dynamic refresh**: model list is static at startup; adding a new provider requires a redeploy
 
 ## Status
 

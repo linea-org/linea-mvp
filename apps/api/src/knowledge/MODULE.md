@@ -9,16 +9,16 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | editor+ | Create a knowledge base |
-| GET | `/` | viewer+ | List knowledge bases with entry counts |
-| GET | `/:id` | viewer+ | Get a single knowledge base |
-| PATCH | `/:id` | editor+ | Update name, description, or settings |
-| DELETE | `/:id` | editor+ | Delete a KB and cascade-delete all entries |
-| POST | `/:id/entries` | editor+ | Add content — chunks, embeds async via BullMQ, returns `status: pending` |
-| GET | `/:id/entries` | viewer+ | List all entries with status |
-| GET | `/:id/entries/:entryId/status` | viewer+ | Poll ingestion status for a single entry |
-| DELETE | `/:id/entries/:entryId` | editor+ | Delete a single entry |
-| POST | `/:id/search` | viewer+ | Hybrid RRF search (vector + BM25); body: `{ query, limit }` |
+| POST | `/` | editor+ | Create a KB. Body: `{ name, description?, settings? }`. Returns the created KB. |
+| GET | `/` | viewer+ | List all KBs in the workspace. Returns array with `entryCount` per KB. |
+| GET | `/:id` | viewer+ | Get a single KB by ID. Returns KB with settings. |
+| PATCH | `/:id` | editor+ | Update name, description, or `KnowledgeBaseSettings`. Returns updated KB. |
+| DELETE | `/:id` | editor+ | Delete KB and cascade-delete all entries. Returns 204. |
+| POST | `/:id/entries` | editor+ | Add content: splits into chunks, SHA-256 deduplicates, enqueues BullMQ embedding. Body: `{ content, metadata? }`. Returns first chunk with `status: pending`. |
+| GET | `/:id/entries` | viewer+ | List entries with `{ id, content, status, chunkIndex, metadata }`. |
+| GET | `/:id/entries/:entryId/status` | viewer+ | Get ingestion status for one entry. Returns `{ status }` — poll until `indexed` or `failed`. |
+| DELETE | `/:id/entries/:entryId` | editor+ | Delete a single entry. Returns 204. |
+| POST | `/:id/search` | viewer+ | Hybrid RRF search (vector 0.7 + BM25 0.3). Body: `{ query, limit? }`. Returns `[{ content, metadata }]`. |
 
 ## Key Types
 
@@ -64,6 +64,13 @@
 - Added `status` column (`pending | embedding | indexed | failed`)
 - Added `knowledge_bases.settings` JSONB with `KnowledgeBaseSettings` interface
 - DB migration 0001 created HNSW index (`m=16, ef_construction=64`) and GIN index
+
+## Missing / Gaps
+
+- **Bulk entry ingestion**: no `POST /:id/entries/bulk` — ingesting many documents requires N serial requests
+- **Entry update**: no `PATCH /:id/entries/:entryId` to replace content; must delete and re-add
+- **Search explain**: no way to inspect per-arm scores (vector vs BM25) for a query — useful for tuning RRF weights
+- **Rate limiting on search**: search endpoint has no per-workspace throttle; a runaway agent could overload pgvector
 
 ## Status
 

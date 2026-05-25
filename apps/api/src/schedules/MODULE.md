@@ -9,11 +9,11 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | admin+ | Create a schedule |
-| GET | `/` | viewer+ | List schedules for the pod |
-| GET | `/:id` | viewer+ | Get a schedule |
-| PATCH | `/:id` | admin+ | Update cron expression, input, or enabled flag |
-| DELETE | `/:id` | admin+ | Delete a schedule |
+| POST | `/` | admin+ | Create a schedule. Body: `{ workflowId, cronExpr, input?, enabled? }`. Returns created schedule with `nextRunAt`. |
+| GET | `/` | viewer+ | List schedules for the pod. Returns `[{ id, workflowId, cronExpr, enabled, lastRunAt, nextRunAt }]`. |
+| GET | `/:id` | viewer+ | Get a schedule. Returns `{ cronExpr, enabled, lastRunAt, nextRunAt, input }`. |
+| PATCH | `/:id` | admin+ | Update schedule. Body: `{ cronExpr?, input?, enabled? }`. Recomputes `nextRunAt`. Returns updated schedule. |
+| DELETE | `/:id` | admin+ | Delete a schedule. Returns 204. |
 
 ## Key Types
 
@@ -33,6 +33,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Manual trigger**: no `POST /:id/run` to fire a schedule immediately without waiting for the next cron time — useful for testing
+- **Run history**: no `GET /:id/runs` endpoint to see past triggered executions for a schedule
+- **Timezone support**: `cronExpr` is interpreted in UTC; no per-schedule timezone field
 
 ## Status
 

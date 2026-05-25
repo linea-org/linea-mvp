@@ -17,49 +17,49 @@ And a workflow evals route:
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | editor+ | Create a workflow |
-| GET | `/` | viewer+ | List workflows (filterable by status, search, favorites) |
-| GET | `/me/favorites` | viewer+ | Get IDs of workflows favorited by current user in this pod |
-| GET | `/:id` | viewer+ | Get a workflow (graph, metadata) |
-| PATCH | `/:id` | editor+ | Update workflow graph or metadata |
-| DELETE | `/:id` | editor+ | Soft-delete (move to trash) |
-| POST | `/:id/presence` | viewer+ | Upsert presence heartbeat; returns other active users |
-| POST | `/:id/duplicate` | editor+ | Clone a workflow within the same pod |
-| POST | `/:id/deploy` | admin+ | Mark workflow as deployed (triggers are live) |
-| POST | `/:id/undeploy` | admin+ | Unpublish a deployed workflow |
-| GET | `/:id/versions` | viewer+ | List full version history |
-| GET | `/:id/versions/:v` | viewer+ | Get a specific version snapshot |
-| POST | `/:id/versions/:v/restore` | editor+ | Restore workflow to a previous version |
-| PATCH | `/:id/star` | editor+ | Star or unstar |
-| PATCH | `/:id/trash` | editor+ | Move to trash |
-| PATCH | `/:id/restore` | editor+ | Restore from trash |
-| DELETE | `/:id/permanent` | editor+ | Permanently delete a trashed workflow |
-| PATCH | `/:id/template` | editor+ | Mark/unmark as a pod-level template |
-| POST | `/:id/favorite` | viewer+ | Add to personal favorites |
-| DELETE | `/:id/favorite` | viewer+ | Remove from personal favorites |
-| POST | `/:id/publish` | admin+ | Publish to the public gallery |
-| PATCH | `/:id/log-settings` | admin+ | Configure log verbosity per workflow |
-| POST | `from-template/:templateId` | editor+ | Clone a public template into this pod |
-| POST | `/:id/generate` | editor+ | AI-generate a workflow from natural language (SSE stream) |
+| POST | `/` | editor+ | Create a workflow. Body: `{ name, graph, description? }`. Returns created workflow. |
+| GET | `/` | viewer+ | List workflows. Query: `{ search?, status?, cursor?, limit? }`. Returns paginated array with metadata. |
+| GET | `/me/favorites` | viewer+ | Get favorited workflow IDs for the current user. Returns `string[]`. |
+| GET | `/:id` | viewer+ | Get a workflow with full `graph`, metadata, and latest version number. |
+| PATCH | `/:id` | editor+ | Update workflow. Body: partial `{ name?, graph?, description? }`. Auto-creates version snapshot if `graph` changes. Returns updated workflow. |
+| DELETE | `/:id` | editor+ | Soft-delete workflow (sets `deletedAt`). Returns 204. |
+| POST | `/:id/presence` | viewer+ | Upsert presence heartbeat. Body: `{}`. Returns array of other active users with `lastSeenAt`. |
+| POST | `/:id/duplicate` | editor+ | Clone workflow within the same pod. Returns new workflow with cloned graph. |
+| POST | `/:id/deploy` | admin+ | Mark workflow as deployed so triggers go live. Sets `deployed: true`. Returns updated workflow. |
+| POST | `/:id/undeploy` | admin+ | Unpublish a deployed workflow. Sets `deployed: false`. Returns updated workflow. |
+| GET | `/:id/versions` | viewer+ | List full version history. Returns `[{ versionNumber, createdAt, graph }]`. |
+| GET | `/:id/versions/:v` | viewer+ | Get a specific version snapshot. Returns version with full `graph`. |
+| POST | `/:id/versions/:v/restore` | editor+ | Restore workflow to a previous version. Copies version graph to current. Returns updated workflow. |
+| PATCH | `/:id/star` | editor+ | Star or unstar a workflow. Body: `{ starred: boolean }`. Returns updated workflow. |
+| PATCH | `/:id/trash` | editor+ | Move workflow to trash. Sets `deletedAt`. Returns updated workflow. |
+| PATCH | `/:id/restore` | editor+ | Restore workflow from trash. Clears `deletedAt`. Returns updated workflow. |
+| DELETE | `/:id/permanent` | editor+ | Permanently delete a trashed workflow. Hard-deletes the row. Returns 204. |
+| PATCH | `/:id/template` | editor+ | Mark/unmark as a pod-level template. Body: `{ isTemplate: boolean }`. Returns updated workflow. |
+| POST | `/:id/favorite` | viewer+ | Add workflow to personal favorites. Returns 201. |
+| DELETE | `/:id/favorite` | viewer+ | Remove workflow from personal favorites. Returns 204. |
+| POST | `/:id/publish` | admin+ | Publish workflow to the public gallery. Body: `{ title, description, category, tags? }`. Returns created public template. |
+| PATCH | `/:id/log-settings` | admin+ | Configure log verbosity. Body: `{ verbosity: 'minimal' \| 'normal' \| 'verbose' }`. Returns updated workflow. |
+| POST | `from-template/:templateId` | editor+ | Clone a public template into this pod. Returns new workflow cloned from the template. |
+| POST | `/:id/generate` | editor+ | AI-generate a workflow from natural language via SSE. Body: `{ prompt, canvasContext?, history? }`. Streams token deltas then a final `workflow_json` event. |
 
 ### Public Templates (`/v1/templates`)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/` | public | List public gallery templates |
-| GET | `/me/upvoted` | user | Get IDs of templates upvoted by current user |
-| GET | `/:id` | public | Get a template (increments view count) |
-| POST | `/:id/upvote` | user | Toggle upvote |
-| PATCH | `/:id` | platform-admin | Update a gallery template |
-| DELETE | `/:id` | platform-admin | Delete a gallery template |
+| GET | `/` | public | List public gallery templates. Returns paginated templates with upvote counts. |
+| GET | `/me/upvoted` | user | Get upvoted template IDs for current user. Returns `string[]`. |
+| GET | `/:id` | public | Get a gallery template. Increments `viewCount`. Returns template with full graph and stats. |
+| POST | `/:id/upvote` | user | Toggle upvote on a template. Returns `{ upvoted: boolean, count: number }`. |
+| PATCH | `/:id` | platform-admin | Update a gallery template. Body: partial template fields. Returns updated template. |
+| DELETE | `/:id` | platform-admin | Delete a gallery template. Returns 204. |
 
 ### Evals (`/v1/workspaces/:wId/pods/:pId/workflows/:wfId/evals`)
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | editor+ | Create an eval run |
-| GET | `/` | viewer+ | List eval runs for a workflow |
-| GET | `/:id` | viewer+ | Get an eval run result |
+| POST | `/` | editor+ | Create an eval run. Body: `{ testCases: [{ input, expectedOutput? }] }`. Returns created eval run. |
+| GET | `/` | viewer+ | List eval runs for the workflow. Returns array of eval runs with summary results. |
+| GET | `/:id` | viewer+ | Get an eval run result with per-test-case pass/fail detail. |
 
 ## Key Types
 
@@ -87,6 +87,13 @@ And a workflow evals route:
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Version diff endpoint**: no `GET /:id/versions/:v/diff` to compare two version graphs — clients must diff manually
+- **Bulk workflow export/import**: no way to export all workflows in a pod as a ZIP or import from external JSON
+- **Eval test case management**: evals accept inline test cases only — no endpoint to manage a persistent test-case library
+- **Presence TTL endpoint**: presence staleness is client-enforced (30 s); no server-side cleanup or `DELETE /:id/presence` to explicitly leave
 
 ## Status
 

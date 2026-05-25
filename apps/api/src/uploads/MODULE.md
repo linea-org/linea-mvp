@@ -9,7 +9,7 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/presign` | editor+ | Generate a presigned upload URL and return the final file URL |
+| POST | `/presign` | editor+ | Generate a presigned S3 upload URL. Body: `{ filename, mimeType, size? }`. Returns `{ uploadUrl, fileUrl }` — client uploads directly to `uploadUrl`, then references `fileUrl` in workflow inputs. |
 
 ## Business Logic
 
@@ -23,6 +23,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **File listing**: no `GET /` to list uploaded files for a workspace — there's no file management layer above S3
+- **File deletion**: no `DELETE /:fileKey` to remove an uploaded file; files accumulate in S3 indefinitely
+- **Size limits**: no server-side enforcement of `size` — the presigned URL is generated regardless; S3 Content-Length restriction is not applied
 
 ## Status
 

@@ -9,7 +9,7 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/webhooks/clerk` | Clerk signature | Receives `user.created` / `user.updated` / `user.deleted` events from Clerk; upserts `users` table |
+| POST | `/webhooks/clerk` | Clerk signature | Body: raw Clerk event payload, validated by Svix signature. Handles `user.created` (insert), `user.updated` (email/name/avatar), `user.deleted` (soft-delete). Returns 200. |
 
 ## Key Types
 
@@ -28,6 +28,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Session listing**: no `GET /me/sessions` to list or revoke active Clerk sessions
+- **API key auth path**: `ClerkAuthGuard` handles Clerk JWTs; API key auth (for `public-run`) is handled separately in `PublicRunModule` rather than as a unified guard
+- **Audit on auth events**: login/logout events are not written to the audit log
 
 ## Status
 

@@ -21,6 +21,12 @@ None — service-only module.
 
 _No recent changes._
 
+## Missing / Gaps
+
+- **No read endpoint**: quota limits and current usage aren't exposed via HTTP — only the billing module shows a summary, and only for admins
+- **Soft limits / warnings**: `assertCanRun` throws hard at 100% — no mechanism to warn at 80% or allow a grace period
+- **Token counting accuracy**: `increment` is called with the actual token count post-execution, but there's no reservation before the execution starts, so concurrent executions can temporarily exceed limits
+
 ## Status
 
 Stable.

@@ -9,9 +9,9 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | admin+ | Create an API key (returns raw key once only) |
-| GET | `/` | admin+ | List API keys (hashed — raw key never returned again) |
-| DELETE | `/:id` | admin+ | Revoke an API key |
+| POST | `/` | admin+ | Create an API key. Body: `{ label?, expiresAt? }`. Returns `{ id, key, label, expiresAt }` — raw `key` is only returned on creation. |
+| GET | `/` | admin+ | List API keys. Returns `[{ id, label, keyPreview, createdAt, expiresAt, revokedAt }]` — raw key never returned again. |
+| DELETE | `/:id` | admin+ | Revoke an API key. Sets `revokedAt`. Returns 204. |
 
 ## Key Types
 
@@ -29,6 +29,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Key rotation**: no `POST /:id/rotate` to generate a new secret while keeping the same key record; must delete and recreate
+- **Scope/permissions**: API keys grant full workspace access at the caller's role level — no fine-grained scope (e.g. read-only key)
+- **Last-used tracking**: no `lastUsedAt` field; can't audit which keys are stale
 
 ## Status
 

@@ -12,16 +12,16 @@ Also exposes a node test endpoint:
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | editor+ | Trigger a new execution (rate-limited: 60/min) |
-| GET | `/` | viewer+ | List executions with filters (status, workflowId, pagination) |
-| GET | `/:id` | viewer+ | Get a single execution with output and error |
-| GET | `/:id/logs` | viewer+ | Get structured execution logs |
-| SSE | `/:id/events` | viewer+ | Stream live execution events (skips throttle); supports `Last-Event-Id` reconnect |
-| PATCH | `/:id/respond` | editor+ | Respond to a suspended execution (human-in-the-loop input) |
-| PATCH | `/:id/approve` | editor+ | Approve a suspended execution (alias for respond) |
-| POST | `/:id/replay` | editor+ | Re-run an execution, optionally from a specific node |
-| DELETE | `/:id` | editor+ | Cancel a running execution |
-| POST | `/nodes/test` | editor+ | Execute a single node in isolation (dev/debug tool) |
+| POST | `/` | editor+ | Trigger a new execution (rate-limited: 60/min). Body: `{ workflowId, input?, triggeredBy? }`. Returns created execution with `status: queued`. |
+| GET | `/` | viewer+ | List executions. Query: `{ status?, workflowId?, cursor?, limit? }`. Returns paginated array with status and timing. |
+| GET | `/:id` | viewer+ | Get a single execution. Returns execution with `output`, `error`, and node trace. |
+| GET | `/:id/logs` | viewer+ | Get structured execution logs. Returns array of `{ level, nodeId, message, timestamp }`. |
+| SSE | `/:id/events` | viewer+ | Stream live execution events via SSE. Supports `Last-Event-Id` reconnect; replays buffered events on reconnect. Auto-closes after 10 min. |
+| PATCH | `/:id/respond` | editor+ | Resume a suspended execution. Body: `{ approved: boolean, input? }`. Returns updated execution. |
+| PATCH | `/:id/approve` | editor+ | Alias for `/respond`. Body: `{ approved: boolean, input? }`. Returns updated execution. |
+| POST | `/:id/replay` | editor+ | Re-run from scratch or a specific node. Body: `{ fromNodeId? }`. Returns new execution with `status: queued`. |
+| DELETE | `/:id` | editor+ | Cancel a running execution. Sets `status: cancelled`. Returns 204. |
+| POST | `/nodes/test` | editor+ | Execute a single node in isolation for debugging. Body: `{ nodeType, config, input? }`. Returns node output or error. |
 
 ## Key Types
 
@@ -55,6 +55,13 @@ Also exposes a node test endpoint:
 ### 2026-05-25 — RAG retriever hybrid search
 - `NodeExecutorService` retriever node now runs parallel vector + BM25 arms with RRF merge
 - Supports `expandContext` (neighbor chunks) and `enableRerank` (Cohere) from KB settings
+
+## Missing / Gaps
+
+- **Execution timeout config**: no per-workflow or per-execution max-duration setting; only the 10-min SSE stream limit acts as a soft ceiling
+- **Bulk cancel**: no way to cancel all running executions for a workflow at once (e.g. before undeploying)
+- **Structured output schema validation**: node output shapes aren't validated against a declared schema — failures surface only at the next node's input
+- **Replay diff**: replay creates a new execution but there's no diff view showing what changed vs the original run
 
 ## Status
 

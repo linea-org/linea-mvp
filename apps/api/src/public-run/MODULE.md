@@ -9,7 +9,7 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/:workspaceSlug/:podSlug/:workflowId` | Linea API key | Execute a deployed workflow by slug |
+| POST | `/:workspaceSlug/:podSlug/:workflowId` | Linea API key | Execute a deployed workflow. Header: `Authorization: Bearer <api-key>`. Body: `{ input?, stream? }`. Returns execution output or streams SSE events if `stream: true`. |
 
 ## Business Logic
 
@@ -25,6 +25,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Streaming response shape**: SSE event schema for `stream: true` is not formally documented alongside this endpoint
+- **Input validation**: workflow input is passed through without schema validation — malformed input surfaces only inside the execution engine
+- **CORS config**: this endpoint is intended for external callers but CORS policy is inherited from the global NestJS config — no per-route override
 
 ## Status
 

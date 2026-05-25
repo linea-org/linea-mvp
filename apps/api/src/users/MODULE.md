@@ -9,9 +9,9 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/me` | authenticated | Get the current user's profile |
-| PATCH | `/me` | authenticated | Update name or avatar URL |
-| POST | `/me/onboard` | authenticated | Mark onboarding complete |
+| GET | `/me` | authenticated | Get the current user's profile. Returns `{ id, email, name, avatarUrl, onboardedAt }`. |
+| PATCH | `/me` | authenticated | Update profile. Body: `{ name?, avatarUrl? }`. Returns updated profile. |
+| POST | `/me/onboard` | authenticated | Mark onboarding complete. Sets `onboardedAt = now()`. Returns updated profile. No-op if already onboarded. |
 
 ## Business Logic
 
@@ -21,6 +21,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Account deletion**: no `DELETE /me` for a user to delete their own account — must go through Clerk dashboard
+- **Email change**: email is synced from Clerk but can't be changed via this API
+- **Preferences**: no `PATCH /me/preferences` for UI preferences (theme, notification settings, etc.) beyond `name` and `avatarUrl`
 
 ## Status
 

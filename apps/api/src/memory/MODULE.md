@@ -9,12 +9,12 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/ingest` | editor+ | Extract atomic facts from free text, embed each, resolve conflicts |
-| POST | `/search` | viewer+ | Hybrid search: pgvector cosine + keyword, merged score |
-| GET | `/profile` | viewer+ | User memory profile grouped by `factType` |
-| POST | `/` | editor+ | Manually store a memory (no LLM extraction) |
-| GET | `/` | viewer+ | List memories (filterable by scope, threadId, workflowId) |
-| DELETE | `/:id` | editor+ | Delete a memory |
+| POST | `/ingest` | editor+ | LLM-extract atomic facts from free text, embed, and deduplicate. Body: `{ content, scope, threadId?, workflowId?, userId? }`. Returns `{ inserted: number, superseded: number }`. |
+| POST | `/search` | viewer+ | Hybrid search (pgvector cosine + keyword). Body: `{ query, scope?, limit?, userId?, threadId? }`. Returns `[{ content, factType, score, metadata }]`. |
+| GET | `/profile` | viewer+ | User memory profile grouped by `factType`. Query: `{ userId }`. Returns memories grouped by type; excludes superseded entries. |
+| POST | `/` | editor+ | Manually store a memory without LLM extraction. Body: `{ content, scope, factType?, metadata? }`. Returns created memory. |
+| GET | `/` | viewer+ | List memories. Query: `{ scope?, threadId?, workflowId?, userId?, limit?, cursor? }`. Returns paginated array. |
+| DELETE | `/:id` | editor+ | Delete a memory. Returns 204. |
 
 ## Key Types
 
@@ -42,6 +42,12 @@
 ## Changelog
 
 _No recent changes._
+
+## Missing / Gaps
+
+- **Bulk delete**: no `DELETE /` to wipe all memories for a scope/user — requires iterating individual deletes
+- **Manual supersede**: no endpoint to manually mark a memory as superseded by another (only conflict resolution does this automatically)
+- **Search explain**: no way to inspect the per-arm scores (cosine vs keyword) for a query result
 
 ## Status
 
