@@ -26,5 +26,25 @@ services:
       timeout: 3s
       retries: 5
 
+  # Runs drizzle-kit migrations against postgres on every `docker compose up`.
+  # On a fresh database (after `infra:reset`) it applies 0000 + 0001.
+  # On an existing database it only applies new migrations.
+  # restart: "no" ensures it exits after running (one-shot job).
+  migrate:
+    image: pgvector/pgvector:pg16
+    environment:
+      PGPASSWORD: linea
+      PGHOST: postgres
+      PGUSER: linea
+      PGDATABASE: linea
+    volumes:
+      - ./scripts/run-migrations.sh:/run-migrations.sh
+      - ./packages/db/migrations:/migrations
+    command: ["sh", "/run-migrations.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   postgres_data:
