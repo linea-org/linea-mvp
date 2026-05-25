@@ -19,18 +19,33 @@ interface WorkspaceSettings {
 }
 
 const ALL_MODELS = [
-  { id: 'claude-sonnet-4-6',            label: 'Claude Sonnet 4.6',           provider: 'anthropic' },
-  { id: 'claude-opus-4-7',              label: 'Claude Opus 4.7',              provider: 'anthropic' },
-  { id: 'claude-haiku-4-5',             label: 'Claude Haiku 4.5',             provider: 'anthropic' },
-  { id: 'gpt-4o',                       label: 'GPT-4o',                       provider: 'openai'    },
-  { id: 'gpt-4.1',                      label: 'GPT-4.1',                      provider: 'openai'    },
-  { id: 'o4-mini',                      label: 'o4 Mini',                      provider: 'openai'    },
-  { id: 'grok-3',                       label: 'Grok 3',                       provider: 'xai'       },
-  { id: 'grok-3-mini',                  label: 'Grok 3 Mini',                  provider: 'xai'       },
-  { id: 'llama-3.3-70b-versatile',      label: 'Llama 3.3 70B',               provider: 'groq'      },
-  { id: 'deepseek-r1-distill-llama-70b',label: 'DeepSeek R1',                  provider: 'groq'      },
-  { id: 'gemini-2.5-pro-preview-05-06', label: 'Gemini 2.5 Pro',              provider: 'google'    },
-  { id: 'gemini-2.0-flash',             label: 'Gemini 2.0 Flash',            provider: 'google'    },
+  // Anthropic
+  { id: 'claude-sonnet-4-6',                          label: 'Claude Sonnet 4.6',        provider: 'anthropic', status: 'production' },
+  { id: 'claude-opus-4-7',                            label: 'Claude Opus 4.7',           provider: 'anthropic', status: 'production' },
+  { id: 'claude-haiku-4-5',                           label: 'Claude Haiku 4.5',          provider: 'anthropic', status: 'production' },
+  // OpenAI
+  { id: 'gpt-4o',                                     label: 'GPT-4o',                    provider: 'openai',    status: 'production' },
+  { id: 'gpt-4o-mini',                                label: 'GPT-4o Mini',               provider: 'openai',    status: 'production' },
+  { id: 'gpt-4.1',                                    label: 'GPT-4.1',                   provider: 'openai',    status: 'production' },
+  { id: 'o4-mini',                                    label: 'o4 Mini',                   provider: 'openai',    status: 'production' },
+  { id: 'o3',                                         label: 'o3',                        provider: 'openai',    status: 'production' },
+  // xAI
+  { id: 'grok-3',                                     label: 'Grok 3',                    provider: 'xai',       status: 'production' },
+  { id: 'grok-3-mini',                                label: 'Grok 3 Mini',               provider: 'xai',       status: 'production' },
+  // Groq — production
+  { id: 'llama-3.3-70b-versatile',                    label: 'Llama 3.3 70B',             provider: 'groq',      status: 'production' },
+  { id: 'llama-3.1-8b-instant',                       label: 'Llama 3.1 8B Instant',      provider: 'groq',      status: 'production' },
+  { id: 'openai/gpt-oss-120b',                        label: 'GPT OSS 120B',              provider: 'groq',      status: 'production' },
+  { id: 'openai/gpt-oss-20b',                         label: 'GPT OSS 20B',               provider: 'groq',      status: 'production' },
+  { id: 'groq/compound',                              label: 'Groq Compound',             provider: 'groq',      status: 'production' },
+  { id: 'groq/compound-mini',                         label: 'Groq Compound Mini',        provider: 'groq',      status: 'production' },
+  // Groq — preview
+  { id: 'meta-llama/llama-4-scout-17b-16e-instruct',  label: 'Llama 4 Scout 17B ✦',      provider: 'groq',      status: 'preview'    },
+  { id: 'qwen/qwen3-32b',                             label: 'Qwen 3 32B ✦',              provider: 'groq',      status: 'preview'    },
+  // Google
+  { id: 'gemini-2.5-pro-preview-05-06',               label: 'Gemini 2.5 Pro',            provider: 'google',    status: 'production' },
+  { id: 'gemini-2.0-flash',                           label: 'Gemini 2.0 Flash',          provider: 'google',    status: 'production' },
+  { id: 'gemini-2.0-flash-lite',                      label: 'Gemini 2.0 Flash Lite',     provider: 'google',    status: 'production' },
 ];
 
 export default function ModelPreferencesPage() {

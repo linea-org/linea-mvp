@@ -35,6 +35,14 @@ export type ModelBadge =
   | 'fastest'
   | 'most-capable';
 
+/**
+ * Lifecycle status:
+ *   production — stable, supported, safe for all users
+ *   preview    — available now but may change/disappear; safe for experimentation
+ *   deprecated — will be removed; users should migrate away
+ */
+export type ModelStatus = 'production' | 'preview' | 'deprecated';
+
 export interface ModelDefinition {
   id: string;
   name: string;
@@ -56,6 +64,8 @@ export interface ModelDefinition {
   dimensions?: number;
   costPer1mTokens: { input: number; output: number };
   badge?: ModelBadge;
+  /** Lifecycle status. Defaults to 'production' when omitted. */
+  status?: ModelStatus;
 }
 
 // ─── Anthropic ────────────────────────────────────────────────────────────────
@@ -237,70 +247,120 @@ const XAI: ModelDefinition[] = [
 ];
 
 // ─── Groq (OpenAI-compatible, ultra-fast inference) ──────────────────────────
+// Updated 2026-05-25 based on official Groq production model list.
+// Preview models are included but flagged status:'preview'.
+// Deprecated models removed: deepseek-r1-distill-llama-70b, qwen-qwq-32b, mixtral-8x7b-32768.
 
 const GROQ: ModelDefinition[] = [
+  // ── Production ──────────────────────────────────────────────────────────────
   {
     id: 'llama-3.3-70b-versatile',
     name: 'Llama 3.3 70B',
     provider: 'groq',
-    description: 'Best Groq model for general tasks. Fast inference, open-source quality.',
-    contextWindow: 128_000,
+    description: 'Best Groq model for agentic and general tasks. 280 T/s, 131K context.',
+    contextWindow: 131_072,
     maxOutputTokens: 32_768,
     tier: 'balanced',
     useCases: ['general', 'coding', 'fast-response'],
     capabilities: { vision: false, functionCalling: true, streaming: true, json: true },
     costPer1mTokens: { input: 0.59, output: 0.79 },
     badge: 'recommended',
+    status: 'production',
   },
   {
     id: 'llama-3.1-8b-instant',
     name: 'Llama 3.1 8B Instant',
     provider: 'groq',
-    description: 'Blindingly fast for simple tasks. Lowest cost on the platform.',
-    contextWindow: 128_000,
-    maxOutputTokens: 8_000,
+    description: 'Fastest Groq model — 560 T/s. Lowest cost for high-volume simple tasks.',
+    contextWindow: 131_072,
+    maxOutputTokens: 131_072,
     tier: 'fast',
-    useCases: ['fast-response', 'conversation'],
+    useCases: ['fast-response', 'conversation', 'data-extraction'],
     capabilities: { vision: false, functionCalling: true, streaming: true },
     costPer1mTokens: { input: 0.05, output: 0.08 },
     badge: 'fastest',
+    status: 'production',
   },
   {
-    id: 'deepseek-r1-distill-llama-70b',
-    name: 'DeepSeek R1 Distill 70B',
+    id: 'openai/gpt-oss-120b',
+    name: 'GPT OSS 120B (Groq)',
     provider: 'groq',
-    description: 'Distilled reasoning model on Groq hardware. Exceptional math and logic.',
-    contextWindow: 128_000,
-    maxOutputTokens: 32_768,
-    tier: 'reasoning',
-    useCases: ['reasoning', 'coding'],
-    capabilities: { vision: false, functionCalling: false, streaming: true },
-    costPer1mTokens: { input: 0.75, output: 0.99 },
-    badge: 'best-reasoning',
+    description: 'OpenAI open-source 120B on Groq hardware. 500 T/s, 65K output.',
+    contextWindow: 131_072,
+    maxOutputTokens: 65_536,
+    tier: 'powerful',
+    useCases: ['general', 'coding', 'reasoning', 'long-context'],
+    capabilities: { vision: false, functionCalling: true, streaming: true, json: true },
+    costPer1mTokens: { input: 0.15, output: 0.60 },
+    status: 'production',
   },
   {
-    id: 'qwen-qwq-32b',
-    name: 'Qwen QwQ 32B',
+    id: 'openai/gpt-oss-20b',
+    name: 'GPT OSS 20B (Groq)',
     provider: 'groq',
-    description: 'Strong open-source reasoning model. Excellent at structured problem solving.',
-    contextWindow: 128_000,
-    maxOutputTokens: 32_768,
-    tier: 'reasoning',
-    useCases: ['reasoning', 'coding', 'data-extraction'],
-    capabilities: { vision: false, functionCalling: true, streaming: true },
-    costPer1mTokens: { input: 0.29, output: 0.39 },
+    description: 'OpenAI open-source 20B on Groq hardware. 1000 T/s — fastest large model.',
+    contextWindow: 131_072,
+    maxOutputTokens: 65_536,
+    tier: 'fast',
+    useCases: ['fast-response', 'general', 'data-extraction'],
+    capabilities: { vision: false, functionCalling: true, streaming: true, json: true },
+    costPer1mTokens: { input: 0.075, output: 0.30 },
+    badge: 'best-value',
+    status: 'production',
   },
   {
-    id: 'mixtral-8x7b-32768',
-    name: 'Mixtral 8x7B',
+    id: 'groq/compound',
+    name: 'Groq Compound',
     provider: 'groq',
-    description: 'MoE model with strong multilingual and extraction capabilities.',
-    contextWindow: 32_768,
-    maxOutputTokens: 32_768,
+    description: 'Groq agentic system with built-in web search and code execution. 450 T/s.',
+    contextWindow: 131_072,
+    maxOutputTokens: 8_192,
     tier: 'balanced',
-    useCases: ['general', 'data-extraction'],
+    useCases: ['general', 'reasoning', 'coding'],
     capabilities: { vision: false, functionCalling: true, streaming: true },
-    costPer1mTokens: { input: 0.24, output: 0.24 },
+    costPer1mTokens: { input: 0, output: 0 }, // pricing TBD
+    status: 'production',
+  },
+  {
+    id: 'groq/compound-mini',
+    name: 'Groq Compound Mini',
+    provider: 'groq',
+    description: 'Smaller Groq compound system. Fast + agentic for lighter workloads.',
+    contextWindow: 131_072,
+    maxOutputTokens: 8_192,
+    tier: 'fast',
+    useCases: ['fast-response', 'general'],
+    capabilities: { vision: false, functionCalling: true, streaming: true },
+    costPer1mTokens: { input: 0, output: 0 }, // pricing TBD
+    status: 'production',
+  },
+  // ── Preview (good quality, may change/be removed with short notice) ──────────
+  {
+    id: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    name: 'Llama 4 Scout 17B',
+    provider: 'groq',
+    description: 'Meta Llama 4 Scout on Groq. 750 T/s, multimodal (vision). Preview.',
+    contextWindow: 131_072,
+    maxOutputTokens: 8_192,
+    tier: 'fast',
+    useCases: ['fast-response', 'general', 'vision'],
+    capabilities: { vision: true, functionCalling: true, streaming: true },
+    costPer1mTokens: { input: 0.11, output: 0.34 },
+    status: 'preview',
+  },
+  {
+    id: 'qwen/qwen3-32b',
+    name: 'Qwen 3 32B',
+    provider: 'groq',
+    description: 'Alibaba Qwen3 32B on Groq. 400 T/s, strong coding and multilingual. Preview.',
+    contextWindow: 131_072,
+    maxOutputTokens: 40_960,
+    tier: 'balanced',
+    useCases: ['reasoning', 'coding', 'data-extraction', 'general'],
+    capabilities: { vision: false, functionCalling: true, streaming: true, json: true },
+    costPer1mTokens: { input: 0.29, output: 0.59 },
+    badge: 'best-reasoning',
+    status: 'preview',
   },
 ];
 
@@ -493,13 +553,34 @@ const EMBEDDING: ModelDefinition[] = [
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
+/** All embedding-only models, keyed by model ID. */
+export const EMBEDDING_REGISTRY: Record<string, ModelDefinition> =
+  Object.fromEntries(EMBEDDING.map((m) => [m.id, m]));
+
+/**
+ * All chat / completion models (no embedding models).
+ * Use this when listing models for agent nodes, fallback chains, etc.
+ * Excludes deprecated models.
+ */
 export const MODEL_REGISTRY: Record<string, ModelDefinition> =
+  Object.fromEntries(
+    [...ANTHROPIC, ...OPENAI, ...XAI, ...GROQ, ...GOOGLE, ...OLLAMA]
+      .filter((m) => m.status !== 'deprecated')
+      .map((m) => [m.id, m]),
+  );
+
+/**
+ * Combined lookup across chat + embedding models.
+ * Use for resolving any model ID the system may encounter (node config, secrets, etc.).
+ */
+export const ALL_MODELS_REGISTRY: Record<string, ModelDefinition> =
   Object.fromEntries(
     [...ANTHROPIC, ...OPENAI, ...XAI, ...GROQ, ...GOOGLE, ...OLLAMA, ...EMBEDDING].map((m) => [m.id, m]),
   );
 
+/** Resolve any model ID — looks in chat + embedding registries. */
 export function getModel(id: string): ModelDefinition {
-  const model = MODEL_REGISTRY[id];
+  const model = ALL_MODELS_REGISTRY[id];
   if (!model)
     throw new Error(
       `Unknown model '${id}'. Add it to apps/api/src/executions/engine/models/registry.ts`,
@@ -511,7 +592,7 @@ export function getModelOrDefault(
   id: string | undefined,
   tier: ModelTier = 'balanced',
 ): ModelDefinition {
-  if (id && MODEL_REGISTRY[id]) return MODEL_REGISTRY[id];
+  if (id && ALL_MODELS_REGISTRY[id]) return ALL_MODELS_REGISTRY[id];
   // Fall back to cheapest available for the requested tier
   const fallbacks: Record<ModelTier, string> = {
     fast: 'claude-haiku-4-5',
@@ -522,21 +603,21 @@ export function getModelOrDefault(
   return MODEL_REGISTRY[fallbacks[tier]] ?? MODEL_REGISTRY['claude-sonnet-4-6'];
 }
 
-/** All models for a given provider, sorted cheapest-first */
+/** All chat models for a given provider, sorted cheapest-first. */
 export function modelsByProvider(provider: ModelProvider): ModelDefinition[] {
   return Object.values(MODEL_REGISTRY)
     .filter((m) => m.provider === provider)
     .sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input);
 }
 
-/** All models that support a given use case, sorted cheapest-first */
+/** All models that support a given use case, sorted cheapest-first. */
 export function modelsByUseCase(useCase: ModelUseCase): ModelDefinition[] {
-  return Object.values(MODEL_REGISTRY)
+  return Object.values(useCase === 'embedding' ? EMBEDDING_REGISTRY : MODEL_REGISTRY)
     .filter((m) => m.useCases.includes(useCase))
     .sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input);
 }
 
-/** Cheapest model across all providers that has the required capability */
+/** Cheapest chat model across all providers that has the required capability. */
 export function cheapestModelWith(
   capability: keyof ModelDefinition['capabilities'],
   apiKeys: Record<string, string | undefined>,
@@ -548,6 +629,18 @@ export function cheapestModelWith(
   if (!available.length)
     throw new Error(`No available model with capability '${capability}'`);
   return available[0];
+}
+
+/** All production-status chat models — safe for surfacing to end users as primary choices. */
+export function productionChatModels(): ModelDefinition[] {
+  return Object.values(MODEL_REGISTRY).filter(
+    (m) => !m.status || m.status === 'production',
+  );
+}
+
+/** All available embedding models across all providers. */
+export function embeddingModels(): ModelDefinition[] {
+  return Object.values(EMBEDDING_REGISTRY);
 }
 
 function hasKeyFor(
