@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isGraphInterrupt, interrupt } from '@langchain/langgraph';
-import { ilike, and, eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { WorkflowState } from './variable-substitution';
 import { substituteInValue } from './variable-substitution';
 import { MODEL_REGISTRY } from './models/registry';
@@ -34,7 +34,8 @@ import { ExecutionSupervisor } from './supervisor';
 import { MemoryService } from './memory.service';
 import type { ModelApiKeys } from './models/client.factory';
 import type { DrizzleDB } from '@linea/db';
-import { knowledgeEntries } from '@linea/db';
+import type { WorkspaceSettings } from '@linea/db';
+import { knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 
 export interface NodeInput {
@@ -279,7 +280,8 @@ export class NodeExecutorService {
           };
         }
 
-        const raw = await executeAgentNode(data, state, resolvedKeys, ltmCtx, onToken);
+        const wsSettings = await this.loadWorkspaceSettings(workspaceId);
+        const raw = await executeAgentNode(data, state, resolvedKeys, ltmCtx, onToken, wsSettings.modelFallbackChain);
         return { result: raw, isAgentOutput: true };
       }
 
@@ -374,15 +376,22 @@ export class NodeExecutorService {
         const modelDef = MODEL_REGISTRY[embModelId];
         const provider = modelDef?.provider ?? 'openai';
 
-        // Load workspace API key for the selected embedding model's provider
         const embApiKey = provider !== 'ollama'
           ? await this.memoryService.loadApiKey(workspaceId, provider)
           : undefined;
 
-        // Generate query embedding using the selected model
         const rawQuery = (nodeData.query as string | undefined) ?? String(state.variables['lastOutput'] ?? '');
         const resolvedQuery = substituteInValue(rawQuery, state) as string;
         const queryEmbedding = await this.memoryService.generateEmbedding(resolvedQuery, embApiKey, embModelId);
+
+        const wsSettings = await this.loadWorkspaceSettings(workspaceId);
+        const similarityThreshold = (nodeData.similarityThreshold as number | undefined)
+          ?? wsSettings.ragSimilarityThreshold
+          ?? 0.75;
+
+        // Convert minimum cosine similarity → cosine distance for pgvector's <=> operator.
+        // <=> returns distance (0=identical), so: distance < (1 - minSimilarity).
+        const distanceThreshold = 1 - similarityThreshold;
 
         const r = await executeRetrieverNode(nodeData, state, {
           query: async (q, kbId, topK) => {
@@ -392,22 +401,34 @@ export class NodeExecutorService {
                 const rows = await this.db.execute(sql`
                   SELECT content, metadata
                   FROM knowledge_entries
-                  WHERE knowledge_base_id = ${kbId} AND embedding IS NOT NULL
+                  WHERE knowledge_base_id = ${kbId}
+                    AND embedding IS NOT NULL
+                    AND (embedding <=> ${embLiteral}::vector) < ${distanceThreshold}
                   ORDER BY embedding <=> ${embLiteral}::vector
                   LIMIT ${topK}
                 `);
                 const results = Array.from(rows) as Array<{ content: string; metadata: unknown }>;
                 if (results.length > 0) return results;
               } catch {
-                /* pgvector unavailable — fall through to text search */
+                /* pgvector unavailable — fall through to FTS */
               }
             }
-            // Text search fallback
-            return this.db
-              .select({ content: knowledgeEntries.content, metadata: knowledgeEntries.metadata })
-              .from(knowledgeEntries)
-              .where(and(eq(knowledgeEntries.knowledgeBaseId, kbId), ilike(knowledgeEntries.content, `%${q}%`)))
-              .limit(topK);
+            // Full-text search fallback
+            try {
+              const rows = await this.db.execute(sql`
+                SELECT content, metadata
+                FROM knowledge_entries
+                WHERE knowledge_base_id = ${kbId}
+                  AND to_tsvector('english', content) @@ plainto_tsquery('english', ${q})
+                ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${q})) DESC
+                LIMIT ${topK}
+              `);
+              const results = Array.from(rows) as Array<{ content: string; metadata: unknown }>;
+              if (results.length > 0) return results;
+            } catch {
+              /* FTS unavailable */
+            }
+            return [];
           },
         });
         return { result: r, isAgentOutput: false };
@@ -522,6 +543,15 @@ export class NodeExecutorService {
           isAgentOutput: false,
         };
     }
+  }
+
+  private async loadWorkspaceSettings(workspaceId: string): Promise<WorkspaceSettings> {
+    const [ws] = await this.db
+      .select({ settings: workspaces.settings })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+    return (ws?.settings ?? {}) as WorkspaceSettings;
   }
 
   private async resolveApiKeys(workspaceId: string): Promise<ModelApiKeys> {

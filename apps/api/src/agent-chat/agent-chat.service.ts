@@ -440,6 +440,20 @@ export class AgentChatService {
     input: Record<string, unknown>,
     dto: ChatDto,
   ): Promise<unknown> {
+    try {
+      return await this.runTool(workspaceId, threadId, name, input, dto);
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  private async runTool(
+    workspaceId: string,
+    threadId: string,
+    name: string,
+    input: Record<string, unknown>,
+    dto: ChatDto,
+  ): Promise<unknown> {
     switch (name) {
       case 'check_workspace_secrets': {
         const rows = await this.secretsService.findAll(workspaceId);

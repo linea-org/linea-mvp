@@ -1,7 +1,7 @@
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
-import { and, eq, ilike, count, desc, sql } from 'drizzle-orm';
+import { and, eq, count, desc, sql } from 'drizzle-orm';
 import type { DrizzleDB, NewKnowledgeBase, NewKnowledgeEntry } from '@linea/db';
-import { knowledgeBases, knowledgeEntries } from '@linea/db';
+import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { EmbeddingService } from '../memory/embedding.service';
 import type { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
@@ -120,86 +120,123 @@ export class KnowledgeService {
     if (!kb) throw new NotFoundException(`Knowledge base ${kbId} not found`);
   }
 
+  private splitIntoChunks(text: string, chunkSize = 1000, overlap = 200): string[] {
+    if (text.length <= chunkSize) return [text];
+    const chunks: string[] = [];
+    let start = 0;
+    while (start < text.length) {
+      const end = Math.min(start + chunkSize, text.length);
+      chunks.push(text.slice(start, end));
+      if (end === text.length) break;
+      start += chunkSize - overlap;
+    }
+    return chunks;
+  }
+
   async addEntry(workspaceId: string, kbId: string, dto: CreateEntryDto) {
     await this.assertBaseOwnership(workspaceId, kbId);
 
-    let embedding: number[] | undefined;
-    try {
-      const vec = await this.embeddingService.embed(dto.content);
-      // A zero-vector means the API key is missing or the model doesn't match — skip storage
-      const isZero = vec.every((v) => v === 0);
-      if (!isZero) embedding = vec;
-    } catch (err) {
-      this.logger.warn(`Failed to embed entry content: ${err}`);
-    }
+    // Load workspace RAG settings (chunk size / overlap)
+    const [ws] = await this.db
+      .select({ settings: workspaces.settings })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+    const wsSettings = ws?.settings ?? {};
+    const CHUNK_SIZE = wsSettings.ragChunkSize ?? 1000;
+    const CHUNK_OVERLAP = wsSettings.ragChunkOverlap ?? 200;
+    const chunks = this.splitIntoChunks(dto.content, CHUNK_SIZE, CHUNK_OVERLAP);
 
-    const [entry] = await this.db
-      .insert(knowledgeEntries)
-      .values({
-        knowledgeBaseId: kbId,
-        content: dto.content,
-        embedding,
-        metadata: dto.metadata ?? {},
-      } satisfies Partial<NewKnowledgeEntry> as NewKnowledgeEntry)
-      .returning();
+    const sourceId = chunks.length > 1 ? crypto.randomUUID() : null;
+    const totalChunks = chunks.length > 1 ? chunks.length : null;
+
+    const inserted: NewKnowledgeEntry[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]!;
+
+      let embedding: number[] | undefined;
+      try {
+        const vec = await this.embeddingService.embed(chunk);
+        const isZero = vec.every((v) => v === 0);
+        if (!isZero) embedding = vec;
+      } catch (err) {
+        this.logger.warn(`Failed to embed chunk ${i}: ${err}`);
+      }
+
+      const [entry] = await this.db
+        .insert(knowledgeEntries)
+        .values({
+          knowledgeBaseId: kbId,
+          content: chunk,
+          embedding,
+          metadata: dto.metadata ?? {},
+          sourceId,
+          chunkIndex: chunks.length > 1 ? i : null,
+          totalChunks,
+        } satisfies Partial<NewKnowledgeEntry> as NewKnowledgeEntry)
+        .returning();
+
+      inserted.push(entry);
+    }
 
     await this.db
       .update(knowledgeBases)
       .set({ updatedAt: new Date() })
       .where(eq(knowledgeBases.id, kbId));
 
-    return entry;
+    return inserted[0]!;
   }
 
   /**
    * Vector-similarity search against embedded entries.
-   * Falls back to keyword search when no embeddings are stored or when the
-   * query embedding is unavailable.
+   * Falls back to full-text search (FTS) when embeddings are unavailable.
    */
   async vectorSearch(
     kbId: string,
     queryEmbedding: number[] | null,
     query: string,
     limit: number,
+    similarityThreshold = 0.75,
   ): Promise<Array<{ content: string; metadata: Record<string, unknown> }>> {
     if (queryEmbedding) {
       try {
         const embLiteral = `[${queryEmbedding.join(',')}]`;
+        // similarityThreshold is a minimum cosine similarity (0–1, higher = stricter).
+        // pgvector's <=> operator returns cosine DISTANCE (0=identical, 2=opposite).
+        // Convert: distance < (1 - minSimilarity).
+        const distanceThreshold = 1 - similarityThreshold;
         const rows = await this.db.execute(sql`
           SELECT content, metadata
           FROM knowledge_entries
-          WHERE knowledge_base_id = ${kbId} AND embedding IS NOT NULL
+          WHERE knowledge_base_id = ${kbId}
+            AND embedding IS NOT NULL
+            AND (embedding <=> ${embLiteral}::vector) < ${distanceThreshold}
           ORDER BY embedding <=> ${embLiteral}::vector
           LIMIT ${limit}
         `);
         const results = Array.from(rows) as Array<{ content: string; metadata: Record<string, unknown> }>;
         if (results.length > 0) return results;
       } catch (err) {
-        this.logger.warn(`Vector search failed, falling back to keyword search: ${err}`);
+        this.logger.warn(`Vector search failed, falling back to FTS: ${err}`);
       }
     }
-    // FTS fallback — uses GIN index on to_tsvector('english', content)
-    if (query.trim()) {
-      try {
-        const ftsRows = await this.db.execute(sql`
-          SELECT content, metadata
-          FROM knowledge_entries
-          WHERE knowledge_base_id = ${kbId}
-            AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
-          LIMIT ${limit}
-        `);
-        const ftsResults = Array.from(ftsRows) as Array<{ content: string; metadata: Record<string, unknown> }>;
-        if (ftsResults.length > 0) return ftsResults;
-      } catch {
-        // FTS unavailable — fall through to LIKE
-      }
+    // Full-text search fallback — ts_rank ordering uses GIN index from migration 0003
+    try {
+      const rows = await this.db.execute(sql`
+        SELECT content, metadata
+        FROM knowledge_entries
+        WHERE knowledge_base_id = ${kbId}
+          AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+        ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC
+        LIMIT ${limit}
+      `);
+      const results = Array.from(rows) as Array<{ content: string; metadata: Record<string, unknown> }>;
+      if (results.length > 0) return results;
+    } catch (err) {
+      this.logger.warn(`FTS failed: ${err}`);
     }
-    // LIKE as last resort
-    return this.db
-      .select({ content: knowledgeEntries.content, metadata: knowledgeEntries.metadata })
-      .from(knowledgeEntries)
-      .where(and(eq(knowledgeEntries.knowledgeBaseId, kbId), ilike(knowledgeEntries.content, `%${query}%`)))
-      .limit(limit) as Promise<Array<{ content: string; metadata: Record<string, unknown> }>>;
+    return [];
   }
 
   async listEntries(workspaceId: string, kbId: string) {
@@ -251,40 +288,6 @@ export class KnowledgeService {
     }
 
     const results = await this.vectorSearch(kbId, queryEmbedding, dto.query, dto.limit ?? 20);
-
-    // vectorSearch returns { content, metadata } — re-select with id/createdAt when falling back
-    if (queryEmbedding && results.length > 0) return results;
-
-    if (dto.query.trim()) {
-      try {
-        const ftsRows = await this.db.execute(sql`
-          SELECT id, content, metadata, created_at AS "createdAt"
-          FROM knowledge_entries
-          WHERE knowledge_base_id = ${kbId}
-            AND to_tsvector('english', content) @@ plainto_tsquery('english', ${dto.query})
-          ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${dto.query})) DESC
-          LIMIT ${dto.limit ?? 20}
-        `);
-        const ftsResults = Array.from(ftsRows) as Array<{ id: string; content: string; metadata: Record<string, unknown>; createdAt: Date }>;
-        if (ftsResults.length > 0) return ftsResults;
-      } catch {
-        // FTS unavailable — fall through to LIKE
-      }
-    }
-    return this.db
-      .select({
-        id: knowledgeEntries.id,
-        content: knowledgeEntries.content,
-        metadata: knowledgeEntries.metadata,
-        createdAt: knowledgeEntries.createdAt,
-      })
-      .from(knowledgeEntries)
-      .where(
-        and(
-          eq(knowledgeEntries.knowledgeBaseId, kbId),
-          ilike(knowledgeEntries.content, `%${dto.query}%`),
-        ),
-      )
-      .limit(dto.limit ?? 20);
+    return results;
   }
 }

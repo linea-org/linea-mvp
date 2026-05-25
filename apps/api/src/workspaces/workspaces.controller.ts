@@ -20,6 +20,7 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { UpdateWorkspaceSettingsDto } from './dto/update-workspace-settings.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { RoleGuard } from '../common/guards/role.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
@@ -77,6 +78,30 @@ export class WorkspacesController {
     @WorkspaceMembership() membership: WorkspaceMember,
   ) {
     return this.service.delete(id, membership);
+  }
+
+  // ─── Settings ──────────────────────────────────────────────────────────────
+
+  @Get(':id/settings')
+  @UseGuards(WorkspaceGuard)
+  @ApiOperation({ summary: 'Get workspace AI settings' })
+  getSettings(
+    @Param('id') id: string,
+    @WorkspaceMembership() membership: WorkspaceMember,
+  ) {
+    return this.service.getSettings(id, membership);
+  }
+
+  @Patch(':id/settings')
+  @RequireRole('admin')
+  @UseGuards(WorkspaceGuard, RoleGuard)
+  @ApiOperation({ summary: 'Update workspace AI settings (admin+)' })
+  updateSettings(
+    @Param('id') id: string,
+    @WorkspaceMembership() membership: WorkspaceMember,
+    @Body() dto: UpdateWorkspaceSettingsDto,
+  ) {
+    return this.service.updateSettings(id, membership, dto);
   }
 
   // ─── Members ───────────────────────────────────────────────────────────────
