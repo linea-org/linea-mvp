@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq, and } from 'drizzle-orm';
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, createHmac, timingSafeEqual, randomBytes } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { oauthConnections } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
@@ -17,19 +17,24 @@ import { OAUTH_PROVIDERS } from './providers';
 export class OAuthService {
   private readonly logger = new Logger(OAuthService.name);
   private readonly encryptionKey: Buffer;
+  private readonly stateSigningKey: Buffer;
 
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly config: ConfigService,
   ) {
     const raw = this.config.get<string>('ENCRYPTION_KEY');
-    const keySource = raw ?? 'default-dev-key-do-not-use-in-production!!';
-    if (keySource.length === 64 && /^[0-9a-fA-F]+$/.test(keySource)) {
-      this.encryptionKey = Buffer.from(keySource, 'hex');
+    if (!raw) throw new Error('ENCRYPTION_KEY is required');
+    if (raw.length === 64 && /^[0-9a-fA-F]+$/.test(raw)) {
+      this.encryptionKey = Buffer.from(raw, 'hex');
     } else {
       this.encryptionKey = Buffer.alloc(32);
-      Buffer.from(keySource, 'utf8').copy(this.encryptionKey);
+      Buffer.from(raw, 'utf8').copy(this.encryptionKey);
     }
+    // Derive a separate signing key for OAuth state HMAC (HKDF-lite via SHA-256)
+    this.stateSigningKey = createHmac('sha256', this.encryptionKey)
+      .update('oauth-state-signing-key')
+      .digest();
   }
 
   buildAuthUrl(
@@ -47,7 +52,9 @@ export class OAuthService {
       );
     }
 
-    const state = Buffer.from(JSON.stringify({ workspaceId, provider })).toString('base64url');
+    const statePayload = JSON.stringify({ workspaceId, provider, nonce: randomBytes(16).toString('hex') });
+    const sig = createHmac('sha256', this.stateSigningKey).update(statePayload).digest('hex');
+    const state = Buffer.from(JSON.stringify({ p: statePayload, s: sig })).toString('base64url');
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -72,8 +79,15 @@ export class OAuthService {
 
     let workspaceId: string;
     try {
-      const decoded = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
-      workspaceId = decoded.workspaceId;
+      const outer = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')) as { p: string; s: string };
+      const expectedSig = createHmac('sha256', this.stateSigningKey).update(outer.p).digest('hex');
+      const expBuf = Buffer.from(expectedSig, 'hex');
+      const sigBuf = Buffer.from(outer.s ?? '', 'hex');
+      if (expBuf.length !== sigBuf.length || !timingSafeEqual(expBuf, sigBuf)) {
+        throw new Error('signature mismatch');
+      }
+      const payload = JSON.parse(outer.p) as { workspaceId: string; provider: string; nonce: string };
+      workspaceId = payload.workspaceId;
     } catch {
       throw new BadRequestException('Invalid OAuth state parameter');
     }

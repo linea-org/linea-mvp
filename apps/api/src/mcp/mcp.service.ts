@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
 import { mcpServers } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
+import { assertSafeUrl } from '../common/utils/ssrf-guard';
 import type { CreateMcpServerDto } from './dto/create-mcp-server.dto';
 import type { UpdateMcpServerDto } from './dto/update-mcp-server.dto';
 
@@ -75,6 +76,7 @@ export class McpService {
     workspaceId: string,
     dto: CreateMcpServerDto,
   ): Promise<McpServerSafeResponse> {
+    await assertSafeUrl(dto.url);
     const [server] = await this.db
       .insert(mcpServers)
       .values({
@@ -130,7 +132,10 @@ export class McpService {
     const updateValues: Partial<typeof mcpServers.$inferInsert> = {};
 
     if (dto.name !== undefined) updateValues.name = dto.name;
-    if (dto.url !== undefined) updateValues.url = dto.url;
+    if (dto.url !== undefined) {
+      await assertSafeUrl(dto.url);
+      updateValues.url = dto.url;
+    }
     if (dto.authType !== undefined) updateValues.authType = dto.authType;
     if (dto.accessToken !== undefined) {
       updateValues.accessTokenEncrypted = dto.accessToken

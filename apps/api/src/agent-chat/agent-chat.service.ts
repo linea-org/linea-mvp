@@ -474,7 +474,8 @@ export class AgentChatService {
         const rows = await this.db
           .select({ id: workflows.id, name: workflows.name, description: workflows.description, isPublic: workflows.isPublic })
           .from(workflows)
-          .where(eq(workflows.podId, podId));
+          .innerJoin(pods, eq(pods.id, workflows.podId))
+          .where(and(eq(workflows.podId, podId), eq(pods.workspaceId, workspaceId)));
         return { workflows: rows };
       }
 
@@ -483,6 +484,14 @@ export class AgentChatService {
         const wfName = input['name'] as string;
         const description = (input['description'] as string | undefined) ?? null;
         const definition = input['definition'] as { nodes: unknown[]; edges: unknown[] };
+
+        // Verify pod belongs to this workspace
+        const [podCheck] = await this.db
+          .select({ id: pods.id })
+          .from(pods)
+          .where(and(eq(pods.id, podId), eq(pods.workspaceId, workspaceId)))
+          .limit(1);
+        if (!podCheck) return { error: `Pod ${podId} not found in this workspace` };
 
         const [created] = await this.db
           .insert(workflows)
@@ -497,12 +506,14 @@ export class AgentChatService {
         const wfId = input['workflow_id'] as string;
         const wfInput = (input['input'] as Record<string, unknown>) ?? {};
 
+        // Verify pod belongs to this workspace before executing
         const [pod] = await this.db
           .select({ workspaceId: pods.workspaceId })
           .from(pods)
-          .where(eq(pods.id, podId))
+          .where(and(eq(pods.id, podId), eq(pods.workspaceId, workspaceId)))
           .limit(1);
-        const resolvedWorkspaceId = pod?.workspaceId ?? workspaceId;
+        if (!pod) return { error: `Pod ${podId} not found in this workspace` };
+        const resolvedWorkspaceId = workspaceId;
 
         let ex: { id: string; status: string };
         try {
@@ -545,7 +556,7 @@ export class AgentChatService {
         const workflowId = input['workflow_id'] as string | undefined;
         const limit = Math.min(Number(input['limit'] ?? 10), 50);
 
-        const conditions = [eq(executions.podId, podId)];
+        const conditions = [eq(executions.podId, podId), eq(executions.workspaceId, workspaceId)];
         if (workflowId) conditions.push(eq(executions.workflowId, workflowId));
 
         const rows = await this.db
@@ -568,6 +579,13 @@ export class AgentChatService {
       case 'get_execution': {
         const podId = input['pod_id'] as string;
         const executionId = input['execution_id'] as string;
+        // Verify pod is in this workspace before fetching execution
+        const [podOwner] = await this.db
+          .select({ id: pods.id })
+          .from(pods)
+          .where(and(eq(pods.id, podId), eq(pods.workspaceId, workspaceId)))
+          .limit(1);
+        if (!podOwner) return { error: `Execution ${executionId} not found` };
         try {
           const ex = await this.executionsService.findOne(podId, executionId);
           return {
@@ -597,7 +615,8 @@ export class AgentChatService {
             nextRunAt: schedules.nextRunAt,
           })
           .from(schedules)
-          .where(eq(schedules.podId, podId))
+          .innerJoin(pods, eq(pods.id, schedules.podId))
+          .where(and(eq(schedules.podId, podId), eq(pods.workspaceId, workspaceId)))
           .orderBy(schedules.nextRunAt);
 
         return { schedules: rows, count: rows.length };

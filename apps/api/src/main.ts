@@ -17,8 +17,17 @@ async function bootstrap() {
   // Trust exactly one proxy hop (load balancer / Cloudflare). req.ip is then the real client IP.
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
-  // Security headers — disable CSP for SSE compatibility
-  app.use(helmet({ contentSecurityPolicy: false }));
+  // Security headers — minimal CSP; SSE streams JSON, not HTML, so this is safe
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+        },
+      },
+    }),
+  );
 
   const allowedOrigins = (
     process.env['ALLOWED_ORIGINS'] ?? 'http://localhost:3000'
@@ -27,6 +36,9 @@ async function bootstrap() {
     .map((o) => o.trim())
     .filter(Boolean);
 
+  // This API is bearer-auth only (no cookies) so credentials:false is correct.
+  // Omitting credentials:true means pre-flight does not gate non-browser callers,
+  // which is intentional — API keys are the auth mechanism for machine clients.
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
@@ -35,7 +47,7 @@ async function bootstrap() {
         callback(new Error('CORS: origin not allowed'));
       }
     },
-    credentials: true,
+    credentials: false,
   });
 
   app.setGlobalPrefix('v1', {

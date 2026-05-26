@@ -21,7 +21,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
-import { SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { WorkflowsService } from './workflows.service';
 import { GenerateWorkflowService } from './generate-workflow.service';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
@@ -355,7 +355,7 @@ export class WorkflowsController {
   }
 
   @Post(':id/generate')
-  @SkipThrottle()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @RequireRole('editor')
   @ApiOperation({
     summary: 'Generate workflow from natural language (SSE stream, editor+)',
