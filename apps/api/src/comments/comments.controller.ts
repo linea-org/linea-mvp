@@ -22,6 +22,7 @@ import { ReactCommentDto } from './dto/react-comment.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
 
@@ -60,6 +61,7 @@ export class CommentsController {
   }
 
   @Patch(':id')
+  @RequireRole('editor')
   @ApiOperation({ summary: 'Update a comment (body or resolved status)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })

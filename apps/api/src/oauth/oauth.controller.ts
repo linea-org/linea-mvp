@@ -7,6 +7,7 @@ import {
   Res,
   UseGuards,
   BadRequestException,
+  GoneException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -59,17 +60,11 @@ export class OAuthCallbackController {
     private readonly config: ConfigService,
   ) {}
 
-  // Kept for backward-compat; prefer authenticated /workspaces/:wId/oauth/:provider/connect-url
+  // Removed — use GET /workspaces/:workspaceId/oauth/:provider/connect-url instead
   @Public()
   @Get(':provider/connect')
-  connect(
-    @Param('provider') provider: string,
-    @Query('workspaceId') workspaceId: string,
-    @Res() res: Response,
-  ) {
-    const redirectUri = this.buildRedirectUri(provider);
-    const url = this.oauth.buildAuthUrl(provider, workspaceId, redirectUri);
-    res.redirect(url);
+  connectGone() {
+    throw new GoneException('Use GET /workspaces/:workspaceId/oauth/:provider/connect-url');
   }
 
   // OAuth provider redirects here after user approves
