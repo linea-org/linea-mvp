@@ -20,7 +20,7 @@ export class NodesController {
   constructor(private readonly nodeExecutor: NodeExecutorService) {}
 
   @Post('test')
-  @RequireRole('editor')
+  @RequireRole('admin')
   @ApiOperation({ summary: 'Test a single node in isolation' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })

@@ -207,9 +207,13 @@ export default function ConnectionsPage() {
     }
   }
 
-  function handleConnectOAuth(provider: string) {
+  async function handleConnectOAuth(provider: string) {
     if (!activeWorkspace) return;
-    window.location.href = `${API_URL}/oauth/${provider}/connect?workspaceId=${activeWorkspace.id}`;
+    const token = await getToken();
+    if (!token) return;
+    const api = createApiClient(token);
+    const data = await api.get<{ url: string }>(`/workspaces/${activeWorkspace.id}/oauth/${provider}/connect-url`);
+    window.location.href = data.url;
   }
 
   const needsToken = form.authType !== 'none';

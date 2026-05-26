@@ -424,11 +424,11 @@ export class EvalsService {
     return results;
   }
 
-  async getRunHistory(workflowId: string, limit = 20): Promise<EvalRunSummary[]> {
+  async getRunHistory(workflowId: string, podId: string, limit = 20): Promise<EvalRunSummary[]> {
     const rows = await this.db
       .select()
       .from(evalRuns)
-      .where(eq(evalRuns.workflowId, workflowId))
+      .where(and(eq(evalRuns.workflowId, workflowId), eq(evalRuns.podId, podId)))
       .orderBy(desc(evalRuns.createdAt))
       .limit(limit);
 

@@ -27,7 +27,7 @@ export class CheckpointCleanupProcessor extends WorkerHost {
     const result = await this.db.execute(sql`
       DELETE FROM checkpoints
       WHERE thread_id IN (
-        SELECT id::text FROM executions
+        SELECT thread_id FROM executions
         WHERE status IN ('completed', 'failed', 'cancelled')
         AND updated_at < ${cutoff}
       )
@@ -36,7 +36,7 @@ export class CheckpointCleanupProcessor extends WorkerHost {
     await this.db.execute(sql`
       DELETE FROM checkpoint_writes
       WHERE thread_id IN (
-        SELECT id::text FROM executions
+        SELECT thread_id FROM executions
         WHERE status IN ('completed', 'failed', 'cancelled')
         AND updated_at < ${cutoff}
       )
@@ -45,7 +45,7 @@ export class CheckpointCleanupProcessor extends WorkerHost {
     await this.db.execute(sql`
       DELETE FROM checkpoint_blobs
       WHERE thread_id IN (
-        SELECT id::text FROM executions
+        SELECT thread_id FROM executions
         WHERE status IN ('completed', 'failed', 'cancelled')
         AND updated_at < ${cutoff}
       )

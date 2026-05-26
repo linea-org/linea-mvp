@@ -98,7 +98,21 @@ export async function executeHTTPNode(
     body = substituteVariables(requestBody, state);
   }
 
-  const response = await fetch(url, { method, headers, body });
+  // Disable automatic redirect following so we can SSRF-check the Location header
+  // before following (a redirect to 169.254.x.x would bypass the initial assertSafeUrl).
+  let response = await fetch(url, { method, headers, body, redirect: 'manual' });
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('location');
+    if (!location) throw new Error('HTTP redirect missing Location header');
+    await assertSafeUrl(location);
+    // 307/308 preserve method+body; 301/302/303 conventionally switch to GET
+    const redirectMethod = [307, 308].includes(response.status) ? method : 'GET';
+    const redirectBody = redirectMethod !== 'GET' ? body : undefined;
+    response = await fetch(location, { method: redirectMethod, headers, body: redirectBody, redirect: 'manual' });
+    if (response.status >= 300 && response.status < 400) {
+      throw new Error('HTTP node: chained redirects are not supported');
+    }
+  }
   const rawBody = await readBodyWithLimit(response);
 
   if (!response.ok) {

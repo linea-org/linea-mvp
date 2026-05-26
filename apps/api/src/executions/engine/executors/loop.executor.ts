@@ -1,4 +1,4 @@
-import { createContext, Script } from 'vm';
+import jexl from 'jexl';
 import type { WorkflowState } from '../variable-substitution';
 
 export interface LoopNodeData {
@@ -49,23 +49,7 @@ export function executeLoopNode(
     const expr = nodeData.itemTransform.trim();
     results = items.map((item) => {
       try {
-        const sandbox: Record<string, unknown> = {
-          item,
-          result: undefined,
-          JSON,
-          Math,
-          Object,
-          Array,
-          String,
-          Number,
-          Boolean,
-        };
-        const ctx = createContext(sandbox);
-        const script = new Script(
-          `result = (function() { return (${expr}); })()`,
-        );
-        script.runInContext(ctx, { timeout: 1000 });
-        return sandbox['result'];
+        return jexl.evalSync(expr, { item });
       } catch {
         return item;
       }

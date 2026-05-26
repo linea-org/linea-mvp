@@ -20,8 +20,9 @@ export class BillingController {
   constructor(private readonly service: BillingService) {}
 
   @Get('plans')
-  @Public()
-  @ApiOperation({ summary: 'Get available plans and pricing' })
+  @ApiBearerAuth()
+  @UseGuards(WorkspaceGuard, RoleGuard)
+  @ApiOperation({ summary: 'Get available plans and current plan for workspace' })
   @ApiParam({ name: 'workspaceId' })
   getPlans(@Param('workspaceId') workspaceId: string) {
     return this.service.getPlans(workspaceId);

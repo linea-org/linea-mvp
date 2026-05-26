@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestj
 import { AuditService } from './audit.service';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 
 @ApiTags('Audit')
 @ApiBearerAuth()
@@ -12,6 +13,7 @@ export class AuditController {
   constructor(private readonly service: AuditService) {}
 
   @Get()
+  @RequireRole('admin')
   @ApiOperation({ summary: 'List audit log events for a workspace' })
   @ApiParam({ name: 'workspaceId' })
   @ApiQuery({ name: 'period', required: false, enum: ['24h', '7d', '30d'] })
