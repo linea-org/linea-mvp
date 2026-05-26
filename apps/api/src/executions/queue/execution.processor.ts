@@ -36,7 +36,7 @@ async function drainWithTimeout<T>(
   }
 }
 import type { DrizzleDB } from '@linea/db';
-import { executions, executionLogs, workflows } from '@linea/db';
+import { executions, executionLogs, workflows, users } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 import { LangGraphService } from '../engine/langgraph.service';
 import type { WorkflowDefinition } from '../engine/langgraph.service';
@@ -45,6 +45,7 @@ import { MemoryService } from '../engine/memory.service';
 import { CheckpointerService } from '../engine/checkpointer.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { QuotasService } from '../../quotas/quotas.service';
+import { MailService } from '../../mail/mail.service';
 import { EXECUTION_QUEUE } from './execution.queue';
 import type { ExecutionJobData } from './execution.queue';
 
@@ -60,6 +61,7 @@ export class ExecutionProcessor extends WorkerHost {
     private readonly checkpointerService: CheckpointerService,
     private readonly notifications: NotificationsService,
     private readonly quotas: QuotasService,
+    private readonly mail: MailService,
   ) {
     super();
   }
@@ -81,6 +83,8 @@ export class ExecutionProcessor extends WorkerHost {
       `${isResume ? 'Resuming' : 'Starting'} execution ${executionId} (thread: ${threadId})`,
     );
 
+    let wf: typeof workflows.$inferSelect | undefined;
+
     try {
       await this.db
         .update(executions)
@@ -90,7 +94,7 @@ export class ExecutionProcessor extends WorkerHost {
         })
         .where(eq(executions.id, executionId));
 
-      const [wf] = await this.db
+      [wf] = await this.db
         .select()
         .from(workflows)
         .where(eq(workflows.id, workflowId))
@@ -216,6 +220,17 @@ export class ExecutionProcessor extends WorkerHost {
           type: 'execution_suspended',
           interrupt: finalState.pendingInterrupt,
         });
+
+        if (userId) {
+          void this.sendApprovalEmail(
+            userId,
+            wf.name,
+            executionId,
+            workspaceId,
+            wf.podId,
+            finalState.pendingInterrupt,
+          );
+        }
       } else {
         // Persist memory before cleanup so next execution can load it
         await this.memoryService.saveFromExecution(
@@ -282,9 +297,45 @@ export class ExecutionProcessor extends WorkerHost {
           msg,
           workspaceId,
         );
+        void this.sendFailureEmail(userId, wf?.name ?? workflowId, executionId, workspaceId, wf?.podId ?? '', msg);
       }
 
       throw error;
     }
+  }
+
+  private async sendFailureEmail(
+    userId: string,
+    workflowName: string,
+    executionId: string,
+    workspaceId: string,
+    podId: string,
+    error: string,
+  ) {
+    const [user] = await this.db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user?.email) return;
+    void this.mail.sendExecutionFailed({ toEmail: user.email, workflowName, executionId, workspaceId, podId, error });
+  }
+
+  private async sendApprovalEmail(
+    userId: string,
+    workflowName: string,
+    executionId: string,
+    workspaceId: string,
+    podId: string,
+    interrupt: unknown,
+  ) {
+    const [user] = await this.db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user?.email) return;
+    const message = (interrupt as any)?.message ?? 'Your approval is required to continue.';
+    void this.mail.sendApprovalRequired({ toEmail: user.email, workflowName, executionId, workspaceId, podId, message });
   }
 }

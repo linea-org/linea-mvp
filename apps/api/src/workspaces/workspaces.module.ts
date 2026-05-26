@@ -4,8 +4,10 @@ import { WorkspacesController } from './workspaces.controller';
 import { InvitesController } from './invites.controller';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { RoleGuard } from '../common/guards/role.guard';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
+  imports: [MailModule],
   providers: [WorkspacesService, WorkspaceGuard, RoleGuard],
   controllers: [WorkspacesController, InvitesController],
   exports: [WorkspacesService, WorkspaceGuard, RoleGuard],
