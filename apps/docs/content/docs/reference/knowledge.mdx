@@ -92,7 +92,7 @@ Delete a single entry.
 
 ### `POST /v1/workspaces/:wId/knowledge-bases/:id/search`
 
-Search entries. Uses semantic (pgvector) search when embeddings are available, falls back to keyword (`ilike`).
+Search entries. Uses semantic search when embeddings are available, falls back to keyword matching.
 
 **Body** `{ "query": "how many runs on free plan?" }`
 

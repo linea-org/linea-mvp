@@ -19,7 +19,7 @@ All string fields in node configuration support `{{variableName}}` substitution:
 | `{{nodeName}}` | Output of a previous node (by name or ID) |
 | `{{lastOutput}}` | Output of the most recently completed node |
 | `{{nodeResults.nodeId.output}}` | Deep-access a specific node result |
-| `{{variables.myVar}}` | Any variable in the LangGraph state |
+| `{{variables.myVar}}` | Any variable set during the current execution |
 
 Substitution is performed recursively — nested references like `{{input.data.items.0.name}}` work as expected.
 

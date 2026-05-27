@@ -85,7 +85,7 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm db:push
 ```
 
-This runs `drizzle-kit push` against your PostgreSQL instance and creates all tables.
+This creates all required tables in your PostgreSQL instance.
 
 </Step>
 
@@ -101,9 +101,9 @@ Turborepo starts all apps in parallel:
 
 | App | URL |
 |---|---|
-| **Web** (Next.js) | `http://localhost:3000` |
-| **API** (NestJS) | `http://localhost:3001` |
-| **Docs** (Fumadocs) | `http://localhost:3002` |
+| **Web** | `http://localhost:3000` |
+| **API** | `http://localhost:3001` |
+| **Docs** | `http://localhost:3002` |
 
 </Step>
 
@@ -201,7 +201,7 @@ Click **Save** in the top toolbar. The workflow is now ready to run.
 2. Click **New execution**.
 3. Select your workflow and provide input JSON:
    ```json
-   { "message": "Explain how LangGraph works in 3 sentences." }
+   { "message": "Summarise the benefits of AI workflow automation in 3 sentences." }
    ```
 4. Click **Run**.
 5. Watch the execution stream live — node statuses update in real time.
@@ -218,7 +218,7 @@ curl -X POST http://localhost:3001/v1/workspaces/<wsId>/pods/<podId>/executions 
   -H "Content-Type: application/json" \
   -d '{
     "workflowId": "<wfId>",
-    "input": { "message": "Explain how LangGraph works in 3 sentences." }
+    "input": { "message": "Summarise the benefits of AI workflow automation in 3 sentences." }
   }'
 ```
 
@@ -238,7 +238,7 @@ const result = await linea.run(
   '<workspaceId>',
   '<podId>',
   '<workflowId>',
-  { message: 'Explain how LangGraph works in 3 sentences.' },
+  { message: 'Summarise the benefits of AI workflow automation in 3 sentences.' },
   { waitForCompletion: true },
 );
 

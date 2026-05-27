@@ -57,6 +57,7 @@ export async function generateMetadata(props: {
 
   const pageUrl = `${siteUrl}${page.url}`;
   const description = page.data.description ?? DEFAULT_DESCRIPTION;
+  const ogImageUrl = `${siteUrl}/api/og?title=${encodeURIComponent(page.data.title)}&description=${encodeURIComponent(description)}`;
 
   return {
     title: page.data.title,
@@ -69,11 +70,13 @@ export async function generateMetadata(props: {
       siteName: SITE_NAME,
       type: 'article',
       locale: 'en',
+      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: page.data.title }],
     },
     twitter: {
       card: 'summary_large_image',
       title: page.data.title,
       description,
+      images: [ogImageUrl],
     },
   };
 }

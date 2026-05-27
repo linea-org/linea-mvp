@@ -7,11 +7,11 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # Memory Node
 
-The `memory` node operates on the in-workflow key-value store that is part of the LangGraph state. It is distinct from the long-term database-backed memory system (see [Memory System](/docs/modules/memory)).
+The `memory` node operates on the in-workflow key-value store that persists within a single execution thread. It is distinct from the long-term memory system (see [Memory System](/docs/modules/memory)).
 
 ## What It Does
 
-The memory node reads from or clears `state.memory` — a dictionary that persists within a single execution thread. Agent nodes can write to this dictionary via the `memory_store` tool.
+The memory node reads from or clears the in-execution memory dictionary — a key-value store that persists within a single execution thread. Agent nodes can write to this dictionary via the `memory_store` tool.
 
 ## Configuration Fields
 
@@ -27,7 +27,7 @@ The memory node reads from or clears `state.memory` — a dictionary that persis
 
 ### `retrieve`
 
-Searches `state.memory` for keys/values matching `memoryQuery` (case-insensitive substring match). Returns up to `memoryTopK` results:
+Searches the in-execution memory dictionary for keys/values matching `memoryQuery` (case-insensitive substring match). Returns up to `memoryTopK` results:
 
 ```json
 {
@@ -41,7 +41,7 @@ Searches `state.memory` for keys/values matching `memoryQuery` (case-insensitive
 
 ### `clear`
 
-Returns `{ "__clearMemory": true, "scope": "thread" }` — signals the LangGraph reducer to wipe the in-flight memory dictionary. The actual wipe happens in the state reducer.
+Clears the in-workflow memory dictionary. Returns `{ "__clearMemory": true, "scope": "thread" }`.
 
 ### `smart`
 
@@ -52,7 +52,7 @@ Passthrough mode — returns the current memory snapshot for an upstream agent t
 ```
 
 <Callout type="info">
-  For persistent, cross-execution memory backed by pgvector, use the `enableLongTermMemory` flag on the **Agent** node and the `memory_store` / `memory_search` built-in tools. The Memory node only operates on ephemeral within-execution state.
+  For persistent, cross-execution memory with semantic search, use the `enableLongTermMemory` flag on the **Agent** node and the `memory_store` / `memory_search` built-in tools. The Memory node only operates on ephemeral within-execution state.
 </Callout>
 
 ## Example Config

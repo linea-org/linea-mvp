@@ -22,7 +22,7 @@ The `approval-gate` node suspends execution and waits for a human decision. Use 
 <Step>
 ### Execution reaches the approval-gate node
 
-The LangGraph engine calls `interrupt()`, which suspends the graph. The execution `status` changes to `suspended` in the database.
+The workflow engine suspends the execution at this node. The execution `status` changes to `suspended`.
 </Step>
 <Step>
 ### Approver is notified
@@ -63,7 +63,7 @@ or
 On approval, `lastOutput` is unchanged — the approval gate is transparent to data flow.
 
 <Callout type="info">
-  Suspended executions timeout after **10 minutes** of SSE inactivity (the stream disconnects). The execution record remains in `suspended` state in the database indefinitely until a response is submitted. There is no automatic timeout on the suspension itself.
+  Suspended executions timeout after **10 minutes** of SSE stream inactivity. The execution remains in `suspended` state indefinitely until a response is submitted — there is no automatic timeout on the suspension itself.
 </Callout>
 
 ## Example Config

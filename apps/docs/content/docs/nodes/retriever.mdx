@@ -19,7 +19,7 @@ The `retriever` node queries a workspace knowledge base and returns the most rel
 | `outputField` | `documents` \| `text` \| `full` | `documents` | How to return results |
 
 <Callout type="warn">
-  The retriever currently uses `ilike` keyword text search against `knowledge_entries.content` — **not** vector/semantic search. The `embedding` column exists in the schema but is not yet populated on entry insert. Semantic retrieval is planned for a future release.
+  The retriever currently uses keyword text search — **not** semantic/vector search. Semantic retrieval is planned for a future release.
 </Callout>
 
 ## Output

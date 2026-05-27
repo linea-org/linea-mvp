@@ -11,7 +11,7 @@ The `end` node is the terminal node of a workflow. When execution reaches it, th
 
 - Sets execution `status` to `completed`
 - Stores the current `variables.lastOutput` as `execution.output` in the database
-- Signals the BullMQ job as done
+- Marks the execution job as complete
 
 **No configuration required.** A workflow can have multiple end nodes (e.g., one per branch of an `if-else`), but execution stops at whichever is reached first.
 
