@@ -63,6 +63,10 @@ interface Template {
   publishedBy: string | null;
   prerequisites?: Prerequisite[] | null;
   definition?: { nodes: TemplateNode[]; edges: unknown[] } | null;
+  // Creator info (populated from LEFT JOIN with users for community templates)
+  creatorName?: string | null;
+  creatorAvatarUrl?: string | null;
+  creatorEmail?: string | null;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -263,7 +267,7 @@ export default function TemplatesPage() {
   const rest = filtered.filter((t) => !t.featured);
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-lg font-semibold">Template gallery</h1>
         <p className="text-sm text-muted-foreground">Start with a pre-built workflow and customise it.</p>
@@ -510,7 +514,7 @@ export default function TemplatesPage() {
             {selectedTemplate?.prerequisites && selectedTemplate.prerequisites.length > 0 && (
               <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/10 p-3 space-y-2">
                 <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                  <Alert01Icon />
+                  <HugeiconsIcon icon={Alert01Icon} className="size-3.5 shrink-0" />
                   Before you start — confirm these are set up
                 </p>
                 {selectedTemplate.prerequisites.map((p, i) => (
@@ -641,11 +645,12 @@ function TemplateCard({
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="font-medium text-sm leading-snug truncate">{template.name}</p>
           {hasPrereqs && (
-            <HugeiconsIcon
-              icon={Alert01Icon}
-              className="size-3 shrink-0 text-amber-500"
-              title="Requires setup"
-            />
+            <span title="Requires setup">
+              <HugeiconsIcon
+                icon={Alert01Icon}
+                className="size-3 shrink-0 text-amber-500"
+              />
+            </span>
           )}
         </div>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${colorClass}`}>
@@ -655,32 +660,54 @@ function TemplateCard({
       {template.description && (
         <p className="text-xs text-muted-foreground line-clamp-2">{template.description}</p>
       )}
-      <div className="mt-auto flex items-center justify-between">
-        {/* Footer: internal shows nothing, community shows upvotes */}
+      <div className="mt-auto flex items-center justify-between gap-2">
+        {/* Footer: internal shows "Built-in", community shows creator + upvotes */}
         {isInternal ? (
           <span className="text-[11px] text-muted-foreground">Built-in</span>
-        ) : template.publishedBy ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleUpvote(template, e); }}
-            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors ${
-              isUpvoted
-                ? 'bg-primary/10 text-primary font-medium'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-            title={isUpvoted ? 'Remove upvote' : 'Upvote'}
-          >
-            <HugeiconsIcon icon={ArrowUp01Icon} className="size-3" />
-            {template.upvotes}
-          </button>
         ) : (
-          <span className="rounded-md px-2 py-1 text-[11px] text-muted-foreground">
-            {template.downloads} uses
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Creator info */}
+            {(template.creatorName || template.creatorAvatarUrl || template.creatorEmail) ? (
+              <div className="flex items-center gap-1 min-w-0">
+                {template.creatorAvatarUrl ? (
+                  <img
+                    src={template.creatorAvatarUrl}
+                    alt={template.creatorName ?? ''}
+                    className="size-4 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="size-4 rounded-full bg-muted flex items-center justify-center text-[8px] font-medium shrink-0">
+                    {(template.creatorName ?? template.creatorEmail ?? 'C')[0]?.toUpperCase() ?? 'C'}
+                  </div>
+                )}
+                <span className="text-[11px] text-muted-foreground truncate max-w-[72px]">
+                  {template.creatorName || template.creatorEmail?.split('@')[0] || 'Community'}
+                </span>
+              </div>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">
+                {template.downloads > 0 ? `${template.downloads} uses` : 'Community'}
+              </span>
+            )}
+            {/* Upvote button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleUpvote(template, e); }}
+              className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors shrink-0 ${
+                isUpvoted
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              title={isUpvoted ? 'Remove upvote' : 'Upvote'}
+            >
+              <HugeiconsIcon icon={ArrowUp01Icon} className="size-3" />
+              {template.upvotes}
+            </button>
+          </div>
         )}
         <Button
           size="sm"
           variant="outline"
-          className="h-7 px-3 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+          className="h-7 px-3 text-xs opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           onClick={(e) => { e.stopPropagation(); onUse(template); }}
         >
           Use

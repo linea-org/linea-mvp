@@ -1484,8 +1484,9 @@ export class TemplatesSeeder implements OnApplicationBootstrap {
   constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
 
   async onApplicationBootstrap() {
-    this.logger.log('Checking built-in templates…');
+    this.logger.log('Syncing built-in templates…');
     let inserted = 0;
+    let updated = 0;
 
     for (const tpl of BUILT_IN_TEMPLATES) {
       const existing = await this.db
@@ -1494,7 +1495,23 @@ export class TemplatesSeeder implements OnApplicationBootstrap {
         .where(eq(templates.name, tpl.name))
         .limit(1);
 
-      if (existing.length > 0) continue;
+      if (existing.length > 0) {
+        // Always sync source/prerequisites/featured/definition so that a
+        // previously-inserted row that got the wrong source default is corrected.
+        await this.db
+          .update(templates)
+          .set({
+            source: 'internal',
+            description: tpl.description,
+            category: tpl.category,
+            featured: tpl.featured,
+            prerequisites: tpl.prerequisites ?? null,
+            definition: tpl.definition as any,
+          })
+          .where(eq(templates.id, existing[0]!.id));
+        updated++;
+        continue;
+      }
 
       await this.db.insert(templates).values({
         name: tpl.name,
@@ -1510,8 +1527,8 @@ export class TemplatesSeeder implements OnApplicationBootstrap {
       inserted++;
     }
 
-    if (inserted > 0) {
-      this.logger.log(`Seeded ${inserted} new template(s)`);
+    if (inserted > 0 || updated > 0) {
+      this.logger.log(`Built-in templates: ${inserted} inserted, ${updated} updated`);
     }
   }
 }

@@ -83,7 +83,13 @@ export const templates = pgTable('templates', {
    * e.g. { type: 'rag', label: 'Knowledge Base', description: 'Create a KB and copy its ID.' }
    */
   prerequisites: jsonb('prerequisites').$type<Array<{ type: string; label: string; description: string }>>(),
-  publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+  /**
+   * The user who published this template to the gallery.
+   * NULL is only valid for source = 'internal' (seeder-created built-ins).
+   * Community templates must always have a publisher; cascading delete removes
+   * the template when the publisher's account is deleted.
+   */
+  publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

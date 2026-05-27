@@ -680,6 +680,7 @@ export class WorkflowsService {
       conditions.push(ilike(templates.name, `%${query.search}%`));
     if (query.category) conditions.push(eq(templates.category, query.category));
     if (query.featured) conditions.push(eq(templates.featured, true));
+    if (query.source) conditions.push(eq(templates.source, query.source));
 
     const rows = await this.db
       .select({
@@ -694,9 +695,16 @@ export class WorkflowsService {
         thumbnailUrl: templates.thumbnailUrl,
         workflowId: templates.workflowId,
         publishedBy: templates.publishedBy,
+        source: templates.source,
+        prerequisites: templates.prerequisites,
         createdAt: templates.createdAt,
+        // Creator info for community templates (LEFT JOIN so internal rows get nulls)
+        creatorName: users.name,
+        creatorAvatarUrl: users.avatarUrl,
+        creatorEmail: users.email,
       })
       .from(templates)
+      .leftJoin(users, eq(templates.publishedBy, users.id))
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(templates.featured), desc(templates.downloads));
 

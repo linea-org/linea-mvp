@@ -231,6 +231,11 @@ export async function executeAgentNode(
 
   const messages: ChatMessage[] = [];
 
+  // H-2: systemPrompt is inserted verbatim — NO variable substitution here.
+  // Substitution only applies to `instructions` (the user turn), where the
+  // resolved values are already sanitized against second-order injection.
+  // Keeping systemPrompt static prevents an editor-role user from using
+  // runtime input variables to override the system-level behaviour.
   if (nodeData.systemPrompt) {
     messages.push({ role: 'system', content: nodeData.systemPrompt });
   }
