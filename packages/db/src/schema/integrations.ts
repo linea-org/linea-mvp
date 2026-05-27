@@ -76,7 +76,10 @@ export const webhooks = pgTable('webhooks', {
   workflowId: uuid('workflow_id')
     .references(() => workflows.id, { onDelete: 'cascade' })
     .notNull(),
-  secretToken: text('secret_token').notNull(),
+  /** @deprecated use secretEncrypted — kept for zero-downtime migration only */
+  secretToken: text('secret_token').notNull().default(''),
+  /** AES-256-GCM encrypted secret: base64(iv[12] + authTag[16] + ciphertext) */
+  secretEncrypted: text('secret_encrypted'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

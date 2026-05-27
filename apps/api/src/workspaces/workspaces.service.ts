@@ -17,6 +17,7 @@ import {
   users,
 } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
+import { MailService } from '../mail/mail.service';
 import type { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import type { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import type { InviteMemberDto } from './dto/invite-member.dto';
@@ -44,7 +45,10 @@ function assertMinRole(
 
 @Injectable()
 export class WorkspacesService {
-  constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DB_TOKEN) private readonly db: DrizzleDB,
+    private readonly mail: MailService,
+  ) {}
 
   // ─── Workspaces ────────────────────────────────────────────────────────────
 
@@ -280,6 +284,27 @@ export class WorkspacesService {
       role: dto.role,
       tokenHash,
       expiresAt,
+    });
+
+    // Fetch workspace name and actor name for the invite email
+    const [ws] = await this.db
+      .select({ name: workspaces.name })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+
+    const [actorUser] = await this.db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, actor.userId))
+      .limit(1);
+
+    void this.mail.sendInvite({
+      toEmail: dto.email,
+      workspaceName: ws?.name ?? 'a workspace',
+      role: dto.role,
+      token: rawToken,
+      inviterName: actorUser?.name ?? 'Someone',
     });
 
     // Return the raw token once — it is never stored and cannot be recovered from the hash

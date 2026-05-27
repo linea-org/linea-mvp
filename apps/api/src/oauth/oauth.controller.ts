@@ -7,6 +7,7 @@ import {
   Res,
   UseGuards,
   BadRequestException,
+  GoneException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -14,7 +15,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { OAuthService } from './oauth.service';
 
-// Authenticated routes — list connections, revoke
+// Authenticated routes — list connections, revoke, initiate OAuth flow
 @Controller('workspaces/:workspaceId/oauth')
 @UseGuards(WorkspaceGuard)
 export class OAuthController {
@@ -36,9 +37,22 @@ export class OAuthController {
     await this.oauth.revokeConnection(workspaceId, id);
     return { success: true };
   }
+
+  // Returns the OAuth provider URL so the frontend can redirect to it.
+  // Gated by WorkspaceGuard so only members of workspaceId can initiate a flow.
+  @Get(':provider/connect-url')
+  getConnectUrl(
+    @Param('workspaceId') workspaceId: string,
+    @Param('provider') provider: string,
+  ) {
+    const apiUrl = this.config.get<string>('API_URL') ?? 'http://localhost:3001';
+    const redirectUri = `${apiUrl}/oauth/${provider}/callback`;
+    const url = this.oauth.buildAuthUrl(provider, workspaceId, redirectUri);
+    return { url };
+  }
 }
 
-// Public routes — browser redirects (no Clerk token possible)
+// Public routes — OAuth provider callbacks only (no Clerk token in browser redirect)
 @Controller('oauth')
 export class OAuthCallbackController {
   constructor(
@@ -46,17 +60,11 @@ export class OAuthCallbackController {
     private readonly config: ConfigService,
   ) {}
 
-  // Browser navigates here to start the OAuth flow
+  // Removed — use GET /workspaces/:workspaceId/oauth/:provider/connect-url instead
   @Public()
   @Get(':provider/connect')
-  connect(
-    @Param('provider') provider: string,
-    @Query('workspaceId') workspaceId: string,
-    @Res() res: Response,
-  ) {
-    const redirectUri = this.buildRedirectUri(provider);
-    const url = this.oauth.buildAuthUrl(provider, workspaceId, redirectUri);
-    res.redirect(url);
+  connectGone() {
+    throw new GoneException('Use GET /workspaces/:workspaceId/oauth/:provider/connect-url');
   }
 
   // OAuth provider redirects here after user approves

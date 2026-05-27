@@ -33,8 +33,14 @@ apps/docs/.source/
 
 # Debug
 npm-debug.log*
+apps/web/chat-debug.log
 
 # Misc
 .DS_Store
 *.pem
 plans/
+
+# Claude Code infrastructure (skills, agents, worktrees — not part of the codebase)
+.agents/
+.claude/
+skills-lock.json

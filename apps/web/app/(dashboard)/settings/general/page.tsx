@@ -10,24 +10,24 @@ import { Label } from '@linea/ui/components/label';
 import { Separator } from '@linea/ui/components/separator';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@linea/ui/components/alert-dialog';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@linea/ui/components/dialog';
 
 export default function GeneralSettingsPage() {
   const { getToken } = useAuth();
-  const { activeWorkspace, loading: wsLoading, setActiveWorkspace, workspaces } = useWorkspace();
+  const { activeWorkspace, loading: wsLoading, removeWorkspace } = useWorkspace();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  // Delete dialog state
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -60,14 +60,19 @@ export default function GeneralSettingsPage() {
       if (!token) return;
       const api = createApiClient(token);
       await api.delete(`/workspaces/${activeWorkspace.id}`);
-      // Switch to another workspace or clear
-      const remaining = workspaces.filter((w) => w.id !== activeWorkspace.id);
-      setActiveWorkspace(remaining[0] ?? null as never);
+      removeWorkspace(activeWorkspace.id);
       window.location.href = '/pods';
     } finally {
       setDeleting(false);
     }
   }
+
+  function openDeleteDialog() {
+    setDeleteConfirmText('');
+    setDeleteOpen(true);
+  }
+
+  const deleteConfirmed = deleteConfirmText === activeWorkspace?.name;
 
   if (wsLoading) return <Skeleton className="h-40 w-full" />;
 
@@ -103,38 +108,64 @@ export default function GeneralSettingsPage() {
       <Separator />
 
       {/* Danger zone */}
-      <div className="space-y-3 rounded-lg border border-destructive/30 p-4">
+      <div className="space-y-3 rounded-lg border border-destructive/40 p-5">
         <div>
-          <p className="text-sm font-semibold text-destructive">Danger zone</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Permanently delete this workspace, including all pods, workflows, executions, and data. This cannot be undone.
+          <p className="text-sm font-semibold text-destructive">Delete workspace</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Permanently deletes this workspace and everything inside it — pods, workflows,
+            executions, secrets, API keys, and all team data. This action{' '}
+            <span className="font-medium text-foreground">cannot be undone</span>.
           </p>
         </div>
-        <Button variant="destructive" size="sm" onClick={() => setDeleteConfirm(true)}>
+        <Button variant="destructive" size="sm" onClick={openDeleteDialog}>
           Delete workspace
         </Button>
       </div>
 
-      <AlertDialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete &quot;{activeWorkspace?.name}&quot;?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the workspace and everything inside it — pods, workflows, executions, secrets, API keys, and all team data. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+      {/* Vercel-style delete confirmation dialog */}
+      <Dialog open={deleteOpen} onOpenChange={(o) => { if (!deleting) setDeleteOpen(o); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete workspace</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <strong>Warning:</strong> This will permanently delete{' '}
+              <strong>{activeWorkspace?.name}</strong> and all associated data. There is no
+              way to recover this workspace.
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="delete-confirm-input" className="text-sm">
+                Type <span className="font-mono font-semibold">{activeWorkspace?.name}</span> to confirm
+              </Label>
+              <Input
+                id="delete-confirm-input"
+                placeholder={activeWorkspace?.name ?? ''}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && deleteConfirmed) void handleDelete(); }}
+                autoFocus
+                className="font-mono"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
               onClick={() => void handleDelete()}
-              disabled={deleting}
+              disabled={!deleteConfirmed || deleting}
             >
-              {deleting ? 'Deleting…' : 'Yes, delete workspace'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              {deleting ? 'Deleting…' : 'Delete workspace'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

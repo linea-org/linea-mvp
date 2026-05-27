@@ -108,7 +108,7 @@ export interface NodeResult {
 const NODE_COLORS: Record<string, string> = {
   start: '#6366f1', end: '#14b8a6', agent: '#3b82f6',
   http: '#8b5cf6', transform: '#7c3aed', 'if-else': '#f59e0b',
-  router: '#ea580c', approval: '#9ca3af', mcp: '#eab308', memory: '#a855f7',
+  router: '#ea580c', approval: '#f97316', 'approval-gate': '#f97316', mcp: '#eab308', memory: '#a855f7',
   extract: '#0ea5e9', retriever: '#10b981', guardrails: '#ef4444', code: '#64748b',
   loop: '#0891b2', parallel: '#6366f1', wait: '#64748b', variables: '#059669',
   evaluator: '#d97706', subworkflow: '#7c3aed',
@@ -433,8 +433,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [testCases, setTestCases] = useState<EvalTestCase[]>([]);
-  const [runDialogOpen, setRunDialogOpen] = useState(false);
-  const [runInputValues, setRunInputValues] = useState<Record<string, string>>({});
   const [quickConnect, setQuickConnect] = useState<{
     screenX: number; screenY: number;
     sourceNodeId: string; sourceHandle: string | null;
@@ -831,7 +829,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       }
 
       // Check: source handle already has an outgoing edge (named handles: 1 each; single-output: 1 total)
-      const isBranchingSource = ['if-else', 'approval', 'evaluator', 'guardrails'].includes(sourceType);
+      const isBranchingSource = ['if-else', 'approval', 'approval-gate', 'evaluator', 'guardrails'].includes(sourceType);
       const isRouterSource = sourceType === 'router';
 
       if (isBranchingSource || isRouterSource) {
@@ -1394,7 +1392,12 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             if (line.startsWith('id: ')) { lastEventId = line.slice(4).trim(); continue; }
             if (!line.startsWith('data: ')) continue;
             try {
-              const evt = JSON.parse(line.slice(6)) as SSEEvent;
+              let parsed = JSON.parse(line.slice(6)) as any;
+              // NestJS SSE serializes the full MessageEvent ({data,id}) not just .data
+              if (parsed && typeof parsed === 'object' && !parsed.type && parsed.data && typeof parsed.data === 'object') {
+                parsed = parsed.data;
+              }
+              const evt = parsed as SSEEvent;
               if (evt.type === 'execution_complete' || evt.type === 'execution_failed') {
                 receivedTerminal = true;
               }
@@ -1453,46 +1456,29 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   function handleRun() {
     const validationError = validateWorkflow();
     if (validationError) { showToast(validationError, 'error'); return; }
-
-    const startNode = nodes.find((n) => n.type === 'start');
-    const inputVars = ((startNode?.data?.inputVariables as { name: string; type: string; required?: boolean }[]) ?? []).filter((v) => v.name);
-    const saved = (startNode?.data?.testInput as Record<string, string>) ?? {};
-    setRunInputValues(Object.fromEntries(inputVars.map((v) => [v.name, String(saved[v.name] ?? '')])));
-    setRunDialogOpen(true);
+    // Open the chat panel as the primary run interface.
+    // The chat panel handles the input prompt and execution.
+    void openChatPreview();
   }
   handleRunRef.current = handleRun;
 
-  async function handleRunWithInput(input: Record<string, string>) {
-    if (runInFlightRef.current) return;
-    runInFlightRef.current = true;
-    setRunDialogOpen(false);
-    setNodes((nds) => nds.map((n) =>
-      n.type === 'start' ? { ...n, data: { ...n.data, testInput: input } } : n,
-    ));
-
-    setIsRunning(true);
+  async function handleStop() {
     sseAbortRef.current?.abort();
-    setRunStatus(null);
+    const currentId = runStatus?.id;
+    setRunStatus((prev) => prev ? { ...prev, status: 'cancelled' } : prev);
+    setIsRunning(false);
     setInterrupt(null);
-    clearNodeStatuses();
+    showToast('Execution cancelled');
 
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const ex = await api.post<{ id: string; status: string }>(
-        `/workspaces/${workspaceId}/pods/${podId}/executions`,
-        { workflowId, input },
-      );
-      localStorage.setItem('linea_gs_run', 'true');
-      setRunStatus({ id: ex.id, status: ex.status ?? 'queued' });
-      showToast('Execution started');
-      void startSSE(token, ex.id);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Run failed', 'error');
-    } finally {
-      setIsRunning(false);
-      runInFlightRef.current = false;
+    if (currentId) {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const api = createApiClient(token);
+        await api.delete(`/workspaces/${workspaceId}/pods/${podId}/executions/${currentId}`);
+      } catch {
+        // Ignore — execution may have already finished
+      }
     }
   }
 
@@ -1581,7 +1567,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         shareOpen={shareOpen}
         commentsOpen={commentsOpen}
         evalsOpen={evalsOpen}
-        chatPreviewOpen={chatPreviewOpen}
         canUndo={canUndo}
         canRedo={canRedo}
         autoSave={autoSave}
@@ -1595,6 +1580,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         onAutoSaveToggle={handleAutoSaveToggle}
         onSave={() => void handleSave()}
         onRun={() => handleRun()}
+        onStop={handleStop}
         onDeployPanel={() => void openDeployPanel()}
         onBack={() => router.push(`/pods/${podId}/workflows`)}
         onNameChange={setWorkflowName}
@@ -1604,7 +1590,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         onShare={() => void openShare()}
         onComments={() => void openComments()}
         onEvals={() => void openEvals()}
-        onChatPreview={() => void openChatPreview()}
         onExport={handleExport}
         onImport={handleImport}
       />
@@ -2088,6 +2073,13 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               workflowId={workflowId}
               token={authToken}
               onClose={() => setChatPreviewOpen(false)}
+              onExecutionStarted={(execId) => {
+                // Clear previous run, connect the builder's SSE for canvas node badges + bottom panel logs
+                clearNodeStatuses();
+                setInterrupt(null);
+                setRunStatus({ id: execId, status: 'running' });
+                void getToken().then((t) => { if (t) void startSSE(t, execId); });
+              }}
             />
           )}
         </div>
@@ -2108,8 +2100,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         />
       )}
 
-      {/* Suspension banner — approval or ask_human */}
-      {isSuspended && (
+      {/* Suspension banner — approval or ask_human (hidden when chat panel is open; chat handles it inline) */}
+      {isSuspended && !chatPreviewOpen && (
         <div className="shrink-0 border-t border-amber-300 bg-amber-50 px-5 py-3 dark:border-amber-800 dark:bg-amber-950/30">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
@@ -2210,64 +2202,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         </DialogContent>
       </Dialog>
 
-      {/* Confirmation dialog */}
-      {/* Run input dialog */}
-      {/* Run input dialog */}
-      {(() => {
-        const startNode = nodes.find((n) => n.type === 'start');
-        const inputVars = ((startNode?.data?.inputVariables as { name: string; type: string; required?: boolean }[]) ?? []).filter((v) => v.name);
-        const hasVars = inputVars.length > 0;
-        return (
-          <Dialog open={runDialogOpen} onOpenChange={(o) => { if (!o) setRunDialogOpen(false); }}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Run workflow</DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  {hasVars ? 'Fill in the inputs below, then click Run.' : 'No input variables defined on the Start node.'}
-                </DialogDescription>
-              </DialogHeader>
-
-              {hasVars ? (
-                <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                  {inputVars.map((v, i) => (
-                    <div key={v.name} className="space-y-1">
-                      <label className="text-xs font-medium flex items-center gap-1.5">
-                        {v.name}
-                        <span className="text-[10px] text-muted-foreground font-normal">· {v.type}</span>
-                        {v.required && <span className="text-[10px] text-destructive">required</span>}
-                      </label>
-                      <input
-                        autoFocus={i === 0}
-                        className="w-full rounded-md border border-input bg-muted/30 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                        value={runInputValues[v.name] ?? ''}
-                        placeholder={v.type === 'object' ? '{"key": "value"}' : `Enter ${v.name}…`}
-                        onChange={(e) => setRunInputValues((prev) => ({ ...prev, [v.name]: e.target.value }))}
-                        onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void handleRunWithInput(runInputValues); } }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed p-4 text-center space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    Click the <span className="font-medium text-foreground">Start</span> node on the canvas, then add input variables to let users pass data into this workflow.
-                  </p>
-                  <p className="text-xs text-muted-foreground">You can still run now with no input.</p>
-                </div>
-              )}
-
-              <DialogFooter>
-                <Button variant="outline" size="sm" onClick={() => setRunDialogOpen(false)}>Cancel</Button>
-                <Button size="sm" onClick={() => void handleRunWithInput(runInputValues)}>
-                  <HugeiconsIcon icon={PlayIcon} className="size-3.5" />
-                  {hasVars ? 'Run' : 'Run with no input'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        );
-      })()}
-
       <Dialog open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -2292,7 +2226,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       {toast && (
         <div
           className={`pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg max-w-sm text-center ${
-            toast.type === 'error' ? 'bg-destructive' : 'bg-foreground'
+            toast.type === 'error' ? 'bg-red-600' : 'bg-neutral-900'
           }`}
         >
           {toast.message}

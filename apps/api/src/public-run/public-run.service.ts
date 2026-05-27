@@ -1,6 +1,6 @@
 import { Injectable, Inject, NotFoundException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
-import { randomBytes } from 'crypto';
+import { eq, and, isNull } from 'drizzle-orm';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { workflows, pods, executions } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
@@ -50,7 +50,7 @@ export class PublicRunService {
         definition: workflows.definition,
       })
       .from(workflows)
-      .where(eq(workflows.id, workflowId))
+      .where(and(eq(workflows.id, workflowId), isNull(workflows.deletedAt)))
       .limit(1);
 
     if (!row) throw new NotFoundException('Workflow not found');
@@ -92,7 +92,7 @@ export class PublicRunService {
       })
       .from(workflows)
       .innerJoin(pods, eq(pods.id, workflows.podId))
-      .where(eq(workflows.id, workflowId))
+      .where(and(eq(workflows.id, workflowId), isNull(workflows.deletedAt)))
       .limit(1);
 
     if (!row) throw new NotFoundException('Workflow not found');
@@ -101,7 +101,12 @@ export class PublicRunService {
     if (row.apiEnabled) {
       if (row.apiVisibility === 'api_key') {
         if (!row.apiKey) throw new ForbiddenException('This workflow has no API key configured');
-        if (!providedApiKey || providedApiKey !== row.apiKey) {
+        if (!providedApiKey || !row.apiKey) {
+          throw new UnauthorizedException('Invalid or missing API key');
+        }
+        const expBuf = Buffer.from(row.apiKey);
+        const prvBuf = Buffer.from(providedApiKey);
+        if (expBuf.length !== prvBuf.length || !timingSafeEqual(expBuf, prvBuf)) {
           throw new UnauthorizedException('Invalid or missing API key');
         }
       }
@@ -260,14 +265,19 @@ Rules:
         isPublic: workflows.isPublic,
       })
       .from(workflows)
-      .where(eq(workflows.id, workflowId))
+      .where(and(eq(workflows.id, workflowId), isNull(workflows.deletedAt)))
       .limit(1);
 
     if (!wf) throw new NotFoundException('Workflow not found');
 
     if (wf.apiEnabled) {
       if (wf.apiVisibility === 'api_key') {
-        if (!wf.apiKey || !providedApiKey || providedApiKey !== wf.apiKey) {
+        if (!wf.apiKey || !providedApiKey) {
+          throw new UnauthorizedException('Invalid or missing API key');
+        }
+        const expBuf = Buffer.from(wf.apiKey);
+        const prvBuf = Buffer.from(providedApiKey);
+        if (expBuf.length !== prvBuf.length || !timingSafeEqual(expBuf, prvBuf)) {
           throw new UnauthorizedException('Invalid or missing API key');
         }
       }
@@ -361,6 +371,7 @@ Rules:
       .limit(1);
 
     if (!row) throw new NotFoundException('Workflow not found');
-    return row;
+    // Never return the raw key — callers see only whether one is configured
+    return { apiEnabled: row.apiEnabled, apiVisibility: row.apiVisibility, hasApiKey: !!row.apiKey };
   }
 }

@@ -10,7 +10,6 @@ import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
-import { Badge } from '@linea/ui/components/badge';
 import {
   Dialog,
   DialogContent,
@@ -34,17 +33,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@linea/ui/components/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@linea/ui/components/alert-dialog';
-
 interface Pod {
   id: string;
   name: string;
@@ -174,6 +162,7 @@ export default function PodsPage() {
   const [editDesc, setEditDesc] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletePod, setDeletePod] = useState<Pod | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -365,7 +354,7 @@ export default function PodsPage() {
               pod={pod}
               onOpen={() => { setActivePod(pod); router.push(`/pods/${pod.id}/workflows`); }}
               onEdit={() => { setEditPod(pod); setEditName(pod.name); setEditDesc(pod.description ?? ''); }}
-              onDelete={() => setDeletePod(pod)}
+              onDelete={() => { setDeletePod(pod); setDeleteConfirmText(''); }}
             />
           ))}
         </div>
@@ -394,27 +383,49 @@ export default function PodsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm */}
-      <AlertDialog open={!!deletePod} onOpenChange={(o) => { if (!o) setDeletePod(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete &quot;{deletePod?.name}&quot;?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the pod and all its workflows, executions, schedules, and webhooks. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+      {/* Delete confirm — Vercel-style name confirmation */}
+      <Dialog open={!!deletePod} onOpenChange={(o) => { if (!deleting && !o) setDeletePod(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete pod</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <strong>Warning:</strong> This will permanently delete{' '}
+              <strong>{deletePod?.name}</strong> and all its workflows, executions,
+              schedules, and webhooks. There is no way to recover this pod.
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="delete-pod-confirm" className="text-sm">
+                Type <span className="font-mono font-semibold">{deletePod?.name}</span> to confirm
+              </Label>
+              <Input
+                id="delete-pod-confirm"
+                placeholder={deletePod?.name ?? ''}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && deleteConfirmText === deletePod?.name) void handleDeletePod();
+                }}
+                autoFocus
+                className="font-mono"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletePod(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
               onClick={() => void handleDeletePod()}
-              disabled={deleting}
+              disabled={deleteConfirmText !== deletePod?.name || deleting}
             >
               {deleting ? 'Deleting…' : 'Delete pod'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create dialog */}
       <Dialog open={podDialogOpen} onOpenChange={setPodDialogOpen}>

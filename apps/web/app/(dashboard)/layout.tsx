@@ -91,36 +91,100 @@ import {
 import { ScrollArea } from '@linea/ui/components/scroll-area';
 
 function PodSwitcher() {
-  const { pods, activePod, setActivePod, loading } = usePod();
+  const { pods, activePod, setActivePod, loading, reload: reloadPods } = usePod();
+  const { activeWorkspace } = useWorkspace();
+  const { getToken } = useAuth();
+  const router = useRouter();
+
+  const [podDialogOpen, setPodDialogOpen] = useState(false);
+  const [podName, setPodName] = useState('');
+  const [creatingPod, setCreatingPod] = useState(false);
+
+  async function handleCreatePod() {
+    if (!activeWorkspace || !podName.trim()) return;
+    setCreatingPod(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      const pod = await api.post<{ id: string; name: string; slug: string; description: string | null }>(
+        `/workspaces/${activeWorkspace.id}/pods`,
+        { name: podName.trim() },
+      );
+      reloadPods();
+      setActivePod(pod);
+      setPodDialogOpen(false);
+      setPodName('');
+      router.push(`/pods/${pod.id}/workflows`);
+    } finally {
+      setCreatingPod(false);
+    }
+  }
 
   if (loading) return <div className="h-7 w-32 animate-pulse rounded bg-muted" />;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button data-tour="pod-switcher" className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors max-w-48">
-          <span className="truncate font-medium text-sm">
-            {activePod?.name ?? 'Select pod'}
-          </span>
-          <HugeiconsIcon icon={ArrowDown01Icon} className="size-3.5 text-muted-foreground shrink-0" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
-        {pods.length === 0 ? (
-          <DropdownMenuItem disabled>No pods yet</DropdownMenuItem>
-        ) : (
-          pods.map((pod) => (
-            <DropdownMenuItem key={pod.id} onClick={() => setActivePod(pod)}>
-              {pod.name}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button data-tour="pod-switcher" className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors max-w-48">
+            <span className="truncate font-medium text-sm">
+              {activePod?.name ?? 'Select pod'}
+            </span>
+            <HugeiconsIcon icon={ArrowDown01Icon} className="size-3.5 text-muted-foreground shrink-0" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-48">
+          {pods.length === 0 ? (
+            <DropdownMenuItem disabled>No pods yet</DropdownMenuItem>
+          ) : (
+            pods.map((pod) => (
+              <DropdownMenuItem key={pod.id} onClick={() => setActivePod(pod)}>
+                {pod.name}
+              </DropdownMenuItem>
+            ))
+          )}
+          <DropdownMenuSeparator />
+          {activeWorkspace && (
+            <DropdownMenuItem onClick={() => setPodDialogOpen(true)}>
+              <HugeiconsIcon icon={Add01Icon} className="mr-2 size-3.5" />
+              New pod
             </DropdownMenuItem>
-          ))
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/pods">Manage pods</Link>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          )}
+          <DropdownMenuItem asChild>
+            <Link href="/pods">Manage pods</Link>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={podDialogOpen} onOpenChange={setPodDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create pod</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label htmlFor="nav-pod-name">Pod name</Label>
+            <Input
+              id="nav-pod-name"
+              placeholder="My pod"
+              value={podName}
+              onChange={(e) => setPodName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void handleCreatePod(); }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPodDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => void handleCreatePod()}
+              disabled={!podName.trim() || creatingPod}
+            >
+              {creatingPod ? 'Creating…' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -993,8 +1057,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <SidebarProvider className="h-svh overflow-hidden">
           <ShortcutsProvider>
             <DashboardSidebar />
-            <main className="flex flex-1 flex-col min-h-0 bg-sidebar pr-2 py-2">
-              <div className="flex flex-1 flex-col min-h-0 rounded-r-xl rounded-l-xl bg-background overflow-hidden">
+            <main className="flex flex-1 flex-col min-h-0 bg-sidebar p-2">
+              <div className="flex flex-1 flex-col min-h-0 rounded-r-xl rounded-l-xl bg-background overflow-hidden ring-1 ring-black/10 dark:ring-white/15">
                 <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
                   <SidebarTrigger />
                   <PodSwitcher />

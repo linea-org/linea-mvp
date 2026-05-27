@@ -69,7 +69,8 @@ export class ExecutionsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get an execution' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Get an execution (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
@@ -78,7 +79,8 @@ export class ExecutionsController {
   }
 
   @Get(':id/logs')
-  @ApiOperation({ summary: 'Get execution logs' })
+  @RequireRole('editor')
+  @ApiOperation({ summary: 'Get execution logs (editor+)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })

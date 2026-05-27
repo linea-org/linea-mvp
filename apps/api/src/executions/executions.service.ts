@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { and, eq, desc, count, inArray } from 'drizzle-orm';
+import { and, eq, desc, count, inArray, isNull } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { executions, executionLogs, workflows } from '@linea/db';
@@ -53,7 +53,7 @@ export class ExecutionsService {
     const [wf] = await this.db
       .select({ id: workflows.id })
       .from(workflows)
-      .where(and(eq(workflows.id, workflowId), eq(workflows.podId, podId)))
+      .where(and(eq(workflows.id, workflowId), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
       .limit(1);
 
     if (!wf) throw new NotFoundException(`Workflow ${workflowId} not found`);
@@ -210,6 +210,8 @@ export class ExecutionsService {
     await this.queue.add('resume', jobData, {
       attempts: 3,
       backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: 100,
+      removeOnFail: 50,
     });
 
     return this.findOne(podId, id);
@@ -226,6 +228,8 @@ export class ExecutionsService {
 
   async replay(podId: string, id: string, fromNodeId?: string) {
     const original = await this.findOne(podId, id);
+
+    await this.quotas.checkLimit(original.workspaceId);
 
     if (!original.workflowId) {
       throw new BadRequestException(

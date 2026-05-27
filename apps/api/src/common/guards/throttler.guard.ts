@@ -14,13 +14,14 @@ export class WorkspaceThrottlerGuard extends ThrottlerGuard {
   }
 
   protected async getTracker(req: Request): Promise<string> {
-    // Key by workspaceId when available so limits are per-workspace, not per-IP.
-    // Falls back to IP for unauthenticated or non-workspace routes.
-    const workspaceId =
-      (req.params as Record<string, string>)['workspaceId'] ??
-      (req.headers['x-workspace-id'] as string | undefined);
-
+    // Key by workspaceId from path params only — never trust client-provided headers
+    // for rate-limit bucket selection (they are attacker-controlled).
+    const workspaceId = (req.params as Record<string, string>)['workspaceId'];
     if (workspaceId) return `ws:${workspaceId}`;
+
+    // Fall back to authenticated user ID, then IP for unauthenticated routes.
+    const userId = (req as Request & { user?: { id?: string } }).user?.id;
+    if (userId) return `user:${userId}`;
 
     // req.ip respects the 'trust proxy' Express setting configured in main.ts
     return `ip:${req.ip ?? 'unknown'}`;

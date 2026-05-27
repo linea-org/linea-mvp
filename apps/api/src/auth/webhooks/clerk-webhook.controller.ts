@@ -75,9 +75,11 @@ export class ClerkWebhookController {
       throw new BadRequestException('Invalid webhook signature');
     }
 
-    // Idempotency check — Clerk guarantees at-least-once delivery; skip duplicates
+    // Idempotency check — Clerk guarantees at-least-once delivery; skip duplicates.
+    // 3600s (1h) is well beyond Svix's retry window and reduces the attack surface
+    // vs the previous 24h window.
     const nonceKey = `clerk-webhook:${svixId}`;
-    const stored = await this.redis.set(nonceKey, '1', 'EX', 86400, 'NX');
+    const stored = await this.redis.set(nonceKey, '1', 'EX', 3600, 'NX');
     if (stored === null) {
       this.logger.log(`Clerk webhook duplicate skipped: ${svixId}`);
       return { received: true };

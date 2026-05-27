@@ -41,9 +41,10 @@ export class EvalsController {
   @ApiParam({ name: 'workflowId' })
   @ApiQuery({ name: 'limit', required: false })
   getHistory(
+    @Param('podId') podId: string,
     @Param('workflowId') workflowId: string,
     @Query('limit') limit?: string,
   ) {
-    return this.service.getRunHistory(workflowId, limit ? parseInt(limit, 10) : 20);
+    return this.service.getRunHistory(workflowId, podId, limit ? parseInt(limit, 10) : 20);
   }
 }

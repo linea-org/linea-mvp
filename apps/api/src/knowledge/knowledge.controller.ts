@@ -137,6 +137,19 @@ export class KnowledgeController {
     return this.service.listEntries(workspaceId, kbId);
   }
 
+  @Get(':id/entries/:entryId/status')
+  @ApiOperation({ summary: 'Get ingestion status for a single entry' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'id' })
+  @ApiParam({ name: 'entryId' })
+  getEntryStatus(
+    @Param('workspaceId') workspaceId: string,
+    @Param('id') kbId: string,
+    @Param('entryId') entryId: string,
+  ) {
+    return this.service.getEntryStatus(workspaceId, kbId, entryId);
+  }
+
   @Delete(':id/entries/:entryId')
   @HttpCode(204)
   @RequireRole('editor')

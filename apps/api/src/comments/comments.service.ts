@@ -1,7 +1,7 @@
 import { Injectable, Inject, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
-import { workflowComments, commentReactions, users } from '@linea/db';
+import { workflowComments, commentReactions, users, workflows } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import type { CreateCommentDto } from './dto/create-comment.dto';
 import type { UpdateCommentDto } from './dto/update-comment.dto';
@@ -12,7 +12,17 @@ const ALLOWED_EMOJIS = new Set(['👍', '❤️', '😂', '😮', '😢', '🎉'
 export class CommentsService {
   constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
 
-  async findAll(workflowId: string, userId: string) {
+  private async assertWorkflowInPod(workflowId: string, podId: string): Promise<void> {
+    const [row] = await this.db
+      .select({ id: workflows.id })
+      .from(workflows)
+      .where(and(eq(workflows.id, workflowId), eq(workflows.podId, podId)))
+      .limit(1);
+    if (!row) throw new NotFoundException('Workflow not found');
+  }
+
+  async findAll(workflowId: string, podId: string, userId: string) {
+    await this.assertWorkflowInPod(workflowId, podId);
     const rows = await this.db
       .select({
         id: workflowComments.id,
@@ -75,7 +85,8 @@ export class CommentsService {
     return topLevel.map(buildThread);
   }
 
-  async create(workflowId: string, userId: string, dto: CreateCommentDto) {
+  async create(workflowId: string, podId: string, userId: string, dto: CreateCommentDto) {
+    await this.assertWorkflowInPod(workflowId, podId);
     if (dto.parentId) {
       const [parent] = await this.db
         .select()
@@ -98,7 +109,8 @@ export class CommentsService {
     return comment;
   }
 
-  async update(workflowId: string, userId: string, id: string, dto: UpdateCommentDto) {
+  async update(workflowId: string, podId: string, userId: string, id: string, dto: UpdateCommentDto) {
+    await this.assertWorkflowInPod(workflowId, podId);
     const [existing] = await this.db
       .select()
       .from(workflowComments)
@@ -123,7 +135,8 @@ export class CommentsService {
     return updated;
   }
 
-  async remove(workflowId: string, userId: string, id: string) {
+  async remove(workflowId: string, podId: string, userId: string, id: string) {
+    await this.assertWorkflowInPod(workflowId, podId);
     const [existing] = await this.db
       .select()
       .from(workflowComments)
@@ -135,7 +148,8 @@ export class CommentsService {
     await this.db.delete(workflowComments).where(eq(workflowComments.id, id));
   }
 
-  async react(workflowId: string, userId: string, commentId: string, emoji: string) {
+  async react(workflowId: string, podId: string, userId: string, commentId: string, emoji: string) {
+    await this.assertWorkflowInPod(workflowId, podId);
     if (!ALLOWED_EMOJIS.has(emoji)) throw new ForbiddenException('Emoji not allowed');
 
     const [comment] = await this.db

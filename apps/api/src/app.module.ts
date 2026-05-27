@@ -36,6 +36,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { BillingModule } from './billing/billing.module';
 import { ModelsModule } from './models/models.module';
 import { AuditModule } from './audit/audit.module';
+import { MailModule } from './mail/mail.module';
 import { ClerkAuthGuard } from './auth/guards/clerk-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -87,6 +88,11 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
             'req.headers.authorization',
             'req.headers["x-api-key"]',
             'req.headers.cookie',
+            'req.query.code',
+            'req.body.value',
+            'req.body.accessToken',
+            'req.body.refreshToken',
+            'req.body.apiKey',
           ],
           censor: '[REDACTED]',
         },
@@ -127,6 +133,7 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
     BillingModule,
     ModelsModule,
     AuditModule,
+    MailModule,
   ],
   controllers: [ClerkWebhookController],
   providers: [

@@ -22,6 +22,7 @@ import { ReactCommentDto } from './dto/react-comment.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
+import { RequireRole } from '../common/decorators/require-role.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
 
@@ -38,10 +39,11 @@ export class CommentsController {
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'workflowId' })
   findAll(
+    @Param('podId') podId: string,
     @Param('workflowId') workflowId: string,
     @CurrentUser() user: User,
   ) {
-    return this.service.findAll(workflowId, user.id);
+    return this.service.findAll(workflowId, podId, user.id);
   }
 
   @Post()
@@ -50,26 +52,29 @@ export class CommentsController {
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'workflowId' })
   create(
+    @Param('podId') podId: string,
     @Param('workflowId') workflowId: string,
     @CurrentUser() user: User,
     @Body() dto: CreateCommentDto,
   ) {
-    return this.service.create(workflowId, user.id, dto);
+    return this.service.create(workflowId, podId, user.id, dto);
   }
 
   @Patch(':id')
+  @RequireRole('editor')
   @ApiOperation({ summary: 'Update a comment (body or resolved status)' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'workflowId' })
   @ApiParam({ name: 'id' })
   update(
+    @Param('podId') podId: string,
     @Param('workflowId') workflowId: string,
     @Param('id') id: string,
     @CurrentUser() user: User,
     @Body() dto: UpdateCommentDto,
   ) {
-    return this.service.update(workflowId, user.id, id, dto);
+    return this.service.update(workflowId, podId, user.id, id, dto);
   }
 
   @Delete(':id')
@@ -80,11 +85,12 @@ export class CommentsController {
   @ApiParam({ name: 'workflowId' })
   @ApiParam({ name: 'id' })
   remove(
+    @Param('podId') podId: string,
     @Param('workflowId') workflowId: string,
     @Param('id') id: string,
     @CurrentUser() user: User,
   ) {
-    return this.service.remove(workflowId, user.id, id);
+    return this.service.remove(workflowId, podId, user.id, id);
   }
 
   @Post(':id/react')
@@ -94,11 +100,12 @@ export class CommentsController {
   @ApiParam({ name: 'workflowId' })
   @ApiParam({ name: 'id' })
   react(
+    @Param('podId') podId: string,
     @Param('workflowId') workflowId: string,
     @Param('id') id: string,
     @CurrentUser() user: User,
     @Body() dto: ReactCommentDto,
   ) {
-    return this.service.react(workflowId, user.id, id, dto.emoji);
+    return this.service.react(workflowId, podId, user.id, id, dto.emoji);
   }
 }

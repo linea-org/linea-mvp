@@ -118,15 +118,21 @@ export class BillingService {
   }
 
   async handleWebhook(rawBody: string, signature: string) {
-    /* HMAC-SHA256 verification */
-    if (this.webhookSecret) {
-      const expected = crypto
-        .createHmac('sha256', this.webhookSecret)
-        .update(rawBody)
-        .digest('hex');
-      if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature ?? ''))) {
-        throw new BadRequestException('Invalid webhook signature');
-      }
+    /* HMAC-SHA256 verification — secret is mandatory; never skip */
+    if (!this.webhookSecret) {
+      throw new BadRequestException('Billing webhook secret is not configured');
+    }
+
+    const expected = crypto
+      .createHmac('sha256', this.webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    const expBuf = Buffer.from(expected, 'hex');
+    const sigBuf = Buffer.from(signature ?? '', 'hex');
+
+    if (expBuf.length !== sigBuf.length || !crypto.timingSafeEqual(expBuf, sigBuf)) {
+      throw new BadRequestException('Invalid webhook signature');
     }
 
     const payload = JSON.parse(rawBody) as PolarSubscriptionPayload;

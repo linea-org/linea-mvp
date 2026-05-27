@@ -45,6 +45,8 @@ export const workflows = pgTable('workflows', {
   apiEnabled: boolean('api_enabled').default(false).notNull(),
   apiVisibility: workflowApiVisibilityEnum('api_visibility').default('api_key').notNull(),
   apiKey: text('api_key'),
+  /** Set when a workflow is cloned from a template; used to prevent publishing unmodified clones. */
+  clonedFromTemplateId: uuid('cloned_from_template_id'),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -66,6 +68,8 @@ export const templates = pgTable('templates', {
   category: text('category').notNull(),
   name: text('name').notNull(),
   description: text('description'),
+  /** 'internal' = built-in (no upvotes/download count shown), 'community' = user-published */
+  source: text('source').default('community').notNull(),
   workflowId: uuid('workflow_id').references(() => workflows.id, { onDelete: 'set null' }),
   definition: jsonb('definition').$type<WorkflowDefinition>(),
   thumbnailUrl: text('thumbnail_url'),
@@ -73,7 +77,19 @@ export const templates = pgTable('templates', {
   views: integer('views').default(0).notNull(),
   upvotes: integer('upvotes').default(0).notNull(),
   featured: boolean('featured').default(false).notNull(),
-  publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+  /**
+   * Prerequisites a user must set up before using this template.
+   * Each item: { type: string; label: string; description: string }
+   * e.g. { type: 'rag', label: 'Knowledge Base', description: 'Create a KB and copy its ID.' }
+   */
+  prerequisites: jsonb('prerequisites').$type<Array<{ type: string; label: string; description: string }>>(),
+  /**
+   * The user who published this template to the gallery.
+   * NULL is only valid for source = 'internal' (seeder-created built-ins).
+   * Community templates must always have a publisher; cascading delete removes
+   * the template when the publisher's account is deleted.
+   */
+  publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

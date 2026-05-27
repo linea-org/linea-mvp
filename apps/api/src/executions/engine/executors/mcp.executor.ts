@@ -1,4 +1,5 @@
 import type { WorkflowState } from '../variable-substitution';
+import { assertSafeUrl } from '../../../common/utils/ssrf-guard';
 
 export interface McpNodeData {
   mcpServerId?: string;
@@ -19,6 +20,8 @@ export async function executeMcpNode(
 ): Promise<unknown> {
   const url = serverUrl ?? nodeData.mcpServerUrl;
   if (!url) throw new Error('MCP node: no server URL configured');
+
+  await assertSafeUrl(url);
 
   const toolName = nodeData.mcpAction;
   if (!toolName)

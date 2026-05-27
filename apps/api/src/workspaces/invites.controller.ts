@@ -5,6 +5,7 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { WorkspacesService } from './workspaces.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@linea/db';
@@ -16,6 +17,7 @@ export class InvitesController {
   constructor(private readonly service: WorkspacesService) {}
 
   @Get(':token')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Preview invite details by token' })
   @ApiParam({ name: 'token' })
   preview(@Param('token') token: string) {

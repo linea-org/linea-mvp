@@ -5,7 +5,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
-import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
+import { randomBytes, createHmac, timingSafeEqual, createCipheriv, createDecipheriv } from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import type { Redis } from 'ioredis';
 import type { DrizzleDB } from '@linea/db';
 import { webhooks, pods, workflows } from '@linea/db';
@@ -20,11 +21,44 @@ const NONCE_TTL_SECONDS = 600; // must be > REPLAY_WINDOW_SECONDS
 
 @Injectable()
 export class WebhooksService {
+  private readonly encryptionKey: Buffer;
+
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     @Inject(WEBHOOK_REDIS) private readonly redis: Redis,
     private readonly executionsService: ExecutionsService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    const raw = this.config.get<string>('ENCRYPTION_KEY');
+    if (!raw && process.env['NODE_ENV'] === 'production') {
+      throw new Error('ENCRYPTION_KEY must be set in production');
+    }
+    const keySource = raw ?? 'default-dev-key-do-not-use-in-production!!';
+    if (keySource.length === 64 && /^[0-9a-fA-F]+$/.test(keySource)) {
+      this.encryptionKey = Buffer.from(keySource, 'hex');
+    } else {
+      this.encryptionKey = Buffer.alloc(32);
+      Buffer.from(keySource, 'utf8').copy(this.encryptionKey);
+    }
+  }
+
+  private encryptSecret(plaintext: string): string {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
+    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return Buffer.concat([iv, authTag, encrypted]).toString('base64');
+  }
+
+  private decryptSecret(ciphertext: string): string {
+    const buf = Buffer.from(ciphertext, 'base64');
+    const iv = buf.subarray(0, 12);
+    const authTag = buf.subarray(12, 28);
+    const encrypted = buf.subarray(28);
+    const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+  }
 
   async create(podId: string, dto: CreateWebhookDto) {
     const [wf] = await this.db
@@ -37,13 +71,15 @@ export class WebhooksService {
       throw new NotFoundException(`Workflow ${dto.workflowId} not found`);
 
     const secretToken = randomBytes(24).toString('hex');
+    const secretEncrypted = this.encryptSecret(secretToken);
 
     const [record] = await this.db
       .insert(webhooks)
-      .values({ podId, workflowId: dto.workflowId, secretToken })
+      .values({ podId, workflowId: dto.workflowId, secretToken: '', secretEncrypted })
       .returning();
 
-    return record;
+    // Return the raw token once — only time it's visible in plaintext
+    return { ...record, secretToken };
   }
 
   async findAll(podId: string) {
@@ -67,7 +103,8 @@ export class WebhooksService {
     if (!row) throw new NotFoundException(`Webhook ${id} not found`);
 
     const secretToken = randomBytes(24).toString('hex');
-    await this.db.update(webhooks).set({ secretToken }).where(eq(webhooks.id, id));
+    const secretEncrypted = this.encryptSecret(secretToken);
+    await this.db.update(webhooks).set({ secretToken: '', secretEncrypted }).where(eq(webhooks.id, id));
     return { secretToken };
   }
 
@@ -108,6 +145,7 @@ export class WebhooksService {
         workspaceId: pods.workspaceId,
         workflowId: webhooks.workflowId,
         secretToken: webhooks.secretToken,
+        secretEncrypted: webhooks.secretEncrypted,
       })
       .from(webhooks)
       .innerJoin(pods, eq(pods.id, webhooks.podId))
@@ -116,7 +154,12 @@ export class WebhooksService {
 
     if (!row) throw new NotFoundException(`Webhook ${id} not found`);
 
-    const sigHex = createHmac('sha256', row.secretToken)
+    // Prefer encrypted secret; fall back to legacy plaintext for rows created before migration
+    const secret = row.secretEncrypted
+      ? this.decryptSecret(row.secretEncrypted)
+      : row.secretToken;
+
+    const sigHex = createHmac('sha256', secret)
       .update(rawBody)
       .digest('hex');
     const expected = `sha256=${sigHex}`;

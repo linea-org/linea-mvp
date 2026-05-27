@@ -61,7 +61,7 @@ const categories: { label: string; nodes: NodeDef[] }[] = [
       { type: 'loop',        label: 'Loop',         description: 'Iterate over an array',     icon: RepeatIcon,            color: '#0891b2' },
       { type: 'parallel',    label: 'Parallel',     description: 'Run branches in parallel',  icon: LayoutTable01Icon,     color: '#6366f1' },
       { type: 'wait',        label: 'Wait',         description: 'Pause execution',           icon: Clock01Icon,           color: '#64748b' },
-      { type: 'approval',    label: 'Approval',     description: 'Human-in-the-loop gate',    icon: CheckmarkCircle01Icon, color: '#9ca3af' },
+      { type: 'approval',    label: 'Approval Gate', description: 'Human-in-the-loop gate',   icon: CheckmarkCircle01Icon, color: '#f97316' },
       { type: 'variables',   label: 'Variables',    description: 'Set workflow variables',    icon: VariableIcon,          color: '#059669' },
       { type: 'evaluator',   label: 'Evaluator',    description: 'Score output with AI',      icon: ChartEvaluationIcon,   color: '#d97706' },
       { type: 'subworkflow', label: 'Sub-workflow', description: 'Call another workflow',     icon: WorkflowSquare01Icon,  color: '#7c3aed' },

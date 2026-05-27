@@ -52,6 +52,8 @@ import {
   GridViewIcon,
   ArrowUp01Icon,
   Copy01Icon,
+  Search01Icon,
+  Add01Icon,
 } from '@hugeicons/core-free-icons';
 
 interface Workflow {
@@ -65,9 +67,33 @@ interface Workflow {
   updatedAt: string;
 }
 
+interface TemplateOption {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  source: string;
+}
+
 type ViewMode = 'active' | 'favorites' | 'pod-templates' | 'trash';
+type CreateStep = 'choice' | 'name';
 
 const CATEGORIES = ['Productivity', 'Communication', 'Data', 'DevOps', 'Automation', 'Marketing'];
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Productivity:  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  Communication: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  Data:          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  DevOps:        'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  Automation:    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  Marketing:     'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
+  AI:            'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  Content:       'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+  Research:      'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  Sales:         'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  Safety:        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  Analytics:     'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+};
 
 export default function WorkflowsPage() {
   const { podId } = useParams<{ podId: string }>();
@@ -79,10 +105,20 @@ export default function WorkflowsPage() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewMode>('active');
+
+  // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
+  const [createStep, setCreateStep] = useState<CreateStep>('choice');
+  const [createMode, setCreateMode] = useState<'blank' | 'template'>('blank');
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Template picker state
+  const [pickedTemplate, setPickedTemplate] = useState<TemplateOption | null>(null);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [templateList, setTemplateList] = useState<TemplateOption[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   // Publish to gallery state
   const [publishOpen, setPublishOpen] = useState(false);
@@ -123,9 +159,42 @@ export default function WorkflowsPage() {
     }
   }
 
+  async function loadTemplates() {
+    const token = await getToken();
+    if (!token) return;
+    setLoadingTemplates(true);
+    try {
+      const api = createApiClient(token);
+      const rows = await api.get<TemplateOption[]>('/templates');
+      setTemplateList(rows);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
+
   useEffect(() => {
     if (!wsLoading && activeWorkspace) void load(view);
   }, [activeWorkspace, wsLoading, podId, view]);
+
+  function openCreateDialog() {
+    setCreateOpen(true);
+    setCreateStep('choice');
+    setCreateMode('blank');
+    setPickedTemplate(null);
+    setNewName('');
+    setNewDesc('');
+    setTemplateSearch('');
+    void loadTemplates();
+  }
+
+  function resetCreateDialog() {
+    setCreateStep('choice');
+    setCreateMode('blank');
+    setPickedTemplate(null);
+    setNewName('');
+    setNewDesc('');
+    setTemplateSearch('');
+  }
 
   async function toggleFavorite(wfId: string) {
     if (!activeWorkspace) return;
@@ -265,8 +334,27 @@ export default function WorkflowsPage() {
       );
       localStorage.setItem('linea_gs_workflow', 'true');
       setCreateOpen(false);
-      setNewName('');
-      setNewDesc('');
+      resetCreateDialog();
+      router.push(`/pods/${podId}/workflows/${wf.id}`);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleCreateFromTemplate() {
+    if (!activeWorkspace || !pickedTemplate || !newName.trim()) return;
+    setCreating(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const api = createApiClient(token);
+      const wf = await api.post<Workflow>(
+        `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/from-template/${pickedTemplate.id}`,
+        { name: newName.trim() },
+      );
+      localStorage.setItem('linea_gs_workflow', 'true');
+      setCreateOpen(false);
+      resetCreateDialog();
       router.push(`/pods/${podId}/workflows/${wf.id}`);
     } finally {
       setCreating(false);
@@ -287,11 +375,15 @@ export default function WorkflowsPage() {
     trash: { title: 'Trash is empty', sub: 'Workflows you delete will appear here before permanent removal.' },
   };
 
+  const filteredTemplateList = templateList.filter((t) =>
+    !templateSearch || t.name.toLowerCase().includes(templateSearch.toLowerCase()),
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Workflows</h1>
-        <Button onClick={() => setCreateOpen(true)}>New workflow</Button>
+        <Button onClick={openCreateDialog}>New workflow</Button>
       </div>
 
       <div className="flex gap-1">
@@ -332,7 +424,7 @@ export default function WorkflowsPage() {
           <p className="text-sm font-medium">{emptyMessages[view].title}</p>
           <p className="mt-1 text-xs text-muted-foreground max-w-xs">{emptyMessages[view].sub}</p>
           {view === 'active' && (
-            <Button size="sm" className="mt-5" onClick={() => setCreateOpen(true)}>
+            <Button size="sm" className="mt-5" onClick={openCreateDialog}>
               New workflow
             </Button>
           )}
@@ -444,38 +536,164 @@ export default function WorkflowsPage() {
         </Table>
       )}
 
-      {/* Create workflow dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New workflow</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input
-                placeholder="e.g. Lead scoring pipeline"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Description <span className="text-muted-foreground">(optional)</span></Label>
-              <Input
-                placeholder="What does this workflow do?"
-                value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleCreate()} disabled={!newName.trim() || creating}>
-              {creating ? 'Creating…' : 'Create & open builder'}
-            </Button>
-          </DialogFooter>
+      {/* ── Create workflow dialog (2-step) ───────────────────────────────────── */}
+      <Dialog
+        open={createOpen}
+        onOpenChange={(o) => {
+          setCreateOpen(o);
+          if (!o) resetCreateDialog();
+        }}
+      >
+        <DialogContent className={createStep === 'choice' ? 'sm:max-w-2xl' : 'sm:max-w-md'} showCloseButton={false}>
+          {createStep === 'choice' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>New workflow</DialogTitle>
+                <DialogDescription>Start blank or pick a template to get going faster.</DialogDescription>
+              </DialogHeader>
+
+              {/* Blank option */}
+              <button
+                className="flex items-center gap-3 rounded-lg border-2 border-dashed p-4 hover:border-primary hover:bg-muted/40 transition-colors text-left w-full group"
+                onClick={() => {
+                  setCreateMode('blank');
+                  setNewName('');
+                  setNewDesc('');
+                  setCreateStep('name');
+                }}
+              >
+                <div className="flex size-9 items-center justify-center rounded-lg bg-muted group-hover:bg-background transition-colors shrink-0">
+                  <HugeiconsIcon icon={Add01Icon} className="size-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">New blank workflow</p>
+                  <p className="text-xs text-muted-foreground">Start with an empty canvas and build from scratch</p>
+                </div>
+              </button>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3 my-1">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">or start from a template</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              {/* Template search */}
+              <div className="relative">
+                <HugeiconsIcon
+                  icon={Search01Icon}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none"
+                />
+                <Input
+                  placeholder="Search templates…"
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  className="pl-8 h-8 text-sm"
+                />
+              </div>
+
+              {/* Template mini-grid */}
+              {loadingTemplates ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-24 rounded-lg" />
+                  ))}
+                </div>
+              ) : filteredTemplateList.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  {templateSearch ? 'No templates match your search.' : 'No templates available.'}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                  {filteredTemplateList.map((tpl) => (
+                    <button
+                      key={tpl.id}
+                      className="rounded-lg border p-3 text-left hover:bg-muted/50 hover:border-primary/60 transition-colors"
+                      onClick={() => {
+                        setPickedTemplate(tpl);
+                        setNewName(tpl.name);
+                        setCreateMode('template');
+                        setCreateStep('name');
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-1.5 mb-1">
+                        <p className="text-xs font-medium leading-snug truncate flex-1">{tpl.name}</p>
+                        {tpl.source === 'internal' && (
+                          <span className="text-[9px] text-muted-foreground bg-muted rounded px-1 py-0.5 shrink-0">Built-in</span>
+                        )}
+                      </div>
+                      {tpl.description && (
+                        <p className="text-[11px] text-muted-foreground line-clamp-2 mb-1.5">{tpl.description}</p>
+                      )}
+                      <span className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-medium ${CATEGORY_COLORS[tpl.category] ?? 'bg-muted text-muted-foreground'}`}>
+                        {tpl.category}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <button
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1 w-fit"
+                  onClick={() => {
+                    setCreateStep('choice');
+                    setPickedTemplate(null);
+                    setNewName('');
+                  }}
+                >
+                  ← Back
+                </button>
+                <DialogTitle>
+                  {createMode === 'template' ? 'Name your workflow' : 'New blank workflow'}
+                </DialogTitle>
+                {createMode === 'template' && pickedTemplate && (
+                  <DialogDescription>
+                    Starting from "{pickedTemplate.name}"
+                  </DialogDescription>
+                )}
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label>Name</Label>
+                  <Input
+                    placeholder={pickedTemplate?.name ?? 'e.g. Lead scoring pipeline'}
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        void (createMode === 'template' ? handleCreateFromTemplate() : handleCreate());
+                      }
+                    }}
+                    autoFocus
+                  />
+                </div>
+                {createMode === 'blank' && (
+                  <div className="space-y-1.5">
+                    <Label>Description <span className="text-muted-foreground">(optional)</span></Label>
+                    <Input
+                      placeholder="What does this workflow do?"
+                      value={newDesc}
+                      onChange={(e) => setNewDesc(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={() => void (createMode === 'template' ? handleCreateFromTemplate() : handleCreate())}
+                  disabled={!newName.trim() || creating}
+                >
+                  {creating ? 'Creating…' : 'Create & open builder'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

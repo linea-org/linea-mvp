@@ -39,6 +39,15 @@ export function substituteInValue(
   return value;
 }
 
+/**
+ * Sanitize a resolved substitution value to prevent second-order prompt injection.
+ * Strips any {{ }} sequences so that user-provided data cannot introduce additional
+ * variable references that would be processed by downstream consumers.
+ */
+function sanitizeResolvedValue(resolved: string): string {
+  return resolved.replace(/\{\{[^}]*\}\}/g, '');
+}
+
 export function substituteVariables(
   text: string,
   state: WorkflowState,
@@ -48,8 +57,11 @@ export function substituteVariables(
     try {
       const value = evaluateExpression(expression.trim(), state);
       if (value === null || value === undefined) return match;
-      if (typeof value === 'object') return JSON.stringify(value);
-      return String(value);
+      const resolved =
+        typeof value === 'object' ? JSON.stringify(value) : String(value);
+      // H-2: strip {{ }} from resolved values so user-controlled data cannot
+      // inject additional template expressions into the substituted output.
+      return sanitizeResolvedValue(resolved);
     } catch {
       return match;
     }

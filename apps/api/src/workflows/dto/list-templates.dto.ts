@@ -20,4 +20,9 @@ export class ListTemplatesDto {
   @IsBoolean()
   @Transform(({ value }) => value === 'true' || value === true)
   featured?: boolean;
+
+  @ApiPropertyOptional({ description: "Filter by source: 'internal' or 'community'" })
+  @IsOptional()
+  @IsString()
+  source?: string;
 }

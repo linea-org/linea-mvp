@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 const ALLOWED_TYPES = new Set([
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'application/pdf',
   'text/plain', 'text/csv', 'text/markdown',
   'application/json',

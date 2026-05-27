@@ -15,10 +15,10 @@
     "test": "turbo test",
     "db:push": "turbo db:push --filter=@linea/db",
     "db:generate": "turbo db:generate --filter=@linea/db",
+    "db:migrate": "pnpm --filter=@linea/db db:migrate",
     "db:studio": "turbo db:studio --filter=@linea/db",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
-    "infra:reset": "docker compose down -v && docker compose up -d",
     "infra:logs": "docker compose logs -f"
   },
   "devDependencies": {
