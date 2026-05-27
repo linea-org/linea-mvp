@@ -6,7 +6,6 @@ import {
   jsonb,
   boolean,
   pgEnum,
-  numeric,
   unique,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
