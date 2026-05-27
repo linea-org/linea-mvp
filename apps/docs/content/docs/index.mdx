@@ -1,69 +1,27 @@
 ---
 title: Introduction
-description: "Linea: a workflow automation PaaS for running AI agent pipelines with memory, scheduling, and integrations."
+description: "Linea: workflow automation for AI agent pipelines."
 ---
 
 import { Cards, Card } from 'fumadocs-ui/components/card';
-import { Callout } from 'fumadocs-ui/components/callout';
 
 # Welcome to Linea
 
-Linea is a **workflow automation platform** designed to run AI agent pipelines at scale. It provides everything needed to build, schedule, monitor, and remember across automated workflows.
+Linea is a **workflow automation platform** for building and running AI agent pipelines. Connect nodes into workflows, deploy them, and trigger them on a schedule, via webhook, or from your own code.
 
-<Callout type="info">
-  This documentation covers the internal architecture of Linea: intended for contributors and developers building on top of the platform.
-</Callout>
+## What you can build
 
-## What Linea Provides
+- Multi-step AI pipelines with memory across executions
+- Human-in-the-loop approval flows
+- Scheduled automations and webhook-triggered workflows
+- Workflows that call Slack, GitHub, Notion, Gmail, or any HTTP endpoint
+- Agent workflows that query your own document knowledge bases
 
-- **Workflow Engine**: define, deploy, and trigger multi-step automation workflows
-- **Execution Runtime**: BullMQ-powered job processing with real-time SSE streaming
-- **Memory System**: SuperMemory-inspired atomic fact storage with pgvector hybrid search
-- **Knowledge Bases**: workspace-scoped document stores with vector search
-- **MCP Integration**: attach Model Context Protocol servers as tools to any workflow
-- **Schedules & Webhooks**: cron triggers and HTTP event hooks
-- **Built-in Integrations**: Slack, GitHub, Notion, and Gmail nodes out of the box
-- **Structured Output**: force any agent node to return typed JSON via schema injection
-- **TypeScript SDK**: `@linea/sdk` — trigger workflows and stream events programmatically
-- **Template Gallery**: 5 pre-built workflows cloneable into any pod
-- **Execution Replay**: re-run any completed, failed, or cancelled execution from a specific node
-- **Metrics**: execution statistics with p50/p95 duration, success rate, and per-workflow breakdown
-- **Rate Limiting**: 300 req/min per workspace globally, 60 execution triggers/min
-- **Notifications**: user-scoped event feed
-- **API Keys**: workspace-level credentials for programmatic access
-
-## Quick Navigation
+## Where to start
 
 <Cards>
   <Card title="Getting Started" href="/docs/getting-started" description="Run Linea locally and trigger your first workflow in under 10 minutes." />
-  <Card title="Node Reference" href="/docs/modules/nodes" description="Config fields and examples for every node type." />
-  <Card title="Memory System" href="/docs/modules/memory" description="Cross-execution fact storage with pgvector semantic search." />
-  <Card title="SDK Reference" href="/docs/modules/sdk" description="Trigger workflows and stream events from TypeScript." />
+  <Card title="Node Reference" href="/docs/nodes" description="Configuration and examples for every node type." />
+  <Card title="SDK" href="/docs/modules/sdk" description="Trigger workflows and stream events from TypeScript." />
+  <Card title="API Reference" href="/docs/reference" description="REST endpoints for executions, triggers, and more." />
 </Cards>
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| API | NestJS 11, TypeScript |
-| Database | PostgreSQL + pgvector (via Drizzle ORM) |
-| Job Queue | BullMQ + Redis |
-| Auth | Clerk |
-| Frontend | Next.js 15, React 19, Tailwind CSS v4 |
-| Monorepo | Turborepo + pnpm workspaces |
-| AI | Anthropic Claude Haiku (extraction), OpenAI (embeddings) |
-
-## Repository Layout
-
-```
-linea/
-├── apps/
-│   ├── api/        # NestJS backend
-│   ├── web/        # Next.js 15 frontend
-│   └── docs/       # This documentation (Fumadocs)
-├── packages/
-│   ├── db/         # Drizzle schema + client
-│   ├── sdk/        # @linea/sdk — TypeScript client
-│   ├── types/      # Shared TypeScript types
-│   └── ui/         # shadcn/ui component library
-```

@@ -1,58 +1,55 @@
 ---
 title: Schedules & Webhooks
-description: Time-based and event-based workflow triggers.
+description: Trigger workflows automatically on a schedule or from an external HTTP event.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Schedules & Webhooks
 
-Both Schedules and Webhooks are **space-scoped** triggers: they live under a specific space and fire executions for a workflow in that space.
+Schedules and Webhooks let workflows run automatically without manual intervention. Both are configured per-workflow and live in the Deploy panel.
+
+---
 
 ## Schedules
 
-A **Schedule** fires a workflow on a cron expression.
+A **Schedule** fires a workflow on a recurring cron expression.
 
-### Schema
+### Creating a schedule
 
-```typescript
-schedules: {
-  id: uuid PK
-  spaceId: uuid FK → spaces (cascade delete)
-  workflowId: uuid FK → workflows (set null on delete)
-  name: text
-  cronExpression: text    // e.g. "0 9 * * 1-5"
-  timezone: text          // e.g. "America/New_York"
-  enabled: boolean
-  lastRunAt: timestamp | null
-  nextRunAt: timestamp | null
-  createdAt: timestamp
-  updatedAt: timestamp
+```http
+POST /workspaces/:wId/pods/:pId/schedules
+
+{
+  "workflowId": "wf_abc123",
+  "name": "Daily digest",
+  "cronExpression": "0 9 * * 1-5",
+  "timezone": "America/New_York",
+  "enabled": true
 }
 ```
 
-### Fire Logic
+Linea fires the workflow at each scheduled time and passes an empty input. Add a **Start** node to your workflow to handle the trigger.
 
-`SchedulesService.fireDueSchedules()` is called by a NestJS `@Cron` task every minute:
+### Cron syntax
 
-1. Queries schedules where `enabled = true` AND `nextRunAt <= now()`
-2. JOINs `spaces` to get `workspaceId`
-3. Calls `ExecutionsService.createFromTrigger(spaceId, workspaceId, workflowId, 'schedule', {})`
-4. Updates `lastRunAt` and computes the next `nextRunAt` from the cron expression
+Standard 5-field cron: `minute hour day-of-month month day-of-week`
 
-<Callout>
-  The `workspaceId` JOIN is necessary because schedules only store `spaceId` after the space layer was introduced. The join is done in bulk once per cron tick, not per execution.
-</Callout>
+| Example | When it fires |
+|---------|--------------|
+| `0 9 * * 1-5` | 9 AM every weekday |
+| `*/15 * * * *` | Every 15 minutes |
+| `0 0 1 * *` | First day of every month at midnight |
 
 ### API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/workspaces/:wId/spaces/:sId/schedules` | List schedules |
-| `POST` | `/workspaces/:wId/spaces/:sId/schedules` | Create schedule |
-| `PATCH` | `/workspaces/:wId/spaces/:sId/schedules/:id` | Update |
-| `PATCH` | `/workspaces/:wId/spaces/:sId/schedules/:id/toggle` | Enable / disable |
-| `DELETE` | `/workspaces/:wId/spaces/:sId/schedules/:id` | Delete |
+| `GET` | `/workspaces/:wId/pods/:pId/schedules` | List schedules |
+| `POST` | `/workspaces/:wId/pods/:pId/schedules` | Create schedule |
+| `PATCH` | `/workspaces/:wId/pods/:pId/schedules/:id` | Update |
+| `PATCH` | `/workspaces/:wId/pods/:pId/schedules/:id/toggle` | Enable or disable |
+| `DELETE` | `/workspaces/:wId/pods/:pId/schedules/:id` | Delete |
 
 ---
 
@@ -60,48 +57,49 @@ schedules: {
 
 A **Webhook** fires a workflow when an HTTP `POST` request is received at its unique URL.
 
-### Schema
+### How it works
 
-```typescript
-webhooks: {
-  id: uuid PK
-  spaceId: uuid FK → spaces (cascade delete)
-  workflowId: uuid FK → workflows (set null on delete)
-  name: text
-  secret: text | null    // HMAC signing secret (optional)
-  enabled: boolean
-  lastTriggeredAt: timestamp | null
-  createdAt: timestamp
-  updatedAt: timestamp
-}
-```
+1. Create a webhook for a workflow — Linea generates a unique trigger URL
+2. Configure your external service (GitHub, Stripe, Zapier, etc.) to POST to that URL
+3. Linea forwards the request body as the workflow's `input`
 
 ### Trigger URL
 
-Each webhook has a public endpoint:
-
 ```
-POST /v1/webhooks/:webhookId/trigger
+POST https://api.getlinea.ai/v1/webhooks/:webhookId/trigger
 ```
 
-This endpoint is `@Public()` (bypasses `AuthGuard`). If a `secret` is configured, the `X-Webhook-Signature` header is verified before processing.
+The request body is passed directly as the workflow input — your nodes can access it via `{{input.field}}`.
 
-### Trigger Logic
+### Securing a webhook
 
-`WebhooksService.trigger(webhookId, payload)`:
+Set a secret when creating the webhook. Linea will verify an `X-Webhook-Signature` HMAC header on each incoming request and reject requests that don't match.
 
-1. Fetches the webhook row, verifies `enabled = true`
-2. JOINs `spaces` for `workspaceId`
-3. Verifies HMAC signature if `secret` is set
-4. Calls `ExecutionsService.createFromTrigger(spaceId, workspaceId, workflowId, 'webhook', payload)`
-5. Updates `lastTriggeredAt`
+```http
+POST /workspaces/:wId/pods/:pId/webhooks
+
+{
+  "workflowId": "wf_abc123",
+  "name": "GitHub push events",
+  "secret": "your-signing-secret",
+  "enabled": true
+}
+```
 
 ### API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/workspaces/:wId/spaces/:sId/webhooks` | List webhooks |
-| `POST` | `/workspaces/:wId/spaces/:sId/webhooks` | Create webhook |
-| `PATCH` | `/workspaces/:wId/spaces/:sId/webhooks/:id` | Update |
-| `DELETE` | `/workspaces/:wId/spaces/:sId/webhooks/:id` | Delete |
-| `POST` | `/webhooks/:id/trigger` | Public trigger endpoint |
+| `GET` | `/workspaces/:wId/pods/:pId/webhooks` | List webhooks |
+| `POST` | `/workspaces/:wId/pods/:pId/webhooks` | Create webhook |
+| `PATCH` | `/workspaces/:wId/pods/:pId/webhooks/:id` | Update |
+| `DELETE` | `/workspaces/:wId/pods/:pId/webhooks/:id` | Delete |
+| `POST` | `/v1/webhooks/:id/trigger` | Public trigger endpoint (no auth required) |
+
+<Callout>
+  The trigger endpoint is public — protect it with a signing secret if your workflow processes sensitive data.
+</Callout>
+
+## Testing without a live URL
+
+Use the **Chat Preview panel** in the workflow builder to simulate any trigger payload locally. Switch to **JSON mode**, paste your payload, and the workflow runs immediately — no webhook URL or signing needed.

@@ -1,123 +1,82 @@
 ---
 title: Memory System
-description: SuperMemory-inspired atomic fact storage with pgvector hybrid search and conflict resolution.
+description: Persistent fact storage that gives your AI agents memory across workflow runs.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 # Memory System
 
-Linea's memory system is inspired by [SuperMemory](https://supermemory.ai) and targets ~45% feature parity. It provides persistent, structured memory for AI agents across workflow runs: enabling agents to remember facts, user preferences, and past events.
+Linea's memory system gives your AI agents persistent, structured memory across workflow runs. Agents can remember facts, user preferences, and past events — and retrieve them later with natural-language search.
 
-## Design Principles
+## How it works
 
-- **Atomic facts**: raw text is split into the smallest self-contained statements before storing
-- **Semantic deduplication**: new facts semantically equivalent to existing ones supersede them rather than duplicating
-- **Hybrid retrieval**: pgvector cosine similarity + keyword search, merged with score boosting
-- **Temporal grounding**: `eventDate` is separate from `createdAt` so facts can reference when something happened
-- **User profiling**: `scope=user` memories grouped by `factType` form a user's behavioral profile
+When you send text to the memory ingest endpoint, Linea:
 
-## Schema
+1. Breaks the text into the smallest self-contained facts
+2. Checks whether any of those facts conflict with existing memories
+3. If a new fact supersedes an old one, the old memory is automatically retired
+4. Stores the remaining facts and makes them searchable
 
-```typescript
-memories: {
-  id: uuid PK
-  workspaceId: uuid FK → workspaces
-  userId: uuid FK → users (nullable)
-  threadId: text (nullable)         // agent conversation thread
-  workflowId: uuid FK → workflows (nullable)
-  scope: enum('thread','workflow','user')
-  content: text                     // the atomic fact
-  embedding: vector(1536)           // OpenAI text-embedding-3-small
-  source: enum('manual','extracted','ingested')  default: 'manual'
-  factType: enum('fact','preference','event','profile','system') nullable
-  eventDate: timestamp (nullable)   // when the fact occurred (≠ createdAt)
-  supersededById: uuid (nullable)   // points to the replacement memory
-  confidence: real                  // 0.0–1.0, default 1.0
-  metadata: jsonb                   // arbitrary structured data
-  createdAt: timestamp
-  updatedAt: timestamp
+This means your agent's memory stays accurate over time — stale facts are replaced, not duplicated.
+
+## Memory scopes
+
+| Scope | What it covers |
+|-------|---------------|
+| `thread` | A single agent conversation |
+| `workflow` | All runs of a specific workflow |
+| `user` | Persistent facts about a user across all workflows |
+
+## Fact types
+
+Memories can be categorized for easier retrieval:
+
+| Type | Examples |
+|------|---------|
+| `fact` | General information |
+| `preference` | "User prefers dark mode" |
+| `event` | "Deployed to production on 2024-03-15" |
+| `profile` | "User's name is Alex" |
+| `system` | Internal agent notes |
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/workspaces/:wId/memories/ingest` | Ingest text and extract facts |
+| `POST` | `/workspaces/:wId/memories/search` | Search memories by natural language query |
+| `GET` | `/workspaces/:wId/memories` | List memories |
+| `DELETE` | `/workspaces/:wId/memories/:id` | Delete a memory |
+| `GET` | `/workspaces/:wId/memories/profile` | Get user profile grouped by fact type |
+
+## Ingesting memories
+
+```http
+POST /workspaces/:wId/memories/ingest
+
+{
+  "content": "Alex prefers concise responses and is based in London.",
+  "scope": "user",
+  "userId": "user_abc"
 }
-
-memory_sessions: {
-  id: uuid PK
-  workspaceId: uuid FK → workspaces
-  rawContent: text                  // original input text
-  memoriesExtracted: text[]         // IDs of newly created memories
-  memoriesUpdated: text[]           // IDs of superseded memories
-  createdAt: timestamp
-}
 ```
 
-## Ingest Pipeline
-
-`POST /workspaces/:id/memories/ingest`
-
-<Steps>
-<Step>
-### Extract atomic facts
-
-Claude Haiku (`claude-haiku-4-5`) receives the raw content and returns a JSON array of facts:
-
-```json
-[
-  { "content": "User prefers dark mode", "factType": "preference", "confidence": 0.97 },
-  { "content": "User's name is Alex", "factType": "profile", "confidence": 0.99 },
-  { "content": "Deployed to production on 2024-03-15", "factType": "event",
-    "confidence": 0.95, "eventDate": "2024-03-15" }
-]
-```
-</Step>
-<Step>
-### Embed each fact
-
-Each fact is embedded with OpenAI `text-embedding-3-small` (1536 dimensions).
-</Step>
-<Step>
-### Check for conflicts
-
-For each embedding, query for the nearest existing memory (excluding superseded):
-
-```sql
-SELECT id, 1 - (embedding <=> $1::vector) AS similarity
-FROM memories
-WHERE workspace_id = $2 AND superseded_by_id IS NULL
-ORDER BY embedding <=> $1::vector
-LIMIT 1
-```
-
-If `similarity >= 0.88` → the new fact supersedes the old one.
-</Step>
-<Step>
-### Insert and supersede
-
-- Insert the new memory row
-- If superseding: set `old_memory.superseded_by_id = new_memory.id`
-</Step>
-<Step>
-### Log the session
-
-Record the ingest batch in `memory_sessions` with extracted/updated IDs.
-</Step>
-</Steps>
-
-### Response
+**Response:**
 
 ```json
 {
-  "memoriesCreated": 3,
-  "memoriesUpdated": 1,
-  "sessionId": "uuid",
-  "memories": [...]
+  "memoriesCreated": 2,
+  "memoriesUpdated": 0,
+  "sessionId": "uuid"
 }
 ```
 
-## Hybrid Search
+## Searching memories
 
-`POST /workspaces/:id/memories/search`
+```http
+POST /workspaces/:wId/memories/search
 
-```json
 {
   "query": "what does the user prefer?",
   "scope": "user",
@@ -125,60 +84,29 @@ Record the ingest batch in `memory_sessions` with extracted/updated IDs.
 }
 ```
 
-**Algorithm:**
+Search uses a combination of semantic similarity and keyword matching to find the most relevant memories.
 
-1. Embed the query with `text-embedding-3-small`
-2. pgvector cosine → top 20 candidates with scores
-3. `ilike` keyword search → top 20 candidates
-4. Merge scores:
-   - Vector-only result: use raw cosine similarity
-   - Keyword match on top of vector: `score + 0.2`
-   - Keyword-only (not in vector results): `score = 0.3`
-5. Exclude `supersededById IS NOT NULL`
-6. Return top-K sorted by merged score
+## User profile
 
-## User Profile
+Get all memories about a user, grouped by fact type:
 
-`GET /workspaces/:id/memories/profile?userId=...`
-
-Returns `scope=user` memories (excluding superseded) grouped by `factType`:
+```http
+GET /workspaces/:wId/memories/profile?userId=user_abc
+```
 
 ```json
 {
   "facts": [...],
   "preferences": [...],
   "events": [...],
-  "profile": [...],
-  "system": [...],
-  "uncategorized": [...]
+  "profile": [...]
 }
 ```
 
-## Services
+## Using memory in workflows
 
-### `EmbeddingService`
-
-Wraps OpenAI `text-embedding-3-small`. Zero-vector fallback if `OPENAI_API_KEY` is not set: useful for local dev without AI billing.
-
-### `ExtractionService`
-
-Wraps Claude Haiku with a strict extraction prompt. Falls back to storing the entire input as a single `fact` if:
-- `ANTHROPIC_API_KEY` is not set
-- Claude returns non-JSON
-- Any parse error occurs
-
-## Feature Parity vs SuperMemory
-
-| Feature | SuperMemory | Linea |
-|---------|-------------|-------|
-| Atomic extraction | ✅ | ✅ Claude Haiku |
-| Hybrid retrieval | ✅ Sub-300ms | ✅ pgvector + ilike |
-| Conflict resolution | ✅ | ✅ `supersededById` |
-| User profiles | ✅ Behavioral | ✅ grouped by `factType` |
-| Temporal grounding | ✅ Dual-layer | ✅ `eventDate` column |
-| Memory graph | ✅ Neo4j | ❌ Not implemented |
-| Web/audio connectors | ✅ | ❌ Not implemented |
+The [Memory node](/docs/nodes) inside a workflow can read from or write to memory directly — no API calls needed. Facts stored during one run are available in all future runs.
 
 <Callout>
-  Enabling vector search requires the `pgvector` PostgreSQL extension. Run `CREATE EXTENSION IF NOT EXISTS vector;` before `db:push`.
+  Memory search is powered by semantic embeddings. Queries like "what city is the user in?" will match memories like "Alex is based in London" even without exact keyword overlap.
 </Callout>

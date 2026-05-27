@@ -1,109 +1,69 @@
 ---
 title: Workflows
-description: Defining, deploying, and managing workflows within a space.
+description: Building, deploying, and managing workflows.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Workflows
 
-A **Workflow** is the core unit of automation in Linea. It belongs to a **Space** and defines a sequence of steps that are executed together.
+A **Workflow** is the core unit of automation in Linea. It defines a sequence of steps — nodes connected by edges — that run together as a single execution.
 
-## Schema
+## Lifecycle
 
-```typescript
-workflows: {
-  id: uuid PK
-  spaceId: uuid FK → spaces (cascade delete)
-  name: text
-  description: text | null
-  definition: jsonb             // step graph (runtime-defined)
-  deployedAt: timestamp | null  // null = draft
-  starred: boolean              // user favourite
-  deletedAt: timestamp | null   // soft delete (trash)
-  createdAt: timestamp
-  updatedAt: timestamp
-}
-```
+| State | Meaning |
+|-------|---------|
+| **Draft** | In progress, not yet runnable from triggers |
+| **Deployed** | Live — can be triggered by schedules, webhooks, or the API |
+| **Trashed** | Soft-deleted — can be restored |
 
-## Lifecycle States
-
-| State | Condition |
-|-------|-----------|
-| **Draft** | `deployedAt IS NULL` and `deletedAt IS NULL` |
-| **Deployed** | `deployedAt IS NOT NULL` and `deletedAt IS NULL` |
-| **Trashed** | `deletedAt IS NOT NULL` |
-
-Workflows can be trashed and restored. Trashed workflows are excluded from all list queries by default.
+<Callout>
+  Only deployed workflows can be triggered automatically. Drafts can still be run manually from the preview panel.
+</Callout>
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/workspaces/:wId/spaces/:sId/workflows` | List (supports `?trashed=true`, `?starred=true`) |
-| `POST` | `/workspaces/:wId/spaces/:sId/workflows` | Create workflow |
-| `GET` | `/workspaces/:wId/spaces/:sId/workflows/:id` | Get workflow |
-| `PATCH` | `/workspaces/:wId/spaces/:sId/workflows/:id` | Update name/description/definition |
-| `PATCH` | `/workspaces/:wId/spaces/:sId/workflows/:id/star` | Toggle `starred` |
-| `PATCH` | `/workspaces/:wId/spaces/:sId/workflows/:id/trash` | Soft delete |
-| `PATCH` | `/workspaces/:wId/spaces/:sId/workflows/:id/restore` | Restore from trash |
+| `GET` | `/workspaces/:wId/pods/:pId/workflows` | List workflows (`?starred=true`, `?trashed=true`) |
+| `POST` | `/workspaces/:wId/pods/:pId/workflows` | Create workflow |
+| `GET` | `/workspaces/:wId/pods/:pId/workflows/:id` | Get workflow |
+| `PATCH` | `/workspaces/:wId/pods/:pId/workflows/:id` | Update name, description, or definition |
+| `PATCH` | `/workspaces/:wId/pods/:pId/workflows/:id/star` | Toggle starred |
+| `PATCH` | `/workspaces/:wId/pods/:pId/workflows/:id/trash` | Move to trash |
+| `PATCH` | `/workspaces/:wId/pods/:pId/workflows/:id/restore` | Restore from trash |
 
-## Service: Key Methods
+## Node types
 
-### `findAll(spaceId, query)`
+Workflows are built from nodes. Each node performs a specific action:
 
-```typescript
-const conditions = [eq(workflows.spaceId, spaceId)]
-if (query.trashed) {
-  conditions.push(isNotNull(workflows.deletedAt))
-} else {
-  conditions.push(isNull(workflows.deletedAt))
-  if (query.starred) conditions.push(eq(workflows.starred, true))
-}
-```
+| Category | Node | What it does |
+|----------|------|-------------|
+| **Core** | Start | Entry point — receives trigger input |
+| **Core** | End | Outputs the final result |
+| **AI** | Agent | Runs an LLM with tool use and structured output |
+| **AI** | Memory | Read or write persistent memory |
+| **Logic** | If / Else | Branch based on a condition |
+| **Logic** | Router | Route to multiple paths |
+| **Tools** | HTTP | Call any external REST API |
+| **Tools** | MCP | Use a connected Model Context Protocol server |
+| **Data** | Transform | Reshape variables with a JS expression |
+| **Data** | Extract | Scrape web content |
+| **Data** | Retriever | Query a knowledge base |
+| **Safety** | Guardrails | PII detection and content filtering |
+| **Safety** | Code | Run sandboxed JavaScript |
+| **Flow** | Loop | Iterate over an array |
+| **Flow** | Sub-workflow | Call another workflow and wait for its result |
+| **Integrations** | Slack | Send messages or DMs |
+| **Integrations** | GitHub | Create issues, comments, and PRs |
+| **Integrations** | Notion | Create pages and query databases |
+| **Integrations** | Gmail | Send and read email |
+| **Human-in-loop** | Approval Gate | Pause and wait for a human to approve or reject |
 
-### `trash(spaceId, id, membership)`
+See the [Node Reference](/docs/nodes) for full configuration details on each type.
 
-Requires `editor` role or above. Sets `deletedAt = now()`.
+## Building a workflow
 
-### `restore(spaceId, id, membership)`
+Open the visual builder from the dashboard. Drag nodes from the library panel onto the canvas, connect them with edges, and configure each node in the side panel. Click **Deploy** when ready.
 
-Requires `editor` role. Sets `deletedAt = null`.
-
-## Node Types
-
-The workflow `definition` JSONB stores a graph of nodes. The engine supports the following node types:
-
-| Category | Type | Description |
-|---|---|---|
-| **Core** | `start` | Entry point — spreads trigger input into variables |
-| **Core** | `end` | Terminal node — emits `lastOutput` as final result |
-| **AI** | `agent` | LLM-powered node with tool use and structured output |
-| **AI** | `memory` | Read/write key-value memory scoped to thread or workflow |
-| **Logic** | `if-else` | Conditional branch on a variable expression |
-| **Logic** | `router` | Multi-path routing |
-| **Tools** | `http` | Call any external REST API |
-| **Tools** | `mcp` | Attach a Model Context Protocol server as tool |
-| **Data** | `transform` | JS expression to reshape variables |
-| **Data** | `extract` | Web scraping via Firecrawl |
-| **Data** | `retriever` | Query a workspace knowledge base |
-| **Safety** | `guardrails` | PII detection and content filtering |
-| **Safety** | `code` | Execute sandboxed JavaScript (Node `vm`) |
-| **Flow** | `loop` | Iterate over an array variable, optional item transform |
-| **Flow** | `subworkflow` | Call another workflow and wait for its output |
-| **Integrations** | `slack` | Send Slack messages or DMs |
-| **Integrations** | `github` | Create issues, comments, and PRs |
-| **Integrations** | `notion` | Create pages, append blocks, query databases |
-| **Integrations** | `gmail` | Send and read Gmail messages |
-| **Misc** | `approval` | Pause for human-in-the-loop confirmation |
-| **Misc** | `note` | Canvas annotation — no runtime effect |
-
-## Frontend
-
-The workflows page lives at `/spaces/[spaceId]/workflows` and supports three view tabs:
-
-- **All**: active (non-trashed) workflows
-- **Starred**: active + `starred = true`
-- **Trash**: trashed workflows with a Restore action
-
-The visual workflow builder is available at `/pods/[podId]/workflows/[id]`. Nodes are dragged from the library panel onto the canvas and connected with edges. Each node type has a dedicated configuration panel.
+The **Chat Preview** panel lets you run the workflow immediately — in text mode or JSON simulation mode — without deploying first.

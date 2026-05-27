@@ -1,90 +1,66 @@
 ---
-title: MCP Integration
-description: Attaching Model Context Protocol servers as tools to workflows.
+title: MCP Servers
+description: Connect Model Context Protocol servers as tools in your workflows.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# MCP Integration
+# MCP Servers
 
-Linea supports the **Model Context Protocol (MCP)**: a standard for connecting AI models to external tools and data sources. MCP servers are registered at the **workspace level** and can be attached to any workflow within that workspace.
+Linea supports the **Model Context Protocol (MCP)** — an open standard for connecting AI models to external tools and data sources. Register an MCP server in your workspace and its tools become available to any workflow.
 
-## What Is MCP?
+## What is MCP?
 
-MCP defines a client/server protocol where:
-- An **MCP server** exposes a set of **tools** (functions the model can call)
-- An **MCP client** (Linea's execution engine) discovers those tools and invokes them during workflow execution
+MCP lets you expose a set of callable tools via a standard protocol. Once a server is registered, Linea's execution engine connects to it during workflow runs and makes its tools available to Agent nodes — the same way built-in tools like HTTP or Slack work.
 
-This allows workflows to call external APIs, query databases, run scripts, or interact with any service that implements the MCP spec.
+This means you can connect workflows to internal services, databases, custom scripts, or any third-party system that implements the MCP spec.
 
-## Schema
+## Transport types
 
-```typescript
-mcp_servers: {
-  id: uuid PK
-  workspaceId: uuid FK → workspaces (cascade delete)
-  name: text
-  description: text | null
-  url: text                    // MCP server endpoint
-  transport: enum('sse','stdio','streamable-http')
-  authType: enum('none','bearer','basic','custom')
-  authConfig: jsonb            // credentials (encrypted at rest)
-  status: enum('active','inactive','error')
-  lastCheckedAt: timestamp | null
-  embedding: vector(1536)      // semantic search over server descriptions
-  createdAt: timestamp
-  updatedAt: timestamp
-}
+| Transport | When to use |
+|-----------|------------|
+| `sse` | Persistent HTTP streams — most common for hosted servers |
+| `streamable-http` | HTTP with streaming (MCP 2025 spec) |
+| `stdio` | Local process-based servers |
 
-mcp_tools: {
-  id: uuid PK
-  serverId: uuid FK → mcp_servers (cascade delete)
-  name: text
-  description: text | null
-  inputSchema: jsonb           // JSON Schema for tool arguments
-  embedding: vector(1536)      // semantic search over tool descriptions
-  createdAt: timestamp
-}
-```
+## Authentication
 
-<Callout>
-  Both `mcp_servers` and `mcp_tools` store embeddings to enable semantic tool discovery (for example, "find me tools that can send emails") without requiring the exact tool name.
-</Callout>
+MCP servers support four auth modes:
 
-## Transport Types
+| Mode | Description |
+|------|-------------|
+| `none` | No authentication |
+| `bearer` | Bearer token in the `Authorization` header |
+| `basic` | HTTP Basic authentication |
+| `custom` | Custom headers or auth scheme |
 
-| Transport | Description |
-|-----------|-------------|
-| `sse` | Server-Sent Events, persistent HTTP stream |
-| `stdio` | Standard I/O (local process-based servers) |
-| `streamable-http` | HTTP with streaming response (MCP 2025 spec) |
+Credentials are encrypted at rest.
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/workspaces/:wId/mcp-servers` | List MCP servers |
-| `POST` | `/workspaces/:wId/mcp-servers` | Register server |
-| `GET` | `/workspaces/:wId/mcp-servers/:id` | Get server |
-| `PATCH` | `/workspaces/:wId/mcp-servers/:id` | Update server |
+| `GET` | `/workspaces/:wId/mcp-servers` | List registered servers |
+| `POST` | `/workspaces/:wId/mcp-servers` | Register a new server |
+| `GET` | `/workspaces/:wId/mcp-servers/:id` | Get server details |
+| `PATCH` | `/workspaces/:wId/mcp-servers/:id` | Update server config |
 | `DELETE` | `/workspaces/:wId/mcp-servers/:id` | Remove server |
-| `POST` | `/workspaces/:wId/mcp-servers/:id/sync` | Discover and sync tools from server |
+| `POST` | `/workspaces/:wId/mcp-servers/:id/sync` | Discover and sync tools from the server |
 | `GET` | `/workspaces/:wId/mcp-servers/:id/tools` | List synced tools |
-| `POST` | `/workspaces/:wId/mcp-servers/search` | Semantic tool search |
+| `POST` | `/workspaces/:wId/mcp-servers/search` | Search tools by description |
 
-## Tool Sync
+## Syncing tools
 
-Calling `POST .../sync` connects to the MCP server, calls `tools/list`, and upserts `mcp_tools` rows. Embeddings are generated for each tool description to enable semantic search.
+After registering a server, call `/sync` to discover its tools. Linea connects to the server, fetches the tool list, and stores them for use in workflows.
 
-## Semantic Tool Discovery
+Re-sync any time the server's tools change.
 
-During execution, the workflow engine can search for relevant tools by description:
+## Using MCP in workflows
 
-```
-"find tools that can query a SQL database"
-→ embed query
-→ cosine search over mcp_tools.embedding
-→ return top-K tools across all servers
-```
+Add an **MCP node** to your workflow and select the server and tool you want to call. Tool inputs map to workflow variables.
 
-This allows workflows to dynamically discover tools without hardcoding server/tool names.
+MCP tools are also available inside **Agent nodes** — the agent can call them automatically when it determines they're needed.
+
+<Callout>
+  MCP servers are registered at the workspace level and available to all workflows within that workspace.
+</Callout>
