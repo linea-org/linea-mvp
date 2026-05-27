@@ -581,7 +581,9 @@ export class NodeExecutorService {
       }
 
       case 'evaluator': {
-        const anthropicKey = this.config.get<string>('ANTHROPIC_API_KEY');
+        // Prefer workspace BYOK; fall back to platform key so dev/testing still works
+        const resolvedKeys = await this.resolveApiKeys(workspaceId);
+        const anthropicKey = resolvedKeys['ANTHROPIC_API_KEY'] ?? this.config.get<string>('ANTHROPIC_API_KEY');
         const r = await executeEvaluatorNode(nodeData, state, anthropicKey);
         return { result: r, isAgentOutput: false };
       }

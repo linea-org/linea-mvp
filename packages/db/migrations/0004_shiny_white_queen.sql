@@ -1,0 +1,1 @@
+ALTER TABLE "workflows" ADD COLUMN "cloned_from_template_id" uuid;

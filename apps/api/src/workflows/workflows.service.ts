@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import {
   and,
   eq,
@@ -367,7 +367,12 @@ export class WorkflowsService {
     return updated;
   }
 
-  async createFromTemplate(podId: string, userId: string, templateId: string) {
+  async createFromTemplate(
+    podId: string,
+    userId: string,
+    templateId: string,
+    name?: string,
+  ) {
     const [template] = await this.db
       .select()
       .from(templates)
@@ -401,19 +406,23 @@ export class WorkflowsService {
       .insert(workflows)
       .values({
         podId,
-        name: template.name,
+        name: (name?.trim()) || template.name,
         description,
         definition,
         isTemplate: false,
         isPublic: false,
+        clonedFromTemplateId: templateId,
         createdBy: userId,
       })
       .returning();
 
-    void this.db
-      .update(templates)
-      .set({ downloads: sql`downloads + 1` })
-      .where(eq(templates.id, templateId));
+    // Don't track downloads on internal (built-in) templates
+    if (template.source !== 'internal') {
+      void this.db
+        .update(templates)
+        .set({ downloads: sql`downloads + 1` })
+        .where(eq(templates.id, templateId));
+    }
 
     return cloned;
   }
@@ -452,6 +461,26 @@ export class WorkflowsService {
   ) {
     const workflow = await this.findOne(podId, workflowId);
 
+    // Block publishing if this workflow is an unmodified clone of a template
+    if (workflow.clonedFromTemplateId) {
+      const [sourceTemplate] = await this.db
+        .select({ definition: templates.definition, source: templates.source })
+        .from(templates)
+        .where(eq(templates.id, workflow.clonedFromTemplateId))
+        .limit(1);
+
+      if (sourceTemplate) {
+        const workflowHash = JSON.stringify(workflow.definition);
+        const templateHash = JSON.stringify(sourceTemplate.definition ?? workflow.definition);
+
+        if (workflowHash === templateHash) {
+          throw new BadRequestException(
+            'This workflow is an unmodified clone of a template. Customise it before publishing to the gallery.',
+          );
+        }
+      }
+    }
+
     const [template] = await this.db
       .insert(templates)
       .values({
@@ -459,6 +488,7 @@ export class WorkflowsService {
         description: dto.description ?? workflow.description,
         category: dto.category,
         featured: dto.featured ?? false,
+        source: 'community',
         thumbnailUrl: dto.thumbnailUrl ?? null,
         workflowId: workflow.id,
         definition: workflow.definition,

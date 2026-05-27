@@ -1,4 +1,4 @@
-export const RAG_EMBED_QUEUE = 'rag:embed';
+export const RAG_EMBED_QUEUE = 'rag-embed';
 
 export interface RagEmbedJobData {
   entryId: string;

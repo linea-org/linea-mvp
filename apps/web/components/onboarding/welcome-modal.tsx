@@ -6,7 +6,7 @@ import { useAuth } from '@clerk/nextjs';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { usePod } from '@/contexts/space-context';
 import { createApiClient } from '@/lib/api';
-import { Dialog, DialogContent } from '@linea/ui/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@linea/ui/components/dialog';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -213,6 +213,7 @@ export function WelcomeModal() {
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) dismiss(); }}>
       <DialogContent className="sm:max-w-lg p-0 overflow-hidden gap-0">
+        <DialogTitle className="sr-only">Welcome to Linea</DialogTitle>
         {step === 'welcome' && (
           <WelcomeStep onNext={() => setStep('pod')} onSkip={dismiss} />
         )}

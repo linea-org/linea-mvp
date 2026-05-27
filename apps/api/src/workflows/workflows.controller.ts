@@ -350,8 +350,9 @@ export class WorkflowsController {
     @Param('podId') podId: string,
     @Param('templateId') templateId: string,
     @CurrentUser() user: User,
+    @Body() body: { name?: string },
   ) {
-    return this.service.createFromTemplate(podId, user.id, templateId);
+    return this.service.createFromTemplate(podId, user.id, templateId, body.name);
   }
 
   @Post(':id/generate')

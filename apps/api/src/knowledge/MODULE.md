@@ -71,7 +71,36 @@
 - **Entry update**: no `PATCH /:id/entries/:entryId` to replace content; must delete and re-add
 - **Search explain**: no way to inspect per-arm scores (vector vs BM25) for a query — useful for tuning RRF weights
 - **Rate limiting on search**: search endpoint has no per-workspace throttle; a runaway agent could overload pgvector
+- **Web crawler source**: no way to ingest from a URL or sitemap — users must copy-paste content manually
+- **Scheduled re-sync**: no mechanism to re-embed a source on a cron (content can go stale)
+- **Metadata filtering**: search has no `filter` parameter to scope retrieval by source, date, or custom tags
+
+## RAG Phase 4 Roadmap
+
+> Deferred until after alpha launch. Implement in order of highest retrieval quality gain.
+
+### 1. Web crawler source
+Allow `POST /:id/entries` to accept a `sourceUrl` field. The worker fetches the URL, extracts main content (Mozilla Readability or Trafilatura), splits and embeds it. Optionally follow internal links up to a configurable depth. Enables entire docs sites to be ingested without manual copy-paste.
+
+### 2. Scheduled re-sync
+Add a `source` JSONB column to `knowledge_entries` tracking `{ type: 'url', url, fetchedAt }`. A new BullMQ `rag:resync` queue re-fetches stale sources on a per-KB cron (configurable in `KnowledgeBaseSettings`). Hashes new content — if unchanged, skips re-embedding to save tokens.
+
+### 3. Metadata filtering on search
+Add an optional `filter` field to `SearchEntriesDto`:
+```ts
+filter?: { sourceId?: string; after?: string; metadata?: Record<string, string> }
+```
+Apply as a `WHERE` clause in both the vector and BM25 arms before RRF merge. Enables queries like "find chunks from this document only" or "only content added in the last 30 days".
+
+### 4. Bulk ingestion endpoint
+`POST /:id/entries/bulk` accepting `{ entries: Array<{ content, metadata? }> }` up to 100 items. Batches dedup checks and BullMQ enqueues in a single transaction. Reduces API calls from N → 1 for large ingestion jobs.
+
+### 5. RAGAS eval harness
+Add `POST /:id/eval` accepting a set of `{ query, expectedAnswer }` pairs. Runs retrieval, feeds chunks to an LLM for answer synthesis, then scores Faithfulness + Answer Relevance via the RAGAS framework. Gives a quantitative RAG quality score per KB — useful for tuning `chunkSize`, RRF weights, and `rerankTopK`.
+
+### 6. Parent-child chunking (stretch)
+Index fine-grained child chunks (400 chars) for high-precision retrieval, but return their parent chunk (1800 chars) as context to the LLM. Reduces context noise while maintaining recall. Requires a `parentId` relation on `knowledge_entries`.
 
 ## Status
 
-Stable. Phase 4 (Voyage AI variable-dimension embeddings, parent-child chunking, RAGAS eval harness) is planned but not scheduled.
+Stable — Phases 1–3 shipped (HNSW index, async ingestion, hybrid RRF search, Cohere reranking). Focusing on alpha launch stability before implementing Phase 4 features above.

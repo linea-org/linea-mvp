@@ -1,6 +1,6 @@
 {
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "prevId": "ff39049c-8c1e-4a40-a34c-10939cd3f6a3",
+  "id": "dd52f29a-acd3-41ff-a3d6-258d7a1bcd40",
+  "prevId": "86288517-ed51-4ce5-908c-b92221292eaa",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -596,6 +596,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'community'"
+        },
         "workflow_id": {
           "name": "workflow_id",
           "type": "uuid",
@@ -641,6 +648,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "prerequisites": {
+          "name": "prerequisites",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "published_by": {
           "name": "published_by",
@@ -2203,7 +2216,14 @@
           "name": "secret_token",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "''"
+        },
+        "secret_encrypted": {
+          "name": "secret_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

@@ -8,6 +8,7 @@ import { usePod } from '@/contexts/space-context';
 import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import {
   Dialog,
@@ -30,7 +31,16 @@ import {
   Search01Icon,
   ArrowUp01Icon,
   ArrowRight01Icon,
+  CheckmarkCircle01Icon,
+  Alert01Icon,
+  BookOpen01Icon,
 } from '@hugeicons/core-free-icons';
+
+interface Prerequisite {
+  type: string;
+  label: string;
+  description: string;
+}
 
 interface TemplateNode {
   id: string;
@@ -43,6 +53,7 @@ interface Template {
   name: string;
   description: string | null;
   category: string;
+  source: string;
   featured: boolean;
   downloads: number;
   views: number;
@@ -50,33 +61,61 @@ interface Template {
   thumbnailUrl: string | null;
   workflowId: string | null;
   publishedBy: string | null;
+  prerequisites?: Prerequisite[] | null;
   definition?: { nodes: TemplateNode[]; edges: unknown[] } | null;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Productivity: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  Productivity:  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   Communication: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  Data: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  DevOps: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  Automation: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-  Marketing: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
+  Data:          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  DevOps:        'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  Automation:    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  Marketing:     'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
+  AI:            'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  Content:       'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+  Research:      'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  Sales:         'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  Safety:        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  Analytics:     'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+};
+
+const PREREQ_ICONS: Record<string, string> = {
+  rag:       '🗄️',
+  slack:     '💬',
+  github:    '🐙',
+  gmail:     '📧',
+  notion:    '📝',
+  model_key: '🔑',
+  webhook:   '🔗',
 };
 
 const NODE_TYPE_LABELS: Record<string, string> = {
-  start: 'Start',
-  end: 'End',
-  agent: 'AI Agent',
-  http: 'HTTP Request',
-  extract: 'Extract',
-  transform: 'Transform',
-  code: 'Code',
-  loop: 'Loop',
-  condition: 'Condition',
-  memory: 'Memory',
-  retriever: 'Retriever',
-  mcp: 'MCP Tool',
-  slack: 'Slack',
-  github: 'GitHub',
+  start:           'Start',
+  end:             'End',
+  agent:           'AI Agent',
+  http:            'HTTP Request',
+  extract:         'Extract',
+  transform:       'Transform',
+  code:            'Code',
+  loop:            'Loop',
+  filter:          'Filter',
+  merge:           'Merge',
+  parallel:        'Parallel',
+  wait:            'Wait',
+  variables:       'Variables',
+  datetime:        'DateTime',
+  memory:          'Memory',
+  retriever:       'Retriever',
+  guardrails:      'Guardrails',
+  evaluator:       'Evaluator',
+  'if-else':       'If / Else',
+  router:          'Router',
+  mcp:             'MCP Tool',
+  slack:           'Slack',
+  github:          'GitHub',
+  gmail:           'Gmail',
+  notion:          'Notion',
   'approval-gate': 'Approval Gate',
 };
 
@@ -91,6 +130,7 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'internal' | 'community'>('internal');
 
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -98,6 +138,7 @@ export default function TemplatesPage() {
   const [useDialogOpen, setUseDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [targetPodId, setTargetPodId] = useState<string>('');
+  const [workflowName, setWorkflowName] = useState('');
   const [cloning, setCloning] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -138,6 +179,7 @@ export default function TemplatesPage() {
   function openUseDialog(tpl: Template) {
     setSelectedTemplate(tpl);
     setTargetPodId(activePod?.id ?? pods[0]?.id ?? '');
+    setWorkflowName(tpl.name);
     setUseDialogOpen(true);
   }
 
@@ -150,7 +192,7 @@ export default function TemplatesPage() {
       const api = createApiClient(token);
       const wf = await api.post<{ id: string }>(
         `/workspaces/${activeWorkspace.id}/pods/${targetPodId}/workflows/from-template/${selectedTemplate.id}`,
-        {},
+        { name: workflowName.trim() || selectedTemplate.name },
       );
       setUseDialogOpen(false);
       setPreviewTemplate(null);
@@ -167,7 +209,6 @@ export default function TemplatesPage() {
     const api = createApiClient(token);
     const isUpvoted = upvotedIds.has(tpl.id);
 
-    // Optimistic update
     setUpvotedIds((prev) => {
       const next = new Set(prev);
       if (isUpvoted) next.delete(tpl.id); else next.add(tpl.id);
@@ -184,7 +225,6 @@ export default function TemplatesPage() {
         `/templates/${tpl.id}/upvote`,
         {},
       );
-      // Sync with server truth
       setUpvotedIds((prev) => {
         const next = new Set(prev);
         if (result.upvoted) next.add(tpl.id); else next.delete(tpl.id);
@@ -194,7 +234,6 @@ export default function TemplatesPage() {
         prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: result.upvotes } : t)),
       );
     } catch {
-      // Revert on failure
       setUpvotedIds((prev) => {
         const next = new Set(prev);
         if (isUpvoted) next.add(tpl.id); else next.delete(tpl.id);
@@ -208,13 +247,18 @@ export default function TemplatesPage() {
     }
   }
 
-  const filtered = allTemplates.filter((t) => {
+  // Split by source
+  const internalAll = allTemplates.filter((t) => t.source === 'internal');
+  const communityAll = allTemplates.filter((t) => t.source !== 'internal');
+  const sourcePool = activeTab === 'internal' ? internalAll : communityAll;
+
+  const filtered = sourcePool.filter((t) => {
     if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (activeCategory && t.category !== activeCategory) return false;
     return true;
   });
 
-  const categories = Array.from(new Set(allTemplates.map((t) => t.category))).sort();
+  const categories = Array.from(new Set(sourcePool.map((t) => t.category))).sort();
   const featured = filtered.filter((t) => t.featured);
   const rest = filtered.filter((t) => !t.featured);
 
@@ -223,6 +267,26 @@ export default function TemplatesPage() {
       <div>
         <h1 className="text-lg font-semibold">Template gallery</h1>
         <p className="text-sm text-muted-foreground">Start with a pre-built workflow and customise it.</p>
+      </div>
+
+      {/* Tab: Internal / Community */}
+      <div className="flex items-center gap-1 border-b">
+        {(['internal', 'community'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => { setActiveTab(tab); setActiveCategory(null); }}
+            className={`px-3 pb-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {tab === 'internal' ? 'Built-in' : 'Community'}
+            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {tab === 'internal' ? internalAll.length : communityAll.length}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Filters */}
@@ -272,12 +336,14 @@ export default function TemplatesPage() {
             />
           </div>
           <h2 className="text-base font-semibold">
-            {search ? 'No templates match your search' : 'No templates yet'}
+            {search ? 'No templates match your search' : activeTab === 'community' ? 'No community templates yet' : 'No built-in templates'}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground max-w-xs">
             {search
-              ? 'Try a different keyword or clear the search to browse all templates.'
-              : 'Templates will appear here once they are published to the gallery.'}
+              ? 'Try a different keyword or clear the search.'
+              : activeTab === 'community'
+              ? 'Publish your own workflows to the gallery to share them with your team.'
+              : 'Built-in templates will appear here.'}
           </p>
           {search && (
             <Button variant="outline" size="sm" className="mt-4" onClick={() => setSearch('')}>
@@ -293,6 +359,7 @@ export default function TemplatesPage() {
               <TemplateGrid
                 templates={featured}
                 upvotedIds={upvotedIds}
+                isInternal={activeTab === 'internal'}
                 onPreview={openPreview}
                 onUse={openUseDialog}
                 onToggleUpvote={toggleUpvote}
@@ -307,6 +374,7 @@ export default function TemplatesPage() {
               <TemplateGrid
                 templates={rest}
                 upvotedIds={upvotedIds}
+                isInternal={activeTab === 'internal'}
                 onPreview={openPreview}
                 onUse={openUseDialog}
                 onToggleUpvote={toggleUpvote}
@@ -316,7 +384,7 @@ export default function TemplatesPage() {
         </>
       )}
 
-      {/* Preview modal */}
+      {/* ── Preview modal ─────────────────────────────────────────────────── */}
       <Dialog open={!!previewTemplate} onOpenChange={(o) => { if (!o) setPreviewTemplate(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -335,7 +403,27 @@ export default function TemplatesPage() {
             </div>
           </DialogHeader>
 
-          <div className="py-2">
+          <div className="space-y-4 py-2">
+            {/* Prerequisites */}
+            {previewTemplate?.prerequisites && previewTemplate.prerequisites.length > 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/10 p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  <HugeiconsIcon icon={Alert01Icon} className="size-3.5" />
+                  Setup required before use
+                </p>
+                {previewTemplate.prerequisites.map((p, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs">
+                    <span className="mt-0.5 shrink-0 text-sm">{PREREQ_ICONS[p.type] ?? '⚙️'}</span>
+                    <div>
+                      <span className="font-medium text-foreground">{p.label}</span>
+                      <span className="text-muted-foreground"> — {p.description}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Node list */}
             {previewLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 rounded-md" />)}
@@ -343,25 +431,27 @@ export default function TemplatesPage() {
             ) : previewTemplate?.definition?.nodes?.length ? (
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                  Nodes ({previewTemplate.definition.nodes.length})
+                  Nodes ({previewTemplate.definition.nodes.filter(n => n.type !== 'start' && n.type !== 'end').length})
                 </p>
-                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                  {previewTemplate.definition.nodes.map((node, i) => {
-                    const label = node.data.label || NODE_TYPE_LABELS[node.type] || node.type;
-                    const typeLabel = NODE_TYPE_LABELS[node.type] ?? node.type;
-                    return (
-                      <div
-                        key={node.id}
-                        className="flex items-center gap-2.5 rounded-md border bg-muted/30 px-3 py-2 text-sm"
-                      >
-                        <span className="text-[10px] tabular-nums text-muted-foreground w-4 shrink-0">{i + 1}</span>
-                        <span className="font-medium flex-1">{label}</span>
-                        {label !== typeLabel && (
-                          <span className="text-[10px] text-muted-foreground">{typeLabel}</span>
-                        )}
-                      </div>
-                    );
-                  })}
+                <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+                  {previewTemplate.definition.nodes
+                    .filter(n => n.type !== 'start' && n.type !== 'end')
+                    .map((node, i) => {
+                      const label = node.data.label || NODE_TYPE_LABELS[node.type] || node.type;
+                      const typeLabel = NODE_TYPE_LABELS[node.type] ?? node.type;
+                      return (
+                        <div
+                          key={node.id}
+                          className="flex items-center gap-2.5 rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                        >
+                          <span className="text-[10px] tabular-nums text-muted-foreground w-4 shrink-0">{i + 1}</span>
+                          <span className="font-medium flex-1">{label}</span>
+                          {label !== typeLabel && (
+                            <span className="text-[10px] text-muted-foreground">{typeLabel}</span>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             ) : (
@@ -371,21 +461,22 @@ export default function TemplatesPage() {
 
           <DialogFooter className="gap-2">
             <div className="flex-1 flex items-center gap-3 self-center">
-              {previewTemplate && (
+              {previewTemplate && previewTemplate.source !== 'internal' && (
                 <>
                   <span className="text-[11px] text-muted-foreground">
                     {previewTemplate.downloads > 0 ? `${previewTemplate.downloads.toLocaleString()} uses` : 'New'}
                   </span>
-                  {previewTemplate.views > 0 && (
-                    <span className="text-[11px] text-muted-foreground">
-                      {previewTemplate.views.toLocaleString()} views
-                    </span>
-                  )}
                   <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                     <HugeiconsIcon icon={ArrowUp01Icon} className="size-3" />
                     {previewTemplate.upvotes}
                   </span>
                 </>
+              )}
+              {previewTemplate?.source === 'internal' && (
+                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <HugeiconsIcon icon={BookOpen01Icon} className="size-3" />
+                  Built-in
+                </span>
               )}
             </div>
             <Button variant="outline" onClick={() => setPreviewTemplate(null)}>Close</Button>
@@ -404,42 +495,82 @@ export default function TemplatesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Use template dialog */}
+      {/* ── Use template dialog ───────────────────────────────────────────── */}
       <Dialog open={useDialogOpen} onOpenChange={setUseDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Use template</DialogTitle>
+            <DialogTitle>Use "{selectedTemplate?.name}"</DialogTitle>
             <DialogDescription>
-              Select a pod to clone <strong>{selectedTemplate?.name}</strong> into.
+              Name your workflow and pick which pod to add it to.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2">
-            {pods.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No pods found. Create a pod first from the Pods page.
-              </p>
-            ) : (
-              <Select value={targetPodId} onValueChange={setTargetPodId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select pod" />
-                </SelectTrigger>
-                <SelectContent>
-                  {pods.map((pod) => (
-                    <SelectItem key={pod.id} value={pod.id}>
-                      {pod.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+          <div className="space-y-4 py-2">
+            {/* Prerequisites checklist */}
+            {selectedTemplate?.prerequisites && selectedTemplate.prerequisites.length > 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/10 p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  <Alert01Icon />
+                  Before you start — confirm these are set up
+                </p>
+                {selectedTemplate.prerequisites.map((p, i) => (
+                  <label key={i} className="flex items-start gap-2 cursor-pointer group">
+                    <HugeiconsIcon
+                      icon={CheckmarkCircle01Icon}
+                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/40 group-hover:text-amber-500 transition-colors"
+                    />
+                    <span className="text-xs">
+                      <span className="font-medium">{p.label}</span>
+                      <span className="text-muted-foreground"> — {p.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             )}
+
+            {/* Workflow name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="wf-name">Workflow name</Label>
+              <Input
+                id="wf-name"
+                value={workflowName}
+                onChange={(e) => setWorkflowName(e.target.value)}
+                placeholder={selectedTemplate?.name ?? 'My workflow'}
+                autoFocus
+              />
+            </div>
+
+            {/* Pod selector */}
+            <div className="space-y-1.5">
+              <Label>Pod</Label>
+              {pods.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No pods found. Create a pod first from the Pods page.
+                </p>
+              ) : (
+                <Select value={targetPodId} onValueChange={setTargetPodId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select pod" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pods.map((pod) => (
+                      <SelectItem key={pod.id} value={pod.id}>
+                        {pod.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setUseDialogOpen(false)}>Cancel</Button>
             <Button
-              disabled={!targetPodId || cloning || pods.length === 0}
+              disabled={!targetPodId || !workflowName.trim() || cloning || pods.length === 0}
               onClick={() => void handleUseTemplate()}
             >
-              {cloning ? 'Cloning…' : 'Use template'}
+              {cloning ? 'Creating…' : 'Create workflow'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -451,12 +582,14 @@ export default function TemplatesPage() {
 function TemplateGrid({
   templates,
   upvotedIds,
+  isInternal,
   onPreview,
   onUse,
   onToggleUpvote,
 }: {
   templates: Template[];
   upvotedIds: Set<string>;
+  isInternal: boolean;
   onPreview: (t: Template) => void;
   onUse: (t: Template) => void;
   onToggleUpvote: (t: Template, e: React.MouseEvent) => void;
@@ -468,6 +601,7 @@ function TemplateGrid({
           key={tpl.id}
           template={tpl}
           isUpvoted={upvotedIds.has(tpl.id)}
+          isInternal={isInternal}
           onPreview={onPreview}
           onUse={onUse}
           onToggleUpvote={onToggleUpvote}
@@ -480,18 +614,20 @@ function TemplateGrid({
 function TemplateCard({
   template,
   isUpvoted,
+  isInternal,
   onPreview,
   onUse,
   onToggleUpvote,
 }: {
   template: Template;
   isUpvoted: boolean;
+  isInternal: boolean;
   onPreview: (t: Template) => void;
   onUse: (t: Template) => void;
   onToggleUpvote: (t: Template, e: React.MouseEvent) => void;
 }) {
-  const colorClass =
-    CATEGORY_COLORS[template.category] ?? 'bg-gray-100 text-gray-700';
+  const colorClass = CATEGORY_COLORS[template.category] ?? 'bg-gray-100 text-gray-700';
+  const hasPrereqs = template.prerequisites && template.prerequisites.length > 0;
 
   return (
     <div
@@ -502,7 +638,16 @@ function TemplateCard({
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onPreview(template)}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="font-medium text-sm leading-snug">{template.name}</p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="font-medium text-sm leading-snug truncate">{template.name}</p>
+          {hasPrereqs && (
+            <HugeiconsIcon
+              icon={Alert01Icon}
+              className="size-3 shrink-0 text-amber-500"
+              title="Requires setup"
+            />
+          )}
+        </div>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${colorClass}`}>
           {template.category}
         </span>
@@ -511,7 +656,10 @@ function TemplateCard({
         <p className="text-xs text-muted-foreground line-clamp-2">{template.description}</p>
       )}
       <div className="mt-auto flex items-center justify-between">
-        {template.publishedBy ? (
+        {/* Footer: internal shows nothing, community shows upvotes */}
+        {isInternal ? (
+          <span className="text-[11px] text-muted-foreground">Built-in</span>
+        ) : template.publishedBy ? (
           <button
             onClick={(e) => { e.stopPropagation(); onToggleUpvote(template, e); }}
             className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors ${

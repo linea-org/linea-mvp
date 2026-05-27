@@ -14,8 +14,9 @@ interface Workspace {
 interface WorkspaceContextValue {
   workspaces: Workspace[];
   activeWorkspace: Workspace | null;
-  setActiveWorkspace: (ws: Workspace) => void;
+  setActiveWorkspace: (ws: Workspace | null) => void;
   addWorkspace: (ws: Workspace) => void;
+  removeWorkspace: (id: string) => void;
   loading: boolean;
 }
 
@@ -24,6 +25,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   activeWorkspace: null,
   setActiveWorkspace: () => {},
   addWorkspace: () => {},
+  removeWorkspace: () => {},
   loading: true,
 });
 
@@ -55,9 +57,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     void load();
   }, [getToken]);
 
-  function setActiveWorkspace(ws: Workspace) {
+  function setActiveWorkspace(ws: Workspace | null) {
     setActiveWorkspaceState(ws);
-    localStorage.setItem('activeWorkspaceId', ws.id);
+    if (ws) {
+      localStorage.setItem('activeWorkspaceId', ws.id);
+    } else {
+      localStorage.removeItem('activeWorkspaceId');
+    }
   }
 
   function addWorkspace(ws: Workspace) {
@@ -65,8 +71,19 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     setActiveWorkspace(ws);
   }
 
+  function removeWorkspace(id: string) {
+    setWorkspaces((prev) => {
+      const next = prev.filter((w) => w.id !== id);
+      // If the deleted workspace was active, switch to first remaining or null
+      if (activeWorkspace?.id === id) {
+        setActiveWorkspace(next[0] ?? null);
+      }
+      return next;
+    });
+  }
+
   return (
-    <WorkspaceContext.Provider value={{ workspaces, activeWorkspace, loading, setActiveWorkspace, addWorkspace }}>
+    <WorkspaceContext.Provider value={{ workspaces, activeWorkspace, loading, setActiveWorkspace, addWorkspace, removeWorkspace }}>
       {children}
     </WorkspaceContext.Provider>
   );
