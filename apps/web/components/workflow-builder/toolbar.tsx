@@ -5,10 +5,10 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import type { IconSvgElement } from '@hugeicons/react';
 import {
   ArrowLeft01Icon, FloppyDiskIcon, PlayIcon, Loading01Icon, SparklesIcon,
-  WebhookIcon, ClockIcon, CloudUploadIcon, CheckmarkCircle01Icon,
+  ClockIcon, CloudUploadIcon, CheckmarkCircle01Icon,
   Download04Icon, Upload04Icon, GitBranchIcon, Share01Icon,
   UndoIcon, RedoIcon, AlignSelectionIcon, AlarmClockIcon, BubbleChatIcon,
-  KeyboardIcon, Cancel01Icon, TestTube01Icon, Message01Icon,
+  KeyboardIcon, Cancel01Icon, TestTube01Icon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
@@ -35,7 +35,6 @@ interface ToolbarProps {
   shareOpen: boolean;
   commentsOpen: boolean;
   evalsOpen: boolean;
-  chatPreviewOpen: boolean;
   isDeployed: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -46,6 +45,7 @@ interface ToolbarProps {
   workflowId?: string;
   onSave: () => void;
   onRun: () => void;
+  onStop?: () => void;
   onDeployPanel: () => void;
   onBack: () => void;
   onNameChange: (name: string) => void;
@@ -55,7 +55,6 @@ interface ToolbarProps {
   onShare: () => void;
   onComments: () => void;
   onEvals: () => void;
-  onChatPreview: () => void;
   onExport: () => void;
   onImport: () => void;
   onUndo: () => void;
@@ -250,7 +249,8 @@ const STATUS_COLOR: Record<string, string> = {
   completed: 'text-green-500',
   failed:    'text-destructive',
   cancelled: 'text-muted-foreground',
-  suspended: 'text-yellow-500',
+  stopped:   'text-muted-foreground',
+  suspended: 'text-amber-500',
 };
 
 /* ------------------------------------------------------------------ */
@@ -258,11 +258,11 @@ const STATUS_COLOR: Record<string, string> = {
 /* ------------------------------------------------------------------ */
 export function Toolbar({
   workflowName, isSaving, isRunning, isGenerating, runStatus, validationState,
-  deployPanelOpen, historyOpen, versionsOpen, shareOpen, commentsOpen, evalsOpen, chatPreviewOpen,
+  deployPanelOpen, historyOpen, versionsOpen, shareOpen, commentsOpen, evalsOpen,
   isDeployed, canUndo, canRedo, autoSave,
   token, workspaceId, podId, workflowId,
-  onSave, onRun, onDeployPanel, onBack, onNameChange, onGenerate,
-  onHistory, onVersions, onShare, onComments, onEvals, onChatPreview,
+  onSave, onRun, onStop, onDeployPanel, onBack, onNameChange, onGenerate,
+  onHistory, onVersions, onShare, onComments, onEvals,
   onExport, onImport, onUndo, onRedo, onAutoLayout, onAutoSaveToggle,
 }: ToolbarProps) {
   const [editingName, setEditingName] = useState(false);
@@ -334,8 +334,10 @@ export function Toolbar({
 
         <div className="flex items-center gap-2">
           {runStatus && (
-            <span className={`flex items-center gap-1.5 text-xs font-medium ${STATUS_COLOR[runStatus.status] ?? 'text-muted-foreground'}`}>
+            <span className={`flex items-center gap-1.5 text-xs font-medium capitalize ${STATUS_COLOR[runStatus.status] ?? 'text-muted-foreground'}`}>
               {runStatus.status === 'running' && <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin" />}
+              {runStatus.status === 'failed' && <span className="size-1.5 rounded-full bg-destructive" />}
+              {runStatus.status === 'suspended' && <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />}
               {runStatus.status}
             </span>
           )}
@@ -405,13 +407,6 @@ export function Toolbar({
             description="Define and run evals against this workflow"
             onClick={onEvals}
             active={evalsOpen}
-          />
-          <TBtn
-            icon={Message01Icon}
-            label="Chat Preview"
-            description="Test your workflow in a conversational interface"
-            onClick={onChatPreview}
-            active={chatPreviewOpen}
           />
           <TBtn
             icon={Upload04Icon}
@@ -491,17 +486,34 @@ export function Toolbar({
             </TooltipContent>
           </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="sm" onClick={onRun} disabled={isRunning || isGenerating}>
-                <HugeiconsIcon icon={isRunning ? Loading01Icon : PlayIcon} className={isRunning ? 'animate-spin' : ''} />
-                Run
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
-              Run workflow <Kbd>Ctrl+Enter</Kbd>
-            </TooltipContent>
-          </Tooltip>
+          {runStatus?.status === 'running' ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
+                  onClick={onStop}
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} className="size-3.5" />
+                  Stop
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>Abort execution</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" onClick={onRun} disabled={isRunning || isGenerating}>
+                  <HugeiconsIcon icon={PlayIcon} className="size-3.5" />
+                  Run
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
+                Run workflow <Kbd>Ctrl+Enter</Kbd>
+              </TooltipContent>
+            </Tooltip>
+          )}
 
           <Separator orientation="vertical" className="h-4" />
 

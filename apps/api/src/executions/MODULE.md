@@ -52,6 +52,9 @@ Also exposes a node test endpoint:
 
 ## Changelog
 
+### 2026-05-28 — SSE wire format clarification
+- **NestJS serialises the full `MessageEvent` object as the SSE `data:` field**, not just `MessageEvent.data`. Wire format: `data: {"data":{...event...},"id":"streamId"}`. Clients must unwrap `parsed.data` to get the actual event payload. Fixed in the workflow builder's chat preview panel and canvas SSE client.
+
 ### 2026-05-25 — RAG retriever hybrid search
 - `NodeExecutorService` retriever node now runs parallel vector + BM25 arms with RRF merge
 - Supports `expandContext` (neighbor chunks) and `enableRerank` (Cohere) from KB settings

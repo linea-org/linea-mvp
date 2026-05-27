@@ -33,6 +33,7 @@ apps/docs/.source/
 
 # Debug
 npm-debug.log*
+apps/web/chat-debug.log
 
 # Misc
 .DS_Store
