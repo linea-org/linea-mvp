@@ -154,6 +154,7 @@ export class LangGraphService {
         sourceType === 'if / else' ||
         sourceType === 'router' ||
         sourceType === 'approval' ||
+        sourceType === 'approval-gate' ||
         sourceType === 'evaluator' ||
         sourceType === 'guardrails'
       ) {
@@ -163,7 +164,7 @@ export class LangGraphService {
             pathMap[edge.sourceHandle || edge.label || 'default'] = edge.target;
           builder.addConditionalEdges(
             sourceId as any,
-            this.createConditionalRouter(sourceId, definition, sourceType),
+            this.createConditionalRouter(sourceId, definition, sourceType, pathMap),
             pathMap as any,
           );
           conditionals.add(sourceId);
@@ -389,21 +390,38 @@ export class LangGraphService {
     nodeId: string,
     definition: WorkflowDefinition,
     nodeType: string,
+    pathMap: Record<string, string>,
   ) {
     return (state: typeof WorkflowStateAnnotation.State) => {
       const node = definition.nodes.find((n) => n.id === nodeId);
-      if (!node) return 'default';
+      if (!node) return this.resolvePathKey(pathMap, 'default');
 
       const result = state.nodeResults?.[nodeId];
-      if (!result) return 'else';
+      if (!result) return this.resolvePathKey(pathMap, 'else');
 
       const output = result.output;
-      if (nodeType === 'router') return output?.branch ?? 'none';
-      if (nodeType === 'approval') return output?.__approvalDecision ?? 'approved';
-      if (nodeType === 'evaluator') return output?.passed === true ? 'passed' : 'failed';
-      if (nodeType === 'guardrails') return output?.passed === true ? 'pass' : 'block';
-      return output?.branch ?? 'else';
+      let candidate: string;
+      if (nodeType === 'router') candidate = output?.branch ?? 'none';
+      else if (nodeType === 'approval' || nodeType === 'approval-gate') candidate = output?.__approvalDecision ?? 'approved';
+      else if (nodeType === 'evaluator') candidate = output?.passed === true ? 'passed' : 'failed';
+      else if (nodeType === 'guardrails') candidate = output?.passed === true ? 'pass' : 'block';
+      else candidate = output?.branch ?? 'else';
+
+      return this.resolvePathKey(pathMap, candidate);
     };
+  }
+
+  /**
+   * Return `preferred` if it exists in pathMap, otherwise fall back to 'default',
+   * then to the first available key. This prevents LangGraph from throwing
+   * "Branch condition returned unknown or null destination" when a branching node
+   * (guardrails, approval, evaluator) has a single un-labelled outgoing edge.
+   */
+  private resolvePathKey(pathMap: Record<string, string>, preferred: string): string {
+    if (preferred in pathMap) return preferred;
+    if ('default' in pathMap) return 'default';
+    const keys = Object.keys(pathMap);
+    return keys[0] ?? 'default';
   }
 
   async *stream(

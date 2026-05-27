@@ -64,6 +64,7 @@ const DEFAULT_TIMEOUTS: Record<string, number> = {
   start: 2_000,
   end: 1_000,
   approval: 0,
+  'approval-gate': 0,
   mcp: 30_000,
   memory: 5_000,
   guardrails: 5_000,
@@ -307,12 +308,13 @@ export class NodeExecutorService {
         return { result: r, isAgentOutput: false };
       }
 
+      case 'approval-gate': // backward-compat alias for old cloned workflows
       case 'approval': {
         // Suspend execution; when resumed the interrupt() call returns the resume value
         const resumeValue = interrupt({
           type: 'approval',
           nodeId,
-          message: nodeData.approvalMessage || nodeData.instructions || 'Approval required',
+          message: nodeData.approvalMessage || nodeData.message || nodeData.instructions || 'Approval required',
         });
         // resumeValue is { approved: boolean } from ApproveExecutionDto
         const approved = typeof resumeValue === 'object' && resumeValue !== null
