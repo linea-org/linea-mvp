@@ -32,7 +32,11 @@ export function executeLoopNode(
     if (resolved === undefined) {
       const trimmed = nodeData.arrayPath.trim();
       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
-        try { resolved = JSON.parse(trimmed); } catch { /* keep undefined */ }
+        try {
+          resolved = JSON.parse(trimmed);
+        } catch {
+          /* keep undefined */
+        }
       }
     }
 

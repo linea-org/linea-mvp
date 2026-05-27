@@ -28,12 +28,19 @@ export function executeLogicNode(
   }
 
   if (nodeType === 'router') {
-    const routes: Array<{ id?: string; label: string; condition: string; isDefault?: boolean }> =
-      nodeData.routes || [];
+    const routes: Array<{
+      id?: string;
+      label: string;
+      condition: string;
+      isDefault?: boolean;
+    }> = nodeData.routes || [];
     let defaultRoute: (typeof routes)[number] | undefined;
 
     for (const [i, route] of routes.entries()) {
-      if (route.isDefault) { defaultRoute = route; continue; }
+      if (route.isDefault) {
+        defaultRoute = route;
+        continue;
+      }
       if (evalCondition(route.condition, state)) {
         return { branch: route.id ?? `route-${i}`, label: route.label };
       }
@@ -42,7 +49,10 @@ export function executeLogicNode(
     // Fall back to the designated default route if one exists
     if (defaultRoute) {
       const i = routes.indexOf(defaultRoute);
-      return { branch: defaultRoute.id ?? `route-${i}`, label: defaultRoute.label };
+      return {
+        branch: defaultRoute.id ?? `route-${i}`,
+        label: defaultRoute.label,
+      };
     }
 
     throw new Error(

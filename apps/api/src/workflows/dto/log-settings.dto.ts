@@ -6,7 +6,10 @@ export class UpdateLogSettingsDto {
   @IsEnum(['none', 'errors', 'info', 'debug'])
   logLevel: 'none' | 'errors' | 'info' | 'debug';
 
-  @ApiPropertyOptional({ description: 'Days to keep logs (null = forever)', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Days to keep logs (null = forever)',
+    nullable: true,
+  })
   @IsOptional()
   @IsInt()
   @Min(1)

@@ -3,7 +3,13 @@ import { and, eq, or, sql } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
-import { memories, apiKeys, mcpServers, secrets, oauthConnections } from '@linea/db';
+import {
+  memories,
+  apiKeys,
+  mcpServers,
+  secrets,
+  oauthConnections,
+} from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 
 const PROVIDER_TO_SECRET: Record<string, string> = {
@@ -48,10 +54,21 @@ export class MemoryService {
       const scopeFilters = [
         and(eq(memories.scope, 'thread'), eq(memories.threadId, threadId)),
         ...(workflowId
-          ? [and(eq(memories.scope, 'workflow'), eq(memories.workflowId, workflowId))]
+          ? [
+              and(
+                eq(memories.scope, 'workflow'),
+                eq(memories.workflowId, workflowId),
+              ),
+            ]
           : []),
         ...(workflowId && sessionKey
-          ? [and(eq(memories.scope, 'session'), eq(memories.workflowId, workflowId), eq(memories.sessionKey, sessionKey))]
+          ? [
+              and(
+                eq(memories.scope, 'session'),
+                eq(memories.workflowId, workflowId),
+                eq(memories.sessionKey, sessionKey),
+              ),
+            ]
           : []),
       ];
 
@@ -61,15 +78,25 @@ export class MemoryService {
         .where(and(eq(memories.workspaceId, workspaceId), or(...scopeFilters)));
 
       // Merge: workflow → session → thread (later takes precedence)
-      const priority = { workflow: 0, session: 1, thread: 2, user: 1 } as Record<string, number>;
-      const sorted = [...rows].sort((a, b) => (priority[a.scope] ?? 0) - (priority[b.scope] ?? 0));
+      const priority = {
+        workflow: 0,
+        session: 1,
+        thread: 2,
+        user: 1,
+      } as Record<string, number>;
+      const sorted = [...rows].sort(
+        (a, b) => (priority[a.scope] ?? 0) - (priority[b.scope] ?? 0),
+      );
 
       let merged: Record<string, any> = {};
       for (const row of sorted) {
         try {
           const parsed = JSON.parse(row.content);
-          if (parsed && typeof parsed === 'object') merged = { ...merged, ...parsed };
-        } catch { /* skip */ }
+          if (parsed && typeof parsed === 'object')
+            merged = { ...merged, ...parsed };
+        } catch {
+          /* skip */
+        }
       }
       return merged;
     } catch (err) {
@@ -89,7 +116,13 @@ export class MemoryService {
     try {
       await this.db
         .delete(memories)
-        .where(and(eq(memories.workspaceId, workspaceId), eq(memories.scope, 'thread'), eq(memories.threadId, threadId)));
+        .where(
+          and(
+            eq(memories.workspaceId, workspaceId),
+            eq(memories.scope, 'thread'),
+            eq(memories.threadId, threadId),
+          ),
+        );
 
       await this.db.insert(memories).values({
         workspaceId,
@@ -124,8 +157,10 @@ export class MemoryService {
         eq(memories.scope, scope),
         sql`${memories.metadata}->>'memoryKey' = ${key}`,
       ];
-      if (scope === 'thread') matchConditions.push(eq(memories.threadId, threadId));
-      if (scope === 'workflow' && workflowId) matchConditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'thread')
+        matchConditions.push(eq(memories.threadId, threadId));
+      if (scope === 'workflow' && workflowId)
+        matchConditions.push(eq(memories.workflowId, workflowId));
       if (scope === 'session' && workflowId && sessionKey) {
         matchConditions.push(eq(memories.workflowId, workflowId));
         matchConditions.push(eq(memories.sessionKey, sessionKey));
@@ -165,8 +200,10 @@ export class MemoryService {
         eq(memories.scope, scope),
         sql`${memories.metadata}->>'memoryKey' = ${key}`,
       ];
-      if (scope === 'thread') matchConditions.push(eq(memories.threadId, threadId));
-      if (scope === 'workflow' && workflowId) matchConditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'thread')
+        matchConditions.push(eq(memories.threadId, threadId));
+      if (scope === 'workflow' && workflowId)
+        matchConditions.push(eq(memories.workflowId, workflowId));
       if (scope === 'session' && workflowId && sessionKey) {
         matchConditions.push(eq(memories.workflowId, workflowId));
         matchConditions.push(eq(memories.sessionKey, sessionKey));
@@ -194,7 +231,8 @@ export class MemoryService {
         eq(memories.scope, scope),
       ];
       if (scope === 'thread') conditions.push(eq(memories.threadId, threadId));
-      if (scope === 'workflow' && workflowId) conditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'workflow' && workflowId)
+        conditions.push(eq(memories.workflowId, workflowId));
       if (scope === 'session' && workflowId && sessionKey) {
         conditions.push(eq(memories.workflowId, workflowId));
         conditions.push(eq(memories.sessionKey, sessionKey));
@@ -222,8 +260,10 @@ export class MemoryService {
         eq(memories.workspaceId, workspaceId),
         eq(memories.scope, scope),
       ];
-      if (scope === 'thread') matchConditions.push(eq(memories.threadId, threadId));
-      if (scope === 'workflow' && workflowId) matchConditions.push(eq(memories.workflowId, workflowId));
+      if (scope === 'thread')
+        matchConditions.push(eq(memories.threadId, threadId));
+      if (scope === 'workflow' && workflowId)
+        matchConditions.push(eq(memories.workflowId, workflowId));
       if (scope === 'session' && workflowId && sessionKey) {
         matchConditions.push(eq(memories.workflowId, workflowId));
         matchConditions.push(eq(memories.sessionKey, sessionKey));
@@ -238,12 +278,21 @@ export class MemoryService {
 
       const q = query.toLowerCase();
       const filtered = q
-        ? rows.filter((r) => r.content.toLowerCase().includes(q) || JSON.stringify(r.metadata).toLowerCase().includes(q))
+        ? rows.filter(
+            (r) =>
+              r.content.toLowerCase().includes(q) ||
+              JSON.stringify(r.metadata).toLowerCase().includes(q),
+          )
         : rows;
 
       return filtered.slice(0, topK).map((r) => ({
-        key: String((r.metadata as Record<string, unknown> | null)?.memoryKey ?? r.content.split(':')[0] ?? ''),
-        value: (r.metadata as Record<string, unknown> | null)?.value ?? r.content,
+        key: String(
+          (r.metadata as Record<string, unknown> | null)?.memoryKey ??
+            r.content.split(':')[0] ??
+            '',
+        ),
+        value:
+          (r.metadata as Record<string, unknown> | null)?.value ?? r.content,
       }));
     } catch (err) {
       this.logger.warn(`readEntries failed: ${err}`);
@@ -389,7 +438,11 @@ export class MemoryService {
     modelId = 'text-embedding-3-small',
   ): Promise<number[] | null> {
     // Google and Ollama models output 768/1024d which doesn't match the 1536d pgvector column
-    if (modelId === 'text-embedding-004' || modelId === 'nomic-embed-text' || modelId === 'mxbai-embed-large') {
+    if (
+      modelId === 'text-embedding-004' ||
+      modelId === 'nomic-embed-text' ||
+      modelId === 'mxbai-embed-large'
+    ) {
       this.logger.warn(
         `Embedding model ${modelId} outputs dimensions incompatible with 1536d pgvector column — falling back to text search`,
       );
@@ -397,7 +450,9 @@ export class MemoryService {
     }
     if (!apiKey) return null;
     try {
-      const supportsReduction = modelId === 'text-embedding-3-small' || modelId === 'text-embedding-3-large';
+      const supportsReduction =
+        modelId === 'text-embedding-3-small' ||
+        modelId === 'text-embedding-3-large';
       const body: Record<string, unknown> = { model: modelId, input: text };
       if (supportsReduction) body['dimensions'] = 1536;
 
@@ -436,7 +491,11 @@ export class MemoryService {
   ): Promise<void> {
     try {
       const content = `${key}: ${value}`;
-      const embedding = await this.generateEmbedding(content, openaiKey, 'text-embedding-3-small');
+      const embedding = await this.generateEmbedding(
+        content,
+        openaiKey,
+        'text-embedding-3-small',
+      );
 
       // Upsert: delete existing entry for this key+scope, then insert fresh
       await this.db
@@ -473,7 +532,11 @@ export class MemoryService {
     openaiKey: string | undefined,
   ): Promise<Array<{ key: string; value: unknown; score: number }>> {
     try {
-      const queryEmbedding = await this.generateEmbedding(query, openaiKey, 'text-embedding-3-small');
+      const queryEmbedding = await this.generateEmbedding(
+        query,
+        openaiKey,
+        'text-embedding-3-small',
+      );
 
       if (queryEmbedding) {
         // Vector similarity search using pgvector <=> (cosine distance)

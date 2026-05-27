@@ -29,7 +29,9 @@ import type { User } from '@linea/db';
 @ApiTags('Comments')
 @ApiBearerAuth()
 @UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
-@Controller('workspaces/:workspaceId/pods/:podId/workflows/:workflowId/comments')
+@Controller(
+  'workspaces/:workspaceId/pods/:podId/workflows/:workflowId/comments',
+)
 export class CommentsController {
   constructor(private readonly service: CommentsService) {}
 

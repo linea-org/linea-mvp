@@ -5,7 +5,6 @@ import { createModelClient } from '../models/client.factory';
 import type {
   ChatMessage,
   CompletionOptions,
-  CompletionResult,
   ModelClient,
   NormalizedToolCall,
   ModelApiKeys,
@@ -38,7 +37,12 @@ function buildFallbackChain(
   primary: ModelDefinition,
   apiKeys: ModelApiKeys,
 ): Array<{ def: ModelDefinition; client: ModelClient }> {
-  const tierRank: Record<string, number> = { fast: 0, balanced: 1, powerful: 2, reasoning: 3 };
+  const tierRank: Record<string, number> = {
+    fast: 0,
+    balanced: 1,
+    powerful: 2,
+    reasoning: 3,
+  };
   const primaryRank = tierRank[primary.tier] ?? 1;
 
   const candidates = Object.values(MODEL_REGISTRY)
@@ -61,7 +65,10 @@ function buildFallbackChain(
   const result: Array<{ def: ModelDefinition; client: ModelClient }> = [];
   for (const def of candidates) {
     try {
-      result.push({ def, client: createModelClient(def.id, def.provider, apiKeys) });
+      result.push({
+        def,
+        client: createModelClient(def.id, def.provider, apiKeys),
+      });
     } catch {
       // Skip — shouldn't happen since we checked hasApiKey, but guard anyway
     }
@@ -93,7 +100,7 @@ async function callWithFallback(
   } catch (err) {
     if (!isProviderError(err)) throw err;
     while (fallbackIdx.v < fallbacks.length) {
-      const next = fallbacks[fallbackIdx.v++]!;
+      const next = fallbacks[fallbackIdx.v++];
       activeRef.def = next.def;
       activeRef.client = next.client;
       try {
@@ -150,24 +157,36 @@ export async function executeAgentNode(
   const modelDef = getModelOrDefault(nodeData.model, 'balanced');
 
   // Build fallback chain: workspace-configured chain takes priority; auto-detect from API keys as fallback.
-  const fallbacks: Array<{ def: ModelDefinition; client: ModelClient }> = workspaceFallbackChain?.length
-    ? workspaceFallbackChain
-        .filter((id) => id !== modelDef.id)
-        .flatMap((modelId) => {
-          const def = MODEL_REGISTRY[modelId];
-          if (!def || !hasApiKey(def.provider, apiKeys)) return [];
-          try { return [{ def, client: createModelClient(def.id, def.provider, apiKeys) }]; }
-          catch { return []; }
-        })
-    : buildFallbackChain(modelDef, apiKeys);
+  const fallbacks: Array<{ def: ModelDefinition; client: ModelClient }> =
+    workspaceFallbackChain?.length
+      ? workspaceFallbackChain
+          .filter((id) => id !== modelDef.id)
+          .flatMap((modelId) => {
+            const def = MODEL_REGISTRY[modelId];
+            if (!def || !hasApiKey(def.provider, apiKeys)) return [];
+            try {
+              return [
+                {
+                  def,
+                  client: createModelClient(def.id, def.provider, apiKeys),
+                },
+              ];
+            } catch {
+              return [];
+            }
+          })
+      : buildFallbackChain(modelDef, apiKeys);
 
   const fallbackIdx = { v: 0 };
   const activeRef: { def: ModelDefinition; client: ModelClient } = (() => {
     try {
-      return { def: modelDef, client: createModelClient(modelDef.id, modelDef.provider, apiKeys) };
+      return {
+        def: modelDef,
+        client: createModelClient(modelDef.id, modelDef.provider, apiKeys),
+      };
     } catch (err) {
       if (!isProviderError(err) || fallbacks.length === 0) throw err;
-      const first = fallbacks[fallbackIdx.v++]!;
+      const first = fallbacks[fallbackIdx.v++];
       return { def: first.def, client: first.client };
     }
   })();
@@ -293,7 +312,12 @@ export async function executeAgentNode(
     const temperature = tools.length > 0 ? 0 : (nodeData.temperature ?? 0.7);
 
     const response = await callWithFallback(
-      await compactWithSummary(messages, activeRef.def.contextWindow, budgetPct, apiKeys),
+      await compactWithSummary(
+        messages,
+        activeRef.def.contextWindow,
+        budgetPct,
+        apiKeys,
+      ),
       {
         maxTokens: nodeData.maxTokens ?? 4096,
         temperature,
@@ -317,7 +341,17 @@ export async function executeAgentNode(
       if (structuredSchema) {
         const parsed = tryParseJson(response.text);
         if (parsed !== null) {
-          return buildResult(parsed as unknown as string, totalUsage, messages, variableUpdates, memoryUpdates, toolCallLog, activeRef.def, false, null);
+          return buildResult(
+            parsed as unknown as string,
+            totalUsage,
+            messages,
+            variableUpdates,
+            memoryUpdates,
+            toolCallLog,
+            activeRef.def,
+            false,
+            null,
+          );
         }
         // Parsing failed — push a correction turn and continue if steps remain
         if (step < maxSteps - 1) {
@@ -340,7 +374,6 @@ export async function executeAgentNode(
         toolCallLog,
         activeRef.def,
         false,
-        structuredSchema,
       );
     }
 
@@ -358,7 +391,10 @@ export async function executeAgentNode(
       (tc) =>
         tc.name === 'ask_human' ||
         (tools.find((t) => t.name === tc.name) != null &&
-          toolNeedsApproval(tools.find((t) => t.name === tc.name)!, tc.arguments)),
+          toolNeedsApproval(
+            tools.find((t) => t.name === tc.name)!,
+            tc.arguments,
+          )),
     );
 
     if (hasInterruptingTool) {
@@ -377,8 +413,17 @@ export async function executeAgentNode(
             step,
           });
           const answer = humanResponse?.answer ?? '(no response)';
-          messages.push({ role: 'tool', content: answer, toolCallId: toolCall.id });
-          toolCallLog.push({ step, name: 'ask_human', args: toolCall.arguments, result: answer });
+          messages.push({
+            role: 'tool',
+            content: answer,
+            toolCallId: toolCall.id,
+          });
+          toolCallLog.push({
+            step,
+            name: 'ask_human',
+            args: toolCall.arguments,
+            result: answer,
+          });
           continue;
         }
 
@@ -393,17 +438,42 @@ export async function executeAgentNode(
           });
           if (!decision?.approved) {
             const denial = decision?.reason ?? 'User denied this action';
-            messages.push({ role: 'tool', content: `Action denied: ${denial}`, toolCallId: toolCall.id });
-            toolCallLog.push({ step, name: toolCall.name, args: toolCall.arguments, result: { denied: true, reason: denial } });
+            messages.push({
+              role: 'tool',
+              content: `Action denied: ${denial}`,
+              toolCallId: toolCall.id,
+            });
+            toolCallLog.push({
+              step,
+              name: toolCall.name,
+              args: toolCall.arguments,
+              result: { denied: true, reason: denial },
+            });
             continue;
           }
         }
 
         const toolResult = await executeTool(toolCall, state, toolCtx);
-        captureToolSideEffects(toolResult, variableUpdates, memoryUpdates, state);
-        const resultContent = toolResult.error ? `Error: ${toolResult.error}` : JSON.stringify(toolResult.output ?? null);
-        messages.push({ role: 'tool', content: resultContent, toolCallId: toolCall.id });
-        toolCallLog.push({ step, name: toolCall.name, args: toolCall.arguments, result: toolResult.output });
+        captureToolSideEffects(
+          toolResult,
+          variableUpdates,
+          memoryUpdates,
+          state,
+        );
+        const resultContent = toolResult.error
+          ? `Error: ${toolResult.error}`
+          : JSON.stringify(toolResult.output ?? null);
+        messages.push({
+          role: 'tool',
+          content: resultContent,
+          toolCallId: toolCall.id,
+        });
+        toolCallLog.push({
+          step,
+          name: toolCall.name,
+          args: toolCall.arguments,
+          result: toolResult.output,
+        });
       }
     } else {
       // ── Parallel path: all tools in this batch are safe to run concurrently ─
@@ -411,12 +481,28 @@ export async function executeAgentNode(
         response.toolCalls.map((tc) => executeTool(tc, state, toolCtx)),
       );
       for (let i = 0; i < response.toolCalls.length; i++) {
-        const toolCall = response.toolCalls[i]!;
-        const toolResult = settled[i]!;
-        captureToolSideEffects(toolResult, variableUpdates, memoryUpdates, state);
-        const resultContent = toolResult.error ? `Error: ${toolResult.error}` : JSON.stringify(toolResult.output ?? null);
-        messages.push({ role: 'tool', content: resultContent, toolCallId: toolCall.id });
-        toolCallLog.push({ step, name: toolCall.name, args: toolCall.arguments, result: toolResult.output });
+        const toolCall = response.toolCalls[i];
+        const toolResult = settled[i];
+        captureToolSideEffects(
+          toolResult,
+          variableUpdates,
+          memoryUpdates,
+          state,
+        );
+        const resultContent = toolResult.error
+          ? `Error: ${toolResult.error}`
+          : JSON.stringify(toolResult.output ?? null);
+        messages.push({
+          role: 'tool',
+          content: resultContent,
+          toolCallId: toolCall.id,
+        });
+        toolCallLog.push({
+          step,
+          name: toolCall.name,
+          args: toolCall.arguments,
+          result: toolResult.output,
+        });
       }
     }
   }
@@ -434,7 +520,6 @@ export async function executeAgentNode(
     toolCallLog,
     activeRef.def,
     true,
-    structuredSchema,
   );
 }
 
@@ -461,7 +546,6 @@ function buildResult(
   toolCallLog: AgentResult['__toolCallLog'],
   modelDef: { id: string; provider: string },
   hitMaxSteps = false,
-  structuredSchema: unknown = null,
 ): AgentResult {
   const chatUpdates = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -494,7 +578,10 @@ function estimateTokens(messages: ChatMessage[]): number {
   return Math.ceil(JSON.stringify(messages).length / 4);
 }
 
-function hasApiKeyForProvider(provider: ModelProvider, apiKeys: ModelApiKeys): boolean {
+function hasApiKeyForProvider(
+  provider: ModelProvider,
+  apiKeys: ModelApiKeys,
+): boolean {
   if (provider === 'ollama') return true;
   const map: Record<string, keyof ModelApiKeys> = {
     anthropic: 'ANTHROPIC_API_KEY',
@@ -523,7 +610,10 @@ async function compactWithSummary(
   // Truncate oversized tool results in place first
   const capped = messages.map((m) =>
     m.role === 'tool' && m.content.length > TOOL_RESULT_MAX_CHARS
-      ? { ...m, content: m.content.slice(0, TOOL_RESULT_MAX_CHARS) + '\n[truncated]' }
+      ? {
+          ...m,
+          content: m.content.slice(0, TOOL_RESULT_MAX_CHARS) + '\n[truncated]',
+        }
       : m,
   );
 
@@ -534,7 +624,8 @@ async function compactWithSummary(
 
   if (rest.length <= SUMMARY_KEEP_LAST) {
     // Too few messages to split — fall back to drop-oldest
-    while (rest.length > 1 && estimateTokens([...system, ...rest]) > budget) rest.shift();
+    while (rest.length > 1 && estimateTokens([...system, ...rest]) > budget)
+      rest.shift();
     return [...system, ...rest];
   }
 
@@ -544,11 +635,19 @@ async function compactWithSummary(
   try {
     // Pick cheapest model we have a key for
     const cheapestDef = Object.values(MODEL_REGISTRY)
-      .filter((m) => !m.capabilities.embedding && hasApiKeyForProvider(m.provider, apiKeys))
+      .filter(
+        (m) =>
+          !m.capabilities.embedding &&
+          hasApiKeyForProvider(m.provider, apiKeys),
+      )
       .sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input)[0];
 
     if (cheapestDef) {
-      const summaryClient = createModelClient(cheapestDef.id, cheapestDef.provider, apiKeys);
+      const summaryClient = createModelClient(
+        cheapestDef.id,
+        cheapestDef.provider,
+        apiKeys,
+      );
       const convText = toSummarize
         .map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 600)}`)
         .join('\n');
@@ -565,7 +664,10 @@ async function compactWithSummary(
 
       const compacted = [
         ...system,
-        { role: 'user' as const, content: `[Earlier context summary]\n${summaryResp.text}` },
+        {
+          role: 'user' as const,
+          content: `[Earlier context summary]\n${summaryResp.text}`,
+        },
         ...toKeep,
       ];
       if (estimateTokens(compacted) <= budget) return compacted;
@@ -594,7 +696,8 @@ function captureToolSideEffects(
     const out = toolResult.output as any;
     if ('__writeVariable' in out) {
       const { name, value } = out.__writeVariable;
-      if (name && !FORBIDDEN_KEYS.has(String(name))) variableUpdates[name] = value;
+      if (name && !FORBIDDEN_KEYS.has(String(name)))
+        variableUpdates[name] = value;
     }
     if ('__memoryWrite' in out) {
       const { key, value } = out.__memoryWrite;

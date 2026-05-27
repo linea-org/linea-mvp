@@ -13,7 +13,10 @@ async function drainWithTimeout<T>(
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(
-      () => reject(new Error(`Execution timed out after ${timeoutMs / 60_000} minutes`)),
+      () =>
+        reject(
+          new Error(`Execution timed out after ${timeoutMs / 60_000} minutes`),
+        ),
       timeoutMs,
     );
   });
@@ -23,7 +26,7 @@ async function drainWithTimeout<T>(
       [Symbol.asyncIterator]: () => {
         const iter = gen[Symbol.asyncIterator]();
         return {
-          next: () => Promise.race([iter.next(), timeoutPromise]) as Promise<IteratorResult<T>>,
+          next: () => Promise.race([iter.next(), timeoutPromise]),
           return: iter.return?.bind(iter),
         };
       },
@@ -297,7 +300,14 @@ export class ExecutionProcessor extends WorkerHost {
           msg,
           workspaceId,
         );
-        void this.sendFailureEmail(userId, wf?.name ?? workflowId, executionId, workspaceId, wf?.podId ?? '', msg);
+        void this.sendFailureEmail(
+          userId,
+          wf?.name ?? workflowId,
+          executionId,
+          workspaceId,
+          wf?.podId ?? '',
+          msg,
+        );
       }
 
       throw error;
@@ -318,7 +328,14 @@ export class ExecutionProcessor extends WorkerHost {
       .where(eq(users.id, userId))
       .limit(1);
     if (!user?.email) return;
-    void this.mail.sendExecutionFailed({ toEmail: user.email, workflowName, executionId, workspaceId, podId, error });
+    void this.mail.sendExecutionFailed({
+      toEmail: user.email,
+      workflowName,
+      executionId,
+      workspaceId,
+      podId,
+      error,
+    });
   }
 
   private async sendApprovalEmail(
@@ -335,7 +352,15 @@ export class ExecutionProcessor extends WorkerHost {
       .where(eq(users.id, userId))
       .limit(1);
     if (!user?.email) return;
-    const message = (interrupt as any)?.message ?? 'Your approval is required to continue.';
-    void this.mail.sendApprovalRequired({ toEmail: user.email, workflowName, executionId, workspaceId, podId, message });
+    const message =
+      (interrupt as any)?.message ?? 'Your approval is required to continue.';
+    void this.mail.sendApprovalRequired({
+      toEmail: user.email,
+      workflowName,
+      executionId,
+      workspaceId,
+      podId,
+      message,
+    });
   }
 }

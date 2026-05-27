@@ -1,4 +1,9 @@
-import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
@@ -7,23 +12,40 @@ import { workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 
 /* ─── Plan catalogue ────────────────────────────────────────────────── */
-export const PLANS: Record<string, {
-  name: string; priceUsd: number;
-  executions: string; workflows: string; members: string; features: string[];
-  polarPriceId?: string; // set via env at runtime
-}> = {
+export const PLANS: Record<
+  string,
+  {
+    name: string;
+    priceUsd: number;
+    executions: string;
+    workflows: string;
+    members: string;
+    features: string[];
+    polarPriceId?: string; // set via env at runtime
+  }
+> = {
   free: {
-    name: 'Free', priceUsd: 0,
-    executions: '500 / month', workflows: '5', members: '3', features: [],
+    name: 'Free',
+    priceUsd: 0,
+    executions: '500 / month',
+    workflows: '5',
+    members: '3',
+    features: [],
   },
   pro: {
-    name: 'Pro', priceUsd: 29,
-    executions: '10,000 / month', workflows: 'Unlimited', members: '10',
+    name: 'Pro',
+    priceUsd: 29,
+    executions: '10,000 / month',
+    workflows: 'Unlimited',
+    members: '10',
     features: ['Priority support', 'Advanced analytics', 'Custom domains'],
   },
   team: {
-    name: 'Team', priceUsd: 99,
-    executions: '100,000 / month', workflows: 'Unlimited', members: '25',
+    name: 'Team',
+    priceUsd: 99,
+    executions: '100,000 / month',
+    workflows: 'Unlimited',
+    members: '25',
     features: ['SSO', 'Audit logs', 'Dedicated support', 'SLA guarantee'],
   },
 };
@@ -54,9 +76,10 @@ export class BillingService {
   ) {
     this.accessToken = config.get<string>('POLAR_ACCESS_TOKEN') ?? '';
     this.webhookSecret = config.get<string>('POLAR_WEBHOOK_SECRET') ?? '';
-    this.frontendUrl = config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    this.frontendUrl =
+      config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
     this.priceIds = {
-      pro:  config.get<string>('POLAR_PRICE_ID_PRO')  ?? '',
+      pro: config.get<string>('POLAR_PRICE_ID_PRO') ?? '',
       team: config.get<string>('POLAR_PRICE_ID_TEAM') ?? '',
     };
   }
@@ -102,11 +125,16 @@ export class BillingService {
   async createCheckout(workspaceId: string, planKey: string) {
     const plan = PLANS[planKey];
     if (!plan) throw new BadRequestException(`Unknown plan: ${planKey}`);
-    if (plan.priceUsd === 0) throw new BadRequestException('Free plan does not require payment');
-    if (!this.accessToken) throw new BadRequestException('Polar.sh not configured');
+    if (plan.priceUsd === 0)
+      throw new BadRequestException('Free plan does not require payment');
+    if (!this.accessToken)
+      throw new BadRequestException('Polar.sh not configured');
 
     const priceId = this.priceIds[planKey];
-    if (!priceId) throw new BadRequestException(`No Polar price ID configured for plan: ${planKey}`);
+    if (!priceId)
+      throw new BadRequestException(
+        `No Polar price ID configured for plan: ${planKey}`,
+      );
 
     const checkout = await this.polarPost<{ url: string }>('/v1/checkouts', {
       product_price_id: priceId,
@@ -131,7 +159,10 @@ export class BillingService {
     const expBuf = Buffer.from(expected, 'hex');
     const sigBuf = Buffer.from(signature ?? '', 'hex');
 
-    if (expBuf.length !== sigBuf.length || !crypto.timingSafeEqual(expBuf, sigBuf)) {
+    if (
+      expBuf.length !== sigBuf.length ||
+      !crypto.timingSafeEqual(expBuf, sigBuf)
+    ) {
       throw new BadRequestException('Invalid webhook signature');
     }
 
@@ -140,11 +171,14 @@ export class BillingService {
 
     const meta = payload.data?.metadata;
     const workspaceId = meta?.workspaceId;
-    const plan = meta?.plan as string | undefined;
+    const plan = meta?.plan;
 
     if (
-      (payload.type === 'subscription.created' || payload.type === 'order.created') &&
-      workspaceId && plan && PLANS[plan]
+      (payload.type === 'subscription.created' ||
+        payload.type === 'order.created') &&
+      workspaceId &&
+      plan &&
+      PLANS[plan]
     ) {
       await this.db
         .update(workspaces)
@@ -158,7 +192,9 @@ export class BillingService {
         .update(workspaces)
         .set({ plan: 'free', updatedAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
-      this.logger.log(`Workspace ${workspaceId} downgraded to free (subscription revoked)`);
+      this.logger.log(
+        `Workspace ${workspaceId} downgraded to free (subscription revoked)`,
+      );
     }
 
     return { received: true };

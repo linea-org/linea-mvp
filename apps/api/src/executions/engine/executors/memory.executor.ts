@@ -7,7 +7,7 @@ export interface MemoryNodeData {
   memoryKey?: string;
   memoryValue?: string; // write mode — supports {{variable}} (already substituted by caller)
   memoryQuery?: string; // retrieve mode — keyword filter
-  memoryTopK?: number;  // retrieve mode — max results
+  memoryTopK?: number; // retrieve mode — max results
   memorySessionKey?: string; // session scope — resolved caller identifier
 }
 
@@ -24,7 +24,7 @@ export async function executeMemoryNode(
   ctx?: MemoryExecutorContext,
 ): Promise<unknown> {
   const mode = nodeData.memoryMode ?? 'retrieve';
-  const scope = (nodeData.memoryScope ?? 'thread') as 'thread' | 'workflow' | 'session';
+  const scope = nodeData.memoryScope ?? 'thread';
 
   // Legacy fallback: no context → operate on in-memory state only
   if (!ctx) {
@@ -38,7 +38,11 @@ export async function executeMemoryNode(
         text: typeof value === 'string' ? value : JSON.stringify(value),
       }));
       const matches = query
-        ? entries.filter((e) => e.key.toLowerCase().includes(query) || e.text.toLowerCase().includes(query))
+        ? entries.filter(
+            (e) =>
+              e.key.toLowerCase().includes(query) ||
+              e.text.toLowerCase().includes(query),
+          )
         : entries;
       const top = matches.slice(0, topK);
       return { memories: top, count: top.length, query };
@@ -55,7 +59,8 @@ export async function executeMemoryNode(
   // Session scope without an isolation key leaks memory across all callers
   if (scope === 'session' && !sessionKey) {
     return {
-      error: 'Session scope requires a non-empty memorySessionKey. Without it all callers share the same memory namespace.',
+      error:
+        'Session scope requires a non-empty memorySessionKey. Without it all callers share the same memory namespace.',
     };
   }
 
@@ -66,27 +71,58 @@ export async function executeMemoryNode(
       let value: unknown = nodeData.memoryValue;
       try {
         value = JSON.parse(nodeData.memoryValue ?? '');
-      } catch { /* keep as string */ }
-      await service.writeEntry(workspaceId, workflowId, threadId, scope, sessionKey, key, value);
+      } catch {
+        /* keep as string */
+      }
+      await service.writeEntry(
+        workspaceId,
+        workflowId,
+        threadId,
+        scope,
+        sessionKey,
+        key,
+        value,
+      );
       return { written: true, key, scope };
     }
 
     case 'delete': {
       const key = (nodeData.memoryKey ?? '').trim();
       if (!key) return { error: 'memoryKey is required for delete mode' };
-      await service.deleteEntry(workspaceId, workflowId, threadId, scope, sessionKey, key);
+      await service.deleteEntry(
+        workspaceId,
+        workflowId,
+        threadId,
+        scope,
+        sessionKey,
+        key,
+      );
       return { deleted: true, key, scope };
     }
 
     case 'retrieve': {
       const query = nodeData.memoryQuery ?? '';
       const topK = nodeData.memoryTopK ?? 5;
-      const entries = await service.readEntries(workspaceId, workflowId, threadId, scope, sessionKey, query, topK);
+      const entries = await service.readEntries(
+        workspaceId,
+        workflowId,
+        threadId,
+        scope,
+        sessionKey,
+        query,
+        topK,
+      );
       return { memories: entries, count: entries.length, query };
     }
 
     case 'clear': {
-      await service.clearEntries(workspaceId, workflowId, threadId, scope, sessionKey);
+      await service.clearEntries(
+        workspaceId,
+        workflowId,
+        threadId,
+        scope,
+        sessionKey,
+      );
       return { cleared: true, scope };
     }
 

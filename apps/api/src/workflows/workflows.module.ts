@@ -17,8 +17,21 @@ import { ExecutionsModule } from '../executions/executions.module';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [WorkspacesModule, PodsModule, UsersModule, SchedulesModule, ExecutionsModule, AuditModule],
-  providers: [WorkflowsService, GenerateWorkflowService, EvalsService, TemplatesSeeder, GlobalAdminGuard],
+  imports: [
+    WorkspacesModule,
+    PodsModule,
+    UsersModule,
+    SchedulesModule,
+    ExecutionsModule,
+    AuditModule,
+  ],
+  providers: [
+    WorkflowsService,
+    GenerateWorkflowService,
+    EvalsService,
+    TemplatesSeeder,
+    GlobalAdminGuard,
+  ],
   controllers: [WorkflowsController, TemplatesController, EvalsController],
   exports: [WorkflowsService],
 })

@@ -29,7 +29,10 @@ import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import { ListWorkflowsDto } from './dto/list-workflows.dto';
 import { ListTemplatesDto } from './dto/list-templates.dto';
 import { GenerateWorkflowDto } from './dto/generate-workflow.dto';
-import { PublishTemplateDto, UpdateTemplateDto } from './dto/publish-template.dto';
+import {
+  PublishTemplateDto,
+  UpdateTemplateDto,
+} from './dto/publish-template.dto';
 import { UpdateLogSettingsDto } from './dto/log-settings.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
@@ -265,7 +268,9 @@ export class WorkflowsController {
 
   @Patch(':id/template')
   @RequireRole('editor')
-  @ApiOperation({ summary: 'Mark or unmark a workflow as a pod template (editor+)' })
+  @ApiOperation({
+    summary: 'Mark or unmark a workflow as a pod template (editor+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
@@ -301,7 +306,9 @@ export class WorkflowsController {
 
   @Get('me/favorites')
   @RequireRole('viewer')
-  @ApiOperation({ summary: 'Get IDs of workflows favorited by current user in this pod' })
+  @ApiOperation({
+    summary: 'Get IDs of workflows favorited by current user in this pod',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   getWorkflowFavoriteIds(
@@ -313,7 +320,9 @@ export class WorkflowsController {
 
   @Post(':id/publish')
   @RequireRole('admin')
-  @ApiOperation({ summary: 'Publish a workflow to the public gallery (workspace admin+)' })
+  @ApiOperation({
+    summary: 'Publish a workflow to the public gallery (workspace admin+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
@@ -328,7 +337,9 @@ export class WorkflowsController {
 
   @Patch(':id/log-settings')
   @RequireRole('admin')
-  @ApiOperation({ summary: 'Update log collection settings for a workflow (admin+)' })
+  @ApiOperation({
+    summary: 'Update log collection settings for a workflow (admin+)',
+  })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'podId' })
   @ApiParam({ name: 'id' })
@@ -352,7 +363,12 @@ export class WorkflowsController {
     @CurrentUser() user: User,
     @Body() body: { name?: string },
   ) {
-    return this.service.createFromTemplate(podId, user.id, templateId, body.name);
+    return this.service.createFromTemplate(
+      podId,
+      user.id,
+      templateId,
+      body.name,
+    );
   }
 
   @Post(':id/generate')
@@ -378,7 +394,12 @@ export class WorkflowsController {
     const abort = new AbortController();
     req.on('close', () => abort.abort());
 
-    const gen = this.generateService.generate(dto.prompt, abort.signal, dto.canvasContext, dto.history);
+    const gen = this.generateService.generate(
+      dto.prompt,
+      abort.signal,
+      dto.canvasContext,
+      dto.history,
+    );
     try {
       for await (const event of gen) {
         if (abort.signal.aborted) break;

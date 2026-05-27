@@ -6,7 +6,10 @@ export function executeTransformNode(
   state: WorkflowState,
 ): any {
   const expression: string =
-    nodeData.transformScript || nodeData.transformation || nodeData.expression || 'lastOutput';
+    nodeData.transformScript ||
+    nodeData.transformation ||
+    nodeData.expression ||
+    'lastOutput';
 
   const context = {
     input: state.variables?.lastOutput,

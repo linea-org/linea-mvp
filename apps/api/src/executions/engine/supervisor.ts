@@ -71,12 +71,13 @@ export class ExecutionSupervisor {
       ctx.error?.includes('context length') ||
       ctx.error?.includes('context_length_exceeded') ||
       ctx.error?.includes('maximum context') ||
-      ctx.error?.includes('tokens') && ctx.error?.includes('limit') ||
+      (ctx.error?.includes('tokens') && ctx.error?.includes('limit')) ||
       ctx.error?.includes('413')
     ) {
       return {
         action: 'abort',
-        reason: 'Input exceeds model context limit — reduce input size or use a model with a larger context window',
+        reason:
+          'Input exceeds model context limit — reduce input size or use a model with a larger context window',
       };
     }
 
@@ -91,7 +92,9 @@ export class ExecutionSupervisor {
     ) {
       return {
         action: 'abort',
-        reason: ctx.error ?? 'Invalid or missing URL — check the URL field in the node configuration',
+        reason:
+          ctx.error ??
+          'Invalid or missing URL — check the URL field in the node configuration',
       };
     }
 

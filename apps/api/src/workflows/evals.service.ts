@@ -112,17 +112,22 @@ function getByPath(obj: unknown, path: string): unknown {
 /* ------------------------------------------------------------------ */
 /*  Source extraction                                                   */
 /* ------------------------------------------------------------------ */
-function extractSource(terminal: TerminalRow, source: string | undefined): unknown {
+function extractSource(
+  terminal: TerminalRow,
+  source: string | undefined,
+): unknown {
   const s = source ?? 'output';
 
   if (s === 'output') {
     const out = terminal.output as { result?: unknown } | null;
-    return out?.result ?? (terminal.variables as Record<string, unknown>)?.lastOutput;
+    return out?.result ?? terminal.variables?.lastOutput;
   }
 
   if (s.startsWith('node:')) {
     const nodeId = s.slice(5);
-    return (terminal.nodeResults as Record<string, { output?: unknown }>)?.[nodeId]?.output;
+    return (terminal.nodeResults as Record<string, { output?: unknown }>)?.[
+      nodeId
+    ]?.output;
   }
 
   if (s === 'duration_ms') {
@@ -134,13 +139,24 @@ function extractSource(terminal: TerminalRow, source: string | undefined): unkno
     ).reduce((sum, nr) => sum + (nr.durationMs ?? 0), 0);
   }
 
-  const tokenUsage = terminal.tokenUsage as { input?: number; output?: number; total?: number } | null;
+  const tokenUsage = terminal.tokenUsage as {
+    input?: number;
+    output?: number;
+    total?: number;
+  } | null;
   if (s === 'total_tokens') return tokenUsage?.total ?? null;
   if (s === 'input_tokens') return tokenUsage?.input ?? null;
   if (s === 'output_tokens') return tokenUsage?.output ?? null;
 
-  type ToolEntry = { step: number; name: string; args: Record<string, unknown>; result: unknown };
-  const nodeResultsMap = (terminal.nodeResults as Record<string, { toolCallLog?: ToolEntry[] }>) ?? {};
+  type ToolEntry = {
+    step: number;
+    name: string;
+    args: Record<string, unknown>;
+    result: unknown;
+  };
+  const nodeResultsMap =
+    (terminal.nodeResults as Record<string, { toolCallLog?: ToolEntry[] }>) ??
+    {};
 
   if (s === 'tool_calls') {
     return Object.values(nodeResultsMap).flatMap((nr) => nr.toolCallLog ?? []);
@@ -156,7 +172,11 @@ function extractSource(terminal: TerminalRow, source: string | undefined): unkno
 /* ------------------------------------------------------------------ */
 /*  Deterministic evaluator                                             */
 /* ------------------------------------------------------------------ */
-function evaluateDeterministic(assertion: Assertion, extracted: unknown, source: string): AssertionResult {
+function evaluateDeterministic(
+  assertion: Assertion,
+  extracted: unknown,
+  source: string,
+): AssertionResult {
   const actual = getByPath(extracted, assertion.path);
   let passed = false;
 
@@ -165,10 +185,15 @@ function evaluateDeterministic(assertion: Assertion, extracted: unknown, source:
       passed = JSON.stringify(actual) === JSON.stringify(assertion.expected);
       break;
     case 'contains':
-      if (typeof actual === 'string' && typeof assertion.expected === 'string') {
+      if (
+        typeof actual === 'string' &&
+        typeof assertion.expected === 'string'
+      ) {
         passed = actual.includes(assertion.expected);
       } else if (Array.isArray(actual)) {
-        passed = actual.some((v) => JSON.stringify(v) === JSON.stringify(assertion.expected));
+        passed = actual.some(
+          (v) => JSON.stringify(v) === JSON.stringify(assertion.expected),
+        );
       }
       break;
     case 'exists':
@@ -178,23 +203,43 @@ function evaluateDeterministic(assertion: Assertion, extracted: unknown, source:
       passed = actual === undefined || actual === null;
       break;
     case 'gt':
-      passed = typeof actual === 'number' && typeof assertion.expected === 'number' && actual > assertion.expected;
+      passed =
+        typeof actual === 'number' &&
+        typeof assertion.expected === 'number' &&
+        actual > assertion.expected;
       break;
     case 'lt':
-      passed = typeof actual === 'number' && typeof assertion.expected === 'number' && actual < assertion.expected;
+      passed =
+        typeof actual === 'number' &&
+        typeof assertion.expected === 'number' &&
+        actual < assertion.expected;
       break;
   }
 
-  return { source, path: assertion.path, operator: assertion.operator, expected: assertion.expected, actual, passed };
+  return {
+    source,
+    path: assertion.path,
+    operator: assertion.operator,
+    expected: assertion.expected,
+    actual,
+    passed,
+  };
 }
 
 /* ------------------------------------------------------------------ */
 /*  Tool call evaluator                                                 */
 /* ------------------------------------------------------------------ */
-function evaluateToolCalls(assertion: Assertion, extracted: unknown, source: string): AssertionResult {
+function evaluateToolCalls(
+  assertion: Assertion,
+  extracted: unknown,
+  source: string,
+): AssertionResult {
   type ToolEntry = { name: string };
-  const log: ToolEntry[] = Array.isArray(extracted) ? (extracted as ToolEntry[]) : [];
-  const toolName = typeof assertion.expected === 'string' ? assertion.expected : '';
+  const log: ToolEntry[] = Array.isArray(extracted)
+    ? (extracted as ToolEntry[])
+    : [];
+  const toolName =
+    typeof assertion.expected === 'string' ? assertion.expected : '';
   const wasCalled = log.some((entry) => entry.name === toolName);
   const passed = assertion.operator === 'tool_called' ? wasCalled : !wasCalled;
 
@@ -240,8 +285,13 @@ A score >= ${threshold} means PASS.`;
 
     const text = msg.content.find((c) => c.type === 'text')?.text ?? '{}';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const parsed = jsonMatch ? (JSON.parse(jsonMatch[0]) as { score?: number; reasoning?: string }) : {};
-    const score = typeof parsed.score === 'number' ? Math.max(0, Math.min(1, parsed.score)) : 0;
+    const parsed = jsonMatch
+      ? (JSON.parse(jsonMatch[0]) as { score?: number; reasoning?: string })
+      : {};
+    const score =
+      typeof parsed.score === 'number'
+        ? Math.max(0, Math.min(1, parsed.score))
+        : 0;
 
     return {
       source,
@@ -304,8 +354,13 @@ A score >= ${threshold} means PASS.`;
 
     const text = msg.content.find((c) => c.type === 'text')?.text ?? '{}';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const parsed = jsonMatch ? (JSON.parse(jsonMatch[0]) as { score?: number; reasoning?: string }) : {};
-    const score = typeof parsed.score === 'number' ? Math.max(0, Math.min(1, parsed.score)) : 0;
+    const parsed = jsonMatch
+      ? (JSON.parse(jsonMatch[0]) as { score?: number; reasoning?: string })
+      : {};
+    const score =
+      typeof parsed.score === 'number'
+        ? Math.max(0, Math.min(1, parsed.score))
+        : 0;
 
     return {
       source,
@@ -372,9 +427,19 @@ export class EvalsService {
           );
           executionId = ex.id;
 
-          const terminal = await this.pollUntilDone(podId, executionId, 120_000, tc.scriptedResponses);
-          const assertionResults = await this.evaluateAll(tc.assertions, terminal);
-          const trialPassed = assertionResults.every((r) => r.passed) && terminal.status === 'completed';
+          const terminal = await this.pollUntilDone(
+            podId,
+            executionId,
+            120_000,
+            tc.scriptedResponses,
+          );
+          const assertionResults = await this.evaluateAll(
+            tc.assertions,
+            terminal,
+          );
+          const trialPassed =
+            assertionResults.every((r) => r.passed) &&
+            terminal.status === 'completed';
 
           trialResults.push({
             executionId,
@@ -396,7 +461,9 @@ export class EvalsService {
       const passCount = trialResults.filter((r) => r.passed).length;
       const passRate = passCount / k;
       const passed = passCount > 0;
-      const displayTrial = trialResults.find((r) => r.passed) ?? trialResults[trialResults.length - 1];
+      const displayTrial =
+        trialResults.find((r) => r.passed) ??
+        trialResults[trialResults.length - 1];
 
       results.push({
         caseId: tc.id,
@@ -424,11 +491,17 @@ export class EvalsService {
     return results;
   }
 
-  async getRunHistory(workflowId: string, podId: string, limit = 20): Promise<EvalRunSummary[]> {
+  async getRunHistory(
+    workflowId: string,
+    podId: string,
+    limit = 20,
+  ): Promise<EvalRunSummary[]> {
     const rows = await this.db
       .select()
       .from(evalRuns)
-      .where(and(eq(evalRuns.workflowId, workflowId), eq(evalRuns.podId, podId)))
+      .where(
+        and(eq(evalRuns.workflowId, workflowId), eq(evalRuns.podId, podId)),
+      )
       .orderBy(desc(evalRuns.createdAt))
       .limit(limit);
 
@@ -438,11 +511,14 @@ export class EvalsService {
       passCount: r.passCount,
       totalCount: r.totalCount,
       createdAt: r.createdAt.toISOString(),
-      results: r.results as unknown as TestCaseResult[],
+      results: r.results as TestCaseResult[],
     }));
   }
 
-  private async evaluateAll(assertions: Assertion[], terminal: TerminalRow): Promise<AssertionResult[]> {
+  private async evaluateAll(
+    assertions: Assertion[],
+    terminal: TerminalRow,
+  ): Promise<AssertionResult[]> {
     const results: AssertionResult[] = [];
     for (const a of assertions) {
       const source = a.source ?? 'output';
@@ -451,9 +527,13 @@ export class EvalsService {
       if (a.operator === 'tool_called' || a.operator === 'tool_not_called') {
         results.push(evaluateToolCalls(a, extracted, source));
       } else if (a.operator === 'semantic_match') {
-        results.push(await evaluateSemanticMatch(a, extracted, this.anthropic, source));
+        results.push(
+          await evaluateSemanticMatch(a, extracted, this.anthropic, source),
+        );
       } else if (a.operator === 'llm_judge') {
-        results.push(await evaluateWithLlmJudge(a, extracted, this.anthropic, source));
+        results.push(
+          await evaluateWithLlmJudge(a, extracted, this.anthropic, source),
+        );
       } else {
         results.push(evaluateDeterministic(a, extracted, source));
       }
@@ -493,9 +573,10 @@ export class EvalsService {
             scripted.type === 'approve'
               ? true
               : scripted.type === 'deny'
-              ? false
-              : undefined,
-          answer: scripted.type === 'answer' ? (scripted.value ?? '') : undefined,
+                ? false
+                : undefined,
+          answer:
+            scripted.type === 'answer' ? (scripted.value ?? '') : undefined,
           comment: scripted.value,
         });
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -505,6 +586,8 @@ export class EvalsService {
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    throw new Error(`Execution ${executionId} did not complete within ${timeoutMs / 1000}s`);
+    throw new Error(
+      `Execution ${executionId} did not complete within ${timeoutMs / 1000}s`,
+    );
   }
 }

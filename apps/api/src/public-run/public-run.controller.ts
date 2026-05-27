@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Patch, Param, Body, Headers, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  Headers,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiHeader } from '@nestjs/swagger';
 import { UseGuards } from '@nestjs/common';
 import { PublicRunService } from './public-run.service';
@@ -24,16 +32,26 @@ export class PublicRunController {
 
   @Post(':workflowId')
   @Public()
-  @ApiOperation({ summary: 'Trigger a workflow execution via public REST endpoint' })
+  @ApiOperation({
+    summary: 'Trigger a workflow execution via public REST endpoint',
+  })
   @ApiParam({ name: 'workflowId' })
-  @ApiHeader({ name: 'x-api-key', required: false, description: 'API key for api_key-visibility workflows' })
+  @ApiHeader({
+    name: 'x-api-key',
+    required: false,
+    description: 'API key for api_key-visibility workflows',
+  })
   trigger(
     @Param('workflowId') workflowId: string,
     @Body() body: Record<string, unknown>,
     @Headers('x-api-key') xApiKey?: string,
     @Headers('authorization') authorization?: string,
   ) {
-    const apiKey = xApiKey ?? (authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined);
+    const apiKey =
+      xApiKey ??
+      (authorization?.startsWith('Bearer ')
+        ? authorization.slice(7)
+        : undefined);
     return this.service.trigger(workflowId, body, apiKey);
   }
 
@@ -49,7 +67,11 @@ export class PublicRunController {
     @Headers('x-api-key') xApiKey?: string,
     @Headers('authorization') authorization?: string,
   ) {
-    const apiKey = xApiKey ?? (authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined);
+    const apiKey =
+      xApiKey ??
+      (authorization?.startsWith('Bearer ')
+        ? authorization.slice(7)
+        : undefined);
     return this.service.getExecutionStatus(workflowId, executionId, apiKey);
   }
 }
@@ -82,7 +104,8 @@ export class WorkflowApiController {
   setConfig(
     @Param('workflowId') workflowId: string,
     @Param('podId') podId: string,
-    @Body() body: { apiEnabled?: boolean; apiVisibility?: 'api_key' | 'public' },
+    @Body()
+    body: { apiEnabled?: boolean; apiVisibility?: 'api_key' | 'public' },
   ) {
     return this.service.setApiConfig(workflowId, podId, body);
   }

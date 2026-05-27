@@ -3,7 +3,12 @@ import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { and, eq, count, desc, sql, inArray } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
-import type { DrizzleDB, NewKnowledgeBase, NewKnowledgeEntry, KnowledgeBaseSettings } from '@linea/db';
+import type {
+  DrizzleDB,
+  NewKnowledgeBase,
+  NewKnowledgeEntry,
+  KnowledgeBaseSettings,
+} from '@linea/db';
 import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { EmbeddingService } from '../memory/embedding.service';
@@ -21,7 +26,8 @@ export class KnowledgeService {
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly embeddingService: EmbeddingService,
-    @InjectQueue(RAG_EMBED_QUEUE) private readonly embedQueue: Queue<RagEmbedJobData>,
+    @InjectQueue(RAG_EMBED_QUEUE)
+    private readonly embedQueue: Queue<RagEmbedJobData>,
   ) {}
 
   // ─── Knowledge Bases ────────────────────────────────────────────────────────
@@ -138,7 +144,11 @@ export class KnowledgeService {
    * 3. Start next chunk by reusing the last `overlap` chars (sliding window)
    * 4. If a single sentence exceeds maxChars, hard-split at word boundary
    */
-  private splitSentenceAware(text: string, maxChars = 1800, overlap = 360): string[] {
+  private splitSentenceAware(
+    text: string,
+    maxChars = 1800,
+    overlap = 360,
+  ): string[] {
     if (text.length <= maxChars) return [text];
 
     // Split at sentence boundaries: period/question/exclamation followed by whitespace+capital,
@@ -208,8 +218,9 @@ export class KnowledgeService {
     const kbSettings: KnowledgeBaseSettings = kb?.settings ?? {};
 
     // Settings cascade: KB → workspace → system default
-    const CHUNK_SIZE   = kbSettings.chunkSize   ?? wsSettings.ragChunkSize   ?? 1000;
-    const CHUNK_OVERLAP = kbSettings.chunkOverlap ?? wsSettings.ragChunkOverlap ?? 200;
+    const CHUNK_SIZE = kbSettings.chunkSize ?? wsSettings.ragChunkSize ?? 1000;
+    const CHUNK_OVERLAP =
+      kbSettings.chunkOverlap ?? wsSettings.ragChunkOverlap ?? 200;
 
     // ── Deduplication: skip if whole-document hash already exists in this KB ──
     const contentHash = createHash('sha256').update(dto.content).digest('hex');
@@ -225,22 +236,30 @@ export class KnowledgeService {
       .limit(1);
 
     if (existing) {
-      this.logger.debug(`Duplicate content detected for KB ${kbId}, skipping insert`);
+      this.logger.debug(
+        `Duplicate content detected for KB ${kbId}, skipping insert`,
+      );
       return existing;
     }
 
-    const embeddingModel = kbSettings.embeddingModel ?? 'text-embedding-3-small';
-    const chunks = this.splitSentenceAware(dto.content, CHUNK_SIZE, CHUNK_OVERLAP);
+    const embeddingModel =
+      kbSettings.embeddingModel ?? 'text-embedding-3-small';
+    const chunks = this.splitSentenceAware(
+      dto.content,
+      CHUNK_SIZE,
+      CHUNK_OVERLAP,
+    );
     const sourceId = chunks.length > 1 ? crypto.randomUUID() : null;
     const totalChunks = chunks.length > 1 ? chunks.length : null;
 
     const inserted: (typeof knowledgeEntries.$inferSelect)[] = [];
 
     for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]!;
-      const chunkHash = chunks.length > 1
-        ? createHash('sha256').update(chunk).digest('hex')
-        : contentHash;
+      const chunk = chunks[i];
+      const chunkHash =
+        chunks.length > 1
+          ? createHash('sha256').update(chunk).digest('hex')
+          : contentHash;
 
       // Insert with status='pending' — the BullMQ worker will embed and flip to 'indexed'
       const [entry] = await this.db
@@ -257,13 +276,13 @@ export class KnowledgeService {
         } satisfies Partial<NewKnowledgeEntry> as NewKnowledgeEntry)
         .returning();
 
-      inserted.push(entry!);
+      inserted.push(entry);
 
       // Enqueue embedding job — worker marks 'embedding' → 'indexed' | 'failed'
       await this.embedQueue.add(
         'embed',
         {
-          entryId: entry!.id,
+          entryId: entry.id,
           knowledgeBaseId: kbId,
           workspaceId,
           content: chunk,
@@ -284,7 +303,7 @@ export class KnowledgeService {
       .set({ updatedAt: new Date() })
       .where(eq(knowledgeBases.id, kbId));
 
-    return inserted[0]!;
+    return inserted[0];
   }
 
   // ─── Retrieval helpers ──────────────────────────────────────────────────────
@@ -298,7 +317,15 @@ export class KnowledgeService {
     queryEmbedding: number[],
     limit: number,
     distanceThreshold: number,
-  ): Promise<Array<{ id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null }>> {
+  ): Promise<
+    Array<{
+      id: string;
+      content: string;
+      metadata: Record<string, unknown>;
+      sourceId: string | null;
+      chunkIndex: number | null;
+    }>
+  > {
     try {
       const embLiteral = `[${queryEmbedding.join(',')}]`;
       const rows = await this.db.execute(sql`
@@ -311,7 +338,13 @@ export class KnowledgeService {
         ORDER BY embedding <=> ${embLiteral}::vector
         LIMIT ${limit}
       `);
-      return Array.from(rows) as Array<{ id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null }>;
+      return Array.from(rows) as Array<{
+        id: string;
+        content: string;
+        metadata: Record<string, unknown>;
+        sourceId: string | null;
+        chunkIndex: number | null;
+      }>;
     } catch (err) {
       this.logger.warn(`Vector search failed: ${err}`);
       return [];
@@ -326,7 +359,15 @@ export class KnowledgeService {
     kbId: string,
     query: string,
     limit: number,
-  ): Promise<Array<{ id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null }>> {
+  ): Promise<
+    Array<{
+      id: string;
+      content: string;
+      metadata: Record<string, unknown>;
+      sourceId: string | null;
+      chunkIndex: number | null;
+    }>
+  > {
     try {
       const rows = await this.db.execute(sql`
         SELECT id, content, metadata, source_id AS "sourceId", chunk_index AS "chunkIndex"
@@ -337,7 +378,13 @@ export class KnowledgeService {
         ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC
         LIMIT ${limit}
       `);
-      return Array.from(rows) as Array<{ id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null }>;
+      return Array.from(rows) as Array<{
+        id: string;
+        content: string;
+        metadata: Record<string, unknown>;
+        sourceId: string | null;
+        chunkIndex: number | null;
+      }>;
     } catch (err) {
       this.logger.warn(`FTS failed: ${err}`);
       return [];
@@ -350,7 +397,13 @@ export class KnowledgeService {
    * Benchmark: Parent-child chunking is the production gold standard for Q&A.
    */
   private async expandWithNeighbors(
-    hits: Array<{ id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null }>,
+    hits: Array<{
+      id: string;
+      content: string;
+      metadata: Record<string, unknown>;
+      sourceId: string | null;
+      chunkIndex: number | null;
+    }>,
   ): Promise<Array<{ content: string; metadata: Record<string, unknown> }>> {
     return Promise.all(
       hits.map(async (h) => {
@@ -359,12 +412,19 @@ export class KnowledgeService {
         }
         try {
           const neighbors = await this.db
-            .select({ content: knowledgeEntries.content, chunkIndex: knowledgeEntries.chunkIndex })
+            .select({
+              content: knowledgeEntries.content,
+              chunkIndex: knowledgeEntries.chunkIndex,
+            })
             .from(knowledgeEntries)
             .where(
               and(
                 eq(knowledgeEntries.sourceId, h.sourceId),
-                inArray(knowledgeEntries.chunkIndex, [h.chunkIndex - 1, h.chunkIndex, h.chunkIndex + 1]),
+                inArray(knowledgeEntries.chunkIndex, [
+                  h.chunkIndex - 1,
+                  h.chunkIndex,
+                  h.chunkIndex + 1,
+                ]),
               ),
             )
             .orderBy(knowledgeEntries.chunkIndex);
@@ -383,11 +443,25 @@ export class KnowledgeService {
    * Cost: $2 / 1,000 searches.
    */
   private async rerankWithCohere(
-    docs: Array<{ id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null }>,
+    docs: Array<{
+      id: string;
+      content: string;
+      metadata: Record<string, unknown>;
+      sourceId: string | null;
+      chunkIndex: number | null;
+    }>,
     query: string,
     topK: number,
     cohereApiKey: string,
-  ): Promise<Array<{ id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null }>> {
+  ): Promise<
+    Array<{
+      id: string;
+      content: string;
+      metadata: Record<string, unknown>;
+      sourceId: string | null;
+      chunkIndex: number | null;
+    }>
+  > {
     try {
       const resp = await fetch('https://api.cohere.ai/v1/rerank', {
         method: 'POST',
@@ -409,8 +483,8 @@ export class KnowledgeService {
         return docs.slice(0, topK);
       }
 
-      const json = await resp.json() as { results: Array<{ index: number }> };
-      return json.results.map((r) => docs[r.index]!);
+      const json = (await resp.json()) as { results: Array<{ index: number }> };
+      return json.results.map((r) => docs[r.index]);
     } catch (err) {
       this.logger.warn(`Cohere rerank error, using RRF order: ${err}`);
       return docs.slice(0, topK);
@@ -448,7 +522,12 @@ export class KnowledgeService {
     // Run both arms in parallel
     const [vectorHits, ftsHits] = await Promise.all([
       queryEmbedding
-        ? this.runVectorSearch(kbId, queryEmbedding, candidateK, distanceThreshold)
+        ? this.runVectorSearch(
+            kbId,
+            queryEmbedding,
+            candidateK,
+            distanceThreshold,
+          )
         : Promise.resolve([]),
       this.runFtsSearch(kbId, query, candidateK),
     ]);
@@ -557,13 +636,16 @@ export class KnowledgeService {
     const kbSettings: KnowledgeBaseSettings = kb?.settings ?? {};
 
     const similarityThreshold = kbSettings.similarityThreshold ?? 0.75;
-    const expandContext      = kbSettings.expandContext  ?? false;
-    const enableRerank       = kbSettings.enableRerank   ?? false;
-    const rerankTopK         = kbSettings.rerankTopK     ?? 50;
+    const expandContext = kbSettings.expandContext ?? false;
+    const enableRerank = kbSettings.enableRerank ?? false;
+    const rerankTopK = kbSettings.rerankTopK ?? 50;
 
     let queryEmbedding: number[] | null = null;
     try {
-      const vec = await this.embeddingService.embed(dto.query, kbSettings.embeddingModel);
+      const vec = await this.embeddingService.embed(
+        dto.query,
+        kbSettings.embeddingModel,
+      );
       const isZero = vec.every((v) => v === 0);
       if (!isZero) queryEmbedding = vec;
     } catch {

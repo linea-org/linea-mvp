@@ -126,7 +126,9 @@ export class SchedulesService {
       }
 
       const nextRunAt = this.nextRunDate(cronExpr);
-      await this.db.delete(schedules).where(eq(schedules.workflowId, workflowId));
+      await this.db
+        .delete(schedules)
+        .where(eq(schedules.workflowId, workflowId));
       await this.db.insert(schedules).values({
         podId,
         workflowId,
@@ -136,7 +138,9 @@ export class SchedulesService {
         nextRunAt,
       });
     } else {
-      await this.db.delete(schedules).where(eq(schedules.workflowId, workflowId));
+      await this.db
+        .delete(schedules)
+        .where(eq(schedules.workflowId, workflowId));
     }
   }
 

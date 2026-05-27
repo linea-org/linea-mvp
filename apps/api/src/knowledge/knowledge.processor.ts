@@ -23,7 +23,9 @@ export class KnowledgeEmbedProcessor extends WorkerHost {
   async process(job: Job<RagEmbedJobData>): Promise<void> {
     const { entryId, content, embeddingModel } = job.data;
 
-    this.logger.debug(`Embedding entry ${entryId} with model ${embeddingModel}`);
+    this.logger.debug(
+      `Embedding entry ${entryId} with model ${embeddingModel}`,
+    );
 
     // Mark as 'embedding' so the UI can show a spinner during processing
     await this.db
@@ -45,7 +47,9 @@ export class KnowledgeEmbedProcessor extends WorkerHost {
         })
         .where(eq(knowledgeEntries.id, entryId));
 
-      this.logger.debug(`Entry ${entryId} embedded successfully (zero=${isZero})`);
+      this.logger.debug(
+        `Entry ${entryId} embedded successfully (zero=${isZero})`,
+      );
     } catch (err) {
       this.logger.error(`Failed to embed entry ${entryId}: ${err}`);
       await this.db

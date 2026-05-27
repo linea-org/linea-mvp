@@ -1,7 +1,17 @@
-import { Injectable, Inject, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { eq, and, isNull, desc, sql } from 'drizzle-orm';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { eq, and, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
-import { workflowComments, commentReactions, users, workflows } from '@linea/db';
+import {
+  workflowComments,
+  commentReactions,
+  users,
+  workflows,
+} from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import type { CreateCommentDto } from './dto/create-comment.dto';
 import type { UpdateCommentDto } from './dto/update-comment.dto';
@@ -12,7 +22,10 @@ const ALLOWED_EMOJIS = new Set(['👍', '❤️', '😂', '😮', '😢', '🎉'
 export class CommentsService {
   constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
 
-  private async assertWorkflowInPod(workflowId: string, podId: string): Promise<void> {
+  private async assertWorkflowInPod(
+    workflowId: string,
+    podId: string,
+  ): Promise<void> {
     const [row] = await this.db
       .select({ id: workflows.id })
       .from(workflows)
@@ -54,7 +67,10 @@ export class CommentsService {
         sql`${commentReactions.commentId} IN (SELECT id FROM workflow_comments WHERE workflow_id = ${workflowId})`,
       );
 
-    const reactionMap = new Map<string, { emoji: string; count: number; reacted: boolean }[]>();
+    const reactionMap = new Map<
+      string,
+      { emoji: string; count: number; reacted: boolean }[]
+    >();
     for (const r of reactions) {
       if (!reactionMap.has(r.commentId)) reactionMap.set(r.commentId, []);
       const list = reactionMap.get(r.commentId)!;
@@ -85,13 +101,23 @@ export class CommentsService {
     return topLevel.map(buildThread);
   }
 
-  async create(workflowId: string, podId: string, userId: string, dto: CreateCommentDto) {
+  async create(
+    workflowId: string,
+    podId: string,
+    userId: string,
+    dto: CreateCommentDto,
+  ) {
     await this.assertWorkflowInPod(workflowId, podId);
     if (dto.parentId) {
       const [parent] = await this.db
         .select()
         .from(workflowComments)
-        .where(and(eq(workflowComments.id, dto.parentId), eq(workflowComments.workflowId, workflowId)));
+        .where(
+          and(
+            eq(workflowComments.id, dto.parentId),
+            eq(workflowComments.workflowId, workflowId),
+          ),
+        );
       if (!parent) throw new NotFoundException('Parent comment not found');
     }
 
@@ -109,12 +135,23 @@ export class CommentsService {
     return comment;
   }
 
-  async update(workflowId: string, podId: string, userId: string, id: string, dto: UpdateCommentDto) {
+  async update(
+    workflowId: string,
+    podId: string,
+    userId: string,
+    id: string,
+    dto: UpdateCommentDto,
+  ) {
     await this.assertWorkflowInPod(workflowId, podId);
     const [existing] = await this.db
       .select()
       .from(workflowComments)
-      .where(and(eq(workflowComments.id, id), eq(workflowComments.workflowId, workflowId)));
+      .where(
+        and(
+          eq(workflowComments.id, id),
+          eq(workflowComments.workflowId, workflowId),
+        ),
+      );
 
     if (!existing) throw new NotFoundException('Comment not found');
     if (dto.body !== undefined && existing.userId !== userId) {
@@ -140,22 +177,40 @@ export class CommentsService {
     const [existing] = await this.db
       .select()
       .from(workflowComments)
-      .where(and(eq(workflowComments.id, id), eq(workflowComments.workflowId, workflowId)));
+      .where(
+        and(
+          eq(workflowComments.id, id),
+          eq(workflowComments.workflowId, workflowId),
+        ),
+      );
 
     if (!existing) throw new NotFoundException('Comment not found');
-    if (existing.userId !== userId) throw new ForbiddenException('Only the author can delete this comment');
+    if (existing.userId !== userId)
+      throw new ForbiddenException('Only the author can delete this comment');
 
     await this.db.delete(workflowComments).where(eq(workflowComments.id, id));
   }
 
-  async react(workflowId: string, podId: string, userId: string, commentId: string, emoji: string) {
+  async react(
+    workflowId: string,
+    podId: string,
+    userId: string,
+    commentId: string,
+    emoji: string,
+  ) {
     await this.assertWorkflowInPod(workflowId, podId);
-    if (!ALLOWED_EMOJIS.has(emoji)) throw new ForbiddenException('Emoji not allowed');
+    if (!ALLOWED_EMOJIS.has(emoji))
+      throw new ForbiddenException('Emoji not allowed');
 
     const [comment] = await this.db
       .select()
       .from(workflowComments)
-      .where(and(eq(workflowComments.id, commentId), eq(workflowComments.workflowId, workflowId)));
+      .where(
+        and(
+          eq(workflowComments.id, commentId),
+          eq(workflowComments.workflowId, workflowId),
+        ),
+      );
 
     if (!comment) throw new NotFoundException('Comment not found');
 
@@ -171,7 +226,9 @@ export class CommentsService {
       );
 
     if (existing) {
-      await this.db.delete(commentReactions).where(eq(commentReactions.id, existing.id));
+      await this.db
+        .delete(commentReactions)
+        .where(eq(commentReactions.id, existing.id));
       return { toggled: false };
     }
 

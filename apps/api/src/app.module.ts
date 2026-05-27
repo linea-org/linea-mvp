@@ -52,7 +52,9 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const redisUrl = config.get<string>('REDIS_URL');
-        const redis = redisUrl ? new Redis(redisUrl) : new Redis({ host: 'localhost', port: 6379 });
+        const redis = redisUrl
+          ? new Redis(redisUrl)
+          : new Redis({ host: 'localhost', port: 6379 });
         return {
           throttlers: [
             { name: 'default', ttl: 60_000, limit: 300 },

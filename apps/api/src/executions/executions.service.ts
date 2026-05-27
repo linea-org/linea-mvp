@@ -53,7 +53,13 @@ export class ExecutionsService {
     const [wf] = await this.db
       .select({ id: workflows.id })
       .from(workflows)
-      .where(and(eq(workflows.id, workflowId), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
+      .where(
+        and(
+          eq(workflows.id, workflowId),
+          eq(workflows.podId, podId),
+          isNull(workflows.deletedAt),
+        ),
+      )
       .limit(1);
 
     if (!wf) throw new NotFoundException(`Workflow ${workflowId} not found`);

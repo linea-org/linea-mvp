@@ -4,7 +4,9 @@ export function executeMergeNode(
   nodeData: Record<string, any>,
   state: WorkflowState,
 ): any {
-  const sources: string[] = Array.isArray(nodeData.sources) ? nodeData.sources : [];
+  const sources: string[] = Array.isArray(nodeData.sources)
+    ? nodeData.sources
+    : [];
   const mode: string = nodeData.mode ?? 'concat';
 
   const resolved: unknown[] = sources
@@ -32,7 +34,8 @@ export function executeMergeNode(
     }
     case 'zip': {
       const arrays = resolved.filter(Array.isArray) as unknown[][];
-      const maxLen = arrays.length > 0 ? Math.max(...arrays.map((a) => a.length)) : 0;
+      const maxLen =
+        arrays.length > 0 ? Math.max(...arrays.map((a) => a.length)) : 0;
       return Array.from({ length: maxLen }, (_, i) => arrays.map((a) => a[i]));
     }
     default:

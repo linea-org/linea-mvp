@@ -7,8 +7,8 @@ import { DB_TOKEN } from '../database/database.module';
 import type { CreateApiKeyDto } from './dto/create-api-key.dto';
 
 const EXPIRY_MS: Record<string, number> = {
-  '30d':  30  * 86_400_000,
-  '90d':  90  * 86_400_000,
+  '30d': 30 * 86_400_000,
+  '90d': 90 * 86_400_000,
   '365d': 365 * 86_400_000,
 };
 
@@ -20,13 +20,20 @@ export class ApiKeysService {
     const rawKey = `lnk_${randomBytes(32).toString('hex')}`;
     const keyHash = createHash('sha256').update(rawKey).digest('hex');
 
-    const expiresAt = dto.expiresIn && dto.expiresIn !== 'never'
-      ? new Date(Date.now() + EXPIRY_MS[dto.expiresIn]!)
-      : null;
+    const expiresAt =
+      dto.expiresIn && dto.expiresIn !== 'never'
+        ? new Date(Date.now() + EXPIRY_MS[dto.expiresIn])
+        : null;
 
     const [record] = await this.db
       .insert(lineaApiKeys)
-      .values({ workspaceId, userId, keyHash, label: dto.label ?? null, expiresAt })
+      .values({
+        workspaceId,
+        userId,
+        keyHash,
+        label: dto.label ?? null,
+        expiresAt,
+      })
       .returning();
 
     return { ...record, key: rawKey };
@@ -43,10 +50,12 @@ export class ApiKeysService {
         createdAt: lineaApiKeys.createdAt,
       })
       .from(lineaApiKeys)
-      .where(and(
-        eq(lineaApiKeys.workspaceId, workspaceId),
-        isNull(lineaApiKeys.revokedAt),
-      ));
+      .where(
+        and(
+          eq(lineaApiKeys.workspaceId, workspaceId),
+          isNull(lineaApiKeys.revokedAt),
+        ),
+      );
 
     const now = new Date();
     return rows.map((r) => ({

@@ -1,5 +1,3 @@
-import type { WorkflowState } from '../variable-substitution';
-
 export interface ParallelBranch {
   id: string;
   label?: string;
@@ -31,7 +29,7 @@ export function buildParallelResults(
     label: branches[i]?.label ?? `Branch ${i + 1}`,
     status: res.status,
     value: res.status === 'fulfilled' ? res.value.result : undefined,
-    error: res.status === 'rejected' ? String((res as PromiseRejectedResult).reason) : undefined,
+    error: res.status === 'rejected' ? String(res.reason) : undefined,
   }));
 
   return {

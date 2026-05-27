@@ -131,7 +131,11 @@ export class GenerateWorkflowService {
   async *generate(
     rawPrompt: string,
     signal?: AbortSignal,
-    canvasContext?: { nodeCount: number; nodeTypes: string[]; nodeLabels: string[] },
+    canvasContext?: {
+      nodeCount: number;
+      nodeTypes: string[];
+      nodeLabels: string[];
+    },
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
   ): AsyncGenerator<GenerateEvent> {
     const apiKey = process.env['ANTHROPIC_API_KEY'];
@@ -157,11 +161,17 @@ export class GenerateWorkflowService {
     const safeUserContent = `<user_request>\n${prompt}\n</user_request>${canvasCtxStr}\n\nBased on the user request above, produce the workflow plan JSON.`;
 
     // Build message history for planner (last 3 turns for context, excluding latest)
-    const plannerHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    const plannerHistory: Array<{
+      role: 'user' | 'assistant';
+      content: string;
+    }> = [];
     if (history && history.length > 0) {
       const recent = history.slice(-6); // last 3 turns (user+assistant pairs)
       for (const msg of recent) {
-        plannerHistory.push({ role: msg.role, content: msg.content.slice(0, 500) });
+        plannerHistory.push({
+          role: msg.role,
+          content: msg.content.slice(0, 500),
+        });
       }
     }
 

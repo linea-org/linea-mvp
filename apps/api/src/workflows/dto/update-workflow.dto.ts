@@ -35,7 +35,10 @@ export class UpdateWorkflowDto {
   @IsBoolean()
   isPublic?: boolean;
 
-  @ApiPropertyOptional({ description: 'When true, saves the definition without creating a version snapshot (used for auto-save)' })
+  @ApiPropertyOptional({
+    description:
+      'When true, saves the definition without creating a version snapshot (used for auto-save)',
+  })
   @IsOptional()
   @IsBoolean()
   skipVersion?: boolean;

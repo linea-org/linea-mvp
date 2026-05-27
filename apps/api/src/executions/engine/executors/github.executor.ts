@@ -18,7 +18,9 @@ export async function executeGitHubNode(
   token: string | undefined,
 ): Promise<unknown> {
   if (!token)
-    throw new Error('GitHub token not found. Connect GitHub in Settings → Connections or add a GITHUB_TOKEN secret.');
+    throw new Error(
+      'GitHub token not found. Connect GitHub in Settings → Connections or add a GITHUB_TOKEN secret.',
+    );
   if (!nodeData.owner) throw new Error('GitHub: owner is required');
   if (!nodeData.repo) throw new Error('GitHub: repo is required');
 

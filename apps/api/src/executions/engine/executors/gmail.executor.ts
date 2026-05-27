@@ -48,7 +48,9 @@ export async function executeGmailNode(
   token: string | undefined,
 ): Promise<unknown> {
   if (!token)
-    throw new Error('Gmail token not found. Connect Google in Settings → Connections or add a GMAIL_TOKEN secret.');
+    throw new Error(
+      'Gmail token not found. Connect Google in Settings → Connections or add a GMAIL_TOKEN secret.',
+    );
 
   const action = nodeData.action ?? 'send_email';
   const headers = {

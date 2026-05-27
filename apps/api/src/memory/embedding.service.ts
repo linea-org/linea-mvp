@@ -5,7 +5,10 @@ import { ConfigService } from '@nestjs/config';
 export const EMBEDDING_DIMENSIONS = 1536;
 
 // Models that support the OpenAI `dimensions` reduction parameter
-const SUPPORTS_DIMENSION_PARAM = new Set(['text-embedding-3-small', 'text-embedding-3-large']);
+const SUPPORTS_DIMENSION_PARAM = new Set([
+  'text-embedding-3-small',
+  'text-embedding-3-large',
+]);
 
 @Injectable()
 export class EmbeddingService {
@@ -39,14 +42,16 @@ export class EmbeddingService {
 
     // Determine provider from model id prefix / well-known names.
     // Ollama models output non-1536d vectors — fall back to keyword search.
-    const isOllama = modelId === 'nomic-embed-text' || modelId === 'mxbai-embed-large'
-      || (!modelId.startsWith('text-embedding') && !modelId.startsWith('ada-'));
+    const isOllama =
+      modelId === 'nomic-embed-text' ||
+      modelId === 'mxbai-embed-large' ||
+      (!modelId.startsWith('text-embedding') && !modelId.startsWith('ada-'));
     const isGoogle = modelId === 'text-embedding-004';
 
     if (isGoogle || isOllama) {
       this.logger.warn(
         `Embedding model ${modelId} outputs dimensions that do not match the 1536d pgvector schema — ` +
-        `vector search is unavailable; the retriever will fall back to keyword search.`,
+          `vector search is unavailable; the retriever will fall back to keyword search.`,
       );
       return new Array(EMBEDDING_DIMENSIONS).fill(0);
     }
@@ -56,16 +61,25 @@ export class EmbeddingService {
     try {
       const body: Record<string, unknown> = { model: modelId, input: text };
       // Only new -3-* models support the dimensions parameter
-      if (SUPPORTS_DIMENSION_PARAM.has(modelId)) body['dimensions'] = EMBEDDING_DIMENSIONS;
+      if (SUPPORTS_DIMENSION_PARAM.has(modelId))
+        body['dimensions'] = EMBEDDING_DIMENSIONS;
 
       const resp = await fetch('https://api.openai.com/v1/embeddings', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(body),
       });
-      const json = (await resp.json()) as { data?: [{ embedding: number[] }]; error?: { message: string } };
+      const json = (await resp.json()) as {
+        data?: [{ embedding: number[] }];
+        error?: { message: string };
+      };
       if (!resp.ok || !json.data?.[0]) {
-        this.logger.warn(`Embedding API error: ${json.error?.message ?? resp.status}`);
+        this.logger.warn(
+          `Embedding API error: ${json.error?.message ?? resp.status}`,
+        );
         return new Array(EMBEDDING_DIMENSIONS).fill(0);
       }
       return json.data[0].embedding;

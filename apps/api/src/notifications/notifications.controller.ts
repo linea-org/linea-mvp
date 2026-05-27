@@ -30,7 +30,9 @@ export class NotificationsController {
   constructor(private readonly service: NotificationsService) {}
 
   @Get()
-  @ApiOperation({ summary: "List current user's notifications for this workspace" })
+  @ApiOperation({
+    summary: "List current user's notifications for this workspace",
+  })
   @ApiParam({ name: 'workspaceId' })
   findAll(
     @CurrentUser() user: User,
@@ -44,10 +46,7 @@ export class NotificationsController {
   @Sse('stream')
   @ApiOperation({ summary: 'Server-sent events stream for new notifications' })
   @ApiParam({ name: 'workspaceId' })
-  stream(
-    @CurrentUser() user: User,
-    @Param('workspaceId') workspaceId: string,
-  ) {
+  stream(@CurrentUser() user: User, @Param('workspaceId') workspaceId: string) {
     const subject = this.service.getStream(user.id, workspaceId);
     return subject.pipe(
       map(() => ({ data: { type: 'notification' } })),

@@ -8,7 +8,12 @@ import { PodsModule } from '../pods/pods.module';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), ExecutionsModule, PodsModule, AuditModule],
+  imports: [
+    ScheduleModule.forRoot(),
+    ExecutionsModule,
+    PodsModule,
+    AuditModule,
+  ],
   providers: [SchedulesService, SchedulerService],
   controllers: [SchedulesController],
   exports: [SchedulesService],

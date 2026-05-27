@@ -1,5 +1,11 @@
 import { Controller, Get, Query, UseGuards, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { AuditService } from './audit.service';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { RoleGuard } from '../common/guards/role.guard';
@@ -23,10 +29,6 @@ export class AuditController {
     @Query('period') period?: string,
     @Query('resourceType') resourceType?: string,
   ) {
-    return this.service.findAll(
-      workspaceId,
-      period,
-      resourceType,
-    );
+    return this.service.findAll(workspaceId, period, resourceType);
   }
 }

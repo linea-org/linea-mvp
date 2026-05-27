@@ -33,7 +33,7 @@ import { executeDatetimeNode } from './executors/datetime.executor';
 import { ExecutionSupervisor } from './supervisor';
 import { MemoryService } from './memory.service';
 import type { ModelApiKeys } from './models/client.factory';
-import type { DrizzleDB, KnowledgeBaseSettings, WorkspaceSettings } from '@linea/db';
+import type { DrizzleDB, WorkspaceSettings } from '@linea/db';
 import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 
@@ -186,8 +186,11 @@ export class NodeExecutorService {
     }
 
     if (nodeData.continueOnFail) {
-      const errorMsg = lastError instanceof Error ? lastError.message : String(lastError);
-      this.logger.log(`Node ${nodeId} (${nodeType}) continuing on fail: ${errorMsg}`);
+      const errorMsg =
+        lastError instanceof Error ? lastError.message : String(lastError);
+      this.logger.log(
+        `Node ${nodeId} (${nodeType}) continuing on fail: ${errorMsg}`,
+      );
       return {
         result: { error: errorMsg, continued: true, continueOnFail: true },
         isAgentOutput: false,
@@ -281,7 +284,14 @@ export class NodeExecutorService {
         }
 
         const wsSettings = await this.loadWorkspaceSettings(workspaceId);
-        const raw = await executeAgentNode(data, state, resolvedKeys, ltmCtx, onToken, wsSettings.modelFallbackChain);
+        const raw = await executeAgentNode(
+          data,
+          state,
+          resolvedKeys,
+          ltmCtx,
+          onToken,
+          wsSettings.modelFallbackChain,
+        );
         return { result: raw, isAgentOutput: true };
       }
 
@@ -314,12 +324,17 @@ export class NodeExecutorService {
         const resumeValue = interrupt({
           type: 'approval',
           nodeId,
-          message: nodeData.approvalMessage || nodeData.message || nodeData.instructions || 'Approval required',
+          message:
+            nodeData.approvalMessage ||
+            nodeData.message ||
+            nodeData.instructions ||
+            'Approval required',
         });
         // resumeValue is { approved: boolean } from ApproveExecutionDto
-        const approved = typeof resumeValue === 'object' && resumeValue !== null
-          ? Boolean((resumeValue as Record<string, unknown>).approved)
-          : true;
+        const approved =
+          typeof resumeValue === 'object' && resumeValue !== null
+            ? Boolean((resumeValue as Record<string, unknown>).approved)
+            : true;
         return {
           result: {
             __approvalDecision: approved ? 'approved' : 'rejected',
@@ -355,7 +370,12 @@ export class NodeExecutorService {
 
       case 'memory': {
         const memCtx: MemoryExecutorContext | undefined = workspaceId
-          ? { workspaceId, workflowId, threadId: threadId ?? '', service: this.memoryService }
+          ? {
+              workspaceId,
+              workflowId,
+              threadId: threadId ?? '',
+              service: this.memoryService,
+            }
           : undefined;
         const r = await executeMemoryNode(nodeData, state, memCtx);
         return { result: r, isAgentOutput: false };
@@ -373,17 +393,26 @@ export class NodeExecutorService {
       }
 
       case 'retriever': {
-        const embModelId = (nodeData.embeddingModel as string | undefined) ?? 'text-embedding-3-small';
+        const embModelId =
+          (nodeData.embeddingModel as string | undefined) ??
+          'text-embedding-3-small';
         const modelDef = MODEL_REGISTRY[embModelId];
         const provider = modelDef?.provider ?? 'openai';
 
-        const embApiKey = provider !== 'ollama'
-          ? await this.memoryService.loadApiKey(workspaceId, provider)
-          : undefined;
+        const embApiKey =
+          provider !== 'ollama'
+            ? await this.memoryService.loadApiKey(workspaceId, provider)
+            : undefined;
 
-        const rawQuery = (nodeData.query as string | undefined) ?? String(state.variables['lastOutput'] ?? '');
+        const rawQuery =
+          (nodeData.query as string | undefined) ??
+          String(state.variables['lastOutput'] ?? '');
         const resolvedQuery = substituteInValue(rawQuery, state) as string;
-        const queryEmbedding = await this.memoryService.generateEmbedding(resolvedQuery, embApiKey, embModelId);
+        const queryEmbedding = await this.memoryService.generateEmbedding(
+          resolvedQuery,
+          embApiKey,
+          embModelId,
+        );
 
         const wsSettings = await this.loadWorkspaceSettings(workspaceId);
 
@@ -396,21 +425,36 @@ export class NodeExecutorService {
               .from(knowledgeBases)
               .where(eq(knowledgeBases.id, kbId))
               .limit(1);
-            const kbSettings = (kbRow?.settings ?? {}) as KnowledgeBaseSettings;
+            const kbSettings = kbRow?.settings ?? {};
 
             const similarityThreshold =
-              (nodeData.similarityThreshold as number | undefined)
-              ?? kbSettings.similarityThreshold
-              ?? wsSettings.ragSimilarityThreshold
-              ?? 0.75;
+              (nodeData.similarityThreshold as number | undefined) ??
+              kbSettings.similarityThreshold ??
+              wsSettings.ragSimilarityThreshold ??
+              0.75;
             const distanceThreshold = 1 - similarityThreshold;
 
-            const expandContext = (nodeData.expandContext as boolean | undefined) ?? kbSettings.expandContext ?? false;
-            const enableRerank  = (nodeData.enableRerank  as boolean | undefined) ?? kbSettings.enableRerank  ?? false;
-            const rerankTopK    = (nodeData.rerankTopK    as number  | undefined) ?? kbSettings.rerankTopK    ?? 50;
-            const candidateK    = enableRerank ? rerankTopK : topK * 3;
+            const expandContext =
+              (nodeData.expandContext as boolean | undefined) ??
+              kbSettings.expandContext ??
+              false;
+            const enableRerank =
+              (nodeData.enableRerank as boolean | undefined) ??
+              kbSettings.enableRerank ??
+              false;
+            const rerankTopK =
+              (nodeData.rerankTopK as number | undefined) ??
+              kbSettings.rerankTopK ??
+              50;
+            const candidateK = enableRerank ? rerankTopK : topK * 3;
 
-            type RagHit = { id: string; content: string; metadata: Record<string, unknown>; sourceId: string | null; chunkIndex: number | null };
+            type RagHit = {
+              id: string;
+              content: string;
+              metadata: Record<string, unknown>;
+              sourceId: string | null;
+              chunkIndex: number | null;
+            };
 
             // ── Run vector + FTS in parallel ───────────────────────────────────
             const [vectorHits, ftsHits] = await Promise.all([
@@ -431,7 +475,9 @@ export class NodeExecutorService {
                         LIMIT ${candidateK}
                       `);
                       return Array.from(rows) as RagHit[];
-                    } catch { return []; }
+                    } catch {
+                      return [];
+                    }
                   })()
                 : Promise.resolve([]),
 
@@ -449,7 +495,9 @@ export class NodeExecutorService {
                     LIMIT ${candidateK}
                   `);
                   return Array.from(rows) as RagHit[];
-                } catch { return []; }
+                } catch {
+                  return [];
+                }
               })(),
             ]);
 
@@ -477,12 +525,18 @@ export class NodeExecutorService {
             // ── Optional Cohere Rerank v3.5 — top-50 → top-K ─────────────────
             let ranked = merged;
             if (enableRerank) {
-              const cohereKey = await this.memoryService.loadApiKey(workspaceId, 'cohere');
+              const cohereKey = await this.memoryService.loadApiKey(
+                workspaceId,
+                'cohere',
+              );
               if (cohereKey) {
                 try {
                   const resp = await fetch('https://api.cohere.ai/v1/rerank', {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${cohereKey}`, 'Content-Type': 'application/json' },
+                    headers: {
+                      Authorization: `Bearer ${cohereKey}`,
+                      'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({
                       model: 'rerank-v3.5',
                       query: q,
@@ -492,11 +546,15 @@ export class NodeExecutorService {
                     signal: AbortSignal.timeout(10_000),
                   });
                   if (resp.ok) {
-                    const json = await resp.json() as { results: Array<{ index: number }> };
-                    ranked = json.results.map((r) => merged[r.index]!);
+                    const json = (await resp.json()) as {
+                      results: Array<{ index: number }>;
+                    };
+                    ranked = json.results.map((r) => merged[r.index]);
                   }
                 } catch (err) {
-                  this.logger.warn(`Cohere rerank failed, using RRF order: ${err}`);
+                  this.logger.warn(
+                    `Cohere rerank failed, using RRF order: ${err}`,
+                  );
                   ranked = merged.slice(0, topK);
                 }
               } else {
@@ -508,23 +566,39 @@ export class NodeExecutorService {
 
             // ── Optional context expansion — fetch chunk X-1 and X+1 ─────────
             if (!expandContext) {
-              return ranked.map(({ content, metadata }) => ({ content, metadata }));
+              return ranked.map(({ content, metadata }) => ({
+                content,
+                metadata,
+              }));
             }
 
             return Promise.all(
               ranked.map(async (h) => {
-                if (!h.sourceId || h.chunkIndex === null) return { content: h.content, metadata: h.metadata };
+                if (!h.sourceId || h.chunkIndex === null)
+                  return { content: h.content, metadata: h.metadata };
                 try {
                   const neighbors = await this.db
-                    .select({ content: knowledgeEntries.content, chunkIndex: knowledgeEntries.chunkIndex })
+                    .select({
+                      content: knowledgeEntries.content,
+                      chunkIndex: knowledgeEntries.chunkIndex,
+                    })
                     .from(knowledgeEntries)
-                    .where(and(
-                      eq(knowledgeEntries.sourceId, h.sourceId),
-                      inArray(knowledgeEntries.chunkIndex, [h.chunkIndex - 1, h.chunkIndex, h.chunkIndex + 1]),
-                    ))
+                    .where(
+                      and(
+                        eq(knowledgeEntries.sourceId, h.sourceId),
+                        inArray(knowledgeEntries.chunkIndex, [
+                          h.chunkIndex - 1,
+                          h.chunkIndex,
+                          h.chunkIndex + 1,
+                        ]),
+                      ),
+                    )
                     .orderBy(knowledgeEntries.chunkIndex);
                   const combined = neighbors.map((n) => n.content).join('\n');
-                  return { content: combined || h.content, metadata: h.metadata };
+                  return {
+                    content: combined || h.content,
+                    metadata: h.metadata,
+                  };
                 } catch {
                   return { content: h.content, metadata: h.metadata };
                 }
@@ -549,7 +623,10 @@ export class NodeExecutorService {
         const branches = (nodeData.branches ?? []) as ParallelBranch[];
         const failFast = Boolean(nodeData.failFast);
         if (branches.length === 0) {
-          return { result: { results: [], count: 0, failed: 0 }, isAgentOutput: false };
+          return {
+            result: { results: [], count: 0, failed: 0 },
+            isAgentOutput: false,
+          };
         }
         const settled = await Promise.allSettled(
           branches.map((branch) =>
@@ -566,7 +643,7 @@ export class NodeExecutorService {
         );
         if (failFast) {
           const firstFailure = settled.find((s) => s.status === 'rejected');
-          if (firstFailure) throw (firstFailure as PromiseRejectedResult).reason;
+          if (firstFailure) throw firstFailure.reason;
         }
         const r = buildParallelResults(branches, settled);
         return { result: r, isAgentOutput: false };
@@ -585,14 +662,18 @@ export class NodeExecutorService {
       case 'evaluator': {
         // Prefer workspace BYOK; fall back to platform key so dev/testing still works
         const resolvedKeys = await this.resolveApiKeys(workspaceId);
-        const anthropicKey = resolvedKeys['ANTHROPIC_API_KEY'] ?? this.config.get<string>('ANTHROPIC_API_KEY');
+        const anthropicKey =
+          resolvedKeys['ANTHROPIC_API_KEY'] ??
+          this.config.get<string>('ANTHROPIC_API_KEY');
         const r = await executeEvaluatorNode(nodeData, state, anthropicKey);
         return { result: r, isAgentOutput: false };
       }
 
       case 'slack': {
         const slackToken = await this.memoryService.resolveIntegrationToken(
-          workspaceId, 'slack', 'SLACK_TOKEN',
+          workspaceId,
+          'slack',
+          'SLACK_TOKEN',
         );
         const r = await executeSlackNode(nodeData, state, slackToken);
         return { result: r, isAgentOutput: false };
@@ -600,7 +681,9 @@ export class NodeExecutorService {
 
       case 'github': {
         const ghToken = await this.memoryService.resolveIntegrationToken(
-          workspaceId, 'github', 'GITHUB_TOKEN',
+          workspaceId,
+          'github',
+          'GITHUB_TOKEN',
         );
         const r = await executeGitHubNode(nodeData, state, ghToken);
         return { result: r, isAgentOutput: false };
@@ -608,7 +691,9 @@ export class NodeExecutorService {
 
       case 'notion': {
         const notionToken = await this.memoryService.resolveIntegrationToken(
-          workspaceId, 'notion', 'NOTION_TOKEN',
+          workspaceId,
+          'notion',
+          'NOTION_TOKEN',
         );
         const r = await executeNotionNode(nodeData, state, notionToken);
         return { result: r, isAgentOutput: false };
@@ -616,7 +701,9 @@ export class NodeExecutorService {
 
       case 'gmail': {
         const gmailToken = await this.memoryService.resolveIntegrationToken(
-          workspaceId, 'google', 'GMAIL_TOKEN',
+          workspaceId,
+          'google',
+          'GMAIL_TOKEN',
         );
         const r = await executeGmailNode(nodeData, state, gmailToken);
         return { result: r, isAgentOutput: false };
@@ -648,13 +735,15 @@ export class NodeExecutorService {
     }
   }
 
-  private async loadWorkspaceSettings(workspaceId: string): Promise<WorkspaceSettings> {
+  private async loadWorkspaceSettings(
+    workspaceId: string,
+  ): Promise<WorkspaceSettings> {
     const [ws] = await this.db
       .select({ settings: workspaces.settings })
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
       .limit(1);
-    return (ws?.settings ?? {}) as WorkspaceSettings;
+    return ws?.settings ?? {};
   }
 
   private async resolveApiKeys(workspaceId: string): Promise<ModelApiKeys> {
@@ -669,13 +758,19 @@ export class NodeExecutorService {
 
     await Promise.all(
       PROVIDERS.map(async ({ key, provider }) => {
-        const dbKey = await this.memoryService.loadApiKey(workspaceId, provider);
+        const dbKey = await this.memoryService.loadApiKey(
+          workspaceId,
+          provider,
+        );
         if (dbKey) resolved[key] = dbKey;
       }),
     );
 
     // Ollama base URL from secrets table (users can set it per-workspace)
-    const ollamaUrl = await this.memoryService.loadSecret(workspaceId, 'OLLAMA_BASE_URL');
+    const ollamaUrl = await this.memoryService.loadSecret(
+      workspaceId,
+      'OLLAMA_BASE_URL',
+    );
     if (ollamaUrl) resolved.OLLAMA_BASE_URL = ollamaUrl;
 
     return resolved;

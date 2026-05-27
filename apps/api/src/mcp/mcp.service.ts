@@ -173,14 +173,21 @@ export class McpService {
     const [row] = await this.db
       .select()
       .from(mcpServers)
-      .where(and(eq(mcpServers.id, serverId), eq(mcpServers.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(mcpServers.id, serverId),
+          eq(mcpServers.workspaceId, workspaceId),
+        ),
+      )
       .limit(1);
 
     if (!row) throw new NotFoundException(`MCP server ${serverId} not found`);
 
     return {
       url: row.url,
-      accessToken: row.accessTokenEncrypted ? this.decrypt(row.accessTokenEncrypted) : null,
+      accessToken: row.accessTokenEncrypted
+        ? this.decrypt(row.accessTokenEncrypted)
+        : null,
     };
   }
 }

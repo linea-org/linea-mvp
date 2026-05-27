@@ -15,7 +15,9 @@ export async function executeSlackNode(
   token: string | undefined,
 ): Promise<unknown> {
   if (!token)
-    throw new Error('Slack token not found. Connect Slack in Settings → Connections or add a SLACK_TOKEN secret.');
+    throw new Error(
+      'Slack token not found. Connect Slack in Settings → Connections or add a SLACK_TOKEN secret.',
+    );
 
   const action = nodeData.action ?? 'send_message';
 

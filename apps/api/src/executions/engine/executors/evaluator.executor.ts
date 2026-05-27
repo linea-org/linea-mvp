@@ -81,8 +81,14 @@ Respond with a JSON object in this exact format (no markdown, just JSON):
   let reasoning = 'Could not parse evaluation response.';
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(jsonMatch?.[0] ?? text) as { score?: number; reasoning?: string };
-    score = Math.min(scoreMax, Math.max(scoreMin, Number(parsed.score ?? scoreMin)));
+    const parsed = JSON.parse(jsonMatch?.[0] ?? text) as {
+      score?: number;
+      reasoning?: string;
+    };
+    score = Math.min(
+      scoreMax,
+      Math.max(scoreMin, Number(parsed.score ?? scoreMin)),
+    );
     reasoning = String(parsed.reasoning ?? '');
   } catch {
     // keep defaults

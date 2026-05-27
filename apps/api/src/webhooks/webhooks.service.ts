@@ -5,7 +5,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
-import { randomBytes, createHmac, timingSafeEqual, createCipheriv, createDecipheriv } from 'crypto';
+import {
+  randomBytes,
+  createHmac,
+  timingSafeEqual,
+  createCipheriv,
+  createDecipheriv,
+} from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import type { Redis } from 'ioredis';
 import type { DrizzleDB } from '@linea/db';
@@ -45,7 +51,10 @@ export class WebhooksService {
   private encryptSecret(plaintext: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const encrypted = Buffer.concat([
+      cipher.update(plaintext, 'utf8'),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
     return Buffer.concat([iv, authTag, encrypted]).toString('base64');
   }
@@ -57,7 +66,10 @@ export class WebhooksService {
     const encrypted = buf.subarray(28);
     const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
     decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+    return Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final(),
+    ]).toString('utf8');
   }
 
   async create(podId: string, dto: CreateWebhookDto) {
@@ -75,7 +87,12 @@ export class WebhooksService {
 
     const [record] = await this.db
       .insert(webhooks)
-      .values({ podId, workflowId: dto.workflowId, secretToken: '', secretEncrypted })
+      .values({
+        podId,
+        workflowId: dto.workflowId,
+        secretToken: '',
+        secretEncrypted,
+      })
       .returning();
 
     // Return the raw token once — only time it's visible in plaintext
@@ -104,7 +121,10 @@ export class WebhooksService {
 
     const secretToken = randomBytes(24).toString('hex');
     const secretEncrypted = this.encryptSecret(secretToken);
-    await this.db.update(webhooks).set({ secretToken: '', secretEncrypted }).where(eq(webhooks.id, id));
+    await this.db
+      .update(webhooks)
+      .set({ secretToken: '', secretEncrypted })
+      .where(eq(webhooks.id, id));
     return { secretToken };
   }
 
@@ -159,9 +179,7 @@ export class WebhooksService {
       ? this.decryptSecret(row.secretEncrypted)
       : row.secretToken;
 
-    const sigHex = createHmac('sha256', secret)
-      .update(rawBody)
-      .digest('hex');
+    const sigHex = createHmac('sha256', secret).update(rawBody).digest('hex');
     const expected = `sha256=${sigHex}`;
     const expectedBuf = Buffer.from(expected);
     const signatureBuf = Buffer.from(signature ?? '');

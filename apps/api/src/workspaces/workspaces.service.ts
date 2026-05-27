@@ -401,9 +401,12 @@ export class WorkspacesService {
 
   // ─── Settings ──────────────────────────────────────────────────────────────
 
-  async getSettings(workspaceId: string, actor: WorkspaceMember): Promise<WorkspaceSettings> {
+  async getSettings(
+    workspaceId: string,
+    _actor: WorkspaceMember,
+  ): Promise<WorkspaceSettings> {
     const ws = await this.findOne(workspaceId);
-    return (ws.settings ?? {}) as WorkspaceSettings;
+    return ws.settings ?? {};
   }
 
   async updateSettings(
@@ -414,7 +417,10 @@ export class WorkspacesService {
     assertMinRole(actor, 'admin');
 
     const ws = await this.findOne(workspaceId);
-    const merged: WorkspaceSettings = { ...(ws.settings as WorkspaceSettings ?? {}), ...patch };
+    const merged: WorkspaceSettings = {
+      ...(ws.settings ?? {}),
+      ...patch,
+    };
 
     const [updated] = await this.db
       .update(workspaces)
@@ -422,7 +428,7 @@ export class WorkspacesService {
       .where(eq(workspaces.id, workspaceId))
       .returning();
 
-    return (updated.settings ?? {}) as WorkspaceSettings;
+    return updated.settings ?? {};
   }
 
   // ─── Clerk org sync ────────────────────────────────────────────────────────

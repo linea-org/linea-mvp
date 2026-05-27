@@ -12,8 +12,10 @@ export class MailService {
   constructor(private readonly config: ConfigService) {
     const apiKey = config.get<string>('RESEND_API_KEY');
     this.resend = apiKey ? new Resend(apiKey) : null;
-    this.from = config.get<string>('RESEND_FROM') ?? 'Linea <noreply@getlinea.app>';
-    this.webUrl = config.get<string>('WEB_URL') ?? 'https://platform.getlinea.app';
+    this.from =
+      config.get<string>('RESEND_FROM') ?? 'Linea <noreply@getlinea.app>';
+    this.webUrl =
+      config.get<string>('WEB_URL') ?? 'https://platform.getlinea.app';
 
     if (!this.resend) {
       this.logger.warn('RESEND_API_KEY not set — email delivery is disabled');

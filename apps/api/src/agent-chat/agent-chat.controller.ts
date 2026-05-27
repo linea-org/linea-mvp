@@ -1,4 +1,15 @@
-import { Controller, Post, Get, Patch, Delete, Param, Body, Res, HttpCode, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Res,
+  HttpCode,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { IsString, IsArray, IsOptional } from 'class-validator';
 import type { Response } from 'express';
@@ -76,7 +87,13 @@ export class AgentChatController {
     @CurrentUser() user: User,
     @Body() dto: UpsertSessionDto,
   ) {
-    return this.service.upsertSession(workspaceId, user.id, dto.threadId, dto.title, dto.messages);
+    return this.service.upsertSession(
+      workspaceId,
+      user.id,
+      dto.threadId,
+      dto.title,
+      dto.messages,
+    );
   }
 
   @Patch('sessions/:sessionId')

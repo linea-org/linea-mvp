@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { auditLogs, users } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
@@ -42,11 +42,7 @@ export class AuditService {
     });
   }
 
-  async findAll(
-    workspaceId: string,
-    period?: Period,
-    resourceType?: string,
-  ) {
+  async findAll(workspaceId: string, period?: Period, resourceType?: string) {
     const since = period ? periodToDate(period) : null;
 
     const conditions = [eq(auditLogs.workspaceId, workspaceId)];

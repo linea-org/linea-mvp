@@ -20,7 +20,16 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
-import { Observable, map, takeUntil, timer, from, concat, of, filter } from 'rxjs';
+import {
+  Observable,
+  map,
+  takeUntil,
+  timer,
+  from,
+  concat,
+  of,
+  filter,
+} from 'rxjs';
 import { ExecutionsService } from './executions.service';
 import { ExecutionEventsService } from './execution-events.service';
 import type { BusEntry } from './execution-events.service';
@@ -113,16 +122,22 @@ export class ExecutionsController {
       return of({ data: event } as MessageEvent);
     }
     if (execution.status === 'failed') {
-      return of({ data: { type: 'execution_failed', error: execution.error } } as MessageEvent);
+      return of({
+        data: { type: 'execution_failed', error: execution.error },
+      } as MessageEvent);
     }
 
     // Subscribe to live events BEFORE fetching replay so no events are missed
     // during the async Redis read. Events that fire in this window are buffered
     // locally and deduped against the replay results.
     const liveBuffer: BusEntry[] = [];
-    const bufferSub = this.events.forExecution(id).subscribe((e) => liveBuffer.push(e));
+    const bufferSub = this.events
+      .forExecution(id)
+      .subscribe((e) => liveBuffer.push(e));
 
-    const replayItems = lastEventId ? await this.events.replayFrom(id, lastEventId) : [];
+    const replayItems = lastEventId
+      ? await this.events.replayFrom(id, lastEventId)
+      : [];
     bufferSub.unsubscribe();
 
     const replayedIds = new Set(replayItems.map((r) => r.streamId));

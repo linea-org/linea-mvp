@@ -1,9 +1,22 @@
 import {
-  Controller, Get, Post, Body, Param, Headers,
-  UseGuards, HttpCode, RawBodyRequest, Req,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Headers,
+  UseGuards,
+  HttpCode,
+  RawBodyRequest,
+  Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+} from '@nestjs/swagger';
 import { BillingService } from './billing.service';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { RoleGuard } from '../common/guards/role.guard';
@@ -22,7 +35,9 @@ export class BillingController {
   @Get('plans')
   @ApiBearerAuth()
   @UseGuards(WorkspaceGuard, RoleGuard)
-  @ApiOperation({ summary: 'Get available plans and current plan for workspace' })
+  @ApiOperation({
+    summary: 'Get available plans and current plan for workspace',
+  })
   @ApiParam({ name: 'workspaceId' })
   getPlans(@Param('workspaceId') workspaceId: string) {
     return this.service.getPlans(workspaceId);
@@ -32,9 +47,14 @@ export class BillingController {
   @ApiBearerAuth()
   @UseGuards(WorkspaceGuard, RoleGuard)
   @RequireRole('admin')
-  @ApiOperation({ summary: 'Create a Polar.sh checkout session for plan upgrade' })
+  @ApiOperation({
+    summary: 'Create a Polar.sh checkout session for plan upgrade',
+  })
   @ApiParam({ name: 'workspaceId' })
-  createCheckout(@Param('workspaceId') workspaceId: string, @Body() dto: CreateCheckoutDto) {
+  createCheckout(
+    @Param('workspaceId') workspaceId: string,
+    @Body() dto: CreateCheckoutDto,
+  ) {
     return this.service.createCheckout(workspaceId, dto.plan);
   }
 

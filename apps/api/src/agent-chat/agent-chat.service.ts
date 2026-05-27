@@ -3,7 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { eq, and, desc } from 'drizzle-orm';
 import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import type { DrizzleDB } from '@linea/db';
-import { pods, workflows, executions, schedules, agentChatSessions } from '@linea/db';
+import {
+  pods,
+  workflows,
+  executions,
+  schedules,
+  agentChatSessions,
+} from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { SecretsService } from '../secrets/secrets.service';
 import { ExecutionsService } from '../executions/executions.service';
@@ -85,7 +91,8 @@ Be direct, clear, and structured. Use emoji section headers for readability.`;
 const AGENT_TOOLS: ToolDefinition[] = [
   {
     name: 'check_workspace_secrets',
-    description: 'Check which API keys and secrets are configured in this workspace. Returns secret names (not values).',
+    description:
+      'Check which API keys and secrets are configured in this workspace. Returns secret names (not values).',
     parameters: { type: 'object', properties: {}, required: [] },
     approval: 'never',
   },
@@ -100,18 +107,27 @@ const AGENT_TOOLS: ToolDefinition[] = [
     description: 'List all workflows in a specific pod.',
     parameters: {
       type: 'object',
-      properties: { pod_id: { type: 'string', description: 'The pod ID to list workflows for' } },
+      properties: {
+        pod_id: {
+          type: 'string',
+          description: 'The pod ID to list workflows for',
+        },
+      },
       required: ['pod_id'],
     },
     approval: 'never',
   },
   {
     name: 'create_workflow',
-    description: 'Create a new workflow in a pod. Provide a complete node/edge definition.',
+    description:
+      'Create a new workflow in a pod. Provide a complete node/edge definition.',
     parameters: {
       type: 'object',
       properties: {
-        pod_id: { type: 'string', description: 'Pod ID to create the workflow in' },
+        pod_id: {
+          type: 'string',
+          description: 'Pod ID to create the workflow in',
+        },
         name: { type: 'string', description: 'Workflow name' },
         description: { type: 'string', description: 'Short description' },
         definition: {
@@ -127,13 +143,22 @@ const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'run_workflow',
-    description: 'Trigger a workflow execution and wait for its result (up to 60 seconds). For chatbot workflows pass input: { message: "..." }. Returns output on success, or an error.',
+    description:
+      'Trigger a workflow execution and wait for its result (up to 60 seconds). For chatbot workflows pass input: { message: "..." }. Returns output on success, or an error.',
     parameters: {
       type: 'object',
       properties: {
-        pod_id: { type: 'string', description: 'Pod ID that owns the workflow' },
+        pod_id: {
+          type: 'string',
+          description: 'Pod ID that owns the workflow',
+        },
         workflow_id: { type: 'string', description: 'Workflow ID to execute' },
-        input: { type: 'object', description: 'Input variables', properties: {}, required: [] },
+        input: {
+          type: 'object',
+          description: 'Input variables',
+          properties: {},
+          required: [],
+        },
       },
       required: ['pod_id', 'workflow_id'],
     },
@@ -141,11 +166,16 @@ const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'save_to_memory',
-    description: 'Persist a piece of information so you can recall it in future conversations with this user. Use for names, preferences, context, or any fact worth remembering long-term.',
+    description:
+      'Persist a piece of information so you can recall it in future conversations with this user. Use for names, preferences, context, or any fact worth remembering long-term.',
     parameters: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: 'Short descriptive key, e.g. "user_name" or "preferred_language"' },
+        key: {
+          type: 'string',
+          description:
+            'Short descriptive key, e.g. "user_name" or "preferred_language"',
+        },
         value: { type: 'string', description: 'The information to remember' },
       },
       required: ['key', 'value'],
@@ -154,13 +184,23 @@ const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'list_executions',
-    description: 'List recent executions for a pod, optionally filtered by workflow. Returns id, status, triggeredBy, startedAt, finishedAt.',
+    description:
+      'List recent executions for a pod, optionally filtered by workflow. Returns id, status, triggeredBy, startedAt, finishedAt.',
     parameters: {
       type: 'object',
       properties: {
-        pod_id: { type: 'string', description: 'Pod ID to list executions for' },
-        workflow_id: { type: 'string', description: 'Optional: filter by workflow ID' },
-        limit: { type: 'number', description: 'Max results (default 10, max 50)' },
+        pod_id: {
+          type: 'string',
+          description: 'Pod ID to list executions for',
+        },
+        workflow_id: {
+          type: 'string',
+          description: 'Optional: filter by workflow ID',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results (default 10, max 50)',
+        },
       },
       required: ['pod_id'],
     },
@@ -168,11 +208,15 @@ const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'get_execution',
-    description: 'Get details of a specific execution — status, output, error, node results.',
+    description:
+      'Get details of a specific execution — status, output, error, node results.',
     parameters: {
       type: 'object',
       properties: {
-        pod_id: { type: 'string', description: 'Pod ID that owns the execution' },
+        pod_id: {
+          type: 'string',
+          description: 'Pod ID that owns the execution',
+        },
         execution_id: { type: 'string', description: 'Execution ID' },
       },
       required: ['pod_id', 'execution_id'],
@@ -181,7 +225,8 @@ const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'list_schedules',
-    description: 'List scheduled triggers for a pod — cron expression, enabled state, last and next run times.',
+    description:
+      'List scheduled triggers for a pod — cron expression, enabled state, last and next run times.',
     parameters: {
       type: 'object',
       properties: {
@@ -193,18 +238,26 @@ const AGENT_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'list_mcp_servers',
-    description: 'List all MCP (Model Context Protocol) servers configured in this workspace. Returns id, name, and url for each server.',
+    description:
+      'List all MCP (Model Context Protocol) servers configured in this workspace. Returns id, name, and url for each server.',
     parameters: { type: 'object', properties: {}, required: [] },
     approval: 'never',
   },
   {
     name: 'call_mcp_tool',
-    description: 'Call a tool on a configured MCP server. First use list_mcp_servers to find available servers, then call a specific tool with parameters.',
+    description:
+      'Call a tool on a configured MCP server. First use list_mcp_servers to find available servers, then call a specific tool with parameters.',
     parameters: {
       type: 'object',
       properties: {
-        server_id: { type: 'string', description: 'MCP server ID (from list_mcp_servers)' },
-        tool_name: { type: 'string', description: 'Name of the tool to call on the MCP server' },
+        server_id: {
+          type: 'string',
+          description: 'MCP server ID (from list_mcp_servers)',
+        },
+        tool_name: {
+          type: 'string',
+          description: 'Name of the tool to call on the MCP server',
+        },
         parameters: {
           type: 'object',
           description: 'Tool parameters as key-value pairs',
@@ -262,7 +315,9 @@ function createEventChannel() {
         if (item === DONE) return;
         yield item as object;
       }
-      await new Promise<void>((r) => { resolver = r; });
+      await new Promise<void>((r) => {
+        resolver = r;
+      });
     }
   }
 
@@ -287,17 +342,19 @@ export class AgentChatService {
     const threadId = dto.threadId ?? `agent-chat-${workspaceId}-${Date.now()}`;
 
     // Load workspace API keys (fall back to server env vars)
-    const [anthropicKey, openaiKey, groqKey, googleKey, xaiKey, sessionMemory] = await Promise.all([
-      this.memoryService.loadApiKey(workspaceId, 'anthropic'),
-      this.memoryService.loadApiKey(workspaceId, 'openai'),
-      this.memoryService.loadApiKey(workspaceId, 'groq'),
-      this.memoryService.loadApiKey(workspaceId, 'google'),
-      this.memoryService.loadApiKey(workspaceId, 'xai'),
-      this.memoryService.loadForExecution(workspaceId, undefined, threadId),
-    ]);
+    const [anthropicKey, openaiKey, groqKey, googleKey, xaiKey, sessionMemory] =
+      await Promise.all([
+        this.memoryService.loadApiKey(workspaceId, 'anthropic'),
+        this.memoryService.loadApiKey(workspaceId, 'openai'),
+        this.memoryService.loadApiKey(workspaceId, 'groq'),
+        this.memoryService.loadApiKey(workspaceId, 'google'),
+        this.memoryService.loadApiKey(workspaceId, 'xai'),
+        this.memoryService.loadForExecution(workspaceId, undefined, threadId),
+      ]);
 
     const apiKeys: ModelApiKeys = {
-      ANTHROPIC_API_KEY: anthropicKey ?? this.config.get<string>('ANTHROPIC_API_KEY'),
+      ANTHROPIC_API_KEY:
+        anthropicKey ?? this.config.get<string>('ANTHROPIC_API_KEY'),
       OPENAI_API_KEY: openaiKey ?? this.config.get<string>('OPENAI_API_KEY'),
       GROQ_API_KEY: groqKey ?? this.config.get<string>('GROQ_API_KEY'),
       GOOGLE_API_KEY: googleKey ?? this.config.get<string>('GOOGLE_API_KEY'),
@@ -309,12 +366,19 @@ export class AgentChatService {
     modelDef ??= MODEL_REGISTRY['claude-sonnet-4-6'];
 
     const requiredKey = PROVIDER_KEY_MAP[modelDef.provider];
-    if (requiredKey && !apiKeys[requiredKey] && modelDef.provider !== 'ollama') {
+    if (
+      requiredKey &&
+      !apiKeys[requiredKey] &&
+      modelDef.provider !== 'ollama'
+    ) {
       const fallback = Object.values(MODEL_REGISTRY)
-        .filter((m) => !m.useCases.includes('embedding') && (
-          m.provider === 'ollama' ||
-          (PROVIDER_KEY_MAP[m.provider] != null && apiKeys[PROVIDER_KEY_MAP[m.provider]!] != null)
-        ))
+        .filter(
+          (m) =>
+            !m.useCases.includes('embedding') &&
+            (m.provider === 'ollama' ||
+              (PROVIDER_KEY_MAP[m.provider] != null &&
+                apiKeys[PROVIDER_KEY_MAP[m.provider]!] != null)),
+        )
         .sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input)[0];
       if (fallback) modelDef = fallback;
     }
@@ -324,7 +388,10 @@ export class AgentChatService {
       sessionMemory && Object.keys(sessionMemory).length > 0
         ? '\n\n## What you remember about this user\n' +
           Object.entries(sessionMemory)
-            .map(([k, v]) => `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+            .map(
+              ([k, v]) =>
+                `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`,
+            )
             .join('\n')
         : '';
 
@@ -339,12 +406,14 @@ export class AgentChatService {
 
     const initialMessages: ModelChatMessage[] = [
       { role: 'system', content: system },
-      ...dto.messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ...dto.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
     ];
 
     // Build async event channel — nodes push events, generator yields them
     const channel = createEventChannel();
-    const self = this;
 
     const graph = new StateGraph(AgentStateAnnotation)
       .addNode('callModel', async (state: AgentStateType, config: any) => {
@@ -362,7 +431,13 @@ export class AgentChatService {
 
         if (result.toolCalls?.length && result.stopReason === 'tool_use') {
           return {
-            messages: [{ role: 'assistant' as const, content: result.text, toolCalls: result.toolCalls }],
+            messages: [
+              {
+                role: 'assistant' as const,
+                content: result.text,
+                toolCalls: result.toolCalls,
+              },
+            ],
             pendingTools: result.toolCalls,
           };
         }
@@ -373,19 +448,31 @@ export class AgentChatService {
         };
       })
       .addNode('callTools', async (state: AgentStateType, config: any) => {
-        const { _emit, _workspaceId, _dto, _threadId } = config.configurable as {
-          _emit: typeof channel.emit;
-          _workspaceId: string;
-          _dto: ChatDto;
-          _threadId: string;
-        };
+        const { _emit, _workspaceId, _dto, _threadId } =
+          config.configurable as {
+            _emit: typeof channel.emit;
+            _workspaceId: string;
+            _dto: ChatDto;
+            _threadId: string;
+          };
 
         // Execute all tool calls in parallel — no interrupts in agent-chat
         const results = await Promise.all(
           (state.pendingTools ?? []).map(async (tc) => {
             _emit({ type: 'step_start', id: tc.id, name: tc.name });
-            _emit({ type: 'tool_call', id: tc.id, name: tc.name, input: tc.arguments });
-            const result = await self.executeTool(_workspaceId, _threadId, tc.name, tc.arguments, _dto);
+            _emit({
+              type: 'tool_call',
+              id: tc.id,
+              name: tc.name,
+              input: tc.arguments,
+            });
+            const result = await this.executeTool(
+              _workspaceId,
+              _threadId,
+              tc.name,
+              tc.arguments,
+              _dto,
+            );
             _emit({ type: 'tool_result', id: tc.id, name: tc.name, result });
             return { tc, result };
           }),
@@ -422,7 +509,10 @@ export class AgentChatService {
       )
       .then(() => channel.done())
       .catch((err: unknown) => {
-        channel.emit({ type: 'error', error: err instanceof Error ? err.message : String(err) });
+        channel.emit({
+          type: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        });
         channel.done();
       });
 
@@ -452,18 +542,23 @@ export class AgentChatService {
     threadId: string,
     name: string,
     input: Record<string, unknown>,
-    dto: ChatDto,
+    _dto: ChatDto,
   ): Promise<unknown> {
     switch (name) {
       case 'check_workspace_secrets': {
         const rows = await this.secretsService.findAll(workspaceId);
-        if (rows.length === 0) return { configured: [], message: 'No secrets configured yet.' };
+        if (rows.length === 0)
+          return { configured: [], message: 'No secrets configured yet.' };
         return { configured: rows.map((r) => r.name) };
       }
 
       case 'list_pods': {
         const rows = await this.db
-          .select({ id: pods.id, name: pods.name, description: pods.description })
+          .select({
+            id: pods.id,
+            name: pods.name,
+            description: pods.description,
+          })
           .from(pods)
           .where(eq(pods.workspaceId, workspaceId));
         return { pods: rows };
@@ -472,18 +567,29 @@ export class AgentChatService {
       case 'list_workflows': {
         const podId = input['pod_id'] as string;
         const rows = await this.db
-          .select({ id: workflows.id, name: workflows.name, description: workflows.description, isPublic: workflows.isPublic })
+          .select({
+            id: workflows.id,
+            name: workflows.name,
+            description: workflows.description,
+            isPublic: workflows.isPublic,
+          })
           .from(workflows)
           .innerJoin(pods, eq(pods.id, workflows.podId))
-          .where(and(eq(workflows.podId, podId), eq(pods.workspaceId, workspaceId)));
+          .where(
+            and(eq(workflows.podId, podId), eq(pods.workspaceId, workspaceId)),
+          );
         return { workflows: rows };
       }
 
       case 'create_workflow': {
         const podId = input['pod_id'] as string;
         const wfName = input['name'] as string;
-        const description = (input['description'] as string | undefined) ?? null;
-        const definition = input['definition'] as { nodes: unknown[]; edges: unknown[] };
+        const description =
+          (input['description'] as string | undefined) ?? null;
+        const definition = input['definition'] as {
+          nodes: unknown[];
+          edges: unknown[];
+        };
 
         // Verify pod belongs to this workspace
         const [podCheck] = await this.db
@@ -491,11 +597,17 @@ export class AgentChatService {
           .from(pods)
           .where(and(eq(pods.id, podId), eq(pods.workspaceId, workspaceId)))
           .limit(1);
-        if (!podCheck) return { error: `Pod ${podId} not found in this workspace` };
+        if (!podCheck)
+          return { error: `Pod ${podId} not found in this workspace` };
 
         const [created] = await this.db
           .insert(workflows)
-          .values({ podId, name: wfName, description, definition: definition as any })
+          .values({
+            podId,
+            name: wfName,
+            description,
+            definition: definition as any,
+          })
           .returning({ id: workflows.id, name: workflows.name });
 
         return { success: true, workflowId: created?.id, name: created?.name };
@@ -517,9 +629,18 @@ export class AgentChatService {
 
         let ex: { id: string; status: string };
         try {
-          ex = await this.executionsService.createFromTrigger(podId, resolvedWorkspaceId, wfId, 'sdk', wfInput);
+          ex = await this.executionsService.createFromTrigger(
+            podId,
+            resolvedWorkspaceId,
+            wfId,
+            'sdk',
+            wfInput,
+          );
         } catch (err) {
-          return { error: err instanceof Error ? err.message : 'Failed to start execution' };
+          return {
+            error:
+              err instanceof Error ? err.message : 'Failed to start execution',
+          };
         }
 
         const deadline = Date.now() + 60_000;
@@ -527,13 +648,32 @@ export class AgentChatService {
           await new Promise<void>((r) => setTimeout(r, 2_000));
           const current = await this.executionsService.findOne(podId, ex.id);
           if (current.status === 'completed')
-            return { success: true, executionId: ex.id, output: (current.output as Record<string, unknown>)?.['result'] ?? current.output };
+            return {
+              success: true,
+              executionId: ex.id,
+              output:
+                (current.output as Record<string, unknown>)?.['result'] ??
+                current.output,
+            };
           if (current.status === 'failed')
-            return { success: false, executionId: ex.id, error: current.error ?? 'Execution failed' };
+            return {
+              success: false,
+              executionId: ex.id,
+              error: current.error ?? 'Execution failed',
+            };
           if (current.status === 'suspended')
-            return { success: false, executionId: ex.id, error: 'Workflow paused waiting for human input — cannot complete from agent context' };
+            return {
+              success: false,
+              executionId: ex.id,
+              error:
+                'Workflow paused waiting for human input — cannot complete from agent context',
+            };
         }
-        return { success: false, executionId: ex.id, error: 'Timed out after 60 seconds' };
+        return {
+          success: false,
+          executionId: ex.id,
+          error: 'Timed out after 60 seconds',
+        };
       }
 
       case 'save_to_memory': {
@@ -556,7 +696,10 @@ export class AgentChatService {
         const workflowId = input['workflow_id'] as string | undefined;
         const limit = Math.min(Number(input['limit'] ?? 10), 50);
 
-        const conditions = [eq(executions.podId, podId), eq(executions.workspaceId, workspaceId)];
+        const conditions = [
+          eq(executions.podId, podId),
+          eq(executions.workspaceId, workspaceId),
+        ];
         if (workflowId) conditions.push(eq(executions.workflowId, workflowId));
 
         const rows = await this.db
@@ -599,7 +742,9 @@ export class AgentChatService {
             nodeResults: ex.nodeResults,
           };
         } catch {
-          return { error: `Execution ${executionId} not found in pod ${podId}` };
+          return {
+            error: `Execution ${executionId} not found in pod ${podId}`,
+          };
         }
       }
 
@@ -616,7 +761,9 @@ export class AgentChatService {
           })
           .from(schedules)
           .innerJoin(pods, eq(pods.id, schedules.podId))
-          .where(and(eq(schedules.podId, podId), eq(pods.workspaceId, workspaceId)))
+          .where(
+            and(eq(schedules.podId, podId), eq(pods.workspaceId, workspaceId)),
+          )
           .orderBy(schedules.nextRunAt);
 
         return { schedules: rows, count: rows.length };
@@ -625,7 +772,12 @@ export class AgentChatService {
       case 'list_mcp_servers': {
         const servers = await this.mcpService.findAll(workspaceId);
         return {
-          servers: servers.map((s) => ({ id: s.id, name: s.name, url: s.url, hasToken: s.hasToken })),
+          servers: servers.map((s) => ({
+            id: s.id,
+            name: s.name,
+            url: s.url,
+            hasToken: s.hasToken,
+          })),
           count: servers.length,
         };
       }
@@ -637,13 +789,21 @@ export class AgentChatService {
 
         let serverInfo: { url: string; accessToken: string | null };
         try {
-          serverInfo = await this.mcpService.getServerForCall(workspaceId, serverId);
+          serverInfo = await this.mcpService.getServerForCall(
+            workspaceId,
+            serverId,
+          );
         } catch {
-          return { error: `MCP server ${serverId} not found in this workspace` };
+          return {
+            error: `MCP server ${serverId} not found in this workspace`,
+          };
         }
 
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (serverInfo.accessToken) headers['Authorization'] = `Bearer ${serverInfo.accessToken}`;
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (serverInfo.accessToken)
+          headers['Authorization'] = `Bearer ${serverInfo.accessToken}`;
 
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 30_000);
@@ -663,14 +823,22 @@ export class AgentChatService {
 
           if (!res.ok) {
             const text = await res.text();
-            return { error: `MCP server returned ${res.status}: ${text.slice(0, 200)}` };
+            return {
+              error: `MCP server returned ${res.status}: ${text.slice(0, 200)}`,
+            };
           }
 
-          const json = (await res.json()) as { result?: unknown; error?: { message: string } };
-          if (json.error) return { error: `MCP tool error: ${json.error.message}` };
+          const json = (await res.json()) as {
+            result?: unknown;
+            error?: { message: string };
+          };
+          if (json.error)
+            return { error: `MCP tool error: ${json.error.message}` };
           return { success: true, result: json.result };
         } catch (err) {
-          return { error: err instanceof Error ? err.message : 'MCP call failed' };
+          return {
+            error: err instanceof Error ? err.message : 'MCP call failed',
+          };
         } finally {
           clearTimeout(timer);
         }
@@ -724,7 +892,12 @@ export class AgentChatService {
     const [existing] = await this.db
       .select({ id: agentChatSessions.id })
       .from(agentChatSessions)
-      .where(and(eq(agentChatSessions.id, sessionId), eq(agentChatSessions.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(agentChatSessions.id, sessionId),
+          eq(agentChatSessions.workspaceId, workspaceId),
+        ),
+      )
       .limit(1);
     if (!existing) throw new NotFoundException('Session not found');
 
@@ -739,6 +912,11 @@ export class AgentChatService {
   async deleteSession(workspaceId: string, sessionId: string) {
     await this.db
       .delete(agentChatSessions)
-      .where(and(eq(agentChatSessions.id, sessionId), eq(agentChatSessions.workspaceId, workspaceId)));
+      .where(
+        and(
+          eq(agentChatSessions.id, sessionId),
+          eq(agentChatSessions.workspaceId, workspaceId),
+        ),
+      );
   }
 }

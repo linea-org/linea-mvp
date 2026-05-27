@@ -6,12 +6,19 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 const ALLOWED_TYPES = new Set([
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
   'application/pdf',
-  'text/plain', 'text/csv', 'text/markdown',
+  'text/plain',
+  'text/csv',
+  'text/markdown',
   'application/json',
-  'application/zip', 'application/x-zip-compressed',
-  'video/mp4', 'audio/mpeg',
+  'application/zip',
+  'application/x-zip-compressed',
+  'video/mp4',
+  'audio/mpeg',
 ]);
 
 const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
@@ -48,7 +55,9 @@ export class UploadsService {
     size: number,
   ): Promise<{ presignedUrl: string; publicUrl: string; key: string }> {
     if (!this.s3) {
-      throw new BadRequestException('File uploads are not configured on this server');
+      throw new BadRequestException(
+        'File uploads are not configured on this server',
+      );
     }
     if (!ALLOWED_TYPES.has(contentType)) {
       throw new BadRequestException('File type not allowed');
@@ -67,7 +76,9 @@ export class UploadsService {
       ContentLength: size,
     });
 
-    const presignedUrl = await getSignedUrl(this.s3, command, { expiresIn: 300 });
+    const presignedUrl = await getSignedUrl(this.s3, command, {
+      expiresIn: 300,
+    });
     const publicUrl = this.publicBase ? `${this.publicBase}/${key}` : '';
 
     return { presignedUrl, publicUrl, key };

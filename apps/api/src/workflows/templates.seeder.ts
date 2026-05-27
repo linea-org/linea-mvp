@@ -88,7 +88,8 @@ const BUILT_IN_TEMPLATES: Array<{
       {
         type: 'slack',
         label: 'Slack Connection',
-        description: 'Connect your Slack workspace under Settings → Connections so the Slack node can post messages.',
+        description:
+          'Connect your Slack workspace under Settings → Connections so the Slack node can post messages.',
       },
     ],
     definition: {
@@ -223,12 +224,14 @@ const BUILT_IN_TEMPLATES: Array<{
       {
         type: 'github',
         label: 'GitHub Connection',
-        description: 'Connect your GitHub account under Settings → Connections to allow the GitHub node to create issues.',
+        description:
+          'Connect your GitHub account under Settings → Connections to allow the GitHub node to create issues.',
       },
       {
         type: 'model_key',
         label: 'Anthropic API Key',
-        description: 'Add your Anthropic API key under Settings → Model Keys for AI-powered triage.',
+        description:
+          'Add your Anthropic API key under Settings → Model Keys for AI-powered triage.',
       },
     ],
     definition: {
@@ -361,12 +364,14 @@ const BUILT_IN_TEMPLATES: Array<{
       {
         type: 'slack',
         label: 'Slack Connection',
-        description: 'Connect Slack under Settings → Connections so the digest can be posted to a channel.',
+        description:
+          'Connect Slack under Settings → Connections so the digest can be posted to a channel.',
       },
       {
         type: 'model_key',
         label: 'Anthropic API Key',
-        description: 'Required by the AI summarizer node under Settings → Model Keys.',
+        description:
+          'Required by the AI summarizer node under Settings → Model Keys.',
       },
     ],
     definition: {
@@ -395,9 +400,7 @@ const BUILT_IN_TEMPLATES: Array<{
           data: {
             nodeType: 'extract',
             label: 'Extract Articles',
-            fields: [
-              { name: 'articles', path: '$.articles' },
-            ],
+            fields: [{ name: 'articles', path: '$.articles' }],
           },
           position: { x: 540, y: 250 },
         },
@@ -479,12 +482,14 @@ const BUILT_IN_TEMPLATES: Array<{
       {
         type: 'rag',
         label: 'Knowledge Base',
-        description: 'Create a Knowledge Base in the Knowledge section, upload your content, and copy its ID to use as the knowledgeBaseId input.',
+        description:
+          'Create a Knowledge Base in the Knowledge section, upload your content, and copy its ID to use as the knowledgeBaseId input.',
       },
       {
         type: 'model_key',
         label: 'Anthropic API Key',
-        description: 'Add your Anthropic API key under Settings → Model Keys so the AI agent and guardrails can run.',
+        description:
+          'Add your Anthropic API key under Settings → Model Keys so the AI agent and guardrails can run.',
       },
     ],
     definition: {
@@ -503,7 +508,11 @@ const BUILT_IN_TEMPLATES: Array<{
             label: 'Config',
             variables: [
               { key: 'topK', value: '5' },
-              { key: 'systemRole', value: 'You are a helpful assistant. Answer only based on the provided context.' },
+              {
+                key: 'systemRole',
+                value:
+                  'You are a helpful assistant. Answer only based on the provided context.',
+              },
             ],
           },
           position: { x: 320, y: 250 },
@@ -613,12 +622,14 @@ const BUILT_IN_TEMPLATES: Array<{
       {
         type: 'gmail',
         label: 'Gmail Connection',
-        description: 'Connect your Google account under Settings → Connections so the Gmail node can send the report email.',
+        description:
+          'Connect your Google account under Settings → Connections so the Gmail node can send the report email.',
       },
       {
         type: 'model_key',
         label: 'Anthropic API Key',
-        description: 'Required by the AI analysis node under Settings → Model Keys.',
+        description:
+          'Required by the AI analysis node under Settings → Model Keys.',
       },
     ],
     definition: {
@@ -751,17 +762,20 @@ const BUILT_IN_TEMPLATES: Array<{
       {
         type: 'notion',
         label: 'Notion Connection',
-        description: 'Connect Notion under Settings → Connections and create a CRM database. Copy the database ID into the notionDatabaseId input.',
+        description:
+          'Connect Notion under Settings → Connections and create a CRM database. Copy the database ID into the notionDatabaseId input.',
       },
       {
         type: 'slack',
         label: 'Slack Connection',
-        description: 'Connect Slack under Settings → Connections for sales team notifications.',
+        description:
+          'Connect Slack under Settings → Connections for sales team notifications.',
       },
       {
         type: 'model_key',
         label: 'Anthropic API Key',
-        description: 'Required by the AI qualifier and evaluator nodes under Settings → Model Keys.',
+        description:
+          'Required by the AI qualifier and evaluator nodes under Settings → Model Keys.',
       },
     ],
     definition: {
@@ -791,10 +805,10 @@ const BUILT_IN_TEMPLATES: Array<{
             nodeType: 'extract',
             label: 'Extract Fields',
             fields: [
-              { name: 'name',    path: '$.lead.name'    },
+              { name: 'name', path: '$.lead.name' },
               { name: 'company', path: '$.lead.company' },
-              { name: 'role',    path: '$.lead.title'   },
-              { name: 'email',   path: '$.lead.email'   },
+              { name: 'role', path: '$.lead.title' },
+              { name: 'email', path: '$.lead.email' },
             ],
           },
           position: { x: 540, y: 250 },
@@ -849,11 +863,13 @@ const BUILT_IN_TEMPLATES: Array<{
             action: 'create_page',
             databaseId: '{{input.notionDatabaseId}}',
             properties: {
-              Name:    { title:  [{ text: { content: '{{extract.name}}' } }] },
-              Company: { rich_text: [{ text: { content: '{{extract.company}}' } }] },
-              Role:    { rich_text: [{ text: { content: '{{extract.role}}' } }] },
-              Fit:     { select: { name: '{{qualify.fit}}' } },
-              Score:   { number: '{{eval.score}}' },
+              Name: { title: [{ text: { content: '{{extract.name}}' } }] },
+              Company: {
+                rich_text: [{ text: { content: '{{extract.company}}' } }],
+              },
+              Role: { rich_text: [{ text: { content: '{{extract.role}}' } }] },
+              Fit: { select: { name: '{{qualify.fit}}' } },
+              Score: { number: '{{eval.score}}' },
             },
           },
           position: { x: 1420, y: 100 },
@@ -891,16 +907,16 @@ const BUILT_IN_TEMPLATES: Array<{
         },
       ],
       edges: [
-        { id: 'e1', source: 'start',   target: 'fetch'   },
-        { id: 'e2', source: 'fetch',   target: 'extract' },
+        { id: 'e1', source: 'start', target: 'fetch' },
+        { id: 'e2', source: 'fetch', target: 'extract' },
         { id: 'e3', source: 'extract', target: 'qualify' },
-        { id: 'e4', source: 'qualify', target: 'eval'    },
-        { id: 'e5', source: 'eval',    target: 'route'   },
-        { id: 'e6', source: 'route',   target: 'notion',  sourceHandle: 'true'  },
-        { id: 'e7', source: 'notion',  target: 'slack'   },
-        { id: 'e8', source: 'route',   target: 'reject',  sourceHandle: 'false' },
-        { id: 'e9', source: 'slack',   target: 'end'     },
-        { id: 'e10',source: 'reject',  target: 'end'     },
+        { id: 'e4', source: 'qualify', target: 'eval' },
+        { id: 'e5', source: 'eval', target: 'route' },
+        { id: 'e6', source: 'route', target: 'notion', sourceHandle: 'true' },
+        { id: 'e7', source: 'notion', target: 'slack' },
+        { id: 'e8', source: 'route', target: 'reject', sourceHandle: 'false' },
+        { id: 'e9', source: 'slack', target: 'end' },
+        { id: 'e10', source: 'reject', target: 'end' },
       ],
     },
   },
@@ -977,8 +993,7 @@ const BUILT_IN_TEMPLATES: Array<{
             label: 'Apply Decision',
             method: 'POST',
             url: '{{input.moderationWebhook}}',
-            body:
-              '{"contentId":"{{vars.contentId}}","decision":"approved","redactedText":"{{guard.redactedText}}","reasoning":"{{explain}}"}',
+            body: '{"contentId":"{{vars.contentId}}","decision":"approved","redactedText":"{{guard.redactedText}}","reasoning":"{{explain}}"}',
           },
           position: { x: 1200, y: 250 },
         },
@@ -990,12 +1005,12 @@ const BUILT_IN_TEMPLATES: Array<{
         },
       ],
       edges: [
-        { id: 'e1', source: 'start',    target: 'vars'     },
-        { id: 'e2', source: 'vars',     target: 'guard'    },
-        { id: 'e3', source: 'guard',    target: 'explain'  },
-        { id: 'e4', source: 'explain',  target: 'approval' },
-        { id: 'e5', source: 'approval', target: 'action'   },
-        { id: 'e6', source: 'action',   target: 'end'      },
+        { id: 'e1', source: 'start', target: 'vars' },
+        { id: 'e2', source: 'vars', target: 'guard' },
+        { id: 'e3', source: 'guard', target: 'explain' },
+        { id: 'e4', source: 'explain', target: 'approval' },
+        { id: 'e5', source: 'approval', target: 'action' },
+        { id: 'e6', source: 'action', target: 'end' },
       ],
     },
   },
@@ -1010,17 +1025,20 @@ const BUILT_IN_TEMPLATES: Array<{
       {
         type: 'slack',
         label: 'Slack Connection',
-        description: 'Connect Slack under Settings → Connections for digest posting.',
+        description:
+          'Connect Slack under Settings → Connections for digest posting.',
       },
       {
         type: 'gmail',
         label: 'Gmail Connection',
-        description: 'Connect Gmail under Settings → Connections for email delivery.',
+        description:
+          'Connect Gmail under Settings → Connections for email delivery.',
       },
       {
         type: 'model_key',
         label: 'Anthropic API Key',
-        description: 'Required by the AI digest writer under Settings → Model Keys.',
+        description:
+          'Required by the AI digest writer under Settings → Model Keys.',
       },
     ],
     definition: {
@@ -1146,16 +1164,16 @@ return {
         },
       ],
       edges: [
-        { id: 'e1', source: 'start',   target: 'ts'     },
-        { id: 'e2', source: 'ts',      target: 'recall' },
-        { id: 'e3', source: 'recall',  target: 'metrics'},
-        { id: 'e4', source: 'metrics', target: 'delta'  },
-        { id: 'e5', source: 'delta',   target: 'digest' },
-        { id: 'e6', source: 'digest',  target: 'save'   },
-        { id: 'e7', source: 'save',    target: 'slack'  },
-        { id: 'e8', source: 'save',    target: 'email'  },
-        { id: 'e9', source: 'slack',   target: 'end'    },
-        { id: 'e10',source: 'email',   target: 'end'    },
+        { id: 'e1', source: 'start', target: 'ts' },
+        { id: 'e2', source: 'ts', target: 'recall' },
+        { id: 'e3', source: 'recall', target: 'metrics' },
+        { id: 'e4', source: 'metrics', target: 'delta' },
+        { id: 'e5', source: 'delta', target: 'digest' },
+        { id: 'e6', source: 'digest', target: 'save' },
+        { id: 'e7', source: 'save', target: 'slack' },
+        { id: 'e8', source: 'save', target: 'email' },
+        { id: 'e9', source: 'slack', target: 'end' },
+        { id: 'e10', source: 'email', target: 'end' },
       ],
     },
   },
@@ -1170,17 +1188,20 @@ return {
       {
         type: 'github',
         label: 'GitHub Connection',
-        description: 'Connect your GitHub account under Settings → Connections. The bot needs read access to PRs and write access to comments.',
+        description:
+          'Connect your GitHub account under Settings → Connections. The bot needs read access to PRs and write access to comments.',
       },
       {
         type: 'slack',
         label: 'Slack Connection',
-        description: 'Connect Slack for team notifications when a review is posted.',
+        description:
+          'Connect Slack for team notifications when a review is posted.',
       },
       {
         type: 'model_key',
         label: 'Anthropic API Key',
-        description: 'Required by the AI reviewer and evaluator nodes under Settings → Model Keys.',
+        description:
+          'Required by the AI reviewer and evaluator nodes under Settings → Model Keys.',
       },
     ],
     definition: {
@@ -1199,8 +1220,8 @@ return {
             label: 'PR Config',
             variables: [
               { key: 'owner', value: '{{input.owner}}' },
-              { key: 'repo',  value: '{{input.repo}}'  },
-              { key: 'pr',    value: '{{input.prNumber}}' },
+              { key: 'repo', value: '{{input.repo}}' },
+              { key: 'pr', value: '{{input.prNumber}}' },
             ],
           },
           position: { x: 320, y: 250 },
@@ -1305,15 +1326,15 @@ return {
         },
       ],
       edges: [
-        { id: 'e1', source: 'start',   target: 'vars'    },
-        { id: 'e2', source: 'vars',    target: 'ghfetch' },
-        { id: 'e3', source: 'ghfetch', target: 'guard'   },
-        { id: 'e4', source: 'guard',   target: 'review'  },
-        { id: 'e5', source: 'review',  target: 'eval'    },
-        { id: 'e6', source: 'eval',    target: 'filter'  },
-        { id: 'e7', source: 'filter',  target: 'comment' },
-        { id: 'e8', source: 'comment', target: 'notify'  },
-        { id: 'e9', source: 'notify',  target: 'end'     },
+        { id: 'e1', source: 'start', target: 'vars' },
+        { id: 'e2', source: 'vars', target: 'ghfetch' },
+        { id: 'e3', source: 'ghfetch', target: 'guard' },
+        { id: 'e4', source: 'guard', target: 'review' },
+        { id: 'e5', source: 'review', target: 'eval' },
+        { id: 'e6', source: 'eval', target: 'filter' },
+        { id: 'e7', source: 'filter', target: 'comment' },
+        { id: 'e8', source: 'comment', target: 'notify' },
+        { id: 'e9', source: 'notify', target: 'end' },
       ],
     },
   },
@@ -1328,17 +1349,20 @@ return {
       {
         type: 'notion',
         label: 'Notion Connection + CRM Database',
-        description: 'Connect Notion under Settings → Connections. Create a database with columns: Name, Company, Role, Email, Stage, Source, Urgency, Use Case, Company Stage, Created, Owner. Copy the database ID.',
+        description:
+          'Connect Notion under Settings → Connections. Create a database with columns: Name, Company, Role, Email, Stage, Source, Urgency, Use Case, Company Stage, Created, Owner. Copy the database ID.',
       },
       {
         type: 'slack',
         label: 'Slack Connection',
-        description: 'Connect Slack for sales team alerts when a new lead arrives.',
+        description:
+          'Connect Slack for sales team alerts when a new lead arrives.',
       },
       {
         type: 'model_key',
         label: 'Anthropic API Key',
-        description: 'Required by the AI enrichment node under Settings → Model Keys.',
+        description:
+          'Required by the AI enrichment node under Settings → Model Keys.',
       },
     ],
     definition: {
@@ -1356,11 +1380,11 @@ return {
             nodeType: 'extract',
             label: 'Extract Lead Fields',
             fields: [
-              { name: 'name',    path: '$.name'    },
-              { name: 'email',   path: '$.email'   },
+              { name: 'name', path: '$.name' },
+              { name: 'email', path: '$.email' },
               { name: 'company', path: '$.company' },
-              { name: 'role',    path: '$.title'   },
-              { name: 'source',  path: '$.source'  },
+              { name: 'role', path: '$.title' },
+              { name: 'source', path: '$.source' },
               { name: 'message', path: '$.message' },
             ],
           },
@@ -1373,9 +1397,9 @@ return {
             nodeType: 'variables',
             label: 'Set Defaults',
             variables: [
-              { key: 'stage',    value: 'New'    },
+              { key: 'stage', value: 'New' },
               { key: 'priority', value: 'Medium' },
-              { key: 'owner',    value: '{{input.defaultOwner}}' },
+              { key: 'owner', value: '{{input.defaultOwner}}' },
             ],
           },
           position: { x: 540, y: 250 },
@@ -1428,17 +1452,21 @@ return {
             action: 'create_page',
             databaseId: '{{input.notionDatabaseId}}',
             properties: {
-              Name:        { title: [{ text: { content: '{{extract.name}}' } }] },
-              Company:     { rich_text: [{ text: { content: '{{extract.company}}' } }] },
-              Role:        { rich_text: [{ text: { content: '{{extract.role}}' } }] },
-              Email:       { email: '{{extract.email}}' },
-              Stage:       { select: { name: '{{vars.stage}}' } },
-              Source:      { select: { name: '{{extract.source}}' } },
-              Urgency:     { select: { name: '{{enrich.urgency}}' } },
-              'Use Case':  { rich_text: [{ text: { content: '{{enrich.useCase}}' } }] },
+              Name: { title: [{ text: { content: '{{extract.name}}' } }] },
+              Company: {
+                rich_text: [{ text: { content: '{{extract.company}}' } }],
+              },
+              Role: { rich_text: [{ text: { content: '{{extract.role}}' } }] },
+              Email: { email: '{{extract.email}}' },
+              Stage: { select: { name: '{{vars.stage}}' } },
+              Source: { select: { name: '{{extract.source}}' } },
+              Urgency: { select: { name: '{{enrich.urgency}}' } },
+              'Use Case': {
+                rich_text: [{ text: { content: '{{enrich.useCase}}' } }],
+              },
               'Company Stage': { select: { name: '{{enrich.companyStage}}' } },
-              'Created':   { date: { start: '{{ts.formatted}}' } },
-              Owner:       { rich_text: [{ text: { content: '{{vars.owner}}' } }] },
+              Created: { date: { start: '{{ts.formatted}}' } },
+              Owner: { rich_text: [{ text: { content: '{{vars.owner}}' } }] },
             },
           },
           position: { x: 1420, y: 250 },
@@ -1464,14 +1492,14 @@ return {
         },
       ],
       edges: [
-        { id: 'e1', source: 'start',   target: 'extract' },
-        { id: 'e2', source: 'extract', target: 'vars'    },
-        { id: 'e3', source: 'vars',    target: 'ts'      },
-        { id: 'e4', source: 'ts',      target: 'guard'   },
-        { id: 'e5', source: 'guard',   target: 'enrich'  },
-        { id: 'e6', source: 'enrich',  target: 'notion'  },
-        { id: 'e7', source: 'notion',  target: 'slack'   },
-        { id: 'e8', source: 'slack',   target: 'end'     },
+        { id: 'e1', source: 'start', target: 'extract' },
+        { id: 'e2', source: 'extract', target: 'vars' },
+        { id: 'e3', source: 'vars', target: 'ts' },
+        { id: 'e4', source: 'ts', target: 'guard' },
+        { id: 'e5', source: 'guard', target: 'enrich' },
+        { id: 'e6', source: 'enrich', target: 'notion' },
+        { id: 'e7', source: 'notion', target: 'slack' },
+        { id: 'e8', source: 'slack', target: 'end' },
       ],
     },
   },
@@ -1508,7 +1536,7 @@ export class TemplatesSeeder implements OnApplicationBootstrap {
             prerequisites: tpl.prerequisites ?? null,
             definition: tpl.definition as any,
           })
-          .where(eq(templates.id, existing[0]!.id));
+          .where(eq(templates.id, existing[0].id));
         updated++;
         continue;
       }
@@ -1528,7 +1556,9 @@ export class TemplatesSeeder implements OnApplicationBootstrap {
     }
 
     if (inserted > 0 || updated > 0) {
-      this.logger.log(`Built-in templates: ${inserted} inserted, ${updated} updated`);
+      this.logger.log(
+        `Built-in templates: ${inserted} inserted, ${updated} updated`,
+      );
     }
   }
 }

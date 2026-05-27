@@ -1,4 +1,10 @@
-import { IsString, IsBoolean, IsOptional, IsUrl, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsBoolean,
+  IsOptional,
+  IsUrl,
+  MaxLength,
+} from 'class-validator';
 
 export class PublishTemplateDto {
   @IsOptional()

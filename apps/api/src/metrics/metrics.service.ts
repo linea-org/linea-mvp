@@ -40,10 +40,14 @@ export class MetricsService {
       `),
     );
 
-    const counts = (countRows[0] ?? {}) as Record<string, unknown>;
+    const counts = countRows[0] ?? {};
 
     // Duration percentiles — only over rows that have both timestamps
-    let durationStats: { avgMs: number | null; p50Ms: number | null; p95Ms: number | null } = {
+    let durationStats: {
+      avgMs: number | null;
+      p50Ms: number | null;
+      p95Ms: number | null;
+    } = {
       avgMs: null,
       p50Ms: null,
       p95Ms: null,
@@ -68,19 +72,27 @@ export class MetricsService {
           FROM dur
         `),
       );
-      const dur = (durRows[0] ?? {}) as Record<string, unknown>;
-      const toMs = (v: unknown) => (v != null && !Number.isNaN(Number(v)) ? Number(v) : null);
+      const dur = durRows[0] ?? {};
+      const toMs = (v: unknown) =>
+        v != null && !Number.isNaN(Number(v)) ? Number(v) : null;
       durationStats = {
         avgMs: toMs(dur['avg_ms']),
         p50Ms: toMs(dur['p50_ms']),
         p95Ms: toMs(dur['p95_ms']),
       };
     } catch (err) {
-      this.logger.warn('Duration percentile query failed, returning nulls', err);
+      this.logger.warn(
+        'Duration percentile query failed, returning nulls',
+        err,
+      );
     }
 
     // Token usage totals
-    let tokenStats: { totalInputTokens: number; totalOutputTokens: number; totalTokens: number } = {
+    let tokenStats: {
+      totalInputTokens: number;
+      totalOutputTokens: number;
+      totalTokens: number;
+    } = {
       totalInputTokens: 0,
       totalOutputTokens: 0,
       totalTokens: 0,
@@ -99,7 +111,7 @@ export class MetricsService {
             AND token_usage IS NOT NULL
         `),
       );
-      const tr = (tokenRows[0] ?? {}) as Record<string, unknown>;
+      const tr = tokenRows[0] ?? {};
       tokenStats = {
         totalInputTokens: Number(tr['total_input'] ?? 0),
         totalOutputTokens: Number(tr['total_output'] ?? 0),
@@ -153,7 +165,7 @@ export class MetricsService {
       duration: durationStats,
       tokens: tokenStats,
       topWorkflows: topWorkflowRows.map((r) => {
-        const row = r as Record<string, unknown>;
+        const row = r;
         const t = Number(row['total']);
         const c = Number(row['completed']);
         return {

@@ -7,7 +7,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq, and } from 'drizzle-orm';
-import { createCipheriv, createDecipheriv, createHmac, timingSafeEqual, randomBytes } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  timingSafeEqual,
+  randomBytes,
+} from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { oauthConnections } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
@@ -43,7 +49,8 @@ export class OAuthService {
     redirectUri: string,
   ): string {
     const cfg = OAUTH_PROVIDERS[provider];
-    if (!cfg) throw new BadRequestException(`Unknown OAuth provider: ${provider}`);
+    if (!cfg)
+      throw new BadRequestException(`Unknown OAuth provider: ${provider}`);
 
     const clientId = this.config.get<string>(cfg.clientIdEnv);
     if (!clientId) {
@@ -52,9 +59,17 @@ export class OAuthService {
       );
     }
 
-    const statePayload = JSON.stringify({ workspaceId, provider, nonce: randomBytes(16).toString('hex') });
-    const sig = createHmac('sha256', this.stateSigningKey).update(statePayload).digest('hex');
-    const state = Buffer.from(JSON.stringify({ p: statePayload, s: sig })).toString('base64url');
+    const statePayload = JSON.stringify({
+      workspaceId,
+      provider,
+      nonce: randomBytes(16).toString('hex'),
+    });
+    const sig = createHmac('sha256', this.stateSigningKey)
+      .update(statePayload)
+      .digest('hex');
+    const state = Buffer.from(
+      JSON.stringify({ p: statePayload, s: sig }),
+    ).toString('base64url');
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -75,18 +90,27 @@ export class OAuthService {
     redirectUri: string,
   ): Promise<{ workspaceId: string }> {
     const cfg = OAUTH_PROVIDERS[provider];
-    if (!cfg) throw new BadRequestException(`Unknown OAuth provider: ${provider}`);
+    if (!cfg)
+      throw new BadRequestException(`Unknown OAuth provider: ${provider}`);
 
     let workspaceId: string;
     try {
-      const outer = JSON.parse(Buffer.from(state, 'base64url').toString('utf8')) as { p: string; s: string };
-      const expectedSig = createHmac('sha256', this.stateSigningKey).update(outer.p).digest('hex');
+      const outer = JSON.parse(
+        Buffer.from(state, 'base64url').toString('utf8'),
+      ) as { p: string; s: string };
+      const expectedSig = createHmac('sha256', this.stateSigningKey)
+        .update(outer.p)
+        .digest('hex');
       const expBuf = Buffer.from(expectedSig, 'hex');
       const sigBuf = Buffer.from(outer.s ?? '', 'hex');
       if (expBuf.length !== sigBuf.length || !timingSafeEqual(expBuf, sigBuf)) {
         throw new Error('signature mismatch');
       }
-      const payload = JSON.parse(outer.p) as { workspaceId: string; provider: string; nonce: string };
+      const payload = JSON.parse(outer.p) as {
+        workspaceId: string;
+        provider: string;
+        nonce: string;
+      };
       workspaceId = payload.workspaceId;
     } catch {
       throw new BadRequestException('Invalid OAuth state parameter');
@@ -96,7 +120,9 @@ export class OAuthService {
     const clientSecret = this.config.get<string>(cfg.clientSecretEnv);
 
     if (!clientId || !clientSecret) {
-      throw new BadRequestException(`OAuth provider '${provider}' is not configured`);
+      throw new BadRequestException(
+        `OAuth provider '${provider}' is not configured`,
+      );
     }
 
     const body = new URLSearchParams({
@@ -119,7 +145,9 @@ export class OAuthService {
     if (!res.ok) {
       const text = await res.text();
       this.logger.error(`Token exchange failed for ${provider}: ${text}`);
-      throw new BadRequestException(`OAuth token exchange failed for ${provider}`);
+      throw new BadRequestException(
+        `OAuth token exchange failed for ${provider}`,
+      );
     }
 
     const token = (await res.json()) as {
@@ -132,7 +160,9 @@ export class OAuthService {
 
     const accessToken = token.authed_user?.access_token ?? token.access_token;
     if (!accessToken) {
-      throw new BadRequestException(`No access token returned from ${provider}`);
+      throw new BadRequestException(
+        `No access token returned from ${provider}`,
+      );
     }
 
     const expiresAt = token.expires_in
@@ -154,7 +184,9 @@ export class OAuthService {
       workspaceId,
       provider,
       accessTokenEncrypted: this.encrypt(accessToken),
-      refreshTokenEncrypted: token.refresh_token ? this.encrypt(token.refresh_token) : null,
+      refreshTokenEncrypted: token.refresh_token
+        ? this.encrypt(token.refresh_token)
+        : null,
       expiresAt: expiresAt ?? null,
       scope: token.scope ?? null,
       updatedAt: new Date(),
@@ -192,7 +224,10 @@ export class OAuthService {
     }));
   }
 
-  async getValidToken(workspaceId: string, provider: string): Promise<string | null> {
+  async getValidToken(
+    workspaceId: string,
+    provider: string,
+  ): Promise<string | null> {
     const [row] = await this.db
       .select()
       .from(oauthConnections)
@@ -213,7 +248,11 @@ export class OAuthService {
 
     if (!row.refreshTokenEncrypted) return null;
 
-    const refreshed = await this.refreshToken(provider, row.refreshTokenEncrypted, row.id);
+    const refreshed = await this.refreshToken(
+      provider,
+      row.refreshTokenEncrypted,
+      row.id,
+    );
     return refreshed;
   }
 
@@ -298,7 +337,10 @@ export class OAuthService {
   private encrypt(plaintext: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const encrypted = Buffer.concat([
+      cipher.update(plaintext, 'utf8'),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
     return Buffer.concat([iv, authTag, encrypted]).toString('base64');
   }

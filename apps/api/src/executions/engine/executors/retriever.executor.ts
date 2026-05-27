@@ -6,7 +6,7 @@ export interface RetrieverNodeData {
   namespaceId?: string;
   topK?: number;
   outputField?: string; // 'documents' | 'text' | 'full' (default: 'documents')
-  outputKey?: string;   // panel field — used as variable name; ignored by format logic
+  outputKey?: string; // panel field — used as variable name; ignored by format logic
 }
 
 /**
@@ -35,8 +35,11 @@ export async function executeRetrieverNode(
   // outputKey (panel field) is a variable name to store under — not a format selector.
   // Only treat it as a format selector if it matches a known format keyword.
   const FORMAT_KEYWORDS = new Set(['documents', 'text', 'full']);
-  const outputField = nodeData.outputField ??
-    (FORMAT_KEYWORDS.has(nodeData.outputKey ?? '') ? nodeData.outputKey! : 'documents');
+  const outputField =
+    nodeData.outputField ??
+    (FORMAT_KEYWORDS.has(nodeData.outputKey ?? '')
+      ? nodeData.outputKey!
+      : 'documents');
   const kbId = nodeData.knowledgeBaseId ?? nodeData.namespaceId;
 
   if (!query) {

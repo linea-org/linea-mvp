@@ -1,5 +1,20 @@
-import { Controller, Post, Get, Body, Param, UseGuards, HttpCode, Query } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  UseGuards,
+  HttpCode,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { EvalsService, type TestCase } from './evals.service';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { PodGuard } from '../common/guards/pod.guard';
@@ -30,7 +45,12 @@ export class EvalsController {
     @Param('workflowId') workflowId: string,
     @Body() dto: RunEvalsDto,
   ) {
-    return this.service.runTestCases(podId, workspaceId, workflowId, dto.testCases);
+    return this.service.runTestCases(
+      podId,
+      workspaceId,
+      workflowId,
+      dto.testCases,
+    );
   }
 
   @Get('runs')
@@ -45,6 +65,10 @@ export class EvalsController {
     @Param('workflowId') workflowId: string,
     @Query('limit') limit?: string,
   ) {
-    return this.service.getRunHistory(workflowId, podId, limit ? parseInt(limit, 10) : 20);
+    return this.service.getRunHistory(
+      workflowId,
+      podId,
+      limit ? parseInt(limit, 10) : 20,
+    );
   }
 }

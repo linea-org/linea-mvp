@@ -1,4 +1,9 @@
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import {
   and,
   eq,
@@ -30,7 +35,10 @@ import type { CreateWorkflowDto } from './dto/create-workflow.dto';
 import type { UpdateWorkflowDto } from './dto/update-workflow.dto';
 import type { ListWorkflowsDto } from './dto/list-workflows.dto';
 import type { ListTemplatesDto } from './dto/list-templates.dto';
-import type { PublishTemplateDto, UpdateTemplateDto } from './dto/publish-template.dto';
+import type {
+  PublishTemplateDto,
+  UpdateTemplateDto,
+} from './dto/publish-template.dto';
 import type { UpdateLogSettingsDto } from './dto/log-settings.dto';
 
 const SECRET_NODE_FIELDS = ['accessToken', 'apiKey', 'secretToken', 'password'];
@@ -96,16 +104,16 @@ export class WorkflowsService {
         .select({ workflowId: workflowFavorites.workflowId })
         .from(workflowFavorites)
         .where(
-          and(
-            eq(workflowFavorites.userId, userId),
-            eq(workflows.podId, podId),
-          ),
+          and(eq(workflowFavorites.userId, userId), eq(workflows.podId, podId)),
         )
         .innerJoin(workflows, eq(workflowFavorites.workflowId, workflows.id));
 
       const ids = favIds.map((r) => r.workflowId);
       if (ids.length === 0) {
-        return { workflows: [], meta: { page: query.page, limit: query.limit, total: 0 } };
+        return {
+          workflows: [],
+          meta: { page: query.page, limit: query.limit, total: 0 },
+        };
       }
       const { inArray } = await import('drizzle-orm');
       conditions.push(inArray(workflows.id, ids));
@@ -234,7 +242,9 @@ export class WorkflowsService {
 
       if (!existing) {
         const secretToken = randomBytes(24).toString('hex');
-        await this.db.insert(webhooks).values({ podId, workflowId, secretToken });
+        await this.db
+          .insert(webhooks)
+          .values({ podId, workflowId, secretToken });
       }
     }
   }
@@ -342,7 +352,12 @@ export class WorkflowsService {
     return ver;
   }
 
-  async restoreVersion(podId: string, workflowId: string, version: number, userId: string) {
+  async restoreVersion(
+    podId: string,
+    workflowId: string,
+    version: number,
+    userId: string,
+  ) {
     const ver = await this.getVersion(podId, workflowId, version);
     const existing = await this.findOne(podId, workflowId);
 
@@ -406,7 +421,7 @@ export class WorkflowsService {
       .insert(workflows)
       .values({
         podId,
-        name: (name?.trim()) || template.name,
+        name: name?.trim() || template.name,
         description,
         definition,
         isTemplate: false,
@@ -432,7 +447,11 @@ export class WorkflowsService {
       .select()
       .from(workflows)
       .where(
-        and(eq(workflows.id, id), eq(workflows.podId, podId), isNotNull(workflows.deletedAt)),
+        and(
+          eq(workflows.id, id),
+          eq(workflows.podId, podId),
+          isNotNull(workflows.deletedAt),
+        ),
       )
       .limit(1);
 
@@ -446,7 +465,13 @@ export class WorkflowsService {
     const [updated] = await this.db
       .update(workflows)
       .set({ isTemplate, updatedAt: new Date() })
-      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
+      .where(
+        and(
+          eq(workflows.id, id),
+          eq(workflows.podId, podId),
+          isNull(workflows.deletedAt),
+        ),
+      )
       .returning();
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found`);
@@ -471,7 +496,9 @@ export class WorkflowsService {
 
       if (sourceTemplate) {
         const workflowHash = JSON.stringify(workflow.definition);
-        const templateHash = JSON.stringify(sourceTemplate.definition ?? workflow.definition);
+        const templateHash = JSON.stringify(
+          sourceTemplate.definition ?? workflow.definition,
+        );
 
         if (workflowHash === templateHash) {
           throw new BadRequestException(
@@ -533,7 +560,8 @@ export class WorkflowsService {
       .where(eq(templates.id, id))
       .returning();
 
-    if (!deleted.length) throw new NotFoundException(`Template ${id} not found`);
+    if (!deleted.length)
+      throw new NotFoundException(`Template ${id} not found`);
   }
 
   // ─── Workflow favorites (per-user bookmarks) ─────────────────────────────
@@ -556,7 +584,10 @@ export class WorkflowsService {
       );
   }
 
-  async getWorkflowFavoriteIds(userId: string, podId: string): Promise<string[]> {
+  async getWorkflowFavoriteIds(
+    userId: string,
+    podId: string,
+  ): Promise<string[]> {
     const rows = await this.db
       .select({ workflowId: workflowFavorites.workflowId })
       .from(workflowFavorites)
@@ -625,7 +656,13 @@ export class WorkflowsService {
         logRetentionDays: dto.logRetentionDays ?? null,
         updatedAt: new Date(),
       })
-      .where(and(eq(workflows.id, id), eq(workflows.podId, podId), isNull(workflows.deletedAt)))
+      .where(
+        and(
+          eq(workflows.id, id),
+          eq(workflows.podId, podId),
+          isNull(workflows.deletedAt),
+        ),
+      )
       .returning();
 
     if (!updated) throw new NotFoundException(`Workflow ${id} not found`);

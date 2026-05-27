@@ -45,7 +45,8 @@ export class OAuthController {
     @Param('workspaceId') workspaceId: string,
     @Param('provider') provider: string,
   ) {
-    const apiUrl = this.config.get<string>('API_URL') ?? 'http://localhost:3001';
+    const apiUrl =
+      this.config.get<string>('API_URL') ?? 'http://localhost:3001';
     const redirectUri = `${apiUrl}/oauth/${provider}/callback`;
     const url = this.oauth.buildAuthUrl(provider, workspaceId, redirectUri);
     return { url };
@@ -64,7 +65,9 @@ export class OAuthCallbackController {
   @Public()
   @Get(':provider/connect')
   connectGone() {
-    throw new GoneException('Use GET /workspaces/:workspaceId/oauth/:provider/connect-url');
+    throw new GoneException(
+      'Use GET /workspaces/:workspaceId/oauth/:provider/connect-url',
+    );
   }
 
   // OAuth provider redirects here after user approves
@@ -77,14 +80,19 @@ export class OAuthCallbackController {
     @Query('error') error: string,
     @Res() res: Response,
   ) {
-    const webUrl = this.config.get<string>('WEB_URL') ?? 'http://localhost:3001';
+    const webUrl =
+      this.config.get<string>('WEB_URL') ?? 'http://localhost:3001';
 
     if (error) {
-      return res.redirect(`${webUrl}/settings/connections?error=${encodeURIComponent(error)}`);
+      return res.redirect(
+        `${webUrl}/settings/connections?error=${encodeURIComponent(error)}`,
+      );
     }
 
     if (!code || !state) {
-      throw new BadRequestException('Missing code or state from OAuth provider');
+      throw new BadRequestException(
+        'Missing code or state from OAuth provider',
+      );
     }
 
     const redirectUri = this.buildRedirectUri(provider);
@@ -94,7 +102,8 @@ export class OAuthCallbackController {
   }
 
   private buildRedirectUri(provider: string): string {
-    const apiUrl = this.config.get<string>('API_URL') ?? 'http://localhost:3000';
+    const apiUrl =
+      this.config.get<string>('API_URL') ?? 'http://localhost:3000';
     return `${apiUrl}/oauth/${provider}/callback`;
   }
 }

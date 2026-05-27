@@ -7,9 +7,15 @@ import Redis from 'ioredis';
 import { ExecutionsService } from './executions.service';
 import { ExecutionsController } from './executions.controller';
 import { NodesController } from './nodes.controller';
-import { ExecutionEventsService, EXEC_EVENTS_REDIS } from './execution-events.service';
+import {
+  ExecutionEventsService,
+  EXEC_EVENTS_REDIS,
+} from './execution-events.service';
 import { ExecutionProcessor } from './queue/execution.processor';
-import { CheckpointCleanupProcessor, CLEANUP_QUEUE } from './queue/checkpoint-cleanup.processor';
+import {
+  CheckpointCleanupProcessor,
+  CLEANUP_QUEUE,
+} from './queue/checkpoint-cleanup.processor';
 import { LangGraphService } from './engine/langgraph.service';
 import { NodeExecutorService } from './engine/node-executor.service';
 import { ExecutionSupervisor } from './engine/supervisor';
@@ -48,7 +54,9 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
       provide: EXEC_EVENTS_REDIS,
       useFactory: (config: ConfigService) => {
         const url = config.get<string>('REDIS_URL');
-        return url ? new Redis(url) : new Redis({ host: 'localhost', port: 6379 });
+        return url
+          ? new Redis(url)
+          : new Redis({ host: 'localhost', port: 6379 });
       },
       inject: [ConfigService],
     },
@@ -63,7 +71,12 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
     CheckpointerService,
   ],
   controllers: [ExecutionsController, NodesController],
-  exports: [ExecutionsService, NodeExecutorService, MemoryService, CheckpointerService],
+  exports: [
+    ExecutionsService,
+    NodeExecutorService,
+    MemoryService,
+    CheckpointerService,
+  ],
 })
 export class ExecutionsModule implements OnModuleInit {
   constructor(

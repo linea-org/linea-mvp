@@ -19,6 +19,12 @@ export class UploadsController {
     @CurrentUser() user: User,
     @Body() dto: PresignDto,
   ) {
-    return this.service.presign(workspaceId, user.id, dto.filename, dto.contentType, dto.size);
+    return this.service.presign(
+      workspaceId,
+      user.id,
+      dto.filename,
+      dto.contentType,
+      dto.size,
+    );
   }
 }

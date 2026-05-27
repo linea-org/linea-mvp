@@ -34,10 +34,22 @@ export class ExecutionEventsService {
       // Write to Redis Stream then push to in-memory bus with the returned ID.
       // Fire-and-forget: callers don't await emit() so errors are handled internally.
       this.redis
-        .xadd(streamKey, 'MAXLEN', '~', String(STREAM_MAX_LEN), '*', 'json', JSON.stringify(event))
+        .xadd(
+          streamKey,
+          'MAXLEN',
+          '~',
+          String(STREAM_MAX_LEN),
+          '*',
+          'json',
+          JSON.stringify(event),
+        )
         .then((streamId) => {
           void this.redis!.expire(streamKey, STREAM_TTL_S);
-          this.bus.next({ executionId, event, streamId: streamId ?? `${Date.now()}-0` });
+          this.bus.next({
+            executionId,
+            event,
+            streamId: streamId ?? `${Date.now()}-0`,
+          });
         })
         .catch(() => {
           // Redis unavailable: synthetic ID keeps the in-memory bus working
@@ -66,7 +78,10 @@ export class ExecutionEventsService {
    * Used by the SSE endpoint to replay missed events on client reconnect.
    * Pass `'0'` to replay from the very beginning of the stream.
    */
-  async replayFrom(executionId: string, lastEventId: string): Promise<BusEntry[]> {
+  async replayFrom(
+    executionId: string,
+    lastEventId: string,
+  ): Promise<BusEntry[]> {
     if (!this.redis) return [];
     const streamKey = `exec_events:${executionId}`;
     try {

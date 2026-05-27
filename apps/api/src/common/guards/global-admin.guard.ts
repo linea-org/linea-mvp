@@ -12,7 +12,10 @@ export class GlobalAdminGuard implements CanActivate {
     if (!user) return false;
 
     const raw = this.config.get<string>('ADMIN_USER_IDS', '');
-    const adminIds = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    const adminIds = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     return adminIds.includes(user.id) || adminIds.includes(user.clerkId);
   }
 }

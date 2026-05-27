@@ -11,12 +11,32 @@ export interface GuardrailsNodeData {
 
 // All patterns are defined as source strings and compiled fresh each call
 // to avoid the stateful lastIndex problem with global-flag RegExp singletons.
-const PII_PATTERN_SOURCES: Array<{ name: string; source: string; flags: string }> = [
-  { name: 'email',       source: '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}',  flags: 'g' },
-  { name: 'phone_us',    source: '(\\+1[-.\\s]?)?\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}', flags: 'g' },
-  { name: 'ssn',         source: '\\b\\d{3}-\\d{2}-\\d{4}\\b',                          flags: 'g' },
-  { name: 'credit_card', source: '\\b\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}\\b', flags: 'g' },
-  { name: 'ip_address',  source: '\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b',    flags: 'g' },
+const PII_PATTERN_SOURCES: Array<{
+  name: string;
+  source: string;
+  flags: string;
+}> = [
+  {
+    name: 'email',
+    source: '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}',
+    flags: 'g',
+  },
+  {
+    name: 'phone_us',
+    source: '(\\+1[-.\\s]?)?\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}',
+    flags: 'g',
+  },
+  { name: 'ssn', source: '\\b\\d{3}-\\d{2}-\\d{4}\\b', flags: 'g' },
+  {
+    name: 'credit_card',
+    source: '\\b\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}\\b',
+    flags: 'g',
+  },
+  {
+    name: 'ip_address',
+    source: '\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b',
+    flags: 'g',
+  },
 ];
 
 const JAILBREAK_PHRASES = [
@@ -50,24 +70,33 @@ export function executeGuardrailsNode(
     nodeData.actionOnViolation ?? (nodeData as any).action ?? 'block';
 
   // Map panel inputKey values to actual variable names
-  const rawInputKey: string = nodeData.inputField ?? (nodeData as any).inputKey ?? 'lastOutput';
+  const rawInputKey: string =
+    nodeData.inputField ?? (nodeData as any).inputKey ?? 'lastOutput';
   const inputField =
-    rawInputKey === 'last_message' || rawInputKey === 'output' ? 'lastOutput'
-    : rawInputKey === 'input' ? 'input'
-    : rawInputKey;
+    rawInputKey === 'last_message' || rawInputKey === 'output'
+      ? 'lastOutput'
+      : rawInputKey === 'input'
+        ? 'input'
+        : rawInputKey;
 
-  const raw = state.variables[inputField] ?? state.variables['lastOutput'] ?? '';
+  const raw =
+    state.variables[inputField] ?? state.variables['lastOutput'] ?? '';
   const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
 
   const enablePii =
-    nodeData.piiEnabled ?? checksArray.includes('pii') ??
+    nodeData.piiEnabled ??
+    checksArray.includes('pii') ??
     (nodeData.guardrailType === 'pii' || nodeData.guardrailType === 'all');
   const enableMod =
-    nodeData.moderationEnabled ?? checksArray.includes('moderation') ??
-    (nodeData.guardrailType === 'moderation' || nodeData.guardrailType === 'all');
+    nodeData.moderationEnabled ??
+    checksArray.includes('moderation') ??
+    (nodeData.guardrailType === 'moderation' ||
+      nodeData.guardrailType === 'all');
   const enableJail =
-    nodeData.jailbreakEnabled ?? checksArray.includes('jailbreak') ??
-    (nodeData.guardrailType === 'jailbreak' || nodeData.guardrailType === 'all');
+    nodeData.jailbreakEnabled ??
+    checksArray.includes('jailbreak') ??
+    (nodeData.guardrailType === 'jailbreak' ||
+      nodeData.guardrailType === 'all');
 
   const violations: Array<{ type: string; detail: string }> = [];
   let redacted = text;
@@ -77,9 +106,15 @@ export function executeGuardrailsNode(
       const pattern = new RegExp(source, flags);
       const matches = text.match(pattern);
       if (matches) {
-        violations.push({ type: 'pii', detail: `Detected ${name}: ${matches.length} instance(s)` });
+        violations.push({
+          type: 'pii',
+          detail: `Detected ${name}: ${matches.length} instance(s)`,
+        });
         if (action === 'redact') {
-          redacted = redacted.replace(new RegExp(source, flags), `[${name.toUpperCase()}_REDACTED]`);
+          redacted = redacted.replace(
+            new RegExp(source, flags),
+            `[${name.toUpperCase()}_REDACTED]`,
+          );
         }
       }
     }
@@ -89,14 +124,20 @@ export function executeGuardrailsNode(
     const lower = text.toLowerCase();
     for (const phrase of JAILBREAK_PHRASES) {
       if (lower.includes(phrase)) {
-        violations.push({ type: 'jailbreak', detail: `Detected jailbreak attempt: "${phrase}"` });
+        violations.push({
+          type: 'jailbreak',
+          detail: `Detected jailbreak attempt: "${phrase}"`,
+        });
       }
     }
   }
 
   if (enableMod) {
     if (new RegExp(MODERATION_SOURCE, 'i').test(text)) {
-      violations.push({ type: 'moderation', detail: 'Detected potentially harmful content' });
+      violations.push({
+        type: 'moderation',
+        detail: 'Detected potentially harmful content',
+      });
     }
   }
 
@@ -105,7 +146,10 @@ export function executeGuardrailsNode(
 
   // Redact can only replace PII patterns — jailbreak/moderation violations have no text
   // to substitute, so escalate redact to block when non-PII violations are present.
-  if (!passed && (action === 'block' || (action === 'redact' && hasNonPiiViolation))) {
+  if (
+    !passed &&
+    (action === 'block' || (action === 'redact' && hasNonPiiViolation))
+  ) {
     throw new Error(
       `Guardrails blocked execution — violations: ${violations.map((v) => v.detail).join(', ')}`,
     );
@@ -114,6 +158,8 @@ export function executeGuardrailsNode(
   return {
     passed,
     violations,
-    ...(action === 'redact' && !passed ? { redactedText: redacted, originalText: text } : {}),
+    ...(action === 'redact' && !passed
+      ? { redactedText: redacted, originalText: text }
+      : {}),
   };
 }
