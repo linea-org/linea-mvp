@@ -83,7 +83,7 @@ const nodeTypeColors: Record<string, string> = {
   start:       '#6366f1', end:        '#14b8a6',
   agent:       '#3b82f6', http:       '#8b5cf6',
   transform:   '#7c3aed', 'if-else':  '#f59e0b',
-  router:      '#ea580c', approval:   '#9ca3af',
+  router:      '#ea580c', approval:   '#f97316',
   mcp:         '#eab308', memory:     '#a855f7',
   extract:     '#0ea5e9', retriever:  '#10b981',
   guardrails:  '#ef4444', code:       '#64748b',

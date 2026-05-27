@@ -27,7 +27,8 @@ const themes: Record<string, Theme> = {
   transform: { icon: CodeIcon,              color: '#7c3aed' },
   'if-else': { icon: GitBranchIcon,         color: '#f59e0b' },
   router:    { icon: GitBranchIcon,         color: '#ea580c' },
-  approval:  { icon: CheckmarkCircle01Icon, color: '#9ca3af' },
+  approval:        { icon: CheckmarkCircle01Icon, color: '#f97316' },
+  'approval-gate': { icon: CheckmarkCircle01Icon, color: '#f97316' },
   mcp:       { icon: Plug01Icon,            color: '#eab308' },
   memory:    { icon: AiBrain01Icon,         color: '#a855f7' },
   extract:   { icon: Download04Icon,        color: '#0ea5e9' },
@@ -120,7 +121,10 @@ function getNodeProperties(nodeType: string, data: Record<string, unknown>): Arr
       break;
     }
     case 'extract':     rows.push(data.prompt     ? { key: 'prompt', value: fmt(data.prompt)     } : null); break;
-    case 'approval':    rows.push(data.message    ? { key: 'prompt', value: fmt(data.message)    } : null); break;
+    case 'approval':
+    case 'approval-gate':
+      rows.push(data.message || data.approvalMessage ? { key: 'prompt', value: fmt((data.message || data.approvalMessage) as string) } : null);
+      break;
     case 'guardrails': {
       const rl = (data.rules as Array<unknown> | undefined) ?? [];
       rows.push(rl.length > 0 ? { key: 'rules', value: String(rl.length) } : null);
@@ -305,13 +309,14 @@ function NodeShell({
 const MULTI_TARGET_NODES = new Set(['merge', 'end']);
 
 /** Nodes that render their own branching source handles */
-const BRANCHING_NODES = new Set(['if-else', 'approval', 'evaluator', 'guardrails']);
+const BRANCHING_NODES = new Set(['if-else', 'approval', 'approval-gate', 'evaluator', 'guardrails']);
 
 type BranchSide = { id: string; label: string; cls: string };
 
 const BRANCH_DEFS: Record<string, [BranchSide, BranchSide]> = {
   'if-else':   [{ id: 'true',     label: 'T',        cls: TRUE_CLS  }, { id: 'false',    label: 'F',       cls: FALSE_CLS }],
-  approval:    [{ id: 'approved', label: 'approved',  cls: TRUE_CLS  }, { id: 'rejected', label: 'rejected',cls: FALSE_CLS }],
+  approval:          [{ id: 'approved', label: 'approved', cls: TRUE_CLS }, { id: 'rejected', label: 'rejected', cls: FALSE_CLS }],
+  'approval-gate':   [{ id: 'approved', label: 'approved', cls: TRUE_CLS }, { id: 'rejected', label: 'rejected', cls: FALSE_CLS }],
   evaluator:   [{ id: 'passed',   label: 'passed',    cls: TRUE_CLS  }, { id: 'failed',   label: 'failed',  cls: FALSE_CLS }],
   guardrails:  [{ id: 'pass',     label: 'pass',      cls: TRUE_CLS  }, { id: 'block',    label: 'block',   cls: FALSE_CLS }],
 };

@@ -108,7 +108,7 @@ export interface NodeResult {
 const NODE_COLORS: Record<string, string> = {
   start: '#6366f1', end: '#14b8a6', agent: '#3b82f6',
   http: '#8b5cf6', transform: '#7c3aed', 'if-else': '#f59e0b',
-  router: '#ea580c', approval: '#9ca3af', mcp: '#eab308', memory: '#a855f7',
+  router: '#ea580c', approval: '#f97316', 'approval-gate': '#f97316', mcp: '#eab308', memory: '#a855f7',
   extract: '#0ea5e9', retriever: '#10b981', guardrails: '#ef4444', code: '#64748b',
   loop: '#0891b2', parallel: '#6366f1', wait: '#64748b', variables: '#059669',
   evaluator: '#d97706', subworkflow: '#7c3aed',
@@ -831,7 +831,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       }
 
       // Check: source handle already has an outgoing edge (named handles: 1 each; single-output: 1 total)
-      const isBranchingSource = ['if-else', 'approval', 'evaluator', 'guardrails'].includes(sourceType);
+      const isBranchingSource = ['if-else', 'approval', 'approval-gate', 'evaluator', 'guardrails'].includes(sourceType);
       const isRouterSource = sourceType === 'router';
 
       if (isBranchingSource || isRouterSource) {
@@ -2292,7 +2292,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       {toast && (
         <div
           className={`pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg max-w-sm text-center ${
-            toast.type === 'error' ? 'bg-destructive' : 'bg-foreground'
+            toast.type === 'error' ? 'bg-red-600' : 'bg-neutral-900'
           }`}
         >
           {toast.message}

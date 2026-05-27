@@ -9,6 +9,7 @@ export const nodeTypes = {
   'if-else': CustomNode,
   router: CustomNode,
   approval: CustomNode,
+  'approval-gate': CustomNode,
   mcp: CustomNode,
   memory: CustomNode,
   extract: CustomNode,

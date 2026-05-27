@@ -313,9 +313,9 @@ const BUILT_IN_TEMPLATES: Array<{
         },
         {
           id: 'approval',
-          type: 'approval-gate',
+          type: 'approval',
           data: {
-            nodeType: 'approval-gate',
+            nodeType: 'approval',
             label: 'Await Approval',
             message: '{{review}}',
           },
@@ -960,9 +960,9 @@ const BUILT_IN_TEMPLATES: Array<{
         },
         {
           id: 'approval',
-          type: 'approval-gate',
+          type: 'approval',
           data: {
-            nodeType: 'approval-gate',
+            nodeType: 'approval',
             label: 'Human Review',
             message:
               'Content moderation review required.\n\nContent ID: {{vars.contentId}}\nPlatform: {{vars.platform}}\n\nAI Assessment:\n{{explain}}',
