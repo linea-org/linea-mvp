@@ -350,7 +350,6 @@ export async function executeAgentNode(
             toolCallLog,
             activeRef.def,
             false,
-            null,
           );
         }
         // Parsing failed — push a correction turn and continue if steps remain

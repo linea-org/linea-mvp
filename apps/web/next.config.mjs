@@ -3,6 +3,7 @@ import { withSentryConfig } from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@linea/ui'],
+  allowedDevOrigins: ['192.168.29.63'],
 };
 
 export default withSentryConfig(nextConfig, {
