@@ -1,68 +1,128 @@
 # Linea
 
-**Workflow automation platform for AI agent pipelines.** Build, deploy, and run multi-step automations with memory, scheduling, integrations, and real-time execution streaming.
+**AI workflow orchestration platform.** Build, deploy, and run multi-node AI pipelines — combining LLM agents, tool calls, knowledge retrieval, human-in-the-loop approvals, and integrations — without writing infrastructure code.
 
-## Features
+---
 
-- **Visual workflow builder** — drag-and-drop canvas with 20+ node types
-- **AI agent nodes** — multi-provider LLM support (Anthropic, OpenAI, Groq, Google)
-- **Memory system** — cross-execution fact storage with semantic search
-- **Knowledge bases** — workspace document stores with vector similarity search
-- **MCP tools** — attach Model Context Protocol servers to any agent node
+## What it does
+
+Linea gives teams a visual workflow builder and a reliable execution engine. Compose nodes on a canvas, run them via the UI or SDK, and stream results in real time.
+
+**Nodes (24 types)**
+
+| Category | Nodes |
+|----------|-------|
+| AI | Agent, Evaluator, Guardrails |
+| Data | Transform, Extract, Logic, Loop, Router |
+| Memory | Memory read/write, Retriever (hybrid vector + BM25) |
+| Integrations | Slack, GitHub, Notion, Gmail, HTTP, Code |
+| Control | Approval, Ask Human, Subworkflow, Note |
+| Infrastructure | MCP tool call, Schedule trigger, Webhook trigger |
+
+**Platform**
+
+- **Visual builder** — drag-and-drop canvas with live execution trace
+- **Multi-provider AI** — Anthropic, OpenAI, Groq, Google, Ollama (local)
+- **Knowledge bases** — pgvector + BM25 hybrid search with RRF fusion
+- **Memory** — cross-execution semantic storage per thread/session
 - **Schedules & webhooks** — cron triggers and inbound HTTP hooks
-- **Built-in integrations** — Slack, GitHub, Notion, Gmail
-- **Human-in-the-loop** — approval gates and ask-human nodes
-- **TypeScript SDK** — trigger workflows and stream events programmatically
+- **TypeScript SDK** — trigger, stream, and manage workflows programmatically
 - **RBAC** — owner / admin / editor / viewer roles per workspace
+- **Audit logs** — workspace-level event trail
 
-## Quick Start
+---
 
-### Prerequisites
+## Quick start
 
-- Node.js 22+, pnpm 9+
-- PostgreSQL with the `pgvector` extension
-- Redis
-
-### Setup
+**Prerequisites:** Node.js 20+, pnpm 9+, Docker
 
 ```bash
-# Install dependencies
+# 1. Install
 pnpm install
 
-# Copy and fill in environment variables
-cp .env.example .env
+# 2. Start Postgres (pgvector) + Redis
+pnpm infra:up
 
-# Push database schema
+# 3. Configure environment
+cp .env.example .env
+# Fill in CLERK_SECRET_KEY, CLERK_PUBLISHABLE_KEY, CLERK_WEBHOOK_SECRET,
+# ENCRYPTION_KEY, and at least one LLM provider key (ANTHROPIC_API_KEY etc.)
+
+# 4. Push database schema
 pnpm db:push
 
-# Start everything
+# 5. Start
 pnpm dev
 ```
 
-The API runs on `http://localhost:3001` and the web app on `http://localhost:3000`.
+| Service | URL |
+|---------|-----|
+| Web app | http://localhost:3000 |
+| API | http://localhost:3001 |
+| API health | http://localhost:3001/health |
 
-### Environment Variables
-
-Copy `.env.example` to `.env` and set at minimum:
+**Minimum required env vars**
 
 | Variable | Description |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string (must have pgvector) |
 | `REDIS_URL` | Redis connection string |
-| `CLERK_SECRET_KEY` | From the Clerk dashboard |
-| `CLERK_PUBLISHABLE_KEY` | From the Clerk dashboard |
-| `CLERK_WEBHOOK_SECRET` | From Clerk → Webhooks |
-| `ENCRYPTION_KEY` | 32-byte hex string (`openssl rand -hex 32`) |
-| `ANTHROPIC_API_KEY` | At least one AI provider key is required |
+| `CLERK_SECRET_KEY` | Clerk dashboard → API Keys |
+| `CLERK_PUBLISHABLE_KEY` | Clerk dashboard → API Keys |
+| `CLERK_WEBHOOK_SECRET` | Clerk dashboard → Webhooks → Signing Secret |
+| `ENCRYPTION_KEY` | `openssl rand -hex 32` — 64 hex chars |
+| `ANTHROPIC_API_KEY` | At least one LLM provider key required |
+
+Full env var reference: [`DEVELOPERS.md`](DEVELOPERS.md#environment-variables-reference)
+
+---
+
+## SDK
+
+```ts
+import { LineaClient } from '@linea/sdk'
+
+const client = new LineaClient({ apiKey: 'lnk_...' })
+
+// Trigger and stream
+const { executionId } = await client.trigger(workspaceId, podId, workflowId, {
+  input: { message: 'Summarise last week\'s PRs' }
+})
+
+for await (const event of client.streamEvents(workspaceId, podId, executionId)) {
+  console.log(event.type, event.data)
+}
+```
+
+---
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15, React Flow, shadcn/ui |
+| Backend | NestJS 11, LangGraph.js, BullMQ |
+| Database | PostgreSQL 16 + pgvector, Drizzle ORM |
+| Queue | BullMQ + Redis |
+| Auth | Clerk (JWT + `lnk_` API keys) |
+| Monorepo | pnpm + Turborepo |
+
+---
+
+## Contributing
+
+See [DEVELOPERS.md](DEVELOPERS.md) for setup, architecture, and the full dev workflow.
+
+Issues are tracked in [Linear](https://linear.app/linea-labs/team/LIN/active) — please don't open GitHub issues.
+
+---
 
 ## Documentation
 
-Full documentation is at [docs.getlinea.ai](https://docs.getlinea.ai) — node reference, API reference, SDK guide, and integration guides.
+[docs.getlinea.ai](https://docs.getlinea.ai) — node reference, API reference, SDK guide, integration guides.
 
-## Tech Stack
-
-Next.js 15 · NestJS 11 · PostgreSQL + pgvector · BullMQ · Clerk · Turborepo
+---
 
 ## License
 
-MIT
+Proprietary. All rights reserved. This software is not open source.

@@ -162,34 +162,67 @@ pnpm db:migrate
 
 ## Git workflow
 
-### Branch naming
+**Linear is the single source of truth for all issues.** Do not create GitHub issues manually — they will not be tracked. All work is planned in the [Platform project on Linear](https://linear.app/linea-labs/team/LIN/active). GitHub Issues are disabled on this repo.
 
-One branch per issue or feature. Branch off `main`:
+### 1. Pick an issue
+
+Go to [Linear → LIN board](https://linear.app/linea-labs/team/LIN/active), assign yourself an issue, and move it to **In Progress**.
+
+### 2. Branch naming
+
+Copy the auto-generated branch name directly from the Linear issue card (branch icon, top-right of the issue). It follows the pattern:
+
+```
+yourname/lin-XX-short-issue-title
+```
+
+Create and push:
 
 ```bash
 git checkout main && git pull
-git checkout -b feat/short-description   # new feature
-git checkout -b fix/short-description    # bug fix
-git checkout -b chore/short-description  # infra / tooling
+git checkout -b yourname/lin-7-null-token-crash
+git push -u origin yourname/lin-7-null-token-crash
 ```
 
-### Commit style
+The `LIN-XX` in the branch name is what links the branch and all its PRs to the Linear issue automatically — do not rename it.
 
-Follow Conventional Commits. Keep scope tight and message imperative:
+### 3. Commit style
+
+Prefix every commit with the Linear issue ID:
 
 ```
-feat(knowledge): add bulk entry ingestion endpoint
-fix(executions): correct SSE dedup on reconnect
-chore(db): add 0003 migration for oauth_connections table
-docs(webhooks): update MODULE.md with delivery history gap
+fix(LIN-7): add null token guard before createApiClient call
+feat(LIN-18): add webhook_deliveries table and migration
+chore(LIN-22): add lastError and consecutiveFailures columns to schedules
+refactor(LIN-28): wire loop node as LangGraph control flow
 ```
+
+Prefixes: `fix` · `feat` · `chore` · `refactor` · `test` · `docs`
 
 - One logical change per commit
-- No `Co-authored-by` or AI attribution lines in commits
+- No `Co-authored-by` or AI attribution lines
 
-### Pull requests
+### 4. One branch per issue
 
-Open a PR to `main` before moving on to the next issue. Never bulk-commit multiple unrelated features directly to `main`.
+Never bundle multiple issues into one branch. If you touch two Linear issues, open two branches and two PRs. This keeps Linear issue state accurate and keeps reviews scoped.
+
+### 5. Pull requests
+
+PR title follows the same convention as commits:
+
+```
+fix(LIN-7): null token crash on workflow execution start
+```
+
+In the PR description, close the Linear issue explicitly:
+
+```
+Closes LIN-7
+```
+
+This moves the Linear issue to **Done** automatically when the PR is merged.
+
+Open a PR to `main` before moving on to the next issue. Never bulk-commit unrelated features directly to `main`.
 
 **PR checklist:**
 - [ ] `pnpm typecheck` passes

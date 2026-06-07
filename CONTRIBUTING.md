@@ -1,5 +1,17 @@
 # Contributing to Linea
 
+See **[DEVELOPERS.md](DEVELOPERS.md)** for the full guide — setup, architecture, git workflow, and Linear issue tracking.
+
+## Quick links
+
+- [Linear board](https://linear.app/linea-labs/team/LIN/active) — all issues live here, not GitHub
+- [Dev setup](#) → `DEVELOPERS.md` → Quick start
+- [Git workflow](#) → `DEVELOPERS.md` → Git workflow (branch naming, commit style, PR convention)
+
+---
+
+<!-- The content below is kept for GitHub's CONTRIBUTING.md auto-display. Full guide is in DEVELOPERS.md. -->
+
 ## Prerequisites
 
 - **Node.js** 20+
