@@ -783,6 +783,8 @@ export function ChatPreviewPanel({
 
     let receivedTerminal = false;
     let lastEventId: string | null = null;
+    let timedOut = false;
+    const timeoutHandle = setTimeout(() => { timedOut = true; ac.abort(); }, 10 * 60 * 1000);
 
     outer: while (!ac.signal.aborted) {
       // Refresh Clerk token before each new SSE connection attempt
@@ -835,7 +837,16 @@ export function ChatPreviewPanel({
           // Stream closed cleanly — exit retry loop, go to fallback
           break;
         } catch (err) {
-          if ((err as Error).name === 'AbortError') return;
+          if ((err as Error).name === 'AbortError') {
+            clearTimeout(timeoutHandle);
+            if (timedOut && !receivedTerminal) {
+              setMessages((prev) => prev.filter((m) => !m.typing));
+              setSuspended(null);
+              setExecStatus('failed');
+              toast.error('Lost track of this execution. Check the Executions page for the latest status.', { id: `sse-timeout-${execId}` });
+            }
+            return;
+          }
           if (attempt < 5 && !ac.signal.aborted) {
             await new Promise<void>((resolve) => {
               const delay = Math.min(1_000 * 2 ** attempt, 30_000);
@@ -854,9 +865,11 @@ export function ChatPreviewPanel({
           `/workspaces/${workspaceId}/pods/${podId}/executions/${execId}`,
         );
         if (ex.status === 'completed') {
+          receivedTerminal = true;
           handleSSEEvent({ type: 'execution_complete', output: ex.output }, execId);
           break;
         } else if (ex.status === 'failed') {
+          receivedTerminal = true;
           handleSSEEvent({ type: 'execution_failed', error: ex.error ?? undefined }, execId);
           break;
         } else if (ex.status === 'running' || ex.status === 'queued') {
@@ -867,7 +880,7 @@ export function ChatPreviewPanel({
           });
           // Continue outer loop to retry SSE connection
         } else if (ex.status === 'suspended') {
-          // SSE missed the events — reconstruct via sync
+          receivedTerminal = true;
           void syncCallbackRef.current?.(execId);
           break;
         } else {
@@ -900,6 +913,14 @@ export function ChatPreviewPanel({
         }
         break;
       }
+    }
+
+    clearTimeout(timeoutHandle);
+    if (timedOut && !receivedTerminal) {
+      setMessages((prev) => prev.filter((m) => !m.typing));
+      setSuspended(null);
+      setExecStatus('failed');
+      toast.error('Lost track of this execution. Check the Executions page for the latest status.', { id: `sse-timeout-${execId}` });
     }
   }, [workspaceId, podId, handleSSEEvent]);
 
