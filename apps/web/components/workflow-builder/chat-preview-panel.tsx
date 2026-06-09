@@ -783,13 +783,10 @@ export function ChatPreviewPanel({
 
     let receivedTerminal = false;
     let lastEventId: string | null = null;
-    const startedAt = Date.now();
+    let timedOut = false;
+    const timeoutHandle = setTimeout(() => { timedOut = true; ac.abort(); }, 10 * 60 * 1000);
 
     outer: while (!ac.signal.aborted) {
-      if (Date.now() - startedAt > 10 * 60 * 1000) {
-        toast.error('Lost track of this execution. Check the Executions page for the latest status.', { id: `sse-timeout-${execId}` });
-        break;
-      }
       // Refresh Clerk token before each new SSE connection attempt
       const currentToken = await getTokenRef.current().catch(() => null) ?? execTokenRef.current;
       execTokenRef.current = currentToken;
@@ -840,7 +837,16 @@ export function ChatPreviewPanel({
           // Stream closed cleanly — exit retry loop, go to fallback
           break;
         } catch (err) {
-          if ((err as Error).name === 'AbortError') return;
+          if ((err as Error).name === 'AbortError') {
+            clearTimeout(timeoutHandle);
+            if (timedOut) {
+              setMessages((prev) => prev.filter((m) => !m.typing));
+              setSuspended(null);
+              setExecStatus('failed');
+              toast.error('Lost track of this execution. Check the Executions page for the latest status.', { id: `sse-timeout-${execId}` });
+            }
+            return;
+          }
           if (attempt < 5 && !ac.signal.aborted) {
             await new Promise<void>((resolve) => {
               const delay = Math.min(1_000 * 2 ** attempt, 30_000);
@@ -886,6 +892,14 @@ export function ChatPreviewPanel({
         }
         break;
       }
+    }
+
+    clearTimeout(timeoutHandle);
+    if (timedOut && !receivedTerminal) {
+      setMessages((prev) => prev.filter((m) => !m.typing));
+      setSuspended(null);
+      setExecStatus('failed');
+      toast.error('Lost track of this execution. Check the Executions page for the latest status.', { id: `sse-timeout-${execId}` });
     }
   }, [workspaceId, podId, handleSSEEvent]);
 
