@@ -888,6 +888,9 @@ export function ChatPreviewPanel({
             },
           ]);
           setSuspended(null);
+          setApprovalMsgId(null);
+          setStreamingText('');
+          setStreamingNodeId(null);
           setExecStatus('failed');
           toast.error('Lost connection to this execution. Check the Executions page for the result.', { id: `conn-lost-${execId}` });
         }
