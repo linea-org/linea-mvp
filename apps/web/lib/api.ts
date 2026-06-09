@@ -9,6 +9,19 @@ export class ApiError extends Error {
   }
 }
 
+export function friendlyApiError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return 'Your session expired. Refresh the page.';
+    if (err.status === 402) return 'Execution limit reached. Upgrade your plan.';
+    if (err.status === 429) return "You've hit the rate limit. Wait a moment and try again.";
+    if (err.status >= 500) return 'Server error. Try again in a moment.';
+  }
+  if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+    return 'Connection failed. Check your internet.';
+  }
+  return err instanceof Error ? err.message : 'An unexpected error occurred.';
+}
+
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,

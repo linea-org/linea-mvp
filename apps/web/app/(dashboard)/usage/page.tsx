@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -113,7 +113,7 @@ export default function UsagePage() {
         setData(result);
       } catch (err) {
         setData(null);
-        setLoadError(err instanceof Error ? err.message : 'Failed to load usage data');
+        setLoadError(friendlyApiError(err));
       } finally {
         setLoading(false);
       }

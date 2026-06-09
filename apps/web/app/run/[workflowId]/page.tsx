@@ -69,8 +69,13 @@ export default function PublicRunPage() {
         body: JSON.stringify(inputs),
       });
       if (!res.ok) {
-        const body = (await res.json()) as { message?: string };
-        setErrorMsg(body.message ?? 'Failed to start. Please try again.');
+        const statusMap: Record<number, string> = {
+          401: 'Your session expired. Refresh the page.',
+          402: 'Execution limit reached. Upgrade your plan.',
+          429: "You've hit the rate limit. Wait a moment and try again.",
+        };
+        const msg = statusMap[res.status] ?? (res.status >= 500 ? 'Server error. Try again in a moment.' : 'Failed to start. Please try again.');
+        setErrorMsg(msg);
         setState('ready');
         return;
       }

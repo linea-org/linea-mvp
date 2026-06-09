@@ -14,7 +14,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { Button } from '@linea/ui/components/button';
 import { toast } from '@linea/ui/components/sonner';
-import { createApiClient, ApiError } from '@/lib/api';
+import { createApiClient, ApiError, friendlyApiError } from '@/lib/api';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -92,19 +92,6 @@ export interface ChatPreviewPanelProps {
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
-function friendlyApiError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 401) return 'Your session expired. Refresh the page.';
-    if (err.status === 402) return 'Execution limit reached. Upgrade your plan.';
-    if (err.status === 429) return "You've hit the rate limit. Wait a moment and try again.";
-    if (err.status >= 500) return 'Server error. Try again in a moment.';
-  }
-  if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
-    return 'Connection failed. Check your internet.';
-  }
-  return err instanceof Error ? err.message : 'An unexpected error occurred.';
-}
-
 function extractReply(output: unknown): string {
   if (output === null || output === undefined) return '(no output)';
   if (typeof output === 'string') return output;
