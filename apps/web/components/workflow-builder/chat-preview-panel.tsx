@@ -92,6 +92,19 @@ export interface ChatPreviewPanelProps {
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
+function friendlyApiError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return 'Your session expired. Refresh the page.';
+    if (err.status === 402) return 'Execution limit reached. Upgrade your plan.';
+    if (err.status === 429) return "You've hit the rate limit. Wait a moment and try again.";
+    if (err.status >= 500) return 'Server error. Try again in a moment.';
+  }
+  if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+    return 'Connection failed. Check your internet.';
+  }
+  return err instanceof Error ? err.message : 'An unexpected error occurred.';
+}
+
 function extractReply(output: unknown): string {
   if (output === null || output === undefined) return '(no output)';
   if (typeof output === 'string') return output;
@@ -958,18 +971,9 @@ export function ChatPreviewPanel({
       onExecutionStarted?.(ex.id);
       void startSSE(freshTok, ex.id);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setMessages((prev) => prev.filter((m) => !m.typing));
-        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
-        return;
-      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
-        {
-          id: `sys-${Date.now()}`,
-          role: 'system',
-          content: err instanceof Error ? err.message : 'Failed to start execution',
-        },
+        { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },
       ]);
       setExecStatus('failed');
     } finally {
@@ -1004,14 +1008,9 @@ export function ChatPreviewPanel({
       setExecStatus('running');
       void startSSE(freshTok, executionId);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setMessages((prev) => prev.filter((m) => !m.typing));
-        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
-        return;
-      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
-        { id: `sys-${Date.now()}`, role: 'system', content: err instanceof Error ? err.message : 'Failed to send response' },
+        { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },
       ]);
     }
   }
@@ -1041,14 +1040,9 @@ export function ChatPreviewPanel({
       setExecStatus('running');
       void startSSE(freshTok, executionId);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setMessages((prev) => prev.filter((m) => !m.typing));
-        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
-        return;
-      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
-        { id: `sys-${Date.now()}`, role: 'system', content: err instanceof Error ? err.message : 'Failed to respond' },
+        { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },
       ]);
     }
   }
