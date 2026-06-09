@@ -839,7 +839,7 @@ export function ChatPreviewPanel({
         } catch (err) {
           if ((err as Error).name === 'AbortError') {
             clearTimeout(timeoutHandle);
-            if (timedOut) {
+            if (timedOut && !receivedTerminal) {
               setMessages((prev) => prev.filter((m) => !m.typing));
               setSuspended(null);
               setExecStatus('failed');
