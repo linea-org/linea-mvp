@@ -865,9 +865,11 @@ export function ChatPreviewPanel({
           `/workspaces/${workspaceId}/pods/${podId}/executions/${execId}`,
         );
         if (ex.status === 'completed') {
+          receivedTerminal = true;
           handleSSEEvent({ type: 'execution_complete', output: ex.output }, execId);
           break;
         } else if (ex.status === 'failed') {
+          receivedTerminal = true;
           handleSSEEvent({ type: 'execution_failed', error: ex.error ?? undefined }, execId);
           break;
         } else if (ex.status === 'running' || ex.status === 'queued') {
