@@ -876,8 +876,27 @@ export function ChatPreviewPanel({
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setMessages((prev) => prev.filter((m) => !m.typing));
+          setSuspended(null);
+          setApprovalMsgId(null);
+          setStreamingText('');
+          setStreamingNodeId(null);
           setExecStatus('failed');
           toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
+        } else {
+          setMessages((prev) => [
+            ...prev.filter((m) => !m.typing),
+            {
+              id: `sys-${Date.now()}`,
+              role: 'system',
+              content: 'Lost connection to this execution.',
+            },
+          ]);
+          setSuspended(null);
+          setApprovalMsgId(null);
+          setStreamingText('');
+          setStreamingNodeId(null);
+          setExecStatus('failed');
+          toast.error('Lost connection to this execution. Check the Executions page for the result.', { id: `conn-lost-${execId}` });
         }
         break;
       }
