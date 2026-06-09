@@ -783,8 +783,13 @@ export function ChatPreviewPanel({
 
     let receivedTerminal = false;
     let lastEventId: string | null = null;
+    const startedAt = Date.now();
 
     outer: while (!ac.signal.aborted) {
+      if (Date.now() - startedAt > 10 * 60 * 1000) {
+        toast.error('Lost track of this execution. Check the Executions page for the latest status.', { id: `sse-timeout-${execId}` });
+        break;
+      }
       // Refresh Clerk token before each new SSE connection attempt
       const currentToken = await getTokenRef.current().catch(() => null) ?? execTokenRef.current;
       execTokenRef.current = currentToken;
