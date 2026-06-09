@@ -31,6 +31,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@linea/ui/components/tooltip';
 import { Kbd } from '@linea/ui/components/kbd';
 import { createApiClient } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
 import { Spinner } from '@linea/ui/components/spinner';
 import { nodeTypes } from './nodes/node-types';
@@ -399,7 +400,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(true);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [runStatus, setRunStatus] = useState<{ id: string; status: string } | null>(null);
   const [interrupt, setInterrupt] = useState<SSEEvent['interrupt'] | null>(null);
   const [executionOutput, setExecutionOutput] = useState<unknown>(undefined);
@@ -558,7 +558,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   function handleVersionRestore(restoredNodes: Node[], restoredEdges: Edge[]) {
     setNodes(restoredNodes);
     setEdges(restoredEdges);
-    showToast('Version restored — save to make it current');
+    toast.success('Version restored — save to make it current');
   }
 
   function handleGenerateEvent(event: GenerateEvent) {
@@ -597,7 +597,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setTimeout(() => rfInstance?.fitView({ padding: 0.2, duration: 500 }), 150);
     } else if (event.type === 'error') {
       setIsGenerating(false);
-      showToast(event.message ?? 'Generation failed', 'error');
+      toast.error(event.message ?? 'Generation failed');
     }
   }
 
@@ -669,11 +669,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-
-  function showToast(message: string, type: 'success' | 'error' = 'success') {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), type === 'error' ? 6000 : 3500);
-  }
 
   function pushHistory(ns: Node[], es: Edge[]) {
     historyStackRef.current = historyStackRef.current.slice(0, historyIdxRef.current + 1);
@@ -981,9 +976,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             ...(n.type === 'frame' ? { connectable: false, selectable: true, zIndex: n.zIndex ?? -1 } : {}),
           })) as Node[]);
           setEdges((def.edges ?? []) as Edge[]);
-          showToast('Workflow imported', 'success');
+          toast.success('Workflow imported');
         } catch {
-          showToast('Invalid workflow file', 'error');
+          toast.error('Invalid workflow file');
         }
       };
       reader.readAsText(file);
@@ -1208,13 +1203,13 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setNodes((nds) => nds.map((n) =>
         n.id === testNodeDialog.node.id ? { ...n, data: { ...n.data, status: 'completed' } } : n,
       ));
-      showToast('Node test completed');
+      toast.success('Node test completed');
     } catch (err) {
       setNodeResults((prev) => ({
         ...prev,
         [testNodeDialog!.node.id]: { status: 'failed', error: err instanceof Error ? err.message : 'Test failed' },
       }));
-      showToast(err instanceof Error ? err.message : 'Node test failed', 'error');
+      toast.error(err instanceof Error ? err.message : 'Node test failed');
     } finally {
       setTestNodeRunning(false);
       setTestNodeDialog(null);
@@ -1243,9 +1238,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           settings: { testCases },
         },
       });
-      showToast('Workflow saved');
+      toast.success('Workflow saved');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Save failed', 'error');
+      toast.error(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setIsSaving(false);
     }
@@ -1261,9 +1256,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       const result = await api.post<{ deployedAt?: string }>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/deploy`, {});
       setIsDeployed(true);
       setDeployedAt(result.deployedAt ?? new Date().toISOString());
-      showToast('Workflow deployed');
+      toast.success('Workflow deployed');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Deploy failed', 'error');
+      toast.error(err instanceof Error ? err.message : 'Deploy failed');
     }
   }
 
@@ -1275,9 +1270,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       await api.post(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/undeploy`, {});
       setIsDeployed(false);
       setDeployedAt(null);
-      showToast('Workflow unpublished');
+      toast.success('Workflow unpublished');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Undeploy failed', 'error');
+      toast.error(err instanceof Error ? err.message : 'Undeploy failed');
     }
   }
 
@@ -1339,13 +1334,13 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         setRunStatus({ id: executionId, status: 'completed' });
         setInterrupt(null);
         if (evt.output !== undefined) setExecutionOutput(evt.output);
-        showToast('Execution completed');
+        toast.success('Execution completed', { id: `exec-${executionId}` });
         break;
       case 'execution_failed':
         setStreamingTokens({});
         setRunStatus({ id: executionId, status: 'failed' });
         setInterrupt(null);
-        showToast(evt.error ? `Execution failed: ${evt.error}` : 'Execution failed', 'error');
+        toast.error(evt.error ? `Execution failed: ${evt.error}` : 'Execution failed', { id: `exec-${executionId}` });
         break;
       case 'execution_status':
         if ((evt as any).status) {
@@ -1435,10 +1430,10 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         setRunStatus({ id: executionId, status: 'completed' });
         const rawOutput = ex.output?.result;
         if (rawOutput !== undefined) setExecutionOutput(rawOutput);
-        showToast('Execution completed');
+        toast.success('Execution completed', { id: `exec-${executionId}` });
       } else if (ex.status === 'failed') {
         setRunStatus({ id: executionId, status: 'failed' });
-        showToast(ex.error ? `Execution failed: ${ex.error}` : 'Execution failed', 'error');
+        toast.error(ex.error ? `Execution failed: ${ex.error}` : 'Execution failed', { id: `exec-${executionId}` });
       }
     } catch {
       // best-effort — toast already shown if SSE delivered the event
@@ -1455,7 +1450,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 
   function handleRun() {
     const validationError = validateWorkflow();
-    if (validationError) { showToast(validationError, 'error'); return; }
+    if (validationError) { toast.error(validationError); return; }
     // Open the chat panel as the primary run interface.
     // The chat panel handles the input prompt and execution.
     void openChatPreview();
@@ -1468,7 +1463,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setRunStatus((prev) => prev ? { ...prev, status: 'cancelled' } : prev);
     setIsRunning(false);
     setInterrupt(null);
-    showToast('Execution cancelled');
+    toast.success('Execution cancelled');
 
     if (currentId) {
       try {
@@ -1504,7 +1499,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setInterrupt(null);
       setRunStatus((prev) => prev ? { ...prev, status: 'running' } : prev);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Approval failed', 'error');
+      toast.error(err instanceof Error ? err.message : 'Approval failed');
     }
   }
 
@@ -1521,7 +1516,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setAskHumanAnswer('');
       setRunStatus((prev) => prev ? { ...prev, status: 'running' } : prev);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Response failed', 'error');
+      toast.error(err instanceof Error ? err.message : 'Response failed');
     }
   }
 
@@ -2222,16 +2217,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         </DialogContent>
       </Dialog>
 
-      {/* Toast */}
-      {toast && (
-        <div
-          className={`pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg max-w-sm text-center ${
-            toast.type === 'error' ? 'bg-red-600' : 'bg-neutral-900'
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
     </div>
   );
 }

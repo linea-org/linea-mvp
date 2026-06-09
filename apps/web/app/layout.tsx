@@ -26,6 +26,7 @@ import "@linea/ui/globals.css"
 import "driver.js/dist/driver.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ReactQueryProvider } from "@/components/providers"
+import { Toaster } from "@linea/ui/components/sonner"
 import { cn } from "@linea/ui/lib/utils";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'})
@@ -50,6 +51,7 @@ export default function RootLayout({
         <body>
           <ReactQueryProvider>
             <ThemeProvider>{children}</ThemeProvider>
+            <Toaster />
           </ReactQueryProvider>
         </body>
       </html>

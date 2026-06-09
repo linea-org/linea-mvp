@@ -13,7 +13,8 @@ import {
   ArrowDown01Icon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@linea/ui/components/button';
-import { createApiClient } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
+import { createApiClient, ApiError } from '@/lib/api';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -917,7 +918,13 @@ export function ChatPreviewPanel({
     ]);
 
     try {
-      const freshTok = await getTokenRef.current().catch(() => null) ?? token;
+      const freshTok = await getTokenRef.current().catch(() => null);
+      if (!freshTok) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        setIsSending(false);
+        toast.error('Session expired. Refresh the page to continue.');
+        return;
+      }
       const api = createApiClient(freshTok);
       const ex = await api.post<{ id: string; status: string }>(
         `/workspaces/${workspaceId}/pods/${podId}/executions`,
@@ -928,6 +935,11 @@ export function ChatPreviewPanel({
       onExecutionStarted?.(ex.id);
       void startSSE(freshTok, ex.id);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
+        return;
+      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
         {
@@ -955,7 +967,12 @@ export function ChatPreviewPanel({
     ]);
 
     try {
-      const freshTok = await getTokenRef.current().catch(() => null) ?? token;
+      const freshTok = await getTokenRef.current().catch(() => null);
+      if (!freshTok) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        toast.error('Session expired. Refresh the page to continue.');
+        return;
+      }
       const api = createApiClient(freshTok);
       await api.patch(
         `/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/respond`,
@@ -964,6 +981,11 @@ export function ChatPreviewPanel({
       setExecStatus('running');
       void startSSE(freshTok, executionId);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
+        return;
+      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
         { id: `sys-${Date.now()}`, role: 'system', content: err instanceof Error ? err.message : 'Failed to send response' },
@@ -982,7 +1004,12 @@ export function ChatPreviewPanel({
     ]);
 
     try {
-      const freshTok = await getTokenRef.current().catch(() => null) ?? token;
+      const freshTok = await getTokenRef.current().catch(() => null);
+      if (!freshTok) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        toast.error('Session expired. Refresh the page to continue.');
+        return;
+      }
       const api = createApiClient(freshTok);
       await api.patch(
         `/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/respond`,
@@ -991,6 +1018,11 @@ export function ChatPreviewPanel({
       setExecStatus('running');
       void startSSE(freshTok, executionId);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
+        return;
+      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
         { id: `sys-${Date.now()}`, role: 'system', content: err instanceof Error ? err.message : 'Failed to respond' },
@@ -1258,6 +1290,7 @@ export function ChatPreviewPanel({
           </>
         )}
       </div>
+
     </div>
   );
 }
