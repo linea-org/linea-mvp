@@ -880,7 +880,7 @@ export function ChatPreviewPanel({
           });
           // Continue outer loop to retry SSE connection
         } else if (ex.status === 'suspended') {
-          // SSE missed the events — reconstruct via sync
+          receivedTerminal = true;
           void syncCallbackRef.current?.(execId);
           break;
         } else {
