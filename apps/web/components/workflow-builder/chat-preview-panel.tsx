@@ -876,6 +876,10 @@ export function ChatPreviewPanel({
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setMessages((prev) => prev.filter((m) => !m.typing));
+          setSuspended(null);
+          setApprovalMsgId(null);
+          setStreamingText('');
+          setStreamingNodeId(null);
           setExecStatus('failed');
           toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
         } else {
