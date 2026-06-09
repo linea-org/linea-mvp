@@ -14,6 +14,7 @@ import {
 } from '@linea/ui/components/select';
 import { Textarea } from '@linea/ui/components/textarea';
 import { createApiClient } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 import { EvalInputForm, type InputVar } from './eval-input-form';
 
 /* ------------------------------------------------------------------ */
@@ -162,7 +163,6 @@ export function EvalsPanel({
 }: EvalsPanelProps) {
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TestCaseResult[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [expandedCase, setExpandedCase] = useState<string | null>(testCases[0]?.id ?? null);
 
   function addCase() {
@@ -207,7 +207,6 @@ export function EvalsPanel({
     if (testCases.length === 0) return;
     setRunning(true);
     setResults(null);
-    setError(null);
 
     const payload = testCases.map((tc) => {
       let input: Record<string, unknown> = {};
@@ -249,7 +248,7 @@ export function EvalsPanel({
       );
       setResults(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Eval run failed');
+      toast.error(err instanceof Error ? err.message : 'Eval run failed');
     } finally {
       setRunning(false);
     }
@@ -292,12 +291,6 @@ export function EvalsPanel({
       {results && (
         <div className={`shrink-0 px-4 py-2 text-xs font-medium border-b border-border ${passCount === totalCount ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400'}`}>
           {passCount}/{totalCount} eval cases passed
-        </div>
-      )}
-
-      {error && (
-        <div className="shrink-0 px-4 py-2 text-xs text-destructive border-b border-border bg-destructive/5">
-          {error}
         </div>
       )}
 
