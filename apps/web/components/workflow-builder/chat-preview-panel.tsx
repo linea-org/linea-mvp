@@ -958,6 +958,11 @@ export function ChatPreviewPanel({
       onExecutionStarted?.(ex.id);
       void startSSE(freshTok, ex.id);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
+        return;
+      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
         { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },
@@ -995,6 +1000,11 @@ export function ChatPreviewPanel({
       setExecStatus('running');
       void startSSE(freshTok, executionId);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
+        return;
+      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
         { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },
@@ -1027,6 +1037,11 @@ export function ChatPreviewPanel({
       setExecStatus('running');
       void startSSE(freshTok, executionId);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setMessages((prev) => prev.filter((m) => !m.typing));
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
+        return;
+      }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
         { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },

@@ -12,7 +12,7 @@ import {
 import { Button } from '@linea/ui/components/button';
 import { Kbd } from '@linea/ui/components/kbd';
 import type { Node, Edge } from '@xyflow/react';
-import { friendlyApiError } from '@/lib/api';
+import { ApiError, friendlyApiError } from '@/lib/api';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -180,7 +180,7 @@ export function GenerateDialog({
         },
       );
 
-      if (!resp.ok || !resp.body) throw new Error(`Server error: ${resp.status}`);
+      if (!resp.ok || !resp.body) throw new ApiError(resp.status, resp.statusText);
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();

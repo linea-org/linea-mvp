@@ -6,6 +6,7 @@ import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import { Skeleton } from '@linea/ui/components/skeleton';
+import { friendlyApiErrorFromStatus } from '@/lib/api';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -69,13 +70,7 @@ export default function PublicRunPage() {
         body: JSON.stringify(inputs),
       });
       if (!res.ok) {
-        const statusMap: Record<number, string> = {
-          401: 'Your session expired. Refresh the page.',
-          402: 'Execution limit reached. Upgrade your plan.',
-          429: "You've hit the rate limit. Wait a moment and try again.",
-        };
-        const msg = statusMap[res.status] ?? (res.status >= 500 ? 'Server error. Try again in a moment.' : 'Failed to start. Please try again.');
-        setErrorMsg(msg);
+        setErrorMsg(friendlyApiErrorFromStatus(res.status) ?? 'Failed to start. Please try again.');
         setState('ready');
         return;
       }
@@ -83,7 +78,7 @@ export default function PublicRunPage() {
       setExecutionId(result.executionId);
       setState('success');
     } catch {
-      setErrorMsg('Network error. Please try again.');
+      setErrorMsg('Connection failed. Check your internet.');
       setState('ready');
     }
   }
