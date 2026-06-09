@@ -50,8 +50,10 @@ export default function RootLayout({
       >
         <body>
           <ReactQueryProvider>
-            <ThemeProvider>{children}</ThemeProvider>
-            <Toaster />
+            <ThemeProvider>
+              {children}
+              <Toaster />
+            </ThemeProvider>
           </ReactQueryProvider>
         </body>
       </html>

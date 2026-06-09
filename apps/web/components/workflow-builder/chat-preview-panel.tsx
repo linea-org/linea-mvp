@@ -873,7 +873,12 @@ export function ChatPreviewPanel({
         } else {
           break;
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          setMessages((prev) => prev.filter((m) => !m.typing));
+          setExecStatus('failed');
+          toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
+        }
         break;
       }
     }
@@ -921,8 +926,7 @@ export function ChatPreviewPanel({
       const freshTok = await getTokenRef.current().catch(() => null);
       if (!freshTok) {
         setMessages((prev) => prev.filter((m) => !m.typing));
-        setIsSending(false);
-        toast.error('Session expired. Refresh the page to continue.');
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
         return;
       }
       const api = createApiClient(freshTok);
