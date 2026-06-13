@@ -34,7 +34,21 @@ JSON mode **simulates a webhook payload** — the execution engine receives the 
 
 **Token refresh** — Clerk dev tokens expire in ~30 s. `getTokenRef` (updated every render, read from stable callbacks) ensures a fresh token is fetched before every API call and SSE reconnect.
 
+## Error Handling Pattern
+
+All catch blocks across the web app use two helpers from `apps/web/lib/api.ts`:
+
+- `friendlyApiError(err)` — converts any thrown value to user-readable text. Maps `ApiError` status codes via `friendlyApiErrorFromStatus`, handles `TypeError` fetch failures, and falls back to `err.message`.
+- `friendlyApiErrorFromStatus(status)` — maps HTTP status codes to sentences: 401 → session expired, 402 → execution limit reached, 429 → rate limit, 5xx → server error.
+
+Raw API error strings (e.g. NestJS validation messages, internal error IDs) must never be shown in the UI. Every `catch` block must pass the error through one of these helpers before setting state.
+
 ## Changelog
+
+### 2026-06-09 (LIN-10)
+- Added `friendlyApiError()` and `friendlyApiErrorFromStatus()` to `apps/web/lib/api.ts`
+- Applied across all catch blocks in `chat-preview-panel.tsx`, `index.tsx`, `evals-panel.tsx`, `generate-dialog.tsx`, `share-panel.tsx`, and all dashboard/app pages — raw API error strings no longer surface in the UI
+- Status-code mapping: 401 → session expired, 402 → execution limit, 429 → rate limit, 5xx → server error
 
 ### 2026-05-28
 - Added **JSON simulation mode** with `Text | JSON` pill tabs, `Simulated` badge on user bubbles, Ctrl+Enter submit, and inline JSON parse error
