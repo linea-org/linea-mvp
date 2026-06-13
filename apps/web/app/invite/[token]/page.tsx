@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -51,7 +51,7 @@ export default function InvitePage() {
         const data = await api.get<InviteDetails>(`/invites/${token}`);
         setDetails(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Invite not found or expired');
+        setError(friendlyApiError(err));
       } finally {
         setLoadingDetails(false);
       }
@@ -74,7 +74,7 @@ export default function InvitePage() {
         router.push('/pods');
       }, 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to accept invite');
+      setError(friendlyApiError(err));
     } finally {
       setAccepting(false);
     }
