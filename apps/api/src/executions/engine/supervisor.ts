@@ -32,8 +32,6 @@ export interface SupervisorDecision {
 export class ExecutionSupervisor {
   private readonly logger = new Logger(ExecutionSupervisor.name);
 
-  // ConfigService kept for future use; no env-level model fallback by design —
-  // users must configure a supervisor model in Settings → Model Preferences.
   constructor(private readonly config: ConfigService) {}
 
   /**

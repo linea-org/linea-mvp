@@ -110,6 +110,11 @@ export class NodeExecutorService {
     };
     this.defaultAgentModel =
       config.get('DEFAULT_AGENT_MODEL') ?? 'claude-sonnet-4-6';
+    if (!config.get('SUPERVISOR_MODEL')) {
+      this.logger.warn(
+        'SUPERVISOR_MODEL env var is not set. Workspaces without a saved supervisor model in Settings → Model Preferences will abort on every node failure instead of retrying.',
+      );
+    }
   }
 
   async execute(input: NodeInput): Promise<NodeOutput> {
