@@ -75,7 +75,8 @@ export default function PublicRunPage() {
           const body = await res.json() as { message?: string; error?: { message?: string } };
           bodyMsg = body?.error?.message ?? body?.message;
         } catch { /* ignore */ }
-        setErrorMsg(friendlyApiErrorFromStatus(res.status) ?? bodyMsg ?? 'Failed to start. Please try again.');
+        const mappedMsg = res.status !== 401 ? friendlyApiErrorFromStatus(res.status) : undefined;
+        setErrorMsg(mappedMsg ?? bodyMsg ?? 'Failed to start. Please try again.');
         setState('ready');
         return;
       }
