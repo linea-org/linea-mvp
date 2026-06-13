@@ -989,7 +989,7 @@ export function ChatPreviewPanel({
       const freshTok = await getTokenRef.current().catch(() => null);
       if (!freshTok) {
         setMessages((prev) => prev.filter((m) => !m.typing));
-        toast.error('Session expired. Refresh the page to continue.');
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
         return;
       }
       const api = createApiClient(freshTok);
@@ -1026,7 +1026,7 @@ export function ChatPreviewPanel({
       const freshTok = await getTokenRef.current().catch(() => null);
       if (!freshTok) {
         setMessages((prev) => prev.filter((m) => !m.typing));
-        toast.error('Session expired. Refresh the page to continue.');
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
         return;
       }
       const api = createApiClient(freshTok);

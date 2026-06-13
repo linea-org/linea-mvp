@@ -75,7 +75,9 @@ export default function PublicRunPage() {
           const body = await res.json() as { message?: string; error?: { message?: string } };
           bodyMsg = body?.error?.message ?? body?.message;
         } catch { /* ignore */ }
-        const mappedMsg = res.status !== 401 ? friendlyApiErrorFromStatus(res.status) : undefined;
+        const mappedMsg = res.status === 401
+          ? 'This workflow is not publicly accessible.'
+          : friendlyApiErrorFromStatus(res.status);
         setErrorMsg(mappedMsg ?? bodyMsg ?? 'Failed to start. Please try again.');
         setState('ready');
         return;
