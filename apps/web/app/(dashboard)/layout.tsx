@@ -274,6 +274,15 @@ async function startTour() {
           align: 'start',
         },
       },
+      {
+        element: '[data-tour="supervisor-model"]',
+        popover: {
+          title: 'Execution Supervisor Model',
+          description: "When a node fails, Linea's supervisor uses an AI model to decide whether to retry, skip, or abort — so your workflows recover intelligently instead of just crashing. Set which model handles this in Settings → Model Preferences. You can skip this for now and configure it later.",
+          side: 'top',
+          align: 'start',
+        },
+      },
     ],
   });
   driverObj.drive();

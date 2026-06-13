@@ -52,6 +52,20 @@ Also exposes a node test endpoint:
 
 ## Changelog
 
+### 2026-06-13 — Supervisor overhaul + reasoning model output cleanup (LIN-16)
+
+**Execution Supervisor — user-configurable model, workspace API keys:**
+- `ExecutionSupervisor.assess()` now receives `apiKeys: ModelApiKeys` and `workspaceSupervisorModel?: string` via `SupervisorContext` — no env-level model or key fallback by design
+- `NodeExecutorService` resolves workspace API keys and supervisor model lazily (only on first failure per execution), caches them for subsequent retries
+- `resolveWorkspaceSupervisorModel(workspaceId)` — new helper querying `workspaces.settings.supervisorModel`
+- If no supervisor model is configured, `assess()` returns `{ action: 'abort', reason: 'No supervisor model configured — go to Settings → Model Preferences to set one' }` without calling the LLM
+- New hard rule: connection errors (`ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `fetch failed`, `Connection error`) retry once with a 2 s delay then abort — bypasses the generic fast-failure rule that was triggering too many retries
+
+**Agent executor — reasoning model output cleanup:**
+- `<think>...</think>` blocks (emitted by QwQ, Qwen3, DeepSeek-R1, etc.) are stripped from final `__agentValue` in `buildAgentResult`
+- Streaming path: `wrapOnToken()` wraps the `onToken` callback with a stateful buffer that suppresses `<think>` block tokens in real time, so the live chat bubble never shows chain-of-thought text
+- `isProviderError` regex extended to match connection-related errors (`connection error|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|fetch failed`) so the agent fallback chain activates when a provider is unreachable
+
 ### 2026-05-28 — SSE wire format clarification
 - **NestJS serialises the full `MessageEvent` object as the SSE `data:` field**, not just `MessageEvent.data`. Wire format: `data: {"data":{...event...},"id":"streamId"}`. Clients must unwrap `parsed.data` to get the actual event payload. Fixed in the workflow builder's chat preview panel and canvas SSE client.
 

@@ -14,6 +14,7 @@ export interface WorkspaceSettings {
   ragSimilarityThreshold?: number;
   ragChunkSize?: number;
   ragChunkOverlap?: number;
+  supervisorModel?: string;
 }
 
 export const workspacePlanEnum = pgEnum('workspace_plan', [

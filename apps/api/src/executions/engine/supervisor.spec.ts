@@ -19,6 +19,7 @@ function makeCtx(
     retryCount: 0,
     maxRetries: 2,
     state: { variables: {} },
+    apiKeys: {},
     ...overrides,
   };
 }

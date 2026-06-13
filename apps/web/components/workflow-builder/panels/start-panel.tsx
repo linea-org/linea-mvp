@@ -220,7 +220,7 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
       {(triggerType === 'manual' || triggerType === 'webhook') && (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="flex items-center justify-between">
-            <Label>Input Variables</Label>
+            <Label>{triggerType === 'webhook' ? 'Input Variables' : 'Context Variables'}</Label>
             <Button
               size="xs"
               variant="ghost"
@@ -298,13 +298,15 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-      {/* Test values — manual only */}
-      {triggerType === 'manual' && vars.filter((v) => v.name).length > 0 && (
+      {/* Test values — manual and webhook */}
+      {(triggerType === 'manual' || triggerType === 'webhook') && vars.filter((v) => v.name).length > 0 && (
         <div className="space-y-2.5 border-t border-border pt-3">
           <div>
             <Label>Test Values</Label>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Values used when you click Run.
+              {triggerType === 'webhook'
+                ? 'Initial values loaded into the chat panel when testing.'
+                : 'Values used when you click Run.'}
             </p>
           </div>
           {vars.filter((v) => v.name).map((v) => (

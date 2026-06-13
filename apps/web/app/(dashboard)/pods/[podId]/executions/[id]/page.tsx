@@ -8,6 +8,8 @@ import { createApiClient } from '@/lib/api';
 import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
+import { JsonView, defaultStyles } from 'react-json-view-lite';
+import 'react-json-view-lite/dist/index.css';
 import { Separator } from '@linea/ui/components/separator';
 import { Textarea } from '@linea/ui/components/textarea';
 import {
@@ -112,6 +114,24 @@ interface WorkflowInfo {
   logLevel: 'none' | 'errors' | 'info' | 'debug';
   logRetentionDays: number | null;
   definition: { nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
+}
+
+function JsonOrPre({ value, className }: { value: unknown; className?: string }) {
+  const parsed = (() => {
+    if (typeof value === 'object' && value !== null) return value;
+    if (typeof value === 'string') {
+      try { const p = JSON.parse(value); if (typeof p === 'object' && p !== null) return p; } catch { /* ignore */ }
+    }
+    return null;
+  })();
+  if (parsed) {
+    return (
+      <div className={className}>
+        <JsonView data={parsed} shouldExpandNode={(level) => level < 2} style={defaultStyles} />
+      </div>
+    );
+  }
+  return <pre className={`font-mono whitespace-pre-wrap break-words ${className ?? ''}`}>{String(value ?? '')}</pre>;
 }
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -466,11 +486,9 @@ function NodeTimeline({
                   {result?.output != null && (
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-1">Output</p>
-                      <pre className="rounded bg-muted p-2 text-xs overflow-auto max-h-40">
-                        {typeof result.output === 'string'
-                          ? result.output
-                          : JSON.stringify(result.output, null, 2)}
-                      </pre>
+                      <div className="rounded bg-muted p-2 text-xs overflow-auto max-h-40">
+                        <JsonOrPre value={result.output} />
+                      </div>
                     </div>
                   )}
 
@@ -1049,17 +1067,15 @@ export default function ExecutionDetailPage() {
       <div className="grid grid-cols-2 gap-6">
         <div>
           <p className="mb-2 text-sm font-medium">Input</p>
-          <pre className="rounded-md bg-muted p-3 text-xs overflow-auto max-h-48">
-            {JSON.stringify(execution.input, null, 2)}
-          </pre>
+          <div className="rounded-md bg-muted p-3 text-xs overflow-auto max-h-48">
+            <JsonOrPre value={execution.input} />
+          </div>
         </div>
         <div>
           <p className="mb-2 text-sm font-medium">Output</p>
-          <pre className="rounded-md bg-muted p-3 text-xs overflow-auto max-h-48">
-            {execution.output
-              ? JSON.stringify(execution.output, null, 2)
-              : execution.error ?? '—'}
-          </pre>
+          <div className="rounded-md bg-muted p-3 text-xs overflow-auto max-h-48">
+            <JsonOrPre value={execution.output ?? execution.error ?? '—'} />
+          </div>
         </div>
       </div>
 

@@ -122,6 +122,8 @@ export class NodeExecutorService {
 
     let attempt = 0;
     let lastError: unknown;
+    let resolvedApiKeys: Awaited<ReturnType<typeof this.resolveApiKeys>> | undefined;
+    let resolvedSupervisorModel: string | undefined;
 
     while (attempt <= maxRetries) {
       const startedAt = Date.now();
@@ -142,8 +144,16 @@ export class NodeExecutorService {
         const errorMsg = err instanceof Error ? err.message : String(err);
 
         this.logger.warn(
-          `Node ${nodeId} (${nodeType}) ${isTimeout ? 'timed out' : 'failed'} after ${elapsed}ms [attempt ${attempt + 1}]`,
+          `Node ${nodeId} (${nodeType}) ${isTimeout ? 'timed out' : 'failed'} after ${elapsed}ms [attempt ${attempt + 1}]: ${errorMsg}`,
         );
+
+        // Resolve workspace API keys + supervisor model once on first failure
+        if (!resolvedApiKeys) {
+          [resolvedApiKeys, resolvedSupervisorModel] = await Promise.all([
+            this.resolveApiKeys(input.workspaceId),
+            this.resolveWorkspaceSupervisorModel(input.workspaceId),
+          ]);
+        }
 
         // Ask supervisor whether to retry, skip, or abort
         // Skips this for deterministic nodes (transform, logic) — supervisor returns abort immediately
@@ -156,6 +166,8 @@ export class NodeExecutorService {
           retryCount: attempt,
           maxRetries,
           state: { variables: input.state.variables },
+          apiKeys: resolvedApiKeys,
+          workspaceSupervisorModel: resolvedSupervisorModel,
         });
 
         this.logger.log(
@@ -774,6 +786,17 @@ export class NodeExecutorService {
     if (ollamaUrl) resolved.OLLAMA_BASE_URL = ollamaUrl;
 
     return resolved;
+  }
+
+  private async resolveWorkspaceSupervisorModel(
+    workspaceId: string,
+  ): Promise<string | undefined> {
+    const rows = await this.db
+      .select({ settings: workspaces.settings })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+    return rows[0]?.settings?.supervisorModel;
   }
 
   private withTimeout<T>(
