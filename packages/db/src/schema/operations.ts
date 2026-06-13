@@ -5,6 +5,7 @@ import {
   uuid,
   jsonb,
   boolean,
+  integer,
   pgEnum,
   unique,
 } from 'drizzle-orm/pg-core';
@@ -83,6 +84,8 @@ export const schedules = pgTable('schedules', {
   input: jsonb('input').$type<Record<string, unknown>>().default({}).notNull(),
   lastRunAt: timestamp('last_run_at', { withTimezone: true }),
   nextRunAt: timestamp('next_run_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  consecutiveFailures: integer('consecutive_failures').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
