@@ -712,7 +712,7 @@ export function ChatPreviewPanel({
         if (needsApproval) setApprovalMsgId(msgId);
 
         setMessages((prev) => [
-          ...prev.filter((m) => !m.typing),
+          ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
           {
             id: msgId,
             role: 'workflow',
