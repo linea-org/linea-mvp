@@ -14,6 +14,7 @@
 | `toolbar.tsx` | Right-side panel host. Renders either the node property editor or the deploy/webhook panel depending on selection. |
 | `chat-preview-panel.tsx` | Live test panel. Sends executions via REST and streams results back over SSE, rendering a chat-style trace. |
 | `panels/start-panel.tsx` | Start node property editor — trigger type, input variable schema, test values, cron schedule, extraction model. |
+| `nodes/custom-node.tsx` | Base ReactFlow node component. Renders the node card, status badge, and output preview strip. |
 | `nodes/` | Individual ReactFlow node components (one per node type). |
 
 ## Chat Preview Panel
@@ -52,6 +53,10 @@ Context field values are seeded from the Start node's saved `testInput` and are 
 - **Input extraction model** — model used to extract typed variables from a natural-language API message
 - **Test values** — editable default values for each input variable, loaded into the chat panel when testing (shown for manual + webhook triggers)
 
+## Canvas Node Output Preview
+
+After an execution completes, `index.tsx` writes `_outputPreview` (a truncated string of the node's output) into each node's `data`. `custom-node.tsx` reads this field and renders a compact preview strip at the bottom of the node card. Hovering the strip shows a `Tooltip` with the full value (max `max-w-xs`). The field is prefixed with `_` to mark it as ephemeral canvas state — it is never persisted to the workflow graph.
+
 ## Error Handling Pattern
 
 All catch blocks across the web app use two helpers from `apps/web/lib/api.ts`:
@@ -74,6 +79,11 @@ Raw API error strings (e.g. NestJS validation messages, internal error IDs) must
 - Added **JSON output viewer** (`react-json-view-lite`) in trace step output, node output on execution detail page, and execution input/output grid
 - **`<think>` block filtering** — reasoning model streaming tokens (`wrapOnToken` in `agent.executor.ts`) and final output (`buildAgentResult`) both strip `<think>...</think>` so chain-of-thought text never appears in the chat bubble or approval modal
 - **Supervisor model tour step** added in `app/(dashboard)/layout.tsx` targeting `[data-tour="supervisor-model"]` — explains why a supervisor model is needed and how to set one
+
+### 2026-06-13 (LIN-15)
+- Added **node output preview strip** in `nodes/custom-node.tsx` — after execution, each node card shows a truncated `_outputPreview` string below its content
+- Preview uses Radix `Tooltip` (upgraded from a plain `title` attribute) for styled hover display
+- `_outputPreview` is written by `index.tsx` post-execution and is not persisted to the workflow definition
 
 ### 2026-06-13 (LIN-14)
 - Added **execution start placeholder**: a typing bubble with a `__placeholder` step appears immediately after `send()`, before the first SSE event arrives
