@@ -17,6 +17,7 @@ import { toast } from '@linea/ui/components/sonner';
 import { createApiClient, ApiError, friendlyApiError } from '@/lib/api';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+const PLACEHOLDER_NODE_ID = '__placeholder';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -496,6 +497,8 @@ export function ChatPreviewPanel({
   /** Always-current getToken fn from Clerk — updated every render */
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+  /** Timer that upgrades the start placeholder to "Waiting in queue…" after 5 s */
+  const queueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => { sseAbortRef.current?.abort(); };
@@ -598,7 +601,8 @@ export function ChatPreviewPanel({
         const nodeType = info?.type ?? '';
 
         if (status === 'running') {
-          // Lazily create the trace message (replaces the typing bubble)
+          if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
+          // Lazily create the trace message (replaces the typing bubble / placeholder)
           const traceId = traceIdRef.current ?? `trace-${nodeId}-${Date.now()}`;
           traceIdRef.current = traceId;
           seenNodeIdsRef.current.add(nodeId);
@@ -608,9 +612,11 @@ export function ChatPreviewPanel({
             if (traceMsg) {
               // Don't add duplicate steps (can happen when sync and SSE race)
               if (traceMsg.steps?.some((s) => s.nodeId === nodeId)) return prev;
+              // Strip placeholder step before appending the real node
+              const filteredSteps = (traceMsg.steps ?? []).filter((s) => s.nodeId !== PLACEHOLDER_NODE_ID);
               return prev.map((m) =>
                 m.id === traceId
-                  ? { ...m, steps: [...(m.steps ?? []), { nodeId, nodeName, nodeType, status: 'running' as const }] }
+                  ? { ...m, steps: [...filteredSteps, { nodeId, nodeName, nodeType, status: 'running' as const }] }
                   : m,
               );
             }
@@ -662,6 +668,7 @@ export function ChatPreviewPanel({
 
       /* ---- Suspension (ask_human / approval / tool_approval) ------- */
       case 'execution_suspended': {
+        if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
         const interruptType = evt.interrupt?.type ?? 'ask_human';
         const isApproval = interruptType === 'approval';
         const isToolApproval = interruptType === 'tool_approval';
@@ -705,7 +712,7 @@ export function ChatPreviewPanel({
         if (needsApproval) setApprovalMsgId(msgId);
 
         setMessages((prev) => [
-          ...prev.filter((m) => !m.typing),
+          ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
           {
             id: msgId,
             role: 'workflow',
@@ -725,12 +732,13 @@ export function ChatPreviewPanel({
       case 'execution_complete': {
         if (terminalShownRef.current) break;
         terminalShownRef.current = true;
+        if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
         const reply = extractReply(evt.output);
         traceIdRef.current = null;
         setStreamingText('');
         setStreamingNodeId(null);
         setMessages((prev) => [
-          ...prev.filter((m) => !m.typing),
+          ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
           { id: `w-${Date.now()}`, role: 'workflow', content: reply },
         ]);
         setSuspended(null);
@@ -743,11 +751,12 @@ export function ChatPreviewPanel({
       case 'execution_failed': {
         if (terminalShownRef.current) break;
         terminalShownRef.current = true;
+        if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
         traceIdRef.current = null;
         setStreamingText('');
         setStreamingNodeId(null);
         setMessages((prev) => [
-          ...prev.filter((m) => !m.typing),
+          ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
           {
             id: `sys-${Date.now()}`,
             role: 'system',
@@ -925,6 +934,7 @@ export function ChatPreviewPanel({
   }, [workspaceId, podId, handleSSEEvent]);
 
   function resetRunState() {
+    if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
     traceIdRef.current = null;
     seenNodeIdsRef.current = new Set();
     terminalShownRef.current = false;
@@ -977,6 +987,26 @@ export function ChatPreviewPanel({
       setExecutionId(ex.id);
       setExecStatus('running');
       onExecutionStarted?.(ex.id);
+      const placeholderTraceId = `trace-${ex.id}-start`;
+      traceIdRef.current = placeholderTraceId;
+      setMessages((prev) => [
+        ...prev.filter((m) => !m.typing),
+        {
+          id: placeholderTraceId,
+          role: 'trace' as const,
+          content: '',
+          steps: [{ nodeId: PLACEHOLDER_NODE_ID, nodeName: '⏳ Starting execution…', nodeType: '', status: 'running' as const }],
+        },
+      ]);
+      queueTimerRef.current = setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === placeholderTraceId && m.steps?.some((s) => s.nodeId === PLACEHOLDER_NODE_ID)
+              ? { ...m, steps: m.steps.map((s) => s.nodeId === PLACEHOLDER_NODE_ID ? { ...s, nodeName: 'Waiting in queue…' } : s) }
+              : m,
+          ),
+        );
+      }, 5000);
       void startSSE(freshTok, ex.id);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
