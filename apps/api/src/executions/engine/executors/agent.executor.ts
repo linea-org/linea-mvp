@@ -41,7 +41,12 @@ function wrapOnToken(
           inThink = false;
           buf = buf.slice(closeIdx + CLOSE.length).trimStart();
         } else {
-          buf = '';
+          // Hold back any suffix that could be the start of </think>
+          let partialLen = 0;
+          for (let i = 1; i < CLOSE.length; i++) {
+            if (buf.endsWith(CLOSE.slice(0, i))) partialLen = i;
+          }
+          buf = partialLen > 0 ? buf.slice(buf.length - partialLen) : '';
           break;
         }
       } else {
