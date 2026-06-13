@@ -14,7 +14,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { Button } from '@linea/ui/components/button';
 import { toast } from '@linea/ui/components/sonner';
-import { createApiClient, ApiError } from '@/lib/api';
+import { createApiClient, ApiError, friendlyApiError } from '@/lib/api';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -986,11 +986,7 @@ export function ChatPreviewPanel({
       }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
-        {
-          id: `sys-${Date.now()}`,
-          role: 'system',
-          content: err instanceof Error ? err.message : 'Failed to start execution',
-        },
+        { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },
       ]);
       setExecStatus('failed');
     } finally {
@@ -1014,7 +1010,7 @@ export function ChatPreviewPanel({
       const freshTok = await getTokenRef.current().catch(() => null);
       if (!freshTok) {
         setMessages((prev) => prev.filter((m) => !m.typing));
-        toast.error('Session expired. Refresh the page to continue.');
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
         return;
       }
       const api = createApiClient(freshTok);
@@ -1032,7 +1028,7 @@ export function ChatPreviewPanel({
       }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
-        { id: `sys-${Date.now()}`, role: 'system', content: err instanceof Error ? err.message : 'Failed to send response' },
+        { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },
       ]);
     }
   }
@@ -1051,7 +1047,7 @@ export function ChatPreviewPanel({
       const freshTok = await getTokenRef.current().catch(() => null);
       if (!freshTok) {
         setMessages((prev) => prev.filter((m) => !m.typing));
-        toast.error('Session expired. Refresh the page to continue.');
+        toast.error('Session expired. Refresh the page to continue.', { id: 'session-expired' });
         return;
       }
       const api = createApiClient(freshTok);
@@ -1069,7 +1065,7 @@ export function ChatPreviewPanel({
       }
       setMessages((prev) => [
         ...prev.filter((m) => !m.typing),
-        { id: `sys-${Date.now()}`, role: 'system', content: err instanceof Error ? err.message : 'Failed to respond' },
+        { id: `sys-${Date.now()}`, role: 'system', content: friendlyApiError(err) },
       ]);
     }
   }

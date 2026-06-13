@@ -30,7 +30,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@linea/ui/components/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@linea/ui/components/tooltip';
 import { Kbd } from '@linea/ui/components/kbd';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
 import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
 import { Spinner } from '@linea/ui/components/spinner';
@@ -350,9 +350,8 @@ function CanvasControls({
 
   return (
     <Panel position="bottom-left" className="!m-2">
-      <TooltipProvider delayDuration={400}>
-        <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-md backdrop-blur-sm">
-          {sections.map((section, si) =>
+      <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-md backdrop-blur-sm">
+        {sections.map((section, si) =>
             section === null ? (
               <div key={si} className="mx-1.5 h-px bg-border" />
             ) : (
@@ -379,7 +378,6 @@ function CanvasControls({
             ),
           )}
         </div>
-      </TooltipProvider>
     </Panel>
   );
 }
@@ -774,7 +772,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         setCanUndo(false);
         setCanRedo(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load workflow');
+        setError(friendlyApiError(err));
       } finally {
         setLoading(false);
       }
@@ -1207,9 +1205,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     } catch (err) {
       setNodeResults((prev) => ({
         ...prev,
-        [testNodeDialog!.node.id]: { status: 'failed', error: err instanceof Error ? err.message : 'Test failed' },
+        [testNodeDialog!.node.id]: { status: 'failed', error: friendlyApiError(err) },
       }));
-      toast.error(err instanceof Error ? err.message : 'Node test failed');
+      toast.error(friendlyApiError(err));
     } finally {
       setTestNodeRunning(false);
       setTestNodeDialog(null);
@@ -1240,7 +1238,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       });
       toast.success('Workflow saved');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed');
+      toast.error(friendlyApiError(err));
     } finally {
       setIsSaving(false);
     }
@@ -1258,7 +1256,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setDeployedAt(result.deployedAt ?? new Date().toISOString());
       toast.success('Workflow deployed');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Deploy failed');
+      toast.error(friendlyApiError(err));
     }
   }
 
@@ -1272,7 +1270,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setDeployedAt(null);
       toast.success('Workflow unpublished');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Undeploy failed');
+      toast.error(friendlyApiError(err));
     }
   }
 
@@ -1499,7 +1497,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setInterrupt(null);
       setRunStatus((prev) => prev ? { ...prev, status: 'running' } : prev);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Approval failed');
+      toast.error(friendlyApiError(err));
     }
   }
 
@@ -1516,7 +1514,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setAskHumanAnswer('');
       setRunStatus((prev) => prev ? { ...prev, status: 'running' } : prev);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Response failed');
+      toast.error(friendlyApiError(err));
     }
   }
 
@@ -2226,8 +2224,10 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 /* ------------------------------------------------------------------ */
 export function WorkflowBuilder(props: WorkflowBuilderProps) {
   return (
-    <ReactFlowProvider>
-      <BuilderInner {...props} />
-    </ReactFlowProvider>
+    <TooltipProvider delayDuration={400}>
+      <ReactFlowProvider>
+        <BuilderInner {...props} />
+      </ReactFlowProvider>
+    </TooltipProvider>
   );
 }

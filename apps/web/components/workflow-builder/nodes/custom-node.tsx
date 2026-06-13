@@ -295,7 +295,7 @@ function NodeShell({
               <p className="text-[9px] font-mono text-foreground/50 truncate">{outputPreview}</p>
             </div>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs font-mono text-[10px]">
+          <TooltipContent side="bottom" className="max-w-xs break-all font-mono text-[10px]">
             {outputPreview}
           </TooltipContent>
         </Tooltip>

@@ -39,12 +39,26 @@ JSON mode **simulates a webhook payload** — the execution engine receives the 
 
 After an execution completes, `index.tsx` writes `_outputPreview` (a truncated string of the node's output) into each node's `data`. `custom-node.tsx` reads this field and renders a compact preview strip at the bottom of the node card. Hovering the strip shows a `Tooltip` with the full value (max `max-w-xs`). The field is prefixed with `_` to mark it as ephemeral canvas state — it is never persisted to the workflow graph.
 
+## Error Handling Pattern
+
+All catch blocks across the web app use two helpers from `apps/web/lib/api.ts`:
+
+- `friendlyApiError(err)` — converts any thrown value to user-readable text. Maps `ApiError` status codes via `friendlyApiErrorFromStatus`, handles `TypeError` fetch failures, and falls back to `err.message`.
+- `friendlyApiErrorFromStatus(status)` — maps HTTP status codes to sentences: 401 → session expired, 402 → execution limit reached, 429 → rate limit, 5xx → server error.
+
+Raw API error strings (e.g. NestJS validation messages, internal error IDs) must never be shown in the UI. Every `catch` block must pass the error through one of these helpers before setting state.
+
 ## Changelog
 
 ### 2026-06-13 (LIN-15)
 - Added **node output preview strip** in `nodes/custom-node.tsx` — after execution, each node card shows a truncated `_outputPreview` string below its content
 - Preview uses Radix `Tooltip` (upgraded from a plain `title` attribute) for styled hover display
 - `_outputPreview` is written by `index.tsx` post-execution and is not persisted to the workflow definition
+
+### 2026-06-09 (LIN-10)
+- Added `friendlyApiError()` and `friendlyApiErrorFromStatus()` to `apps/web/lib/api.ts`
+- Applied across all catch blocks in `chat-preview-panel.tsx`, `index.tsx`, `evals-panel.tsx`, `generate-dialog.tsx`, `share-panel.tsx`, and all dashboard/app pages — raw API error strings no longer surface in the UI
+- Status-code mapping: 401 → session expired, 402 → execution limit, 429 → rate limit, 5xx → server error
 
 ### 2026-05-28
 - Added **JSON simulation mode** with `Text | JSON` pill tabs, `Simulated` badge on user bubbles, Ctrl+Enter submit, and inline JSON parse error
