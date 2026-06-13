@@ -13,6 +13,7 @@
 | `index.tsx` | Root component. Owns the ReactFlow canvas, node CRUD, save/deploy logic, and its own SSE connection for canvas-level node badges. |
 | `toolbar.tsx` | Right-side panel host. Renders either the node property editor or the deploy/webhook panel depending on selection. |
 | `chat-preview-panel.tsx` | Live test panel. Sends executions via REST and streams results back over SSE, rendering a chat-style trace. |
+| `nodes/custom-node.tsx` | Base ReactFlow node component. Renders the node card, status badge, and output preview strip. |
 | `nodes/` | Individual ReactFlow node components (one per node type). |
 
 ## Chat Preview Panel
@@ -36,6 +37,10 @@ JSON mode **simulates a webhook payload** — the execution engine receives the 
 
 **Execution start placeholder** — when `send()` is called, a synthetic trace message is immediately inserted with a `__placeholder` step that shows a typing/waiting indicator. The placeholder is replaced by the real `node_started` trace once the SSE stream delivers the first event. If the execution stays queued for more than 5 s, the placeholder upgrades its label to "Waiting in queue…" via a timer.
 
+## Canvas Node Output Preview
+
+After an execution completes, `index.tsx` writes `_outputPreview` (a truncated string of the node's output) into each node's `data`. `custom-node.tsx` reads this field and renders a compact preview strip at the bottom of the node card. Hovering the strip shows a `Tooltip` with the full value (max `max-w-xs`). The field is prefixed with `_` to mark it as ephemeral canvas state — it is never persisted to the workflow graph.
+
 ## Error Handling Pattern
 
 All catch blocks across the web app use two helpers from `apps/web/lib/api.ts`:
@@ -46,6 +51,11 @@ All catch blocks across the web app use two helpers from `apps/web/lib/api.ts`:
 Raw API error strings (e.g. NestJS validation messages, internal error IDs) must never be shown in the UI. Every `catch` block must pass the error through one of these helpers before setting state.
 
 ## Changelog
+
+### 2026-06-13 (LIN-15)
+- Added **node output preview strip** in `nodes/custom-node.tsx` — after execution, each node card shows a truncated `_outputPreview` string below its content
+- Preview uses Radix `Tooltip` (upgraded from a plain `title` attribute) for styled hover display
+- `_outputPreview` is written by `index.tsx` post-execution and is not persisted to the workflow definition
 
 ### 2026-06-13 (LIN-14)
 - Added **execution start placeholder**: a typing bubble with a `__placeholder` step appears immediately after `send()`, before the first SSE event arrives

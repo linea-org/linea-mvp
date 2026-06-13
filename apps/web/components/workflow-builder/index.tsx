@@ -350,9 +350,8 @@ function CanvasControls({
 
   return (
     <Panel position="bottom-left" className="!m-2">
-      <TooltipProvider delayDuration={400}>
-        <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-md backdrop-blur-sm">
-          {sections.map((section, si) =>
+      <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-md backdrop-blur-sm">
+        {sections.map((section, si) =>
             section === null ? (
               <div key={si} className="mx-1.5 h-px bg-border" />
             ) : (
@@ -379,7 +378,6 @@ function CanvasControls({
             ),
           )}
         </div>
-      </TooltipProvider>
     </Panel>
   );
 }
@@ -2226,8 +2224,10 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
 /* ------------------------------------------------------------------ */
 export function WorkflowBuilder(props: WorkflowBuilderProps) {
   return (
-    <ReactFlowProvider>
-      <BuilderInner {...props} />
-    </ReactFlowProvider>
+    <TooltipProvider delayDuration={400}>
+      <ReactFlowProvider>
+        <BuilderInner {...props} />
+      </ReactFlowProvider>
+    </TooltipProvider>
   );
 }
