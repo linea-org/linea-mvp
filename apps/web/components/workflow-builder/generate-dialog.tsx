@@ -180,7 +180,7 @@ export function GenerateDialog({
         },
       );
 
-      if (!resp.ok || !resp.body) throw new ApiError(resp.status, resp.statusText);
+      if (!resp.ok || !resp.body) throw new ApiError(resp.status, resp.statusText || `Request failed with status ${resp.status}`);
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
