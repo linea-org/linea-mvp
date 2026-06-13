@@ -70,7 +70,12 @@ export default function PublicRunPage() {
         body: JSON.stringify(inputs),
       });
       if (!res.ok) {
-        setErrorMsg(friendlyApiErrorFromStatus(res.status) ?? 'Failed to start. Please try again.');
+        let bodyMsg: string | undefined;
+        try {
+          const body = await res.json() as { message?: string; error?: { message?: string } };
+          bodyMsg = body?.error?.message ?? body?.message;
+        } catch { /* ignore */ }
+        setErrorMsg(friendlyApiErrorFromStatus(res.status) ?? bodyMsg ?? 'Failed to start. Please try again.');
         setState('ready');
         return;
       }
