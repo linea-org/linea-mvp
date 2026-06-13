@@ -796,9 +796,13 @@ export class NodeExecutorService {
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
       .limit(1);
-    // Fall back to haiku for workspaces that haven't saved a preference yet,
-    // so existing deployments aren't broken on first node failure after deploy.
-    return rows[0]?.settings?.supervisorModel ?? 'claude-haiku-4-5';
+    // Workspace setting takes priority; fall back to SUPERVISOR_MODEL env var so
+    // existing deployments aren't broken on first node failure after deploy.
+    return (
+      rows[0]?.settings?.supervisorModel ||
+      this.config.get<string>('SUPERVISOR_MODEL') ||
+      undefined
+    );
   }
 
   private withTimeout<T>(
