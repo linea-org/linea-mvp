@@ -13,7 +13,7 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from '@linea/ui/components/select';
 import { Textarea } from '@linea/ui/components/textarea';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
 import { toast } from '@linea/ui/components/sonner';
 import { EvalInputForm, type InputVar } from './eval-input-form';
 
@@ -248,7 +248,7 @@ export function EvalsPanel({
       );
       setResults(res);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Eval run failed');
+      toast.error(friendlyApiError(err));
     } finally {
       setRunning(false);
     }

@@ -9,7 +9,7 @@ import {
   ArrowDown01Icon, ArrowUp01Icon, Clock01Icon,
 } from '@hugeicons/core-free-icons';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Badge } from '@linea/ui/components/badge';
 import { Skeleton } from '@linea/ui/components/skeleton';
@@ -115,7 +115,7 @@ export default function EvalsPage() {
       setExpandedCase(res.find((r) => !r.passed)?.caseId ?? null);
       setHistoryKey((k) => k + 1);
     } catch (err) {
-      setRunError(err instanceof Error ? err.message : 'Run failed');
+      setRunError(friendlyApiError(err));
     } finally {
       setRunning(false);
     }
