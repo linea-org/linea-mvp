@@ -738,7 +738,7 @@ export function ChatPreviewPanel({
         setStreamingText('');
         setStreamingNodeId(null);
         setMessages((prev) => [
-          ...prev.filter((m) => !m.typing),
+          ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
           { id: `w-${Date.now()}`, role: 'workflow', content: reply },
         ]);
         setSuspended(null);
@@ -756,7 +756,7 @@ export function ChatPreviewPanel({
         setStreamingText('');
         setStreamingNodeId(null);
         setMessages((prev) => [
-          ...prev.filter((m) => !m.typing),
+          ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
           {
             id: `sys-${Date.now()}`,
             role: 'system',
