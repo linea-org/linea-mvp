@@ -15,6 +15,9 @@ import {
 import { Button } from '@linea/ui/components/button';
 import { toast } from '@linea/ui/components/sonner';
 import { createApiClient, ApiError, friendlyApiError } from '@/lib/api';
+import { cn } from '@linea/ui/lib/utils';
+import ReactMarkdown from 'react-markdown';
+import { JsonOrPre } from '@/components/ui/json-or-pre';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 const PLACEHOLDER_NODE_ID = '__placeholder';
@@ -263,15 +266,13 @@ function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: stri
         </div>
       )}
 
-      {/* Output — structured for agent nodes, raw JSON otherwise */}
+      {/* Output — structured for agent nodes, JSON tree otherwise */}
       {outputOpen && step.output !== undefined && (
         <div className="px-3 pb-2 text-[11px] text-muted-foreground max-h-64 overflow-y-auto bg-muted/20 border-t border-border/40">
           {agentOutput ? (
             <AgentOutputView output={agentOutput} />
           ) : (
-            <pre className="font-mono whitespace-pre-wrap break-words">
-              {typeof step.output === 'string' ? step.output : JSON.stringify(step.output, null, 2)}
-            </pre>
+            <JsonOrPre value={step.output} className="text-[11px]" />
           )}
         </div>
       )}
@@ -411,13 +412,39 @@ function ChatBubble({ msg, onApprove }: { msg: ChatMessage; onApprove?: (approve
           </div>
         ) : (
           <div
-            className={`rounded-2xl rounded-tl-sm px-3 py-2.5 text-sm whitespace-pre-wrap break-words ${
+            className={cn(
+              'rounded-2xl rounded-tl-sm px-3 py-2.5 text-sm',
               msg.suspended
                 ? 'bg-muted border border-border text-foreground'
-                : 'bg-muted text-foreground'
-            }`}
+                : 'bg-muted text-foreground',
+            )}
           >
-            {msg.content || <span className="text-muted-foreground italic">(empty response)</span>}
+            {msg.content ? (
+              <ReactMarkdown
+                components={{
+                  p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                  h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
+                  h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+                  h3:     ({ children }) => <p className="font-medium mb-1">{children}</p>,
+                  ul:     ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+                  ol:     ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+                  li:     ({ children }) => <li className="text-sm">{children}</li>,
+                  code:   ({ children, className: cls }) =>
+                    cls
+                      ? <code className="block bg-background/60 rounded p-2 text-xs font-mono my-1 overflow-x-auto whitespace-pre">{children}</code>
+                      : <code className="bg-background/60 rounded px-1 text-xs font-mono">{children}</code>,
+                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  a:      ({ href, children }) => {
+                    const safe = /^https?:\/\//i.test(href ?? '') ? href : '#';
+                    return <a href={safe} className="underline text-primary" target="_blank" rel="noopener noreferrer">{children}</a>;
+                  },
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            ) : (
+              <span className="text-muted-foreground italic">(empty response)</span>
+            )}
             {msg.isApproval && onApprove && (
               <div className="mt-3 space-y-2">
                 {msg.isToolApproval && msg.toolName && (
@@ -476,8 +503,9 @@ export function ChatPreviewPanel({
   const [streamingText, setStreamingText] = useState('');
   const [streamingNodeId, setStreamingNodeId] = useState<string | null>(null);
 
-  const [jsonMode, setJsonMode] = useState(false);
-  const [jsonError, setJsonError] = useState<string | null>(null);
+  const [startTriggerType, setStartTriggerType] = useState<'manual' | 'webhook' | 'schedule'>('manual');
+  const [contextInputs, setContextInputs] = useState<Record<string, string>>({});
+  const [contextOpen, setContextOpen] = useState(true);
 
   const sseAbortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -497,6 +525,14 @@ export function ChatPreviewPanel({
   /** Always-current getToken fn from Clerk — updated every render */
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+  /** Start node config (triggerType, inputVariables, testInput) loaded from workflow definition */
+  const startConfigRef = useRef<{
+    triggerType: 'manual' | 'webhook' | 'schedule';
+    inputVariables: Array<{ name: string; type: 'string' | 'number' | 'boolean' | 'object'; required: boolean }>;
+    testInput: Record<string, string>;
+  } | null>(null);
+  /** Stable conversationId for the current chat session */
+  const conversationIdRef = useRef<string>(crypto.randomUUID());
   /** Timer that upgrades the start placeholder to "Waiting in queue…" after 5 s */
   const queueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -529,6 +565,19 @@ export function ChatPreviewPanel({
           };
         }
         nodeMapRef.current = map;
+
+        // Load Start node config for chat panel input adaptation
+        const startNode = wf.definition.nodes.find((n) => n.type === 'start');
+        if (startNode?.data) {
+          const cfg = {
+            triggerType: (startNode.data.triggerType as 'manual' | 'webhook' | 'schedule') ?? 'manual',
+            inputVariables: (startNode.data.inputVariables as Array<{ name: string; type: 'string' | 'number' | 'boolean' | 'object'; required: boolean }>) ?? [],
+            testInput: (startNode.data.testInput as Record<string, string>) ?? {},
+          };
+          startConfigRef.current = cfg;
+          setStartTriggerType(cfg.triggerType);
+          setContextInputs(cfg.testInput);
+        }
       } catch { /* best-effort — trace falls back to nodeId */ }
     }
     void fetchDef();
@@ -945,22 +994,35 @@ export function ChatPreviewPanel({
   }
 
   async function send() {
+    const isWebhook = startTriggerType === 'webhook';
     const text = inputText.trim();
-    if (!text || isSending || execStatus === 'running') return;
+    if (!isWebhook && (!text || isSending || execStatus === 'running')) return;
+    if (isWebhook && (isSending || execStatus === 'running')) return;
 
-    let input: unknown;
-    if (jsonMode) {
-      try {
-        input = JSON.parse(text);
-      } catch {
-        setJsonError('Invalid JSON — check your syntax and try again.');
-        return;
-      }
-    } else {
-      input = { message: text };
+    // Cast contextInputs to declared types
+    const vars = startConfigRef.current?.inputVariables ?? [];
+
+    const missingRequired = vars.filter((v) => v.required && !contextInputs[v.name]?.trim());
+    if (missingRequired.length > 0) {
+      toast.error(`Fill in required fields: ${missingRequired.map((v) => v.name).join(', ')}`);
+      return;
+    }
+    const castContext: Record<string, unknown> = {};
+    for (const v of vars) {
+      const raw = contextInputs[v.name];
+      if (raw === undefined || raw === '') continue;
+      if (v.type === 'number') castContext[v.name] = Number(raw);
+      else if (v.type === 'boolean') castContext[v.name] = raw === 'true';
+      else if (v.type === 'object') { try { castContext[v.name] = JSON.parse(raw); } catch { castContext[v.name] = raw; } }
+      else castContext[v.name] = raw;
     }
 
-    setJsonError(null);
+    const input: Record<string, unknown> = isWebhook
+      ? { ...castContext }
+      : { message: text, conversationId: conversationIdRef.current, ...castContext };
+
+    const displayText = isWebhook ? '▶ Test run' : text;
+
     setInputText('');
     setIsSending(true);
     resetRunState();
@@ -968,7 +1030,7 @@ export function ChatPreviewPanel({
     const typingId = `typing-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
-      { id: `u-${Date.now()}`, role: 'user', content: text, simulated: jsonMode },
+      { id: `u-${Date.now()}`, role: 'user', content: displayText, simulated: isWebhook },
       { id: typingId, role: 'workflow', content: '', typing: true },
     ]);
 
@@ -1125,6 +1187,7 @@ export function ChatPreviewPanel({
     setInputText('');
     setExecutionId(null);
     setExecStatus('idle');
+    conversationIdRef.current = crypto.randomUUID();
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
@@ -1132,13 +1195,6 @@ export function ChatPreviewPanel({
     if (suspended?.isApproval) return;
     if (suspended) void answer(inputText);
     else void send();
-  }
-
-  function switchMode(mode: boolean) {
-    setJsonMode(mode);
-    setJsonError(null);
-    setInputText('');
-    setTimeout(() => inputRef.current?.focus(), 50);
   }
 
   const isRunningOrSending = isSending || execStatus === 'running';
@@ -1188,15 +1244,10 @@ export function ChatPreviewPanel({
             </div>
             <div>
               <p className="text-sm font-medium">Run your workflow</p>
-              {jsonMode ? (
-                <>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Paste a JSON payload and press <kbd className="font-mono">Ctrl+Enter</kbd>.
-                  </p>
-                  <p className="text-[11px] text-muted-foreground/50 mt-2">
-                    Simulates a webhook payload — no URL or signing needed.
-                  </p>
-                </>
+              {startTriggerType === 'webhook' ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Fill in the test payload fields below and click Run test.
+                </p>
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -1236,6 +1287,43 @@ export function ChatPreviewPanel({
         )}
       </div>
 
+      {/* Inline context / test payload section */}
+      {!suspended && (startConfigRef.current?.inputVariables ?? []).filter((v) => v.name).length > 0 && (
+        <div className="shrink-0 border-t border-border/60">
+          <button
+            type="button"
+            onClick={() => setContextOpen((o) => !o)}
+            className="flex items-center gap-1.5 w-full px-4 py-1.5 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground/60 transition-colors"
+          >
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              className={cn('size-3 transition-transform duration-150', !contextOpen && '-rotate-90')}
+            />
+            {startTriggerType === 'webhook' ? 'Test payload' : 'Context'}
+          </button>
+          {contextOpen && (
+            <div className="px-4 pb-2 space-y-1.5">
+              {(startConfigRef.current?.inputVariables ?? []).filter((v) => v.name).map((v) => (
+                <div key={v.name} className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0 w-20 truncate">{v.name}</span>
+                  <input
+                    type="text"
+                    value={contextInputs[v.name] ?? ''}
+                    onChange={(e) => setContextInputs((prev) => ({ ...prev, [v.name]: e.target.value }))}
+                    placeholder={v.type === 'object' ? '{"key":"value"}' : `${v.type}…`}
+                    disabled={isRunningOrSending}
+                    className="flex-1 min-w-0 rounded border border-border/50 bg-transparent px-2 py-0.5 text-[11px] font-mono text-foreground/80 placeholder:text-muted-foreground/30 focus:outline-none focus:border-border disabled:opacity-50"
+                  />
+                  {v.required && !contextInputs[v.name] && (
+                    <span className="text-[9px] text-destructive/60 shrink-0">req</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Input area */}
       <div className="shrink-0 border-t border-border px-4 py-3 space-y-2">
         {suspended && !suspended.isApproval && (
@@ -1252,40 +1340,26 @@ export function ChatPreviewPanel({
               ? <>Use the <strong className="text-foreground/80">Allow</strong> or <strong className="text-foreground/80">Deny</strong> buttons above to continue.</>
               : <>Use the <strong className="text-foreground/80">Approve</strong> or <strong className="text-foreground/80">Reject</strong> buttons above to continue.</>}
           </div>
+        ) : startTriggerType === 'webhook' ? (
+          /* Webhook trigger — just a Run test button */
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={() => void send()}
+            disabled={isRunningOrSending}
+          >
+            {isRunningOrSending ? (
+              <>
+                <HugeiconsIcon icon={Loading01Icon} className="size-3.5 mr-2 animate-spin" />
+                Running…
+              </>
+            ) : (
+              'Run test'
+            )}
+          </Button>
         ) : (
+          /* Manual / schedule trigger — chat input */
           <>
-            {/* Mode pill tabs — hidden while running or suspended */}
-            {!isRunningOrSending && !suspended && (
-              <div className="flex items-center gap-1">
-                {(['Text', 'JSON'] as const).map((label) => {
-                  const active = label === 'JSON' ? jsonMode : !jsonMode;
-                  return (
-                    <button
-                      key={label}
-                      onClick={() => switchMode(label === 'JSON')}
-                      className={`rounded-full border px-2.5 py-0.5 text-[10px] transition-colors ${
-                        active
-                          ? 'bg-muted border-border/80 text-foreground/80'
-                          : 'border-border/40 text-muted-foreground/50 hover:border-border/60 hover:text-foreground/60'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-                {jsonMode && (
-                  <span className="text-[10px] text-muted-foreground/40 ml-1">
-                    Simulates a webhook payload
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* JSON parse error */}
-            {jsonError && (
-              <p className="text-[11px] text-destructive/80">{jsonError}</p>
-            )}
-
             {suspended?.choices && suspended.choices.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {suspended.choices.map((c) => (
@@ -1303,30 +1377,21 @@ export function ChatPreviewPanel({
               <textarea
                 ref={inputRef}
                 value={inputText}
-                onChange={(e) => { setInputText(e.target.value); if (jsonError) setJsonError(null); }}
+                onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (jsonMode) {
-                    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); handleSubmit(); }
-                  } else {
-                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
-                  }
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
                   if (e.key === 'Escape' && isRunningOrSending) void stopExecution();
                 }}
                 disabled={inputDisabled}
                 placeholder={
                   execStatus === 'running' ? 'Press Esc or click Stop to interrupt…'
                   : suspended ? 'Your answer…'
-                  : jsonMode ? '{ "key": "value" }'
                   : 'Type a message and press Enter…'
                 }
-                rows={jsonMode ? 4 : 1}
-                className={`flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground disabled:opacity-60 disabled:cursor-not-allowed ${
-                  jsonMode
-                    ? 'font-mono text-xs min-h-[80px] max-h-48'
-                    : 'text-sm min-h-[36px] max-h-32'
-                }`}
-                style={jsonMode ? undefined : { height: 'auto' }}
-                onInput={jsonMode ? undefined : (e) => {
+                rows={1}
+                className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground disabled:opacity-60 disabled:cursor-not-allowed min-h-[36px] max-h-32"
+                style={{ height: 'auto' }}
+                onInput={(e) => {
                   const el = e.currentTarget;
                   el.style.height = 'auto';
                   el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
@@ -1348,15 +1413,12 @@ export function ChatPreviewPanel({
                   disabled={!inputText.trim()}
                   onClick={handleSubmit}
                   className="shrink-0"
-                  title={jsonMode ? 'Send (Ctrl+Enter)' : 'Send (Enter)'}
+                  title="Send (Enter)"
                 >
                   <HugeiconsIcon icon={ArrowUp01Icon} className="size-3.5" />
                 </Button>
               )}
             </div>
-            {jsonMode && !isRunningOrSending && !suspended && (
-              <p className="text-[10px] text-muted-foreground/40 text-right">Ctrl+Enter to send</p>
-            )}
           </>
         )}
       </div>

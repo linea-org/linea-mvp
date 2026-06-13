@@ -461,6 +461,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const sseAbortRef = useRef<AbortController | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+  const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge[]>([]);
   const connectingFromRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
@@ -771,6 +772,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         historyIdxRef.current = 0;
         setCanUndo(false);
         setCanRedo(false);
+        // Fit view after nodes render — use ref so the async closure always sees the current instance
+        setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }), 100);
       } catch (err) {
         setError(friendlyApiError(err));
       } finally {
@@ -1701,7 +1704,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             onPaneClick={isGenerating ? undefined : onPaneClick}
             onNodeContextMenu={isGenerating ? undefined : onNodeContextMenu}
             onEdgeDoubleClick={isGenerating ? undefined : onEdgeDoubleClick}
-            onInit={setRfInstance}
+            onInit={(inst) => { rfInstanceRef.current = inst; setRfInstance(inst); }}
             nodeTypes={nodeTypes}
             nodesDraggable={!isGenerating && isInteractive}
             nodesConnectable={!isGenerating && isInteractive}

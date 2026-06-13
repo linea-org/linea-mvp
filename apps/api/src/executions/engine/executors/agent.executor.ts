@@ -18,6 +18,59 @@ import type { ToolExecutorContext } from '../tools/tool-executor';
 const DEFAULT_MAX_STEPS = 10;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+/**
+ * Wraps an onToken callback to suppress <think>...</think> blocks that
+ * reasoning models (QwQ, Qwen3, DeepSeek-R1) emit before their real answer.
+ * Handles tag content split across multiple token deltas.
+ */
+function wrapOnToken(
+  onToken: ((delta: string) => void) | undefined,
+): ((delta: string) => void) | undefined {
+  if (!onToken) return undefined;
+  const OPEN = '<think>';
+  const CLOSE = '</think>';
+  let inThink = false;
+  let buf = '';
+  return (delta: string) => {
+    buf += delta;
+    let out = '';
+    while (buf.length > 0) {
+      if (inThink) {
+        const closeIdx = buf.indexOf(CLOSE);
+        if (closeIdx !== -1) {
+          inThink = false;
+          buf = buf.slice(closeIdx + CLOSE.length).trimStart();
+        } else {
+          // Hold back any suffix that could be the start of </think>
+          let partialLen = 0;
+          for (let i = 1; i < CLOSE.length; i++) {
+            if (buf.endsWith(CLOSE.slice(0, i))) partialLen = i;
+          }
+          buf = partialLen > 0 ? buf.slice(buf.length - partialLen) : '';
+          break;
+        }
+      } else {
+        const openIdx = buf.indexOf(OPEN);
+        if (openIdx !== -1) {
+          out += buf.slice(0, openIdx);
+          inThink = true;
+          buf = buf.slice(openIdx + OPEN.length);
+        } else {
+          // Hold back any suffix that could be the start of <think>
+          let partialLen = 0;
+          for (let i = 1; i < OPEN.length; i++) {
+            if (buf.endsWith(OPEN.slice(0, i))) partialLen = i;
+          }
+          out += buf.slice(0, buf.length - partialLen);
+          buf = partialLen > 0 ? buf.slice(buf.length - partialLen) : '';
+          break;
+        }
+      }
+    }
+    if (out) onToken(out);
+  };
+}
+
 // ─── Provider fallback helpers ────────────────────────────────────────────────
 
 function hasApiKey(provider: ModelProvider, apiKeys: ModelApiKeys): boolean {
@@ -154,6 +207,8 @@ export async function executeAgentNode(
   onToken?: (delta: string) => void,
   workspaceFallbackChain?: string[],
 ): Promise<AgentResult> {
+  // Filter <think> blocks from streaming output of reasoning models
+  const filteredOnToken = wrapOnToken(onToken);
   const modelDef = getModelOrDefault(nodeData.model, 'balanced');
 
   // Build fallback chain: workspace-configured chain takes priority; auto-detect from API keys as fallback.
@@ -323,7 +378,7 @@ export async function executeAgentNode(
         temperature,
         tools: tools.length ? tools : undefined,
         toolChoice: tools.length ? 'auto' : undefined,
-        onToken,
+        onToken: filteredOnToken,
       },
       activeRef,
       fallbacks,
@@ -550,7 +605,11 @@ function buildResult(
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }));
 
-  let finalValue: unknown = text;
+  // Strip <think>...</think> blocks emitted by reasoning models (QwQ, Qwen3, DeepSeek-R1, etc.)
+  let finalValue: unknown =
+    typeof text === 'string'
+      ? text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+      : text;
 
   if (hitMaxSteps && typeof finalValue === 'string') {
     finalValue = `${finalValue}\n\n[Note: reached maximum steps limit]`;

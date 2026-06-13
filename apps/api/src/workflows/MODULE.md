@@ -84,9 +84,54 @@ And a workflow evals route:
 - `PodsModule` — pod guard
 - `AuditModule` — logs `workflow.create`, `workflow.delete`
 
+## Seed Script
+
+Built-in templates can be re-seeded without restarting the API:
+
+```
+pnpm --filter api seed:templates
+```
+
+This deletes all rows with `source = 'internal'` and re-inserts all 13 templates from `templates.data.ts`. Safe to run multiple times.
+
+## Template Data Architecture
+
+Built-in template definitions live in **`src/workflows/templates.data.ts`** (not in the seeder class). This is the single source of truth — both the NestJS boot seeder (`templates.seeder.ts`) and the CLI seed script import from it.
+
+All 13 start nodes carry:
+- `triggerType: 'manual' | 'webhook'` — drives the chat panel input area UI
+- `inputVariables: Array<{ name, type, required }>` — schema for context/payload fields
+- `testInput: Record<string, string>` — default values pre-loaded in the chat panel
+
+### Canonical input model
+
+| Concept | Variable | Workflow expression |
+|---------|----------|---------------------|
+| Primary human text | `message` | `{{input.message}}` |
+| Supplementary context | named var | `{{input.knowledgeBaseId}}` etc. |
+| Webhook payload field | named var | `{{input.url}}` etc. |
+
+For `manual` triggers, `{{input.message}}` maps to the chat textarea. `inputVariables` are supplementary context fields rendered alongside the textarea. For `webhook` triggers, there is no textarea — all `inputVariables` are the full payload.
+
+### Trigger type distribution (13 templates)
+
+**`webhook` (9 templates)** — automation workflows with no human chat aspect:
+Web Scraper & Summarizer, Slack Daily Digest, Data Extraction Pipeline, Batch Article Summarizer, Parallel Competitor Monitor, AI Lead Qualifier, Scheduled Metrics Digest, GitHub PR Auto-Reviewer, Notion CRM Lead Pipeline
+
+**`manual` (4 templates)** — conversational workflows where the user types the primary input:
+RAG Knowledge Base Q&A (`{{input.message}}` = user question, `knowledgeBaseId` in context), GitHub Issue Triage (`{{input.message}}` = issue body, `owner`/`repo` in context), Content Safety Moderator (`{{input.message}}` = content to review, `platform`/`contentId`/`moderationWebhook` in context), Approval Workflow (`{{input.message}}` = request text, `callbackUrl` in context)
+
 ## Changelog
 
-_No recent changes._
+### 2026-06-13 (LIN-16)
+- Re-categorized 8 automation templates from `manual` → `webhook` (they have no human chat aspect)
+- Updated 4 conversational templates to use `{{input.message}}` instead of named `inputVariables` for their primary user input (`question`, `issueBody`, `content`, `request` removed from inputVariables — `{{input.message}}` used in their place in all agent prompts)
+- Trigger type distribution corrected: 9 webhook + 4 manual = 13 total
+
+### 2026-06-13 (earlier)
+- Extracted `BUILT_IN_TEMPLATES` array from `templates.seeder.ts` into `templates.data.ts` — NestJS seeder now imports from there
+- Added `scripts/seed-templates.ts` — standalone CLI seed script (`pnpm --filter api seed:templates`)
+- Added `triggerType`, `inputVariables`, and `testInput` to all 13 built-in template start nodes
 
 ## Missing / Gaps
 

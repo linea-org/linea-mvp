@@ -16,6 +16,7 @@ interface WorkspaceSettings {
   ragSimilarityThreshold?: number;
   ragChunkSize?: number;
   ragChunkOverlap?: number;
+  supervisorModel?: string;
 }
 
 const ALL_MODELS = [
@@ -60,6 +61,7 @@ export default function ModelPreferencesPage() {
   const [ragThreshold, setRagThreshold] = useState('0.75');
   const [ragChunkSize, setRagChunkSize] = useState('1000');
   const [ragChunkOverlap, setRagChunkOverlap] = useState('200');
+  const [supervisorModel, setSupervisorModel] = useState('claude-haiku-4-5');
   const [saved, setSaved] = useState(false);
 
   async function load() {
@@ -74,6 +76,7 @@ export default function ModelPreferencesPage() {
       setRagThreshold(String(data.ragSimilarityThreshold ?? 0.75));
       setRagChunkSize(String(data.ragChunkSize ?? 1000));
       setRagChunkOverlap(String(data.ragChunkOverlap ?? 200));
+      setSupervisorModel(data.supervisorModel ?? 'claude-haiku-4-5');
     } finally {
       setLoading(false);
     }
@@ -126,6 +129,7 @@ export default function ModelPreferencesPage() {
         ragSimilarityThreshold: parseFloat(ragThreshold) || 0.75,
         ragChunkSize: parseInt(ragChunkSize, 10) || 1000,
         ragChunkOverlap: parseInt(ragChunkOverlap, 10) || 200,
+        supervisorModel: supervisorModel || 'claude-haiku-4-5',
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -227,6 +231,30 @@ export default function ModelPreferencesPage() {
             Add
           </Button>
         </div>
+      </div>
+
+      {/* ── Supervisor model ── */}
+      <div className="space-y-3" data-tour="supervisor-model">
+        <div>
+          <p className="text-sm font-medium">Execution Supervisor Model</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            When a node fails, Linea's supervisor uses this model to decide whether to retry, skip, or abort.
+            Pick a fast, cheap model — it only runs on failures, not on every execution.
+          </p>
+        </div>
+        <select
+          className="w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm"
+          value={supervisorModel}
+          onChange={(e) => setSupervisorModel(e.target.value)}
+        >
+          {ALL_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Default: <span className="font-mono">claude-haiku-4-5</span>. The model must have an API key configured in{' '}
+          <span className="font-medium">Model Keys</span>.
+        </p>
       </div>
 
       {/* ── RAG settings ── */}

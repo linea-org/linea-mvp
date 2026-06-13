@@ -63,7 +63,11 @@
 
 ## Changelog
 
-_No recent changes._
+### 2026-06-13 (LIN-16)
+- Added `supervisorModel?: string` to `WorkspaceSettings` JSONB schema (`packages/db/src/schema/workspaces.ts`) — no DB migration needed (JSONB optional field)
+- Added `supervisorModel` to `UpdateWorkspaceSettingsDto` with `@IsOptional() @IsString()` validation
+- Settings UI (`app/(dashboard)/settings/models/page.tsx`) exposes a model picker for the supervisor model — loads from and saves to `PATCH /:id/settings`
+- The execution supervisor reads this value via `resolveWorkspaceSupervisorModel()` in `NodeExecutorService` and passes it through `SupervisorContext.workspaceSupervisorModel`; if unset, the supervisor aborts with a clear message directing the user to Settings
 
 ## Missing / Gaps
 

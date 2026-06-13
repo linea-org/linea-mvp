@@ -19,6 +19,7 @@ function makeCtx(
     retryCount: 0,
     maxRetries: 2,
     state: { variables: {} },
+    apiKeys: {},
     ...overrides,
   };
 }
@@ -84,6 +85,31 @@ describe('ExecutionSupervisor — hard rules', () => {
     );
     expect(decision.action).toBe('retry');
     expect(decision.retryDelayMs).toBe(1_000);
+  });
+
+  it('retries once on first connection error', async () => {
+    const decision = await supervisor.assess(
+      makeCtx({ error: 'Connection error.' }),
+    );
+    expect(decision.action).toBe('retry');
+    expect(decision.retryDelayMs).toBe(2_000);
+  });
+
+  it('aborts on second connection error', async () => {
+    const decision = await supervisor.assess(
+      makeCtx({ error: 'Connection error.', retryCount: 1 }),
+    );
+    expect(decision.action).toBe('abort');
+    expect(decision.reason).toMatch(/unreachable/i);
+  });
+
+  it('aborts when no supervisor model is configured', async () => {
+    // retryCount: 1 + elapsedMs: 10_000 clears all hard rules before the model guard
+    const decision = await supervisor.assess(
+      makeCtx({ elapsedMs: 10_000, retryCount: 1 }),
+    );
+    expect(decision.action).toBe('abort');
+    expect(decision.reason).toMatch(/no supervisor model/i);
   });
 });
 

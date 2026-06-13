@@ -17,6 +17,9 @@ export interface SupervisorContext {
   maxRetries: number;
   state: Pick<WorkflowState, 'variables'>;
   modelOverride?: string;
+  /** Workspace-level supervisor model set in Settings → Model Preferences */
+  workspaceSupervisorModel?: string;
+  apiKeys: ModelApiKeys;
 }
 
 export interface SupervisorDecision {
@@ -28,20 +31,8 @@ export interface SupervisorDecision {
 @Injectable()
 export class ExecutionSupervisor {
   private readonly logger = new Logger(ExecutionSupervisor.name);
-  private readonly apiKeys: ModelApiKeys;
-  private readonly supervisorModelId: string;
 
-  constructor(private readonly config: ConfigService) {
-    this.apiKeys = {
-      ANTHROPIC_API_KEY: config.get('ANTHROPIC_API_KEY'),
-      OPENAI_API_KEY: config.get('OPENAI_API_KEY'),
-      XAI_API_KEY: config.get('XAI_API_KEY'),
-      GROQ_API_KEY: config.get('GROQ_API_KEY'),
-      GOOGLE_API_KEY: config.get('GOOGLE_API_KEY'),
-    };
-    this.supervisorModelId =
-      config.get('SUPERVISOR_MODEL') ?? 'claude-haiku-4-5';
-  }
+  constructor(private readonly config: ConfigService) {}
 
   /**
    * Assess whether to retry, skip, or abort a failed/timed-out node.
@@ -99,6 +90,27 @@ export class ExecutionSupervisor {
     }
 
     if (
+      ctx.error?.toLowerCase().includes('connection error') ||
+      ctx.error?.includes('ECONNREFUSED') ||
+      ctx.error?.includes('ENOTFOUND') ||
+      ctx.error?.includes('ETIMEDOUT') ||
+      ctx.error?.includes('fetch failed')
+    ) {
+      if (ctx.retryCount === 0) {
+        return {
+          action: 'retry',
+          reason: 'Connection error — retrying once',
+          retryDelayMs: 2_000,
+        };
+      }
+      return {
+        action: 'abort',
+        reason:
+          'Provider unreachable after retry — check your API key is valid and the provider is accessible',
+      };
+    }
+
+    if (
       ctx.nodeType === 'transform' ||
       ctx.nodeType === 'if-else' ||
       ctx.nodeType === 'router'
@@ -119,28 +131,39 @@ export class ExecutionSupervisor {
       };
     }
 
+    // Guard: LLM call requires a configured supervisor model
+    const supervisorModel = ctx.modelOverride ?? ctx.workspaceSupervisorModel;
+    if (!supervisorModel) {
+      return {
+        action: 'abort',
+        reason:
+          'No supervisor model configured — go to Settings → Model Preferences to set one',
+      };
+    }
+
     // For HTTP/agent nodes on second+ failure, ask the LLM
     try {
-      return await this.askModel(ctx);
+      return await this.askModel(ctx, supervisorModel);
     } catch (err) {
       this.logger.warn(
-        `Supervisor model call failed: ${err}. Defaulting to retry.`,
+        `Supervisor model call failed: ${err instanceof Error ? err.message : String(err)}. Original node error: ${ctx.error ?? '(timeout)'}.`,
       );
       return {
-        action: 'retry',
-        reason: 'Supervisor unavailable, retrying once',
-        retryDelayMs: 2_000,
+        action: 'abort',
+        reason: `Supervisor model "${supervisorModel}" failed: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
   }
 
-  private async askModel(ctx: SupervisorContext): Promise<SupervisorDecision> {
-    const modelId = ctx.modelOverride ?? this.supervisorModelId;
+  private async askModel(
+    ctx: SupervisorContext,
+    modelId: string,
+  ): Promise<SupervisorDecision> {
     const modelDef = getModelOrDefault(modelId, 'fast');
     const client = createModelClient(
       modelDef.id,
       modelDef.provider,
-      this.apiKeys,
+      ctx.apiKeys,
     );
 
     const isTimeout = !ctx.error;
