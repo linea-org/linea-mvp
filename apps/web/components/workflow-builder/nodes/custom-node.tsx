@@ -13,6 +13,7 @@ import {
   ArrowDown01Icon, ArrowRight01Icon,
 } from '@hugeicons/core-free-icons';
 import { cn } from '@linea/ui/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@linea/ui/components/tooltip';
 
 /* ------------------------------------------------------------------ */
 /*  Theme map                                                           */
@@ -288,9 +289,16 @@ function NodeShell({
 
       {/* Output preview strip */}
       {outputPreview && (
-        <div className="border-t border-border/40 mx-2.5 pt-1 pb-1.5">
-          <p className="text-[9px] font-mono text-foreground/50 truncate" title={outputPreview}>{outputPreview}</p>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="border-t border-border/40 mx-2.5 pt-1 pb-1.5 cursor-default">
+              <p className="text-[9px] font-mono text-foreground/50 truncate">{outputPreview}</p>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs font-mono text-[10px]">
+            {outputPreview}
+          </TooltipContent>
+        </Tooltip>
       )}
 
       {children}
