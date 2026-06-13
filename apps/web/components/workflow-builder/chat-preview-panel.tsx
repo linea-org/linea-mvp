@@ -17,8 +17,7 @@ import { toast } from '@linea/ui/components/sonner';
 import { createApiClient, ApiError } from '@/lib/api';
 import { cn } from '@linea/ui/lib/utils';
 import ReactMarkdown from 'react-markdown';
-import { JsonView, defaultStyles } from 'react-json-view-lite';
-import 'react-json-view-lite/dist/index.css';
+import { JsonOrPre } from '@/components/ui/json-or-pre';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -110,24 +109,6 @@ function extractReply(output: unknown): string {
 function fmtMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function JsonOrPre({ value, className }: { value: unknown; className?: string }) {
-  const parsed = (() => {
-    if (typeof value === 'object' && value !== null) return value;
-    if (typeof value === 'string') {
-      try { const p = JSON.parse(value); if (typeof p === 'object' && p !== null) return p; } catch { /* ignore */ }
-    }
-    return null;
-  })();
-  if (parsed) {
-    return (
-      <div className={className}>
-        <JsonView data={parsed} shouldExpandNode={(level) => level < 2} style={defaultStyles} />
-      </div>
-    );
-  }
-  return <pre className={cn('font-mono whitespace-pre-wrap break-words', className)}>{String(value ?? '')}</pre>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1007,6 +988,12 @@ export function ChatPreviewPanel({
 
     // Cast contextInputs to declared types
     const vars = startConfigRef.current?.inputVariables ?? [];
+
+    const missingRequired = vars.filter((v) => v.required && !contextInputs[v.name]?.trim());
+    if (missingRequired.length > 0) {
+      toast.error(`Fill in required fields: ${missingRequired.map((v) => v.name).join(', ')}`);
+      return;
+    }
     const castContext: Record<string, unknown> = {};
     for (const v of vars) {
       const raw = contextInputs[v.name];

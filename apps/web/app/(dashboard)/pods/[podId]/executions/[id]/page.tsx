@@ -8,8 +8,7 @@ import { createApiClient } from '@/lib/api';
 import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
-import { JsonView, defaultStyles } from 'react-json-view-lite';
-import 'react-json-view-lite/dist/index.css';
+import { JsonOrPre } from '@/components/ui/json-or-pre';
 import { Separator } from '@linea/ui/components/separator';
 import { Textarea } from '@linea/ui/components/textarea';
 import {
@@ -116,23 +115,7 @@ interface WorkflowInfo {
   definition: { nodes: WorkflowNode[]; edges?: WorkflowEdge[] };
 }
 
-function JsonOrPre({ value, className }: { value: unknown; className?: string }) {
-  const parsed = (() => {
-    if (typeof value === 'object' && value !== null) return value;
-    if (typeof value === 'string') {
-      try { const p = JSON.parse(value); if (typeof p === 'object' && p !== null) return p; } catch { /* ignore */ }
-    }
-    return null;
-  })();
-  if (parsed) {
-    return (
-      <div className={className}>
-        <JsonView data={parsed} shouldExpandNode={(level) => level < 2} style={defaultStyles} />
-      </div>
-    );
-  }
-  return <pre className={`font-mono whitespace-pre-wrap break-words ${className ?? ''}`}>{String(value ?? '')}</pre>;
-}
+
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   completed: 'default',
