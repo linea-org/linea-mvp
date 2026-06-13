@@ -34,7 +34,14 @@ JSON mode **simulates a webhook payload** — the execution engine receives the 
 
 **Token refresh** — Clerk dev tokens expire in ~30 s. `getTokenRef` (updated every render, read from stable callbacks) ensures a fresh token is fetched before every API call and SSE reconnect.
 
+**Execution start placeholder** — when `send()` is called, a synthetic trace message is immediately inserted with a `__placeholder` step that shows a typing/waiting indicator. The placeholder is replaced by the real `node_started` trace once the SSE stream delivers the first event. If the execution stays queued for more than 5 s, the placeholder upgrades its label to "Waiting in queue…" via a timer.
+
 ## Changelog
+
+### 2026-06-13 (LIN-14)
+- Added **execution start placeholder**: a typing bubble with a `__placeholder` step appears immediately after `send()`, before the first SSE event arrives
+- 5 s queue-wait timer upgrades the placeholder label to "Waiting in queue…" if the first node hasn't started yet
+- Placeholder is cleanly replaced (not appended to) when `node_started` fires — no double-message flash
 
 ### 2026-05-28
 - Added **JSON simulation mode** with `Text | JSON` pill tabs, `Simulated` badge on user bubbles, Ctrl+Enter submit, and inline JSON parse error
