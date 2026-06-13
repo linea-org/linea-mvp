@@ -55,16 +55,16 @@ Also exposes a node test endpoint:
 ### 2026-06-13 — Supervisor overhaul + reasoning model output cleanup (LIN-16)
 
 **Execution Supervisor — user-configurable model, workspace API keys:**
-- `ExecutionSupervisor.assess()` now receives `apiKeys: ModelApiKeys` and `workspaceSupervisorModel?: string` via `SupervisorContext` — no env-level model or key fallback by design
+- `ExecutionSupervisor.assess()` now receives `apiKeys: ModelApiKeys` and `workspaceSupervisorModel?: string` via `SupervisorContext`
 - `NodeExecutorService` resolves workspace API keys and supervisor model lazily (only on first failure per execution), caches them for subsequent retries
-- `resolveWorkspaceSupervisorModel(workspaceId)` — new helper querying `workspaces.settings.supervisorModel`; falls back to `claude-haiku-4-5` when the field is unset (existing workspaces never saved a preference)
-- If the resolved model string is empty after the fallback (e.g. explicitly cleared), `assess()` returns `{ action: 'abort', reason: 'No supervisor model configured — go to Settings → Model Preferences to set one' }` without calling the LLM
+- `resolveWorkspaceSupervisorModel(workspaceId)` — new helper querying `workspaces.settings.supervisorModel`; falls back to the `SUPERVISOR_MODEL` env var, then `undefined`. Workspaces without a saved preference and without the env var set will abort on node failure — set `SUPERVISOR_MODEL` in your environment to protect them. A startup warning is logged when the env var is absent.
+- If no model is resolved, `assess()` returns `{ action: 'abort', reason: 'No supervisor model configured — go to Settings → Model Preferences to set one' }` without calling the LLM
 - New hard rule: connection errors (`ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `fetch failed`, `Connection error`) retry once with a 2 s delay then abort — bypasses the generic fast-failure rule that was triggering too many retries
 
 **Agent executor — reasoning model output cleanup:**
 - `<think>...</think>` blocks (emitted by QwQ, Qwen3, DeepSeek-R1, etc.) are stripped from final `__agentValue` in `buildAgentResult`
 - Streaming path: `wrapOnToken()` wraps the `onToken` callback with a stateful buffer that suppresses `<think>` block tokens in real time, so the live chat bubble never shows chain-of-thought text
-- `isProviderError` regex extended to match connection-related errors (`connection error|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|fetch failed`) so the agent fallback chain activates when a provider is unreachable
+- `isProviderError` matches only provider-specific errors (auth failures, rate limits, quota, 503/529) — network errors (`ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `fetch failed`) are intentionally excluded so they throw immediately to the supervisor's retry-once path rather than rotating through all fallback providers
 
 ### 2026-05-28 — SSE wire format clarification
 - **NestJS serialises the full `MessageEvent` object as the SSE `data:` field**, not just `MessageEvent.data`. Wire format: `data: {"data":{...event...},"id":"streamId"}`. Clients must unwrap `parsed.data` to get the actual event payload. Fixed in the workflow builder's chat preview panel and canvas SSE client.
