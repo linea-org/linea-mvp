@@ -30,7 +30,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@linea/ui/components/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@linea/ui/components/tooltip';
 import { Kbd } from '@linea/ui/components/kbd';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
 import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
 import { Spinner } from '@linea/ui/components/spinner';
@@ -777,7 +777,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         // Fit view after nodes render — use ref so the async closure always sees the current instance
         setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }), 100);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load workflow');
+        setError(friendlyApiError(err));
       } finally {
         setLoading(false);
       }
@@ -1210,9 +1210,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     } catch (err) {
       setNodeResults((prev) => ({
         ...prev,
-        [testNodeDialog!.node.id]: { status: 'failed', error: err instanceof Error ? err.message : 'Test failed' },
+        [testNodeDialog!.node.id]: { status: 'failed', error: friendlyApiError(err) },
       }));
-      toast.error(err instanceof Error ? err.message : 'Node test failed');
+      toast.error(friendlyApiError(err));
     } finally {
       setTestNodeRunning(false);
       setTestNodeDialog(null);
@@ -1243,7 +1243,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       });
       toast.success('Workflow saved');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed');
+      toast.error(friendlyApiError(err));
     } finally {
       setIsSaving(false);
     }
@@ -1261,7 +1261,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setDeployedAt(result.deployedAt ?? new Date().toISOString());
       toast.success('Workflow deployed');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Deploy failed');
+      toast.error(friendlyApiError(err));
     }
   }
 
@@ -1275,7 +1275,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setDeployedAt(null);
       toast.success('Workflow unpublished');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Undeploy failed');
+      toast.error(friendlyApiError(err));
     }
   }
 
@@ -1502,7 +1502,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setInterrupt(null);
       setRunStatus((prev) => prev ? { ...prev, status: 'running' } : prev);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Approval failed');
+      toast.error(friendlyApiError(err));
     }
   }
 
@@ -1519,7 +1519,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       setAskHumanAnswer('');
       setRunStatus((prev) => prev ? { ...prev, status: 'running' } : prev);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Response failed');
+      toast.error(friendlyApiError(err));
     }
   }
 

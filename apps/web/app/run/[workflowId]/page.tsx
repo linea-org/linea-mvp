@@ -6,6 +6,7 @@ import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import { Skeleton } from '@linea/ui/components/skeleton';
+import { friendlyApiErrorFromStatus } from '@/lib/api';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -69,8 +70,15 @@ export default function PublicRunPage() {
         body: JSON.stringify(inputs),
       });
       if (!res.ok) {
-        const body = (await res.json()) as { message?: string };
-        setErrorMsg(body.message ?? 'Failed to start. Please try again.');
+        let bodyMsg: string | undefined;
+        try {
+          const body = await res.json() as { message?: string; error?: { message?: string } };
+          bodyMsg = body?.error?.message ?? body?.message;
+        } catch { /* ignore */ }
+        const mappedMsg = res.status === 401
+          ? 'This workflow is not publicly accessible.'
+          : friendlyApiErrorFromStatus(res.status);
+        setErrorMsg(mappedMsg ?? bodyMsg ?? 'Failed to start. Please try again.');
         setState('ready');
         return;
       }
@@ -78,7 +86,7 @@ export default function PublicRunPage() {
       setExecutionId(result.executionId);
       setState('success');
     } catch {
-      setErrorMsg('Network error. Please try again.');
+      setErrorMsg('Connection failed. Check your internet.');
       setState('ready');
     }
   }

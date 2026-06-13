@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Tick01Icon, Loading01Icon } from '@hugeicons/core-free-icons';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
 import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
@@ -103,7 +103,7 @@ export default function BillingPage() {
       const { url } = await api.post<{ url: string }>(`/workspaces/${wsId}/billing/checkout`, { plan: planKey });
       window.location.href = url;
     } catch (err) {
-      setPayError(err instanceof Error ? err.message : 'Failed to start checkout');
+      setPayError(friendlyApiError(err));
       setPaying(null);
     }
   }

@@ -41,6 +41,8 @@ Context field values are seeded from the Start node's saved `testInput` and are 
 
 **Token refresh** — Clerk dev tokens expire in ~30 s. `getTokenRef` (updated every render, read from stable callbacks) ensures a fresh token is fetched before every API call and SSE reconnect.
 
+**Execution start placeholder** — when `send()` is called, a synthetic trace message is immediately inserted with a `__placeholder` step that shows a typing/waiting indicator. The placeholder is replaced by the real `node_started` trace once the SSE stream delivers the first event. If the execution stays queued for more than 5 s, the placeholder upgrades its label to "Waiting in queue…" via a timer.
+
 ## Start Panel
 
 `panels/start-panel.tsx` — properties panel for the Start node. Manages:
@@ -49,6 +51,15 @@ Context field values are seeded from the Start node's saved `testInput` and are 
 - **Input variable schema** — name/type/required rows (shown for manual + webhook triggers)
 - **Input extraction model** — model used to extract typed variables from a natural-language API message
 - **Test values** — editable default values for each input variable, loaded into the chat panel when testing (shown for manual + webhook triggers)
+
+## Error Handling Pattern
+
+All catch blocks across the web app use two helpers from `apps/web/lib/api.ts`:
+
+- `friendlyApiError(err)` — converts any thrown value to user-readable text. Maps `ApiError` status codes via `friendlyApiErrorFromStatus`, handles `TypeError` fetch failures, and falls back to `err.message`.
+- `friendlyApiErrorFromStatus(status)` — maps HTTP status codes to sentences: 401 → session expired, 402 → execution limit reached, 429 → rate limit, 5xx → server error.
+
+Raw API error strings (e.g. NestJS validation messages, internal error IDs) must never be shown in the UI. Every `catch` block must pass the error through one of these helpers before setting state.
 
 ## Changelog
 
@@ -63,6 +74,16 @@ Context field values are seeded from the Start node's saved `testInput` and are 
 - Added **JSON output viewer** (`react-json-view-lite`) in trace step output, node output on execution detail page, and execution input/output grid
 - **`<think>` block filtering** — reasoning model streaming tokens (`wrapOnToken` in `agent.executor.ts`) and final output (`buildAgentResult`) both strip `<think>...</think>` so chain-of-thought text never appears in the chat bubble or approval modal
 - **Supervisor model tour step** added in `app/(dashboard)/layout.tsx` targeting `[data-tour="supervisor-model"]` — explains why a supervisor model is needed and how to set one
+
+### 2026-06-13 (LIN-14)
+- Added **execution start placeholder**: a typing bubble with a `__placeholder` step appears immediately after `send()`, before the first SSE event arrives
+- 5 s queue-wait timer upgrades the placeholder label to "Waiting in queue…" if the first node hasn't started yet
+- Placeholder is cleanly replaced (not appended to) when `node_started` fires — no double-message flash
+
+### 2026-06-09 (LIN-10)
+- Added `friendlyApiError()` and `friendlyApiErrorFromStatus()` to `apps/web/lib/api.ts`
+- Applied across all catch blocks in `chat-preview-panel.tsx`, `index.tsx`, `evals-panel.tsx`, `generate-dialog.tsx`, `share-panel.tsx`, and all dashboard/app pages — raw API error strings no longer surface in the UI
+- Status-code mapping: 401 → session expired, 402 → execution limit, 429 → rate limit, 5xx → server error
 
 ### 2026-05-28
 - Added JSON simulation mode with `Text | JSON` pill tabs (later removed in LIN-16)

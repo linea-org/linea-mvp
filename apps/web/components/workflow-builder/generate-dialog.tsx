@@ -12,6 +12,7 @@ import {
 import { Button } from '@linea/ui/components/button';
 import { Kbd } from '@linea/ui/components/kbd';
 import type { Node, Edge } from '@xyflow/react';
+import { ApiError, friendlyApiError } from '@/lib/api';
 
 const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
@@ -179,7 +180,7 @@ export function GenerateDialog({
         },
       );
 
-      if (!resp.ok || !resp.body) throw new Error(`Server error: ${resp.status}`);
+      if (!resp.ok || !resp.body) throw new ApiError(resp.status, resp.statusText || `Request failed with status ${resp.status}`);
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
@@ -218,7 +219,7 @@ export function GenerateDialog({
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = friendlyApiError(err);
         setTurns((prev) => {
           const last = prev[prev.length - 1];
           if (!last || last.kind !== 'assistant') return prev;

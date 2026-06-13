@@ -5,7 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Cancel01Icon, Loading01Icon, UserAdd01Icon, Delete01Icon,
 } from '@hugeicons/core-free-icons';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
@@ -96,7 +96,7 @@ export function SharePanel({ workspaceId, podId, workflowId, token, onClose }: P
       setInvites((prev) => [...prev, invite]);
       setEmail('');
     } catch (err) {
-      setSendError(err instanceof Error ? err.message : 'Failed to send invite');
+      setSendError(friendlyApiError(err));
     } finally {
       setSending(false);
     }
