@@ -133,8 +133,7 @@ function isProviderError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return (
     /API key|not configured|authentication|401/i.test(msg) ||
-    /quota|rate.?limit|overload|unavailable|503|529/i.test(msg) ||
-    /connection error|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|fetch failed/i.test(msg)
+    /quota|rate.?limit|overload|unavailable|503|529/i.test(msg)
   );
 }
 
