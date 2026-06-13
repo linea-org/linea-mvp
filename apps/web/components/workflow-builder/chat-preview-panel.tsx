@@ -668,6 +668,7 @@ export function ChatPreviewPanel({
 
       /* ---- Suspension (ask_human / approval / tool_approval) ------- */
       case 'execution_suspended': {
+        if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
         const interruptType = evt.interrupt?.type ?? 'ask_human';
         const isApproval = interruptType === 'approval';
         const isToolApproval = interruptType === 'tool_approval';
@@ -731,6 +732,7 @@ export function ChatPreviewPanel({
       case 'execution_complete': {
         if (terminalShownRef.current) break;
         terminalShownRef.current = true;
+        if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
         const reply = extractReply(evt.output);
         traceIdRef.current = null;
         setStreamingText('');
@@ -749,6 +751,7 @@ export function ChatPreviewPanel({
       case 'execution_failed': {
         if (terminalShownRef.current) break;
         terminalShownRef.current = true;
+        if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
         traceIdRef.current = null;
         setStreamingText('');
         setStreamingNodeId(null);
