@@ -433,7 +433,10 @@ function ChatBubble({ msg, onApprove }: { msg: ChatMessage; onApprove?: (approve
                       ? <code className="block bg-background/60 rounded p-2 text-xs font-mono my-1 overflow-x-auto whitespace-pre">{children}</code>
                       : <code className="bg-background/60 rounded px-1 text-xs font-mono">{children}</code>,
                   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                  a:      ({ href, children }) => <a href={href} className="underline text-primary" target="_blank" rel="noopener noreferrer">{children}</a>,
+                  a:      ({ href, children }) => {
+                    const safe = /^https?:\/\//i.test(href ?? '') ? href : '#';
+                    return <a href={safe} className="underline text-primary" target="_blank" rel="noopener noreferrer">{children}</a>;
+                  },
                 }}
               >
                 {msg.content}
