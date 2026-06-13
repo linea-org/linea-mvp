@@ -13,6 +13,7 @@
 | `index.tsx` | Root component. Owns the ReactFlow canvas, node CRUD, save/deploy logic, and its own SSE connection for canvas-level node badges. |
 | `toolbar.tsx` | Right-side panel host. Renders either the node property editor or the deploy/webhook panel depending on selection. |
 | `chat-preview-panel.tsx` | Live test panel. Sends executions via REST and streams results back over SSE, rendering a chat-style trace. |
+| `nodes/custom-node.tsx` | Base ReactFlow node component. Renders the node card, status badge, and output preview strip. |
 | `nodes/` | Individual ReactFlow node components (one per node type). |
 
 ## Chat Preview Panel
@@ -34,7 +35,16 @@ JSON mode **simulates a webhook payload** — the execution engine receives the 
 
 **Token refresh** — Clerk dev tokens expire in ~30 s. `getTokenRef` (updated every render, read from stable callbacks) ensures a fresh token is fetched before every API call and SSE reconnect.
 
+## Canvas Node Output Preview
+
+After an execution completes, `index.tsx` writes `_outputPreview` (a truncated string of the node's output) into each node's `data`. `custom-node.tsx` reads this field and renders a compact preview strip at the bottom of the node card. Hovering the strip shows a `Tooltip` with the full value (max `max-w-xs`). The field is prefixed with `_` to mark it as ephemeral canvas state — it is never persisted to the workflow graph.
+
 ## Changelog
+
+### 2026-06-13 (LIN-15)
+- Added **node output preview strip** in `nodes/custom-node.tsx` — after execution, each node card shows a truncated `_outputPreview` string below its content
+- Preview uses Radix `Tooltip` (upgraded from a plain `title` attribute) for styled hover display
+- `_outputPreview` is written by `index.tsx` post-execution and is not persisted to the workflow definition
 
 ### 2026-05-28
 - Added **JSON simulation mode** with `Text | JSON` pill tabs, `Simulated` badge on user bubbles, Ctrl+Enter submit, and inline JSON parse error
