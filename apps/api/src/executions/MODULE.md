@@ -57,8 +57,8 @@ Also exposes a node test endpoint:
 **Execution Supervisor — user-configurable model, workspace API keys:**
 - `ExecutionSupervisor.assess()` now receives `apiKeys: ModelApiKeys` and `workspaceSupervisorModel?: string` via `SupervisorContext` — no env-level model or key fallback by design
 - `NodeExecutorService` resolves workspace API keys and supervisor model lazily (only on first failure per execution), caches them for subsequent retries
-- `resolveWorkspaceSupervisorModel(workspaceId)` — new helper querying `workspaces.settings.supervisorModel`
-- If no supervisor model is configured, `assess()` returns `{ action: 'abort', reason: 'No supervisor model configured — go to Settings → Model Preferences to set one' }` without calling the LLM
+- `resolveWorkspaceSupervisorModel(workspaceId)` — new helper querying `workspaces.settings.supervisorModel`; falls back to `claude-haiku-4-5` when the field is unset (existing workspaces never saved a preference)
+- If the resolved model string is empty after the fallback (e.g. explicitly cleared), `assess()` returns `{ action: 'abort', reason: 'No supervisor model configured — go to Settings → Model Preferences to set one' }` without calling the LLM
 - New hard rule: connection errors (`ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `fetch failed`, `Connection error`) retry once with a 2 s delay then abort — bypasses the generic fast-failure rule that was triggering too many retries
 
 **Agent executor — reasoning model output cleanup:**

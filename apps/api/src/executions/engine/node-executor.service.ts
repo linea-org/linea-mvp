@@ -796,7 +796,9 @@ export class NodeExecutorService {
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
       .limit(1);
-    return rows[0]?.settings?.supervisorModel;
+    // Fall back to haiku for workspaces that haven't saved a preference yet,
+    // so existing deployments aren't broken on first node failure after deploy.
+    return rows[0]?.settings?.supervisorModel ?? 'claude-haiku-4-5';
   }
 
   private withTimeout<T>(
