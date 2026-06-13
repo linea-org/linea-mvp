@@ -22,7 +22,10 @@ export function friendlyApiError(err: unknown): string {
     const mapped = friendlyApiErrorFromStatus(err.status);
     if (mapped) return mapped;
   }
-  if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+  if (err instanceof TypeError && (
+    err.message.toLowerCase().includes('fetch') ||
+    err.message.toLowerCase().includes('load failed')
+  )) {
     return 'Connection failed. Check your internet.';
   }
   return err instanceof Error ? err.message : 'An unexpected error occurred.';
