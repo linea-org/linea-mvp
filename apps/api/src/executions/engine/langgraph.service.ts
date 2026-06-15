@@ -16,6 +16,8 @@ import { workflows } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 import { NodeExecutorService } from './node-executor.service';
 import type { WorkflowState } from './variable-substitution';
+import { executeLoopNode } from './executors/loop.executor';
+import type { LoopNodeData } from './executors/loop.executor';
 
 export interface WorkflowNode {
   id: string;
@@ -130,6 +132,7 @@ export class LangGraphService {
         node.id,
         this.createNodeFn(
           node,
+          definition,
           onNodeUpdate,
           workspaceId,
           checkpointer,
@@ -200,6 +203,7 @@ export class LangGraphService {
 
   private createNodeFn(
     node: WorkflowNode,
+    definition: WorkflowDefinition,
     onNodeUpdate: NodeUpdateCallback,
     workspaceId: string,
     _checkpointer?: BaseCheckpointSaver,
@@ -209,6 +213,124 @@ export class LangGraphService {
     onAgentToken?: AgentTokenCallback,
   ) {
     const nodeType = node.data?.nodeType || node.type;
+
+    if (nodeType === 'loop') {
+      return async (state: typeof WorkflowStateAnnotation.State) => {
+        const loopData = node.data as LoopNodeData;
+        const children = loopData.children ?? [];
+
+        const workflowState: WorkflowState = {
+          variables: state.variables,
+          chatHistory: state.chatHistory,
+          memory: state.memory,
+          nodeResults: state.nodeResults,
+          pendingAuth: state.pendingAuth,
+          loopResults: state.loopResults,
+          cumulativeUsage: state.cumulativeUsage,
+        };
+
+        onNodeUpdate(node.id, 'running');
+        const loopStart = Date.now();
+
+        try {
+          const { items } = executeLoopNode(loopData, workflowState);
+
+          // If no children are configured, fall through to the regular executor path
+          if (children.length === 0) {
+            const { result } = await this.nodeExecutor.execute({
+              nodeId: node.id,
+              nodeType,
+              nodeData: { ...node.data, _nodeId: node.id },
+              state: workflowState,
+              workspaceId,
+              workflowId,
+              threadId,
+              supervisorModelOverride,
+            });
+            const durationMs = Date.now() - loopStart;
+            onNodeUpdate(node.id, 'completed', result, undefined, durationMs);
+            const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+            return {
+              variables: { lastOutput: result, [nodeKey]: result, [node.id]: result },
+              chatHistory: [],
+              memory: {},
+              currentNodeId: node.id,
+              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output: result, completedAt: new Date().toISOString(), durationMs } },
+              pendingAuth: null,
+              cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+            };
+          }
+
+          const iterationResults: unknown[] = [];
+          let currentVars: Record<string, any> = { ...state.variables };
+
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            currentVars = { ...currentVars, item, loopItem: item, loopIndex: i };
+
+            for (const childId of children) {
+              const childNode = definition.nodes.find((n) => n.id === childId);
+              if (!childNode) continue;
+              const childType = childNode.data?.nodeType || childNode.type;
+
+              const childState: WorkflowState = {
+                variables: currentVars,
+                chatHistory: state.chatHistory,
+                memory: state.memory ?? {},
+                nodeResults: state.nodeResults,
+                pendingAuth: state.pendingAuth,
+                loopResults: state.loopResults,
+                cumulativeUsage: state.cumulativeUsage,
+              };
+
+              const { result: childResult, isAgentOutput } = await this.nodeExecutor.execute({
+                nodeId: childNode.id,
+                nodeType: childType,
+                nodeData: { ...childNode.data, _nodeId: childNode.id },
+                state: childState,
+                workspaceId,
+                workflowId,
+                threadId,
+                supervisorModelOverride,
+                onToken: onAgentToken ? (delta) => onAgentToken(childNode.id, delta) : undefined,
+              });
+
+              let actualOutput = childResult;
+              if (isAgentOutput && childResult && '__agentValue' in childResult) {
+                actualOutput = childResult.__agentValue;
+              }
+
+              const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
+              currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput };
+            }
+
+            iterationResults.push(currentVars.lastOutput);
+          }
+
+          const durationMs = Date.now() - loopStart;
+          const output = { results: iterationResults, total: iterationResults.length, items };
+          onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
+
+          const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+          return {
+            variables: { ...currentVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
+            chatHistory: [],
+            memory: {},
+            currentNodeId: node.id,
+            nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
+            pendingAuth: null,
+            loopResults: iterationResults,
+            cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+          };
+        } catch (error) {
+          if (isGraphInterrupt(error)) throw error;
+          const durationMs = Date.now() - loopStart;
+          const msg = error instanceof Error ? error.message : String(error);
+          onNodeUpdate(node.id, 'failed', undefined, msg, durationMs);
+          throw error;
+        }
+      };
+    }
 
     // Subworkflow is handled here to avoid a circular dep between
     // LangGraphService ↔ NodeExecutorService.

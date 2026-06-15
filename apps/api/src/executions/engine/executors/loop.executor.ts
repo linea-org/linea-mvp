@@ -5,6 +5,7 @@ export interface LoopNodeData {
   arrayPath?: string;
   itemTransform?: string;
   maxIterations?: number;
+  children?: string[];
 }
 
 function resolveByPath(
