@@ -93,6 +93,8 @@ export const WorkflowStateAnnotation = Annotation.Root({
   }),
 });
 
+const MAX_LOOP_TIMEOUT_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class LangGraphService {
   private readonly logger = new Logger(LangGraphService.name);
@@ -265,6 +267,11 @@ export class LangGraphService {
           let currentVars: Record<string, any> = { ...state.variables };
 
           for (let i = 0; i < items.length; i++) {
+            if (Date.now() - loopStart > MAX_LOOP_TIMEOUT_MS) {
+              throw new Error(
+                `Loop exceeded maximum duration of 5 minutes after ${i} iteration${i === 1 ? '' : 's'}.`,
+              );
+            }
             const item = items[i];
             currentVars = { ...currentVars, item, loopItem: item, loopIndex: i };
 
