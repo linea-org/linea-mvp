@@ -12,6 +12,7 @@ import {
   Tick01Icon,
   ArrowDown01Icon,
 } from '@hugeicons/core-free-icons';
+import { X } from 'lucide-react';
 import { Button } from '@linea/ui/components/button';
 import { toast } from '@linea/ui/components/sonner';
 import { createApiClient, ApiError, friendlyApiError } from '@/lib/api';
@@ -302,14 +303,6 @@ function StepsTrace({
   const isRunning = steps.some((s) => s.status === 'running');
   const [expanded, setExpanded] = useState(true);
 
-  // Auto-collapse when execution finishes
-  useEffect(() => {
-    if (!isRunning && steps.length > 0) {
-      const t = setTimeout(() => setExpanded(false), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [isRunning, steps.length]);
-
   const totalMs = steps.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
   const hasFailed = steps.some((s) => s.status === 'failed');
 
@@ -319,10 +312,11 @@ function StepsTrace({
         <HugeiconsIcon icon={WorkflowSquare01Icon} className="size-3.5 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
-        {/* Clickable header */}
+        {/* Header row */}
+        <div className="flex items-center justify-between mb-1.5">
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground mb-1.5 transition-colors"
+          className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
         >
           {isRunning ? (
             <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin text-muted-foreground/70" />
@@ -340,6 +334,16 @@ function StepsTrace({
             className={`size-2.5 opacity-40 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
           />
         </button>
+        {!isRunning && expanded && (
+          <button
+            onClick={() => setExpanded(false)}
+            className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors leading-none"
+            aria-label="Close trace"
+          >
+            <X className="size-3" />
+          </button>
+        )}
+        </div>
 
         {/* Steps list */}
         {expanded && steps.length > 0 && (
