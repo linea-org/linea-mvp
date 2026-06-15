@@ -686,11 +686,13 @@ export function ChatPreviewPanel({
               const divider: NodeStep[] = isResuming
                 ? [{ nodeId: `__divider__${Date.now()}`, nodeName: '', nodeType: '', status: 'divider' as const }]
                 : [];
-              return prev.map((m) =>
-                m.id === traceId
-                  ? { ...m, steps: [...filteredSteps, ...divider, { nodeId, nodeName, nodeType, status: 'running' as const }] }
-                  : m,
-              );
+              return prev
+                .filter((m) => !m.typing)
+                .map((m) =>
+                  m.id === traceId
+                    ? { ...m, steps: [...filteredSteps, ...divider, { nodeId, nodeName, nodeType, status: 'running' as const }] }
+                    : m,
+                );
             }
             // First node — replace typing bubble with trace
             return [
