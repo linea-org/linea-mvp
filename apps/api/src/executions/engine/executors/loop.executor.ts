@@ -8,6 +8,12 @@ export interface LoopNodeData {
   children?: string[];
 }
 
+export interface LoopOutput {
+  results: unknown[];
+  total: number;
+  items: unknown[];
+}
+
 function resolveByPath(
   variables: Record<string, unknown>,
   path: string,
@@ -21,7 +27,7 @@ function resolveByPath(
 export function executeLoopNode(
   nodeData: LoopNodeData,
   state: WorkflowState,
-): { results: unknown[]; total: number; items: unknown[] } {
+): LoopOutput {
   const maxIterations = nodeData.maxIterations ?? 100;
 
   let items: unknown[] = [];

@@ -84,4 +84,46 @@ describe('executeLoopNode', () => {
     const result = executeLoopNode({}, state({ items: [1, 2] }));
     expect(result.results).toEqual([]);
   });
+
+  describe('structured output shape (LIN-29)', () => {
+    it('always returns results, total, and items keys', () => {
+      const result = executeLoopNode(
+        { arrayPath: 'list' },
+        state({ list: ['a', 'b', 'c'] }),
+      );
+      expect(result).toHaveProperty('results');
+      expect(result).toHaveProperty('total');
+      expect(result).toHaveProperty('items');
+    });
+
+    it('items preserves the original array unchanged', () => {
+      const original = [{ id: 1 }, { id: 2 }];
+      const result = executeLoopNode(
+        { arrayPath: 'rows', itemTransform: 'item.id' },
+        state({ rows: original }),
+      );
+      expect(result.items).toEqual(original);
+      expect(result.results).toEqual([1, 2]);
+    });
+
+    it('total equals results.length', () => {
+      const result = executeLoopNode(
+        { arrayPath: 'nums' },
+        state({ nums: [10, 20, 30] }),
+      );
+      expect(result.total).toBe(result.results.length);
+      expect(result.total).toBe(3);
+    });
+
+    it('items is capped at maxIterations but results matches items length', () => {
+      const nums = Array.from({ length: 10 }, (_, i) => i);
+      const result = executeLoopNode(
+        { arrayPath: 'nums', maxIterations: 4 },
+        state({ nums }),
+      );
+      expect(result.items).toHaveLength(4);
+      expect(result.results).toHaveLength(4);
+      expect(result.total).toBe(4);
+    });
+  });
 });

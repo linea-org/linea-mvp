@@ -17,7 +17,7 @@ import { DB_TOKEN } from '../../database/database.module';
 import { NodeExecutorService } from './node-executor.service';
 import type { WorkflowState } from './variable-substitution';
 import { executeLoopNode } from './executors/loop.executor';
-import type { LoopNodeData } from './executors/loop.executor';
+import type { LoopNodeData, LoopOutput } from './executors/loop.executor';
 
 export interface WorkflowNode {
   id: string;
@@ -308,7 +308,7 @@ export class LangGraphService {
           }
 
           const durationMs = Date.now() - loopStart;
-          const output = { results: iterationResults, total: iterationResults.length, items };
+          const output: LoopOutput = { results: iterationResults, total: iterationResults.length, items };
           onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
 
           const nodeKey = node.data?.nodeName || node.data?.name || node.id;
