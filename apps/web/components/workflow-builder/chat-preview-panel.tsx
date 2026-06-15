@@ -195,7 +195,20 @@ function AgentOutputView({ output }: { output: Record<string, unknown> }) {
 /* ------------------------------------------------------------------ */
 function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: string }) {
   const [outputOpen, setOutputOpen] = useState(false);
-  const hasContent = step.output !== undefined || !!step.error;
+  const [finalStreamedText, setFinalStreamedText] = useState('');
+  const streamingRef = useRef('');
+
+  useEffect(() => {
+    if (streamingText) streamingRef.current = streamingText;
+  }, [streamingText]);
+
+  useEffect(() => {
+    if (step.status === 'completed' && streamingRef.current) {
+      setFinalStreamedText(streamingRef.current);
+    }
+  }, [step.status]);
+
+  const hasContent = step.output !== undefined || !!step.error || !!finalStreamedText;
 
   // Detect agent output shape for badges
   const agentOutput = (
@@ -258,7 +271,7 @@ function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: stri
         )}
       </div>
 
-      {/* Live streaming text for agent nodes */}
+      {/* Live streaming text — only while running */}
       {streamingText && step.status === 'running' && (
         <div className="px-3 pb-2 text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto border-t border-border/40 bg-muted/20">
           {streamingText}
@@ -266,22 +279,34 @@ function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: stri
         </div>
       )}
 
-      {/* Output — structured for agent nodes, JSON tree otherwise */}
-      {outputOpen && step.output !== undefined && (
-        <div className="px-3 pb-2 text-[11px] text-muted-foreground max-h-64 overflow-y-auto bg-muted/20 border-t border-border/40">
-          {agentOutput ? (
-            <AgentOutputView output={agentOutput} />
-          ) : (
-            <JsonOrPre value={step.output} className="text-[11px]" />
+      {outputOpen && (
+        <>
+          {/* Persisted streamed output — shown after node completes */}
+          {finalStreamedText && (
+            <div className="px-3 pt-2 pb-2 text-[11px] text-muted-foreground bg-muted/20 border-t border-border/40">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/50 mb-1">Streamed output</p>
+              <pre className="whitespace-pre-wrap break-words leading-relaxed max-h-40 overflow-y-auto">{finalStreamedText}</pre>
+            </div>
           )}
-        </div>
-      )}
 
-      {/* Error */}
-      {outputOpen && step.error && (
-        <div className="px-3 pb-2 text-[11px] text-destructive border-t border-border/40">
-          {step.error}
-        </div>
+          {/* Structured output — structured for agent nodes, JSON tree otherwise */}
+          {step.output !== undefined && (
+            <div className="px-3 pb-2 text-[11px] text-muted-foreground max-h-64 overflow-y-auto bg-muted/20 border-t border-border/40">
+              {agentOutput ? (
+                <AgentOutputView output={agentOutput} />
+              ) : (
+                <JsonOrPre value={step.output} className="text-[11px]" />
+              )}
+            </div>
+          )}
+
+          {/* Error */}
+          {step.error && (
+            <div className="px-3 pb-2 text-[11px] text-destructive border-t border-border/40">
+              {step.error}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
