@@ -48,6 +48,7 @@ interface ChatMessage {
   toolSummary?: string;
   steps?: NodeStep[];
   simulated?: boolean;
+  isError?: boolean;
 }
 
 type ExecStatus = 'idle' | 'running' | 'suspended' | 'completed' | 'failed';
@@ -105,6 +106,12 @@ function extractReply(output: unknown): string {
   if (typeof o['response'] === 'string') return o['response'];
   if (typeof o['text'] === 'string') return o['text'];
   return JSON.stringify(output, null, 2);
+}
+
+function isErrorOutput(output: unknown): output is { error: string } {
+  if (output === null || typeof output !== 'object') return false;
+  const o = output as Record<string, unknown>;
+  return typeof o['error'] === 'string' && (o['success'] === false || !('message' in o) && !('result' in o) && !('response' in o) && !('text' in o));
 }
 
 function fmtMs(ms: number): string {
@@ -414,9 +421,11 @@ function ChatBubble({ msg, onApprove }: { msg: ChatMessage; onApprove?: (approve
           <div
             className={cn(
               'rounded-2xl rounded-tl-sm px-3 py-2.5 text-sm',
-              msg.suspended
-                ? 'bg-muted border border-border text-foreground'
-                : 'bg-muted text-foreground',
+              msg.isError
+                ? 'bg-destructive/10 border border-destructive/30 text-destructive'
+                : msg.suspended
+                  ? 'bg-muted border border-border text-foreground'
+                  : 'bg-muted text-foreground',
             )}
           >
             {msg.content ? (
@@ -782,13 +791,14 @@ export function ChatPreviewPanel({
         if (terminalShownRef.current) break;
         terminalShownRef.current = true;
         if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
-        const reply = extractReply(evt.output);
+        const errorOutput = isErrorOutput(evt.output);
+        const reply = errorOutput ? evt.output.error : extractReply(evt.output);
         traceIdRef.current = null;
         setStreamingText('');
         setStreamingNodeId(null);
         setMessages((prev) => [
           ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
-          { id: `w-${Date.now()}`, role: 'workflow', content: reply },
+          { id: `w-${Date.now()}`, role: 'workflow', content: reply, ...(errorOutput && { isError: true }) },
         ]);
         setSuspended(null);
         setApprovalMsgId(null);
