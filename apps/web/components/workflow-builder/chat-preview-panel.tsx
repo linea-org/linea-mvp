@@ -34,6 +34,7 @@ interface NodeStep {
   output?: unknown;
   error?: string;
   durationMs?: number;
+  agentStreamedText?: string;
 }
 
 interface ChatMessage {
@@ -195,20 +196,11 @@ function AgentOutputView({ output }: { output: Record<string, unknown> }) {
 /* ------------------------------------------------------------------ */
 function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: string }) {
   const [outputOpen, setOutputOpen] = useState(false);
-  const [finalStreamedText, setFinalStreamedText] = useState('');
-  const streamingRef = useRef('');
 
-  useEffect(() => {
-    if (streamingText) streamingRef.current = streamingText;
-  }, [streamingText]);
-
-  useEffect(() => {
-    if (step.status === 'completed' && streamingRef.current) {
-      setFinalStreamedText(streamingRef.current);
-    }
-  }, [step.status]);
-
-  const hasContent = step.output !== undefined || !!step.error || !!finalStreamedText;
+  // agentStreamedText is written by the panel when the node reaches a terminal state,
+  // so it is always complete and race-free (no effect-based capture needed here).
+  const persistedText = step.agentStreamedText;
+  const hasContent = step.output !== undefined || !!step.error || !!persistedText;
 
   // Detect agent output shape for badges
   const agentOutput = (
@@ -282,10 +274,10 @@ function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: stri
       {outputOpen && (
         <>
           {/* Persisted streamed output — shown after node completes */}
-          {finalStreamedText && (
+          {persistedText && (
             <div className="px-3 pt-2 pb-2 text-[11px] text-muted-foreground bg-muted/20 border-t border-border/40">
               <p className="text-[9px] uppercase tracking-wider text-muted-foreground/50 mb-1">Streamed output</p>
-              <pre className="whitespace-pre-wrap break-words leading-relaxed max-h-40 overflow-y-auto">{finalStreamedText}</pre>
+              <pre className="whitespace-pre-wrap break-words leading-relaxed max-h-40 overflow-y-auto">{persistedText}</pre>
             </div>
           )}
 
@@ -527,6 +519,9 @@ export function ChatPreviewPanel({
   const [approvalMsgId, setApprovalMsgId] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState('');
   const [streamingNodeId, setStreamingNodeId] = useState<string | null>(null);
+  // Ref mirror of streamingText — updated synchronously in agent_token so the
+  // node_update completion handler can capture the full text without a render race.
+  const streamingTextRef = useRef('');
 
   const [startTriggerType, setStartTriggerType] = useState<'manual' | 'webhook' | 'schedule'>('manual');
   const [contextInputs, setContextInputs] = useState<Record<string, string>>({});
@@ -709,6 +704,10 @@ export function ChatPreviewPanel({
           setStreamingText('');
           setStreamingNodeId(nodeId);
         } else {
+          // Capture any accumulated streaming text before clearing it
+          const capturedStreamedText = streamingTextRef.current || undefined;
+          streamingTextRef.current = '';
+
           // Update the existing step's final status
           setMessages((prev) =>
             prev.map((m) => {
@@ -717,7 +716,7 @@ export function ChatPreviewPanel({
                 ...m,
                 steps: (m.steps ?? []).map((s) =>
                   s.nodeId === nodeId
-                    ? { ...s, status: status as NodeStep['status'], output, error, durationMs }
+                    ? { ...s, status: status as NodeStep['status'], output, error, durationMs, agentStreamedText: capturedStreamedText }
                     : s,
                 ),
               };
@@ -734,6 +733,7 @@ export function ChatPreviewPanel({
       case 'agent_token': {
         const { nodeId, delta } = evt;
         if (delta) {
+          streamingTextRef.current += delta;
           setStreamingText((prev) => prev + delta);
           if (nodeId) setStreamingNodeId(nodeId);
         }
@@ -756,14 +756,20 @@ export function ChatPreviewPanel({
               ? 'Human review required.'
               : 'Please provide input.');
 
-        // Mark any still-running step as suspended
+        // Capture any streaming text before marking the running step as suspended
+        const suspendedStreamedText = streamingTextRef.current || undefined;
+        streamingTextRef.current = '';
+
+        // Mark any still-running step as suspended, persisting any streamed text
         setMessages((prev) =>
           prev.map((m) => {
             if (!m.steps) return m;
             return {
               ...m,
               steps: m.steps.map((s) =>
-                s.status === 'running' ? { ...s, status: 'suspended' as const } : s,
+                s.status === 'running'
+                  ? { ...s, status: 'suspended' as const, agentStreamedText: suspendedStreamedText }
+                  : s,
               ),
             };
           }),
@@ -1010,6 +1016,7 @@ export function ChatPreviewPanel({
   function resetRunState() {
     if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
     traceIdRef.current = null;
+    streamingTextRef.current = '';
     seenNodeIdsRef.current = new Set();
     terminalShownRef.current = false;
     setStreamingText('');
