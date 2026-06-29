@@ -792,14 +792,14 @@ export function ChatPreviewPanel({
         if (terminalShownRef.current) break;
         terminalShownRef.current = true;
         if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
-        const errorOutput = isErrorOutput(evt.output);
-        const reply = errorOutput ? evt.output.error : extractReply(evt.output);
+        const reply = isErrorOutput(evt.output) ? evt.output.error : extractReply(evt.output);
+        const isError = isErrorOutput(evt.output);
         traceIdRef.current = null;
         setStreamingText('');
         setStreamingNodeId(null);
         setMessages((prev) => [
           ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
-          { id: `w-${Date.now()}`, role: 'workflow', content: reply, ...(errorOutput && { isError: true }) },
+          { id: `w-${Date.now()}`, role: 'workflow', content: reply, ...(isError && { isError: true }) },
         ]);
         setSuspended(null);
         setApprovalMsgId(null);
