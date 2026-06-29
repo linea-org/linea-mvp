@@ -16,7 +16,7 @@ import { workflows } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 import { NodeExecutorService } from './node-executor.service';
 import type { WorkflowState } from './variable-substitution';
-import { executeLoopNode } from './executors/loop.executor';
+import { executeLoopNode, checkLoopTimeout, MAX_LOOP_TIMEOUT_MS } from './executors/loop.executor';
 import type { LoopNodeData, LoopOutput } from './executors/loop.executor';
 
 export interface WorkflowNode {
@@ -93,7 +93,7 @@ export const WorkflowStateAnnotation = Annotation.Root({
   }),
 });
 
-export const MAX_LOOP_TIMEOUT_MS = 5 * 60 * 1000;
+export { MAX_LOOP_TIMEOUT_MS };
 
 @Injectable()
 export class LangGraphService {
@@ -268,11 +268,7 @@ export class LangGraphService {
           const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
           for (let i = 0; i < items.length; i++) {
-            if (Date.now() - loopStart > MAX_LOOP_TIMEOUT_MS) {
-              throw new Error(
-                `Loop exceeded maximum duration of 5 minutes after ${i} iteration${i === 1 ? '' : 's'}.`,
-              );
-            }
+            checkLoopTimeout(loopStart, i);
             const item = items[i];
             currentVars = { ...currentVars, item, loopItem: item, loopIndex: i };
 
