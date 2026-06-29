@@ -243,6 +243,22 @@ export class LangGraphService {
         const loopData = node.data as LoopNodeData;
         const children = loopData.children ?? [];
 
+        const INTERRUPTIBLE_TYPES = new Set([
+          'approval', 'approval-gate',
+        ]);
+        for (const childId of children) {
+          const childNode = definition.nodes.find((n) => n.id === childId);
+          if (!childNode) continue;
+          const childType = childNode.data?.nodeType || childNode.type;
+          if (INTERRUPTIBLE_TYPES.has(childType)) {
+            throw new Error(
+              `Loop node '${node.id}' contains interruptible child '${childId}' (type: '${childType}'). ` +
+              `Approval nodes cannot be used inside loop children because a mid-loop interrupt cannot be ` +
+              `safely resumed — completed iterations would re-execute, duplicating side-effects.`,
+            );
+          }
+        }
+
         const workflowState: WorkflowState = {
           variables: state.variables,
           chatHistory: state.chatHistory,
