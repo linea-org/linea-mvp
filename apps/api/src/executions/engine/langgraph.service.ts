@@ -326,13 +326,16 @@ export class LangGraphService {
           onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
 
           const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+          // Strip iteration-scoped variables so downstream nodes don't read
+          // stale item/loopItem/loopIndex from the final loop iteration.
+          const { item: _i, loopItem: _li, loopIndex: _lx, ...cleanVars } = currentVars;
           return {
-            variables: { ...currentVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
-            chatHistory: [],
-            memory: {},
+            variables: { ...cleanVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
+            chatHistory: accumulatedChatHistory,
+            memory: accumulatedMemory,
             currentNodeId: node.id,
-            nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
-            pendingAuth: null,
+            nodeResults: { ...childNodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
+            pendingAuth: state.pendingAuth,
             loopResults: iterationResults,
             cumulativeUsage: totalUsage,
           };
