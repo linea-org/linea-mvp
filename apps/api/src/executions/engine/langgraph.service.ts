@@ -273,6 +273,7 @@ export class LangGraphService {
             }
           }
 
+
           const { items, results: transformedItems } = executeLoopNode(loopData, workflowState);
 
           if (children.length === 0) {
@@ -285,24 +286,33 @@ export class LangGraphService {
               workflowId,
               threadId,
               supervisorModelOverride,
+              onToken: onAgentToken ? (delta) => onAgentToken(node.id, delta) : undefined,
             });
             const durationMs = Date.now() - loopStart;
             let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-            if (isAgentOutput && result?.__usage) usageUpdate = result.__usage as typeof usageUpdate;
+            if (isAgentOutput && (result as any)?.__usage) {
+              usageUpdate = (result as any).__usage as typeof usageUpdate;
+            }
             const output = result as LoopOutput;
+            if (!output || typeof output !== 'object' || !Array.isArray(output.results)) {
+              throw new Error(`Loop node '${node.id}' executor returned an unexpected output shape.`);
+            }
             onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
             const chatUpdates = isAgentOutput && (result as any)?.__chatHistoryUpdates
               ? (result as any).__chatHistoryUpdates
               : [];
+            const memoryUpdates = isAgentOutput && (result as any)?.__memoryUpdates
+              ? (result as any).__memoryUpdates
+              : {};
             return {
               variables: { ...state.variables, lastOutput: output, [nodeKey]: output, [node.id]: output },
               chatHistory: chatUpdates,
-              memory: state.memory,
+              memory: memoryUpdates,
               currentNodeId: node.id,
               nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
               pendingAuth: state.pendingAuth,
-              loopResults: Array.isArray(output?.results) ? output.results : [],
+              loopResults: output.results,
               cumulativeUsage: usageUpdate,
             };
           }
@@ -324,8 +334,7 @@ export class LangGraphService {
             for (const childId of children) {
               const childNode = definition.nodes.find((n) => n.id === childId);
               if (!childNode) {
-                this.logger.warn(`Loop node ${node.id}: child node '${childId}' not found in definition, skipping`);
-                continue;
+                throw new Error(`Loop node '${node.id}': child node '${childId}' not found in workflow definition.`);
               }
               const childType = childNode.data?.nodeType || childNode.type;
 
@@ -371,26 +380,33 @@ export class LangGraphService {
               let childVariableUpdates: Record<string, any> = {};
               if (isAgentOutput && childResult) {
                 if ('__agentValue' in childResult) actualOutput = childResult.__agentValue;
-                if (childResult.__variableUpdates) childVariableUpdates = childResult.__variableUpdates;
-                if (childResult.__chatHistoryUpdates) chatHistoryDelta = [...chatHistoryDelta, ...childResult.__chatHistoryUpdates];
-                if (childResult.__memoryUpdates) accumulatedMemory = { ...accumulatedMemory, ...childResult.__memoryUpdates };
                 if (childResult.__usage) {
                   const u = childResult.__usage as { input_tokens?: number; output_tokens?: number; total_tokens?: number };
                   totalUsage.input_tokens += u.input_tokens ?? 0;
                   totalUsage.output_tokens += u.output_tokens ?? 0;
                   totalUsage.total_tokens += u.total_tokens ?? 0;
                 }
+                if (Array.isArray(childResult.__chatHistoryUpdates)) {
+                  chatHistoryDelta = [...chatHistoryDelta, ...childResult.__chatHistoryUpdates];
+                }
+                if (childResult.__memoryUpdates && typeof childResult.__memoryUpdates === 'object') {
+                  accumulatedMemory = { ...accumulatedMemory, ...childResult.__memoryUpdates };
+                }
+                if (childResult.__variableUpdates && typeof childResult.__variableUpdates === 'object') {
+                  childVariableUpdates = childResult.__variableUpdates;
+                }
               }
 
               onNodeUpdate(childNode.id, 'completed', actualOutput, undefined, childDurationMs);
-              childNodeResults[childNode.id] = {
+              const childRecord = {
                 nodeId: childNode.id,
                 status: 'completed',
                 output: actualOutput,
                 completedAt: new Date().toISOString(),
                 durationMs: childDurationMs,
               };
-
+              childNodeResults[childNode.id] = childRecord;
+              childNodeResults[`${childNode.id}:${i}`] = childRecord;
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
               currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput, ...childVariableUpdates };
               anyChildExecuted = true;
@@ -406,16 +422,16 @@ export class LangGraphService {
           onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
 
           const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+          // Strip iteration-scoped variables so downstream nodes don't read
+          // stale item/loopItem/loopIndex from the final loop iteration.
+          const { item: _i, loopItem: _li, loopIndex: _lx, ...cleanVars } = currentVars;
           return {
-            variables: { ...currentVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
+            variables: { ...cleanVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
             chatHistory: chatHistoryDelta,
             memory: accumulatedMemory,
             currentNodeId: node.id,
-            nodeResults: {
-              ...childNodeResults,
-              [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs },
-            },
-            pendingAuth: null,
+            nodeResults: { ...state.nodeResults, ...childNodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
+            pendingAuth: state.pendingAuth,
             loopResults: iterationResults,
             cumulativeUsage: totalUsage,
           };
