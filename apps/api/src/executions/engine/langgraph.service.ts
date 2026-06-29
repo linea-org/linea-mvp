@@ -237,7 +237,7 @@ export class LangGraphService {
 
           // If no children are configured, fall through to the regular executor path
           if (children.length === 0) {
-            const { result } = await this.nodeExecutor.execute({
+            const { result, isAgentOutput } = await this.nodeExecutor.execute({
               nodeId: node.id,
               nodeType,
               nodeData: { ...node.data, _nodeId: node.id },
@@ -248,21 +248,29 @@ export class LangGraphService {
               supervisorModelOverride,
             });
             const durationMs = Date.now() - loopStart;
-            onNodeUpdate(node.id, 'completed', result, undefined, durationMs);
+            let actualResult = result;
+            let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+            if (isAgentOutput && result) {
+              if ('__agentValue' in result) actualResult = result.__agentValue;
+              if (result.__usage) usageUpdate = result.__usage as typeof usageUpdate;
+            }
+            const output: LoopOutput = { results: [actualResult], total: 1, items };
+            onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
             return {
-              variables: { lastOutput: result, [nodeKey]: result, [node.id]: result },
+              variables: { lastOutput: output, [nodeKey]: output, [node.id]: output },
               chatHistory: [],
               memory: {},
               currentNodeId: node.id,
-              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output: result, completedAt: new Date().toISOString(), durationMs } },
+              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
               pendingAuth: null,
-              cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+              cumulativeUsage: usageUpdate,
             };
           }
 
           const iterationResults: unknown[] = [];
           let currentVars: Record<string, any> = { ...state.variables };
+          const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
           for (let i = 0; i < items.length; i++) {
             const item = items[i];
@@ -296,8 +304,14 @@ export class LangGraphService {
               });
 
               let actualOutput = childResult;
-              if (isAgentOutput && childResult && '__agentValue' in childResult) {
-                actualOutput = childResult.__agentValue;
+              if (isAgentOutput && childResult) {
+                if ('__agentValue' in childResult) actualOutput = childResult.__agentValue;
+                if (childResult.__usage) {
+                  const u = childResult.__usage as { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+                  totalUsage.input_tokens += u.input_tokens ?? 0;
+                  totalUsage.output_tokens += u.output_tokens ?? 0;
+                  totalUsage.total_tokens += u.total_tokens ?? 0;
+                }
               }
 
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
@@ -320,7 +334,7 @@ export class LangGraphService {
             nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
             pendingAuth: null,
             loopResults: iterationResults,
-            cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+            cumulativeUsage: totalUsage,
           };
         } catch (error) {
           if (isGraphInterrupt(error)) throw error;
