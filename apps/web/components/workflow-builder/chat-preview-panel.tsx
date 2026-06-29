@@ -48,6 +48,7 @@ interface ChatMessage {
   toolSummary?: string;
   steps?: NodeStep[];
   simulated?: boolean;
+  isError?: boolean;
 }
 
 type ExecStatus = 'idle' | 'running' | 'suspended' | 'completed' | 'failed';
@@ -107,6 +108,13 @@ function extractReply(output: unknown): string {
   return JSON.stringify(output, null, 2);
 }
 
+function isErrorOutput(output: unknown): output is { error: string } {
+  if (output === null || typeof output !== 'object') return false;
+  const o = output as Record<string, unknown>;
+  const hasPriorityField = 'message' in o || 'result' in o || 'response' in o || 'text' in o;
+  return typeof o['error'] === 'string' && !hasPriorityField;
+}
+
 function fmtMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
@@ -120,6 +128,30 @@ interface ToolCallEntry {
   name: string;
   args: Record<string, unknown>;
   result: unknown;
+}
+
+const ARGS_TRUNCATE_LEN = 200;
+
+function ToolCallArgs({ args }: { args: Record<string, unknown> }) {
+  const [expanded, setExpanded] = useState(false);
+  const full = JSON.stringify(args, null, 2);
+  const truncated = full.length > ARGS_TRUNCATE_LEN;
+  const displayed = !truncated || expanded ? full : `${full.slice(0, ARGS_TRUNCATE_LEN)}…`;
+  return (
+    <div className="mt-0.5">
+      <pre className="text-[10px] text-muted-foreground/60 whitespace-pre-wrap">{displayed}</pre>
+      {truncated && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-0.5 text-[10px] text-primary/70 hover:text-primary underline"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function AgentOutputView({ output }: { output: Record<string, unknown> }) {
@@ -155,9 +187,7 @@ function AgentOutputView({ output }: { output: Record<string, unknown> }) {
                     )}
                   </div>
                   {tc.args && Object.keys(tc.args).length > 0 && (
-                    <pre className="mt-0.5 text-[10px] text-muted-foreground/60 whitespace-pre-wrap">
-                      {JSON.stringify(tc.args, null, 2).slice(0, 200)}
-                    </pre>
+                    <ToolCallArgs args={tc.args} />
                   )}
                 </div>
               );
@@ -414,9 +444,11 @@ function ChatBubble({ msg, onApprove }: { msg: ChatMessage; onApprove?: (approve
           <div
             className={cn(
               'rounded-2xl rounded-tl-sm px-3 py-2.5 text-sm',
-              msg.suspended
-                ? 'bg-muted border border-border text-foreground'
-                : 'bg-muted text-foreground',
+              msg.isError
+                ? 'bg-destructive/10 border border-destructive/30 text-destructive'
+                : msg.suspended
+                  ? 'bg-muted border border-border text-foreground'
+                  : 'bg-muted text-foreground',
             )}
           >
             {msg.content ? (
@@ -782,13 +814,14 @@ export function ChatPreviewPanel({
         if (terminalShownRef.current) break;
         terminalShownRef.current = true;
         if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
-        const reply = extractReply(evt.output);
+        const reply = isErrorOutput(evt.output) ? evt.output.error : extractReply(evt.output);
+        const isError = isErrorOutput(evt.output);
         traceIdRef.current = null;
         setStreamingText('');
         setStreamingNodeId(null);
         setMessages((prev) => [
           ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
-          { id: `w-${Date.now()}`, role: 'workflow', content: reply },
+          { id: `w-${Date.now()}`, role: 'workflow', content: reply, ...(isError && { isError: true }) },
         ]);
         setSuspended(null);
         setApprovalMsgId(null);
