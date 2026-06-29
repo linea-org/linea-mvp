@@ -235,7 +235,7 @@ export class LangGraphService {
             currentNodeId: node.id,
             nodeResults: { [node.id]: preloaded },
             pendingAuth: null,
-            loopResults: preloaded.output.results,
+            loopResults: [],
             cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
           };
         }
