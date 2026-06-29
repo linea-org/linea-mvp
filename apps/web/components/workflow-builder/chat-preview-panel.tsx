@@ -130,6 +130,30 @@ interface ToolCallEntry {
   result: unknown;
 }
 
+const ARGS_TRUNCATE_LEN = 200;
+
+function ToolCallArgs({ args }: { args: Record<string, unknown> }) {
+  const [expanded, setExpanded] = useState(false);
+  const full = JSON.stringify(args, null, 2);
+  const truncated = full.length > ARGS_TRUNCATE_LEN;
+  const displayed = !truncated || expanded ? full : `${full.slice(0, ARGS_TRUNCATE_LEN)}…`;
+  return (
+    <div className="mt-0.5">
+      <pre className="text-[10px] text-muted-foreground/60 whitespace-pre-wrap">{displayed}</pre>
+      {truncated && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-0.5 text-[10px] text-primary/70 hover:text-primary underline"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function AgentOutputView({ output }: { output: Record<string, unknown> }) {
   const toolLog = output['__toolCallLog'] as ToolCallEntry[] | undefined;
   const memoryUpdates = output['__memoryUpdates'] as Record<string, unknown> | undefined;
@@ -163,9 +187,7 @@ function AgentOutputView({ output }: { output: Record<string, unknown> }) {
                     )}
                   </div>
                   {tc.args && Object.keys(tc.args).length > 0 && (
-                    <pre className="mt-0.5 text-[10px] text-muted-foreground/60 whitespace-pre-wrap">
-                      {JSON.stringify(tc.args, null, 2).slice(0, 200)}
-                    </pre>
+                    <ToolCallArgs args={tc.args} />
                   )}
                 </div>
               );
