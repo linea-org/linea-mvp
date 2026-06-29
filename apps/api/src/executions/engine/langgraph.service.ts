@@ -236,7 +236,41 @@ export class LangGraphService {
           const { items, results: transformedItems } = executeLoopNode(loopData, workflowState);
 
           if (children.length === 0) {
-            throw new Error(`Loop node '${node.id}' has no children configured.`);
+            const { result, isAgentOutput } = await this.nodeExecutor.execute({
+              nodeId: node.id,
+              nodeType,
+              nodeData: { ...node.data, _nodeId: node.id },
+              state: workflowState,
+              workspaceId,
+              workflowId,
+              threadId,
+              supervisorModelOverride,
+              onToken: onAgentToken ? (delta) => onAgentToken(node.id, delta) : undefined,
+            });
+            const durationMs = Date.now() - loopStart;
+            let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+            const chatUpdates: any[] = isAgentOutput && Array.isArray((result as any)?.__chatHistoryUpdates)
+              ? (result as any).__chatHistoryUpdates
+              : [];
+            if (isAgentOutput && (result as any)?.__usage) {
+              usageUpdate = (result as any).__usage as typeof usageUpdate;
+            }
+            const loopResult = result as LoopOutput;
+            if (!loopResult || typeof loopResult !== 'object' || !Array.isArray(loopResult.results)) {
+              throw new Error(`Loop node '${node.id}' executor returned an unexpected output shape.`);
+            }
+            onNodeUpdate(node.id, 'completed', loopResult, undefined, durationMs);
+            const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+            return {
+              variables: { ...state.variables, lastOutput: loopResult, [nodeKey]: loopResult, [node.id]: loopResult },
+              chatHistory: chatUpdates,
+              memory: {},
+              currentNodeId: node.id,
+              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output: loopResult, completedAt: new Date().toISOString(), durationMs } },
+              pendingAuth: state.pendingAuth,
+              loopResults: loopResult.results,
+              cumulativeUsage: usageUpdate,
+            };
           }
 
           const iterationResults: unknown[] = [];
@@ -301,12 +335,14 @@ export class LangGraphService {
                 }
               }
 
-              childNodeResults[childNode.id] = {
+              const childRecord = {
                 nodeId: childNode.id,
                 status: 'completed',
                 output: actualOutput,
                 completedAt: new Date().toISOString(),
               };
+              childNodeResults[childNode.id] = childRecord;
+              childNodeResults[`${childNode.id}:${i}`] = childRecord;
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
               currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput, ...childVariableUpdates };
             }
