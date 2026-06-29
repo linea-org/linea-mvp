@@ -316,6 +316,7 @@ export class LangGraphService {
           for (let i = 0; i < transformedItems.length; i++) {
             const item = transformedItems[i];
             currentVars = { ...currentVars, item, loopItem: item, loopIndex: i };
+            let anyChildExecuted = false;
 
             for (const childId of children) {
               const childNode = definition.nodes.find((n) => n.id === childId);
@@ -389,9 +390,12 @@ export class LangGraphService {
 
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
               currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput, ...childVariableUpdates };
+              anyChildExecuted = true;
             }
 
-            iterationResults.push(currentVars.lastOutput);
+            if (anyChildExecuted) {
+              iterationResults.push(currentVars.lastOutput);
+            }
           }
 
           const durationMs = Date.now() - loopStart;
