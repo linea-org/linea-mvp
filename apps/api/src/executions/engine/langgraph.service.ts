@@ -315,8 +315,10 @@ export class LangGraphService {
               });
 
               let actualOutput = childResult;
+              let childVariableUpdates: Record<string, any> = {};
               if (isAgentOutput && childResult) {
                 if ('__agentValue' in childResult) actualOutput = childResult.__agentValue;
+                if (childResult.__variableUpdates) childVariableUpdates = childResult.__variableUpdates;
                 if (childResult.__usage) {
                   const u = childResult.__usage as { input_tokens?: number; output_tokens?: number; total_tokens?: number };
                   totalUsage.input_tokens += u.input_tokens ?? 0;
@@ -333,7 +335,7 @@ export class LangGraphService {
               };
 
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
-              currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput };
+              currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput, ...childVariableUpdates };
             }
 
             iterationResults.push(currentVars.lastOutput);
