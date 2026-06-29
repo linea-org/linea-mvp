@@ -111,7 +111,8 @@ function extractReply(output: unknown): string {
 function isErrorOutput(output: unknown): output is { error: string } {
   if (output === null || typeof output !== 'object') return false;
   const o = output as Record<string, unknown>;
-  return typeof o['error'] === 'string' && (o['success'] === false || !('message' in o) && !('result' in o) && !('response' in o) && !('text' in o));
+  const hasPriorityField = 'message' in o || 'result' in o || 'response' in o || 'text' in o;
+  return typeof o['error'] === 'string' && !hasPriorityField;
 }
 
 function fmtMs(ms: number): string {
