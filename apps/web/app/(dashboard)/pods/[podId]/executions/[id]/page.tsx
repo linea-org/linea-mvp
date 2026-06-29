@@ -701,6 +701,8 @@ export default function ExecutionDetailPage() {
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [timelineView, setTimelineView] = useState<'list' | 'gantt'>('list');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollStartRef = useRef<number | null>(null);
+  const [stuckBanner, setStuckBanner] = useState(false);
 
   async function loadData() {
     if (!activeWorkspace) return null;
@@ -739,14 +741,23 @@ export default function ExecutionDetailPage() {
   useEffect(() => {
     if (wsLoading || !activeWorkspace) return;
 
+    setStuckBanner(false);
     void loadData().then((ex) => {
       setLoading(false);
       if (ex?.workflowId) void loadWorkflow(ex.workflowId);
       if (ex && LIVE_STATUSES.has(ex.status)) {
+        pollStartRef.current = Date.now();
         pollRef.current = setInterval(async () => {
+          if (Date.now() - pollStartRef.current! >= 30 * 60 * 1000) {
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setStuckBanner(true);
+            return;
+          }
           const updated = await loadData();
           if (updated && !LIVE_STATUSES.has(updated.status)) {
             clearInterval(pollRef.current!);
+            pollRef.current = null;
           }
         }, 3000);
       }
@@ -757,6 +768,13 @@ export default function ExecutionDetailPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace, wsLoading, podId, id]);
+
+  async function manualRefresh() {
+    const updated = await loadData();
+    if (updated && !LIVE_STATUSES.has(updated.status)) {
+      setStuckBanner(false);
+    }
+  }
 
   async function replay(fromNodeId?: string) {
     if (!activeWorkspace) return;
@@ -854,6 +872,16 @@ export default function ExecutionDetailPage() {
 
   return (
     <div className="space-y-6">
+      {stuckBanner && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-yellow-400/40 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
+          <span>
+            This execution has been running for 30+ minutes and may be stuck. You can check the logs below or contact support.
+          </span>
+          <Button variant="outline" size="sm" onClick={manualRefresh}>
+            Refresh
+          </Button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="font-mono text-sm text-muted-foreground">{execution.id}</h1>
