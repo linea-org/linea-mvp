@@ -741,6 +741,7 @@ export default function ExecutionDetailPage() {
   useEffect(() => {
     if (wsLoading || !activeWorkspace) return;
 
+    setStuckBanner(false);
     void loadData().then((ex) => {
       setLoading(false);
       if (ex?.workflowId) void loadWorkflow(ex.workflowId);
