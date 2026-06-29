@@ -290,9 +290,12 @@ export class LangGraphService {
             const output = result as LoopOutput;
             onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+            const chatUpdates = isAgentOutput && (result as any)?.__chatHistoryUpdates
+              ? (result as any).__chatHistoryUpdates
+              : [];
             return {
               variables: { ...state.variables, lastOutput: output, [nodeKey]: output, [node.id]: output },
-              chatHistory: state.chatHistory,
+              chatHistory: chatUpdates,
               memory: state.memory,
               currentNodeId: node.id,
               nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
