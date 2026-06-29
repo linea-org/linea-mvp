@@ -248,13 +248,13 @@ export class LangGraphService {
               supervisorModelOverride,
             });
             const durationMs = Date.now() - loopStart;
-            let actualResult = result;
             let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-            if (isAgentOutput && result) {
-              if ('__agentValue' in result) actualResult = result.__agentValue;
-              if (result.__usage) usageUpdate = result.__usage as typeof usageUpdate;
+            if (isAgentOutput && result && result.__usage) {
+              usageUpdate = result.__usage as typeof usageUpdate;
             }
-            const output: LoopOutput = { results: [actualResult], total: 1, items };
+            // The loop executor already returns a LoopOutput — use it directly
+            // to avoid double-wrapping (results[0] would be a LoopOutput object).
+            const output = result as LoopOutput;
             onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
             return {
