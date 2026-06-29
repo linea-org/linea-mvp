@@ -235,7 +235,7 @@ export class LangGraphService {
             currentNodeId: node.id,
             nodeResults: { [node.id]: preloaded },
             pendingAuth: null,
-            loopResults: Array.isArray(preloaded.output?.results) ? preloaded.output.results : [],
+            loopResults: preloaded.output.results,
             cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
           };
         }
@@ -259,36 +259,8 @@ export class LangGraphService {
         try {
           const { items, results: transformedItems } = executeLoopNode(loopData, workflowState);
 
-          // If no children are configured, fall through to the regular executor path
           if (children.length === 0) {
-            const { result, isAgentOutput } = await this.nodeExecutor.execute({
-              nodeId: node.id,
-              nodeType,
-              nodeData: { ...node.data, _nodeId: node.id },
-              state: workflowState,
-              workspaceId,
-              workflowId,
-              threadId,
-              supervisorModelOverride,
-            });
-            const durationMs = Date.now() - loopStart;
-            let actualResult = result;
-            let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-            if (isAgentOutput && result) {
-              if ('__agentValue' in result) actualResult = result.__agentValue;
-              if (result.__usage) usageUpdate = result.__usage as typeof usageUpdate;
-            }
-            onNodeUpdate(node.id, 'completed', actualResult, undefined, durationMs);
-            const nodeKey = node.data?.nodeName || node.data?.name || node.id;
-            return {
-              variables: { lastOutput: actualResult, [nodeKey]: actualResult, [node.id]: actualResult },
-              chatHistory: [],
-              memory: {},
-              currentNodeId: node.id,
-              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output: actualResult, completedAt: new Date().toISOString(), durationMs } },
-              pendingAuth: null,
-              cumulativeUsage: usageUpdate,
-            };
+            throw new Error(`Loop node '${node.id}' has no children configured.`);
           }
 
           const iterationResults: unknown[] = [];
