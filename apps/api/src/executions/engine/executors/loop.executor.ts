@@ -24,6 +24,7 @@ export function checkLoopTimeout(startMs: number, iterationIndex: number): void 
   }
 }
 
+
 function resolveByPath(
   variables: Record<string, unknown>,
   path: string,
