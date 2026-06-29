@@ -1,4 +1,4 @@
-import { executeLoopNode } from './loop.executor';
+import { executeLoopNode, checkLoopTimeout, MAX_LOOP_TIMEOUT_MS } from './loop.executor';
 import type { WorkflowState } from '../variable-substitution';
 
 function state(variables: Record<string, any>): WorkflowState {
@@ -83,5 +83,67 @@ describe('executeLoopNode', () => {
   it('returns empty when no arrayPath is given', () => {
     const result = executeLoopNode({}, state({ items: [1, 2] }));
     expect(result.results).toEqual([]);
+  });
+
+  describe('wall-clock timeout guard (LIN-30)', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('throws with correct message when elapsed time exceeds MAX_LOOP_TIMEOUT_MS', () => {
+      let calls = 0;
+      jest.spyOn(Date, 'now').mockImplementation(() =>
+        calls++ === 0 ? 0 : MAX_LOOP_TIMEOUT_MS + 1,
+      );
+      const startMs = Date.now();
+      expect(() => checkLoopTimeout(startMs, 0)).toThrow(
+        /Loop exceeded maximum duration of 5 minutes after 0 iterations/,
+      );
+    });
+
+    it('does not throw before the timeout is reached', () => {
+      jest.spyOn(Date, 'now').mockReturnValue(0);
+      expect(() => checkLoopTimeout(0, 5)).not.toThrow();
+    });
+  });
+
+  describe('structured output shape (LIN-29)', () => {
+    it('always returns results, total, and items keys', () => {
+      const result = executeLoopNode(
+        { arrayPath: 'list' },
+        state({ list: ['a', 'b', 'c'] }),
+      );
+      expect(result).toHaveProperty('results');
+      expect(result).toHaveProperty('total');
+      expect(result).toHaveProperty('items');
+    });
+
+    it('items preserves the original array unchanged', () => {
+      const original = [{ id: 1 }, { id: 2 }];
+      const result = executeLoopNode(
+        { arrayPath: 'rows', itemTransform: 'item.id' },
+        state({ rows: original }),
+      );
+      expect(result.items).toEqual(original);
+      expect(result.results).toEqual([1, 2]);
+    });
+
+    it('total equals results.length', () => {
+      const result = executeLoopNode(
+        { arrayPath: 'nums' },
+        state({ nums: [10, 20, 30] }),
+      );
+      expect(result.total).toBe(result.results.length);
+      expect(result.total).toBe(3);
+    });
+
+    it('items is capped at maxIterations but results matches items length', () => {
+      const nums = Array.from({ length: 10 }, (_, i) => i);
+      const result = executeLoopNode(
+        { arrayPath: 'nums', maxIterations: 4 },
+        state({ nums }),
+      );
+      expect(result.items).toHaveLength(4);
+      expect(result.results).toHaveLength(4);
+      expect(result.total).toBe(4);
+    });
   });
 });
