@@ -30,10 +30,11 @@ interface NodeStep {
   nodeId: string;
   nodeName: string;
   nodeType: string;
-  status: 'running' | 'completed' | 'failed' | 'suspended';
+  status: 'running' | 'completed' | 'failed' | 'suspended' | 'divider';
   output?: unknown;
   error?: string;
   durationMs?: number;
+  agentStreamedText?: string;
 }
 
 interface ChatMessage {
@@ -223,9 +224,23 @@ function AgentOutputView({ output }: { output: Record<string, unknown> }) {
 /* ------------------------------------------------------------------ */
 /*  StepRow                                                             */
 /* ------------------------------------------------------------------ */
+function ResumedDivider() {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 border-b last:border-b-0 border-border/40">
+      <div className="flex-1 h-px bg-border/40" />
+      <span className="text-[9px] uppercase tracking-widest text-muted-foreground/40 shrink-0">Resumed</span>
+      <div className="flex-1 h-px bg-border/40" />
+    </div>
+  );
+}
+
 function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: string }) {
   const [outputOpen, setOutputOpen] = useState(false);
-  const hasContent = step.output !== undefined || !!step.error;
+
+  // agentStreamedText is written by the panel when the node reaches a terminal state,
+  // so it is always complete and race-free (no effect-based capture needed here).
+  const persistedText = step.agentStreamedText;
+  const hasContent = step.output !== undefined || !!step.error || !!persistedText;
 
   // Detect agent output shape for badges
   const agentOutput = (
@@ -288,7 +303,7 @@ function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: stri
         )}
       </div>
 
-      {/* Live streaming text for agent nodes */}
+      {/* Live streaming text — only while running */}
       {streamingText && step.status === 'running' && (
         <div className="px-3 pb-2 text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto border-t border-border/40 bg-muted/20">
           {streamingText}
@@ -296,22 +311,34 @@ function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: stri
         </div>
       )}
 
-      {/* Output — structured for agent nodes, JSON tree otherwise */}
-      {outputOpen && step.output !== undefined && (
-        <div className="px-3 pb-2 text-[11px] text-muted-foreground max-h-64 overflow-y-auto bg-muted/20 border-t border-border/40">
-          {agentOutput ? (
-            <AgentOutputView output={agentOutput} />
-          ) : (
-            <JsonOrPre value={step.output} className="text-[11px]" />
+      {outputOpen && (
+        <>
+          {/* Persisted streamed output — shown after node completes */}
+          {persistedText && (
+            <div className="px-3 pt-2 pb-2 text-[11px] text-muted-foreground bg-muted/20 border-t border-border/40">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/50 mb-1">Streamed output</p>
+              <pre className="whitespace-pre-wrap break-words leading-relaxed max-h-40 overflow-y-auto">{persistedText}</pre>
+            </div>
           )}
-        </div>
-      )}
 
-      {/* Error */}
-      {outputOpen && step.error && (
-        <div className="px-3 pb-2 text-[11px] text-destructive border-t border-border/40">
-          {step.error}
-        </div>
+          {/* Structured output — structured for agent nodes, JSON tree otherwise */}
+          {step.output !== undefined && (
+            <div className="px-3 pb-2 text-[11px] text-muted-foreground max-h-64 overflow-y-auto bg-muted/20 border-t border-border/40">
+              {agentOutput ? (
+                <AgentOutputView output={agentOutput} />
+              ) : (
+                <JsonOrPre value={step.output} className="text-[11px]" />
+              )}
+            </div>
+          )}
+
+          {/* Error */}
+          {step.error && (
+            <div className="px-3 pb-2 text-[11px] text-destructive border-t border-border/40">
+              {step.error}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -331,14 +358,7 @@ function StepsTrace({
 }) {
   const isRunning = steps.some((s) => s.status === 'running');
   const [expanded, setExpanded] = useState(true);
-
-  // Auto-collapse when execution finishes
-  useEffect(() => {
-    if (!isRunning && steps.length > 0) {
-      const t = setTimeout(() => setExpanded(false), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [isRunning, steps.length]);
+  const realStepCount = steps.filter((s) => s.status !== 'divider').length;
 
   const totalMs = steps.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
   const hasFailed = steps.some((s) => s.status === 'failed');
@@ -349,42 +369,57 @@ function StepsTrace({
         <HugeiconsIcon icon={WorkflowSquare01Icon} className="size-3.5 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
-        {/* Clickable header */}
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground mb-1.5 transition-colors"
-        >
-          {isRunning ? (
-            <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin text-muted-foreground/70" />
-          ) : hasFailed ? (
-            <span className="size-1.5 rounded-full bg-destructive/70" />
-          ) : (
-            <span className="size-1.5 rounded-full bg-foreground/25" />
+        {/* Header row */}
+        <div className="flex items-center justify-between mb-1.5">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isRunning ? (
+              <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin text-muted-foreground/70" />
+            ) : hasFailed ? (
+              <span className="size-1.5 rounded-full bg-destructive/70" />
+            ) : (
+              <span className="size-1.5 rounded-full bg-foreground/25" />
+            )}
+            <span>{realStepCount} step{realStepCount !== 1 ? 's' : ''}</span>
+            {!isRunning && totalMs > 0 && (
+              <span className="opacity-50">· {fmtMs(totalMs)}</span>
+            )}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              className={`size-2.5 opacity-40 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {!isRunning && expanded && (
+            <button
+              onClick={() => setExpanded(false)}
+              className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              aria-label="Close trace"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} className="size-3" />
+            </button>
           )}
-          <span>{steps.length} step{steps.length !== 1 ? 's' : ''}</span>
-          {!isRunning && totalMs > 0 && (
-            <span className="opacity-50">· {fmtMs(totalMs)}</span>
-          )}
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            className={`size-2.5 opacity-40 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
-          />
-        </button>
+        </div>
 
         {/* Steps list */}
         {expanded && steps.length > 0 && (
           <div className="rounded-lg border border-border/60 overflow-hidden bg-background">
-            {steps.map((step) => (
-              <StepRow
-                key={step.nodeId}
-                step={step}
-                streamingText={
-                  step.nodeId === streamingNodeId && step.status === 'running'
-                    ? streamingText
-                    : undefined
-                }
-              />
-            ))}
+            {steps.map((step) =>
+              step.status === 'divider' ? (
+                <ResumedDivider key={step.nodeId} />
+              ) : (
+                <StepRow
+                  key={step.nodeId}
+                  step={step}
+                  streamingText={
+                    step.nodeId === streamingNodeId && step.status === 'running'
+                      ? streamingText
+                      : undefined
+                  }
+                />
+              )
+            )}
           </div>
         )}
       </div>
@@ -534,6 +569,9 @@ export function ChatPreviewPanel({
   const [approvalMsgId, setApprovalMsgId] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState('');
   const [streamingNodeId, setStreamingNodeId] = useState<string | null>(null);
+  // Ref mirror of streamingText — updated synchronously in agent_token so the
+  // node_update completion handler can capture the full text without a render race.
+  const streamingTextRef = useRef('');
 
   const [startTriggerType, setStartTriggerType] = useState<'manual' | 'webhook' | 'schedule'>('manual');
   const [contextInputs, setContextInputs] = useState<Record<string, string>>({});
@@ -548,6 +586,8 @@ export function ChatPreviewPanel({
   const nodeMapRef = useRef<Record<string, { name: string; type: string }>>({});
   /** ID of the currently active trace message in the messages array */
   const traceIdRef = useRef<string | null>(null);
+  /** Set to true on suspension so the next node_update inserts a "Resumed" divider */
+  const resumedRef = useRef(false);
   /** nodeIds already added to the current trace (reset per turn) */
   const seenNodeIdsRef = useRef<Set<string>>(new Set());
   /** Latest auth token for use in stable callbacks */
@@ -688,18 +728,26 @@ export function ChatPreviewPanel({
           traceIdRef.current = traceId;
           seenNodeIdsRef.current.add(nodeId);
 
+          const isResuming = resumedRef.current;
+          if (isResuming) resumedRef.current = false;
+
           setMessages((prev) => {
             const traceMsg = prev.find((m) => m.id === traceId);
             if (traceMsg) {
               // Don't add duplicate steps (can happen when sync and SSE race)
               if (traceMsg.steps?.some((s) => s.nodeId === nodeId)) return prev;
-              // Strip placeholder step before appending the real node
+              // Strip placeholder step before appending; insert divider on resumption
               const filteredSteps = (traceMsg.steps ?? []).filter((s) => s.nodeId !== PLACEHOLDER_NODE_ID);
-              return prev.map((m) =>
-                m.id === traceId
-                  ? { ...m, steps: [...filteredSteps, { nodeId, nodeName, nodeType, status: 'running' as const }] }
-                  : m,
-              );
+              const divider: NodeStep[] = isResuming
+                ? [{ nodeId: `__divider__${Date.now()}`, nodeName: '', nodeType: '', status: 'divider' as const }]
+                : [];
+              return prev
+                .filter((m) => !m.typing)
+                .map((m) =>
+                  m.id === traceId
+                    ? { ...m, steps: [...filteredSteps, ...divider, { nodeId, nodeName, nodeType, status: 'running' as const }] }
+                    : m,
+                );
             }
             // First node — replace typing bubble with trace
             return [
@@ -716,6 +764,10 @@ export function ChatPreviewPanel({
           setStreamingText('');
           setStreamingNodeId(nodeId);
         } else {
+          // Capture any accumulated streaming text before clearing it
+          const capturedStreamedText = streamingTextRef.current || undefined;
+          streamingTextRef.current = '';
+
           // Update the existing step's final status
           setMessages((prev) =>
             prev.map((m) => {
@@ -724,7 +776,7 @@ export function ChatPreviewPanel({
                 ...m,
                 steps: (m.steps ?? []).map((s) =>
                   s.nodeId === nodeId
-                    ? { ...s, status: status as NodeStep['status'], output, error, durationMs }
+                    ? { ...s, status: status as NodeStep['status'], output, error, durationMs, agentStreamedText: capturedStreamedText }
                     : s,
                 ),
               };
@@ -741,6 +793,7 @@ export function ChatPreviewPanel({
       case 'agent_token': {
         const { nodeId, delta } = evt;
         if (delta) {
+          streamingTextRef.current += delta;
           setStreamingText((prev) => prev + delta);
           if (nodeId) setStreamingNodeId(nodeId);
         }
@@ -763,20 +816,27 @@ export function ChatPreviewPanel({
               ? 'Human review required.'
               : 'Please provide input.');
 
-        // Mark any still-running step as suspended
+        // Capture any streaming text before marking the running step as suspended
+        const suspendedStreamedText = streamingTextRef.current || undefined;
+        streamingTextRef.current = '';
+
+        // Mark any still-running step as suspended, persisting any streamed text
         setMessages((prev) =>
           prev.map((m) => {
             if (!m.steps) return m;
             return {
               ...m,
               steps: m.steps.map((s) =>
-                s.status === 'running' ? { ...s, status: 'suspended' as const } : s,
+                s.status === 'running'
+                  ? { ...s, status: 'suspended' as const, agentStreamedText: suspendedStreamedText }
+                  : s,
               ),
             };
           }),
         );
-        // Reset trace so that on resume a fresh trace is created
-        traceIdRef.current = null;
+        // Keep traceIdRef so post-resumption steps append to the same trace.
+        // Mark that the next node_update should prepend a "Resumed" divider.
+        resumedRef.current = true;
         setStreamingText('');
         setStreamingNodeId(null);
 
@@ -1018,6 +1078,19 @@ export function ChatPreviewPanel({
   function resetRunState() {
     if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
     traceIdRef.current = null;
+    resumedRef.current = false;
+    streamingTextRef.current = '';
+    seenNodeIdsRef.current = new Set();
+    terminalShownRef.current = false;
+    setStreamingText('');
+    setStreamingNodeId(null);
+    setSuspended(null);
+    setApprovalMsgId(null);
+  }
+
+  // Partial reset for resumption after suspension — preserves traceIdRef and resumedRef
+  // so the continuous-trace feature can append post-resumption steps to the same message.
+  function resetMidRunState() {
     seenNodeIdsRef.current = new Set();
     terminalShownRef.current = false;
     setStreamingText('');
@@ -1123,7 +1196,7 @@ export function ChatPreviewPanel({
     if (!executionId || !text.trim()) return;
     const trimmed = text.trim();
     setInputText('');
-    resetRunState();
+    resetMidRunState();
 
     setMessages((prev) => [
       ...prev,
@@ -1160,7 +1233,7 @@ export function ChatPreviewPanel({
 
   async function approveExecution(approved: boolean) {
     if (!executionId) return;
-    resetRunState();
+    resetMidRunState();
 
     setMessages((prev) => [
       ...prev,

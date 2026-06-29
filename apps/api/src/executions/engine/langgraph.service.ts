@@ -180,10 +180,18 @@ export class LangGraphService {
         continue;
       }
 
+      const loopChildren = sourceType === 'loop'
+        ? new Set<string>((sourceNode.data as any)?.children ?? [])
+        : null;
+
       for (const edge of edges) {
         const targetNode = definition.nodes.find((n) => n.id === edge.target);
         const targetType = targetNode?.data?.nodeType || targetNode?.type;
         if (!targetNode || targetType === 'note') continue;
+        // Skip graph edges from a loop node to its declared children — those
+        // nodes are executed inline by the loop handler; a graph edge would
+        // cause them to run a second time outside the loop context.
+        if (loopChildren?.has(edge.target)) continue;
         builder.addEdge(sourceId as any, edge.target as any);
       }
     }
@@ -216,6 +224,22 @@ export class LangGraphService {
 
     if (nodeType === 'loop') {
       return async (state: typeof WorkflowStateAnnotation.State) => {
+        const preloaded = state.nodeResults?.[node.id];
+        if (preloaded?.__preloaded) {
+          onNodeUpdate(node.id, 'completed', preloaded.output, undefined, 0);
+          const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+          return {
+            variables: { lastOutput: preloaded.output, [nodeKey]: preloaded.output, [node.id]: preloaded.output },
+            chatHistory: [],
+            memory: {},
+            currentNodeId: node.id,
+            nodeResults: { [node.id]: preloaded },
+            pendingAuth: null,
+            loopResults: [],
+            cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+          };
+        }
+
         const loopData = node.data as LoopNodeData;
         const children = loopData.children ?? [];
 
@@ -233,6 +257,21 @@ export class LangGraphService {
         const loopStart = Date.now();
 
         try {
+          const INTERRUPTIBLE_TYPES = new Set(['approval', 'approval-gate']);
+          for (const childId of children) {
+            const childNode = definition.nodes.find((n) => n.id === childId);
+            if (!childNode) continue;
+            const childType = childNode.data?.nodeType || childNode.type;
+            if (INTERRUPTIBLE_TYPES.has(childType)) {
+              throw new Error(
+                `Loop node '${node.id}' contains interruptible child '${childId}' (type: '${childType}'). ` +
+                `Approval nodes cannot be used inside loop children because a mid-loop interrupt cannot be ` +
+                `safely resumed — completed iterations would re-execute, duplicating side-effects.`,
+              );
+            }
+          }
+
+
           const { items, results: transformedItems } = executeLoopNode(loopData, workflowState);
 
           if (children.length === 0) {
@@ -249,26 +288,26 @@ export class LangGraphService {
             });
             const durationMs = Date.now() - loopStart;
             let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-            const chatUpdates: any[] = isAgentOutput && Array.isArray((result as any)?.__chatHistoryUpdates)
-              ? (result as any).__chatHistoryUpdates
-              : [];
             if (isAgentOutput && (result as any)?.__usage) {
               usageUpdate = (result as any).__usage as typeof usageUpdate;
             }
-            const loopResult = result as LoopOutput;
-            if (!loopResult || typeof loopResult !== 'object' || !Array.isArray(loopResult.results)) {
+            const output = result as LoopOutput;
+            if (!output || typeof output !== 'object' || !Array.isArray(output.results)) {
               throw new Error(`Loop node '${node.id}' executor returned an unexpected output shape.`);
             }
-            onNodeUpdate(node.id, 'completed', loopResult, undefined, durationMs);
+            onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+            const chatUpdates = isAgentOutput && (result as any)?.__chatHistoryUpdates
+              ? (result as any).__chatHistoryUpdates
+              : [];
             return {
-              variables: { ...state.variables, lastOutput: loopResult, [nodeKey]: loopResult, [node.id]: loopResult },
+              variables: { ...state.variables, lastOutput: output, [nodeKey]: output, [node.id]: output },
               chatHistory: chatUpdates,
               memory: {},
               currentNodeId: node.id,
-              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output: loopResult, completedAt: new Date().toISOString(), durationMs } },
+              nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
               pendingAuth: state.pendingAuth,
-              loopResults: loopResult.results,
+              loopResults: output.results,
               cumulativeUsage: usageUpdate,
             };
           }
@@ -277,13 +316,14 @@ export class LangGraphService {
           let currentVars: Record<string, any> = { ...state.variables };
           const childNodeResults: Record<string, any> = {};
           const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-          const baseChatHistory = [...(state.chatHistory ?? [])];
+          const baseChatHistory: Array<{ role: string; content: string }> = [...(state.chatHistory ?? [])];
           let chatHistoryDelta: Array<{ role: string; content: string }> = [];
           let accumulatedMemory: Record<string, any> = { ...(state.memory ?? {}) };
 
           for (let i = 0; i < transformedItems.length; i++) {
             const item = transformedItems[i];
             currentVars = { ...currentVars, item, loopItem: item, loopIndex: i };
+            let anyChildExecuted = false;
 
             for (const childId of children) {
               const childNode = definition.nodes.find((n) => n.id === childId);
@@ -302,17 +342,33 @@ export class LangGraphService {
                 cumulativeUsage: state.cumulativeUsage,
               };
 
-              const { result: childResult, isAgentOutput } = await this.nodeExecutor.execute({
-                nodeId: childNode.id,
-                nodeType: childType,
-                nodeData: { ...childNode.data, _nodeId: childNode.id },
-                state: childState,
-                workspaceId,
-                workflowId,
-                threadId,
-                supervisorModelOverride,
-                onToken: onAgentToken ? (delta) => onAgentToken(childNode.id, delta) : undefined,
-              });
+              onNodeUpdate(childNode.id, 'running');
+              const childStart = Date.now();
+              let childResult: any;
+              let isAgentOutput: boolean;
+              try {
+                ({ result: childResult, isAgentOutput } = await this.nodeExecutor.execute({
+                  nodeId: childNode.id,
+                  nodeType: childType,
+                  nodeData: { ...childNode.data, _nodeId: childNode.id },
+                  state: childState,
+                  workspaceId,
+                  workflowId,
+                  threadId,
+                  supervisorModelOverride,
+                  onToken: onAgentToken ? (delta) => onAgentToken(childNode.id, delta) : undefined,
+                }));
+              } catch (childError) {
+                const childDurationMs = Date.now() - childStart;
+                if (isGraphInterrupt(childError)) {
+                  onNodeUpdate(childNode.id, 'suspended', undefined, undefined, childDurationMs);
+                } else {
+                  const msg = childError instanceof Error ? childError.message : String(childError);
+                  onNodeUpdate(childNode.id, 'failed', undefined, msg, childDurationMs);
+                }
+                throw childError;
+              }
+              const childDurationMs = Date.now() - childStart;
 
               let actualOutput = childResult;
               let childVariableUpdates: Record<string, any> = {};
@@ -335,19 +391,24 @@ export class LangGraphService {
                 }
               }
 
+              onNodeUpdate(childNode.id, 'completed', actualOutput, undefined, childDurationMs);
               const childRecord = {
                 nodeId: childNode.id,
                 status: 'completed',
                 output: actualOutput,
                 completedAt: new Date().toISOString(),
+                durationMs: childDurationMs,
               };
               childNodeResults[childNode.id] = childRecord;
               childNodeResults[`${childNode.id}:${i}`] = childRecord;
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
               currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput, ...childVariableUpdates };
+              anyChildExecuted = true;
             }
 
-            iterationResults.push(currentVars.lastOutput);
+            if (anyChildExecuted) {
+              iterationResults.push(currentVars.lastOutput);
+            }
           }
 
           const durationMs = Date.now() - loopStart;
