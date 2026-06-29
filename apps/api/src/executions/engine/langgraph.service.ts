@@ -322,8 +322,12 @@ export class LangGraphService {
                 }));
               } catch (childError) {
                 const childDurationMs = Date.now() - childStart;
-                const msg = childError instanceof Error ? childError.message : String(childError);
-                onNodeUpdate(childNode.id, 'failed', undefined, msg, childDurationMs);
+                if (isGraphInterrupt(childError)) {
+                  onNodeUpdate(childNode.id, 'suspended', undefined, undefined, childDurationMs);
+                } else {
+                  const msg = childError instanceof Error ? childError.message : String(childError);
+                  onNodeUpdate(childNode.id, 'failed', undefined, msg, childDurationMs);
+                }
                 throw childError;
               }
               const childDurationMs = Date.now() - childStart;
