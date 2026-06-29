@@ -243,6 +243,9 @@ export class LangGraphService {
           let currentVars: Record<string, any> = { ...state.variables };
           const childNodeResults: Record<string, any> = {};
           const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+          const baseChatHistory = [...(state.chatHistory ?? [])];
+          let chatHistoryDelta: Array<{ role: string; content: string }> = [];
+          let accumulatedMemory: Record<string, any> = { ...(state.memory ?? {}) };
 
           for (let i = 0; i < items.length; i++) {
             const item = items[i];
@@ -257,8 +260,8 @@ export class LangGraphService {
 
               const childState: WorkflowState = {
                 variables: currentVars,
-                chatHistory: state.chatHistory,
-                memory: state.memory ?? {},
+                chatHistory: [...baseChatHistory, ...chatHistoryDelta],
+                memory: accumulatedMemory,
                 nodeResults: { ...state.nodeResults, ...childNodeResults },
                 pendingAuth: state.pendingAuth,
                 loopResults: state.loopResults,
@@ -278,6 +281,7 @@ export class LangGraphService {
               });
 
               let actualOutput = childResult;
+              let childVariableUpdates: Record<string, any> = {};
               if (isAgentOutput && childResult) {
                 if ('__agentValue' in childResult) actualOutput = childResult.__agentValue;
                 if (childResult.__usage) {
@@ -285,6 +289,15 @@ export class LangGraphService {
                   totalUsage.input_tokens += u.input_tokens ?? 0;
                   totalUsage.output_tokens += u.output_tokens ?? 0;
                   totalUsage.total_tokens += u.total_tokens ?? 0;
+                }
+                if (Array.isArray(childResult.__chatHistoryUpdates)) {
+                  chatHistoryDelta = [...chatHistoryDelta, ...childResult.__chatHistoryUpdates];
+                }
+                if (childResult.__memoryUpdates && typeof childResult.__memoryUpdates === 'object') {
+                  accumulatedMemory = { ...accumulatedMemory, ...childResult.__memoryUpdates };
+                }
+                if (childResult.__variableUpdates && typeof childResult.__variableUpdates === 'object') {
+                  childVariableUpdates = childResult.__variableUpdates;
                 }
               }
 
@@ -295,7 +308,7 @@ export class LangGraphService {
                 completedAt: new Date().toISOString(),
               };
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
-              currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput };
+              currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput, ...childVariableUpdates };
             }
 
             iterationResults.push(currentVars.lastOutput);
@@ -311,8 +324,8 @@ export class LangGraphService {
           const { item: _i, loopItem: _li, loopIndex: _lx, ...cleanVars } = currentVars;
           return {
             variables: { ...cleanVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
-            chatHistory: [],
-            memory: {},
+            chatHistory: chatHistoryDelta,
+            memory: accumulatedMemory,
             currentNodeId: node.id,
             nodeResults: { ...state.nodeResults, ...childNodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
             pendingAuth: state.pendingAuth,
