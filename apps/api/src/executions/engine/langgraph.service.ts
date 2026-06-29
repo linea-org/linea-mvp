@@ -279,6 +279,8 @@ export class LangGraphService {
           let currentVars: Record<string, any> = { ...state.variables };
           const childNodeResults: Record<string, any> = {};
           const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+          let accumulatedChatHistory: Array<{ role: string; content: string }> = [...(state.chatHistory ?? [])];
+          let accumulatedMemory: Record<string, any> = { ...(state.memory ?? {}) };
 
           for (let i = 0; i < items.length; i++) {
             const item = items[i];
@@ -294,8 +296,8 @@ export class LangGraphService {
 
               const childState: WorkflowState = {
                 variables: currentVars,
-                chatHistory: state.chatHistory,
-                memory: state.memory ?? {},
+                chatHistory: accumulatedChatHistory,
+                memory: accumulatedMemory,
                 nodeResults: { ...state.nodeResults, ...childNodeResults },
                 pendingAuth: state.pendingAuth,
                 loopResults: state.loopResults,
@@ -319,6 +321,8 @@ export class LangGraphService {
               if (isAgentOutput && childResult) {
                 if ('__agentValue' in childResult) actualOutput = childResult.__agentValue;
                 if (childResult.__variableUpdates) childVariableUpdates = childResult.__variableUpdates;
+                if (childResult.__chatHistoryUpdates) accumulatedChatHistory = [...accumulatedChatHistory, ...childResult.__chatHistoryUpdates];
+                if (childResult.__memoryUpdates) accumulatedMemory = { ...accumulatedMemory, ...childResult.__memoryUpdates };
                 if (childResult.__usage) {
                   const u = childResult.__usage as { input_tokens?: number; output_tokens?: number; total_tokens?: number };
                   totalUsage.input_tokens += u.input_tokens ?? 0;
@@ -348,8 +352,8 @@ export class LangGraphService {
           const nodeKey = node.data?.nodeName || node.data?.name || node.id;
           return {
             variables: { ...currentVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
-            chatHistory: [],
-            memory: {},
+            chatHistory: accumulatedChatHistory,
+            memory: accumulatedMemory,
             currentNodeId: node.id,
             nodeResults: {
               ...childNodeResults,
