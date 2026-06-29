@@ -241,7 +241,7 @@ export class LangGraphService {
         const loopStart = Date.now();
 
         try {
-          const { items } = executeLoopNode(loopData, workflowState);
+          const { items, results: transformedItems } = executeLoopNode(loopData, workflowState);
 
           // If no children are configured, fall through to the regular executor path
           if (children.length === 0) {
@@ -283,8 +283,8 @@ export class LangGraphService {
           let chatHistoryDelta: Array<{ role: string; content: string }> = [];
           let accumulatedMemory: Record<string, any> = { ...(state.memory ?? {}) };
 
-          for (let i = 0; i < items.length; i++) {
-            const item = items[i];
+          for (let i = 0; i < transformedItems.length; i++) {
+            const item = transformedItems[i];
             currentVars = { ...currentVars, item, loopItem: item, loopIndex: i };
 
             for (const childId of children) {
