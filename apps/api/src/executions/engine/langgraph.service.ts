@@ -262,7 +262,7 @@ export class LangGraphService {
               chatHistory: state.chatHistory,
               memory: state.memory,
               currentNodeId: node.id,
-              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
+              nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
               pendingAuth: state.pendingAuth,
               loopResults: output.results,
               cumulativeUsage: usageUpdate,
