@@ -34,6 +34,7 @@ interface NodeStep {
   output?: unknown;
   error?: string;
   durationMs?: number;
+  agentStreamedText?: string;
 }
 
 interface ChatMessage {
@@ -48,6 +49,7 @@ interface ChatMessage {
   toolSummary?: string;
   steps?: NodeStep[];
   simulated?: boolean;
+  isError?: boolean;
 }
 
 type ExecStatus = 'idle' | 'running' | 'suspended' | 'completed' | 'failed';
@@ -107,6 +109,13 @@ function extractReply(output: unknown): string {
   return JSON.stringify(output, null, 2);
 }
 
+function isErrorOutput(output: unknown): output is { error: string } {
+  if (output === null || typeof output !== 'object') return false;
+  const o = output as Record<string, unknown>;
+  const hasPriorityField = 'message' in o || 'result' in o || 'response' in o || 'text' in o;
+  return typeof o['error'] === 'string' && !hasPriorityField;
+}
+
 function fmtMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
@@ -120,6 +129,30 @@ interface ToolCallEntry {
   name: string;
   args: Record<string, unknown>;
   result: unknown;
+}
+
+const ARGS_TRUNCATE_LEN = 200;
+
+function ToolCallArgs({ args }: { args: Record<string, unknown> }) {
+  const [expanded, setExpanded] = useState(false);
+  const full = JSON.stringify(args, null, 2);
+  const truncated = full.length > ARGS_TRUNCATE_LEN;
+  const displayed = !truncated || expanded ? full : `${full.slice(0, ARGS_TRUNCATE_LEN)}…`;
+  return (
+    <div className="mt-0.5">
+      <pre className="text-[10px] text-muted-foreground/60 whitespace-pre-wrap">{displayed}</pre>
+      {truncated && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-0.5 text-[10px] text-primary/70 hover:text-primary underline"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function AgentOutputView({ output }: { output: Record<string, unknown> }) {
@@ -155,9 +188,7 @@ function AgentOutputView({ output }: { output: Record<string, unknown> }) {
                     )}
                   </div>
                   {tc.args && Object.keys(tc.args).length > 0 && (
-                    <pre className="mt-0.5 text-[10px] text-muted-foreground/60 whitespace-pre-wrap">
-                      {JSON.stringify(tc.args, null, 2).slice(0, 200)}
-                    </pre>
+                    <ToolCallArgs args={tc.args} />
                   )}
                 </div>
               );
@@ -205,7 +236,11 @@ function ResumedDivider() {
 
 function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: string }) {
   const [outputOpen, setOutputOpen] = useState(false);
-  const hasContent = step.output !== undefined || !!step.error;
+
+  // agentStreamedText is written by the panel when the node reaches a terminal state,
+  // so it is always complete and race-free (no effect-based capture needed here).
+  const persistedText = step.agentStreamedText;
+  const hasContent = step.output !== undefined || !!step.error || !!persistedText;
 
   // Detect agent output shape for badges
   const agentOutput = (
@@ -268,7 +303,7 @@ function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: stri
         )}
       </div>
 
-      {/* Live streaming text for agent nodes */}
+      {/* Live streaming text — only while running */}
       {streamingText && step.status === 'running' && (
         <div className="px-3 pb-2 text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto border-t border-border/40 bg-muted/20">
           {streamingText}
@@ -276,22 +311,34 @@ function StepRow({ step, streamingText }: { step: NodeStep; streamingText?: stri
         </div>
       )}
 
-      {/* Output — structured for agent nodes, JSON tree otherwise */}
-      {outputOpen && step.output !== undefined && (
-        <div className="px-3 pb-2 text-[11px] text-muted-foreground max-h-64 overflow-y-auto bg-muted/20 border-t border-border/40">
-          {agentOutput ? (
-            <AgentOutputView output={agentOutput} />
-          ) : (
-            <JsonOrPre value={step.output} className="text-[11px]" />
+      {outputOpen && (
+        <>
+          {/* Persisted streamed output — shown after node completes */}
+          {persistedText && (
+            <div className="px-3 pt-2 pb-2 text-[11px] text-muted-foreground bg-muted/20 border-t border-border/40">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/50 mb-1">Streamed output</p>
+              <pre className="whitespace-pre-wrap break-words leading-relaxed max-h-40 overflow-y-auto">{persistedText}</pre>
+            </div>
           )}
-        </div>
-      )}
 
-      {/* Error */}
-      {outputOpen && step.error && (
-        <div className="px-3 pb-2 text-[11px] text-destructive border-t border-border/40">
-          {step.error}
-        </div>
+          {/* Structured output — structured for agent nodes, JSON tree otherwise */}
+          {step.output !== undefined && (
+            <div className="px-3 pb-2 text-[11px] text-muted-foreground max-h-64 overflow-y-auto bg-muted/20 border-t border-border/40">
+              {agentOutput ? (
+                <AgentOutputView output={agentOutput} />
+              ) : (
+                <JsonOrPre value={step.output} className="text-[11px]" />
+              )}
+            </div>
+          )}
+
+          {/* Error */}
+          {step.error && (
+            <div className="px-3 pb-2 text-[11px] text-destructive border-t border-border/40">
+              {step.error}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -313,14 +360,6 @@ function StepsTrace({
   const [expanded, setExpanded] = useState(true);
   const realStepCount = steps.filter((s) => s.status !== 'divider').length;
 
-  // Auto-collapse when execution finishes
-  useEffect(() => {
-    if (!isRunning && steps.length > 0) {
-      const t = setTimeout(() => setExpanded(false), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [isRunning, steps.length]);
-
   const totalMs = steps.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
   const hasFailed = steps.some((s) => s.status === 'failed');
 
@@ -330,27 +369,38 @@ function StepsTrace({
         <HugeiconsIcon icon={WorkflowSquare01Icon} className="size-3.5 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
-        {/* Clickable header */}
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground mb-1.5 transition-colors"
-        >
-          {isRunning ? (
-            <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin text-muted-foreground/70" />
-          ) : hasFailed ? (
-            <span className="size-1.5 rounded-full bg-destructive/70" />
-          ) : (
-            <span className="size-1.5 rounded-full bg-foreground/25" />
+        {/* Header row */}
+        <div className="flex items-center justify-between mb-1.5">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isRunning ? (
+              <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin text-muted-foreground/70" />
+            ) : hasFailed ? (
+              <span className="size-1.5 rounded-full bg-destructive/70" />
+            ) : (
+              <span className="size-1.5 rounded-full bg-foreground/25" />
+            )}
+            <span>{realStepCount} step{realStepCount !== 1 ? 's' : ''}</span>
+            {!isRunning && totalMs > 0 && (
+              <span className="opacity-50">· {fmtMs(totalMs)}</span>
+            )}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              className={`size-2.5 opacity-40 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {!isRunning && expanded && (
+            <button
+              onClick={() => setExpanded(false)}
+              className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              aria-label="Close trace"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} className="size-3" />
+            </button>
           )}
-          <span>{realStepCount} step{realStepCount !== 1 ? 's' : ''}</span>
-          {!isRunning && totalMs > 0 && (
-            <span className="opacity-50">· {fmtMs(totalMs)}</span>
-          )}
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            className={`size-2.5 opacity-40 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
-          />
-        </button>
+        </div>
 
         {/* Steps list */}
         {expanded && steps.length > 0 && (
@@ -429,9 +479,11 @@ function ChatBubble({ msg, onApprove }: { msg: ChatMessage; onApprove?: (approve
           <div
             className={cn(
               'rounded-2xl rounded-tl-sm px-3 py-2.5 text-sm',
-              msg.suspended
-                ? 'bg-muted border border-border text-foreground'
-                : 'bg-muted text-foreground',
+              msg.isError
+                ? 'bg-destructive/10 border border-destructive/30 text-destructive'
+                : msg.suspended
+                  ? 'bg-muted border border-border text-foreground'
+                  : 'bg-muted text-foreground',
             )}
           >
             {msg.content ? (
@@ -517,6 +569,9 @@ export function ChatPreviewPanel({
   const [approvalMsgId, setApprovalMsgId] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState('');
   const [streamingNodeId, setStreamingNodeId] = useState<string | null>(null);
+  // Ref mirror of streamingText — updated synchronously in agent_token so the
+  // node_update completion handler can capture the full text without a render race.
+  const streamingTextRef = useRef('');
 
   const [startTriggerType, setStartTriggerType] = useState<'manual' | 'webhook' | 'schedule'>('manual');
   const [contextInputs, setContextInputs] = useState<Record<string, string>>({});
@@ -709,6 +764,10 @@ export function ChatPreviewPanel({
           setStreamingText('');
           setStreamingNodeId(nodeId);
         } else {
+          // Capture any accumulated streaming text before clearing it
+          const capturedStreamedText = streamingTextRef.current || undefined;
+          streamingTextRef.current = '';
+
           // Update the existing step's final status
           setMessages((prev) =>
             prev.map((m) => {
@@ -717,7 +776,7 @@ export function ChatPreviewPanel({
                 ...m,
                 steps: (m.steps ?? []).map((s) =>
                   s.nodeId === nodeId
-                    ? { ...s, status: status as NodeStep['status'], output, error, durationMs }
+                    ? { ...s, status: status as NodeStep['status'], output, error, durationMs, agentStreamedText: capturedStreamedText }
                     : s,
                 ),
               };
@@ -734,6 +793,7 @@ export function ChatPreviewPanel({
       case 'agent_token': {
         const { nodeId, delta } = evt;
         if (delta) {
+          streamingTextRef.current += delta;
           setStreamingText((prev) => prev + delta);
           if (nodeId) setStreamingNodeId(nodeId);
         }
@@ -756,14 +816,20 @@ export function ChatPreviewPanel({
               ? 'Human review required.'
               : 'Please provide input.');
 
-        // Mark any still-running step as suspended
+        // Capture any streaming text before marking the running step as suspended
+        const suspendedStreamedText = streamingTextRef.current || undefined;
+        streamingTextRef.current = '';
+
+        // Mark any still-running step as suspended, persisting any streamed text
         setMessages((prev) =>
           prev.map((m) => {
             if (!m.steps) return m;
             return {
               ...m,
               steps: m.steps.map((s) =>
-                s.status === 'running' ? { ...s, status: 'suspended' as const } : s,
+                s.status === 'running'
+                  ? { ...s, status: 'suspended' as const, agentStreamedText: suspendedStreamedText }
+                  : s,
               ),
             };
           }),
@@ -808,13 +874,14 @@ export function ChatPreviewPanel({
         if (terminalShownRef.current) break;
         terminalShownRef.current = true;
         if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
-        const reply = extractReply(evt.output);
+        const reply = isErrorOutput(evt.output) ? evt.output.error : extractReply(evt.output);
+        const isError = isErrorOutput(evt.output);
         traceIdRef.current = null;
         setStreamingText('');
         setStreamingNodeId(null);
         setMessages((prev) => [
           ...prev.filter((m) => !m.typing && !m.steps?.every((s) => s.nodeId === PLACEHOLDER_NODE_ID)),
-          { id: `w-${Date.now()}`, role: 'workflow', content: reply },
+          { id: `w-${Date.now()}`, role: 'workflow', content: reply, ...(isError && { isError: true }) },
         ]);
         setSuspended(null);
         setApprovalMsgId(null);
@@ -1012,6 +1079,7 @@ export function ChatPreviewPanel({
     if (queueTimerRef.current) { clearTimeout(queueTimerRef.current); queueTimerRef.current = null; }
     traceIdRef.current = null;
     resumedRef.current = false;
+    streamingTextRef.current = '';
     seenNodeIdsRef.current = new Set();
     terminalShownRef.current = false;
     setStreamingText('');
