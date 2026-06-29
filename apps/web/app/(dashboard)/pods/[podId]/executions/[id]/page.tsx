@@ -747,7 +747,7 @@ export default function ExecutionDetailPage() {
       if (ex && LIVE_STATUSES.has(ex.status)) {
         pollStartRef.current = Date.now();
         pollRef.current = setInterval(async () => {
-          if (pollStartRef.current !== null && Date.now() - pollStartRef.current >= 30 * 60 * 1000) {
+          if (Date.now() - pollStartRef.current! >= 30 * 60 * 1000) {
             clearInterval(pollRef.current!);
             pollRef.current = null;
             setStuckBanner(true);
@@ -769,7 +769,10 @@ export default function ExecutionDetailPage() {
   }, [activeWorkspace, wsLoading, podId, id]);
 
   async function manualRefresh() {
-    await loadData();
+    const updated = await loadData();
+    if (updated && !LIVE_STATUSES.has(updated.status)) {
+      setStuckBanner(false);
+    }
   }
 
   async function replay(fromNodeId?: string) {
