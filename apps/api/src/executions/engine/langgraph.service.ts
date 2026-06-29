@@ -258,12 +258,12 @@ export class LangGraphService {
             onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
             return {
-              variables: { lastOutput: output, [nodeKey]: output, [node.id]: output },
-              chatHistory: [],
-              memory: {},
+              variables: { ...state.variables, lastOutput: output, [nodeKey]: output, [node.id]: output },
+              chatHistory: state.chatHistory,
+              memory: state.memory,
               currentNodeId: node.id,
               nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
-              pendingAuth: null,
+              pendingAuth: state.pendingAuth,
               cumulativeUsage: usageUpdate,
             };
           }
