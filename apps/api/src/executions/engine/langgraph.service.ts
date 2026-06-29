@@ -93,7 +93,7 @@ export const WorkflowStateAnnotation = Annotation.Root({
   }),
 });
 
-const MAX_LOOP_TIMEOUT_MS = 5 * 60 * 1000;
+export const MAX_LOOP_TIMEOUT_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class LangGraphService {
@@ -265,6 +265,7 @@ export class LangGraphService {
 
           const iterationResults: unknown[] = [];
           let currentVars: Record<string, any> = { ...state.variables };
+          const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
           for (let i = 0; i < items.length; i++) {
             if (Date.now() - loopStart > MAX_LOOP_TIMEOUT_MS) {
@@ -303,8 +304,14 @@ export class LangGraphService {
               });
 
               let actualOutput = childResult;
-              if (isAgentOutput && childResult && '__agentValue' in childResult) {
-                actualOutput = childResult.__agentValue;
+              if (isAgentOutput && childResult) {
+                if ('__agentValue' in childResult) actualOutput = childResult.__agentValue;
+                if (childResult.__usage) {
+                  const u = childResult.__usage as { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+                  totalUsage.input_tokens += u.input_tokens ?? 0;
+                  totalUsage.output_tokens += u.output_tokens ?? 0;
+                  totalUsage.total_tokens += u.total_tokens ?? 0;
+                }
               }
 
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
@@ -327,7 +334,7 @@ export class LangGraphService {
             nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
             pendingAuth: null,
             loopResults: iterationResults,
-            cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+            cumulativeUsage: totalUsage,
           };
         } catch (error) {
           if (isGraphInterrupt(error)) throw error;
