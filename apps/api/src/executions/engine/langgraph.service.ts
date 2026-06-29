@@ -304,17 +304,29 @@ export class LangGraphService {
                 cumulativeUsage: state.cumulativeUsage,
               };
 
-              const { result: childResult, isAgentOutput } = await this.nodeExecutor.execute({
-                nodeId: childNode.id,
-                nodeType: childType,
-                nodeData: { ...childNode.data, _nodeId: childNode.id },
-                state: childState,
-                workspaceId,
-                workflowId,
-                threadId,
-                supervisorModelOverride,
-                onToken: onAgentToken ? (delta) => onAgentToken(childNode.id, delta) : undefined,
-              });
+              onNodeUpdate(childNode.id, 'running');
+              const childStart = Date.now();
+              let childResult: any;
+              let isAgentOutput: boolean;
+              try {
+                ({ result: childResult, isAgentOutput } = await this.nodeExecutor.execute({
+                  nodeId: childNode.id,
+                  nodeType: childType,
+                  nodeData: { ...childNode.data, _nodeId: childNode.id },
+                  state: childState,
+                  workspaceId,
+                  workflowId,
+                  threadId,
+                  supervisorModelOverride,
+                  onToken: onAgentToken ? (delta) => onAgentToken(childNode.id, delta) : undefined,
+                }));
+              } catch (childError) {
+                const childDurationMs = Date.now() - childStart;
+                const msg = childError instanceof Error ? childError.message : String(childError);
+                onNodeUpdate(childNode.id, 'failed', undefined, msg, childDurationMs);
+                throw childError;
+              }
+              const childDurationMs = Date.now() - childStart;
 
               let actualOutput = childResult;
               let childVariableUpdates: Record<string, any> = {};
@@ -331,11 +343,13 @@ export class LangGraphService {
                 }
               }
 
+              onNodeUpdate(childNode.id, 'completed', actualOutput, undefined, childDurationMs);
               childNodeResults[childNode.id] = {
                 nodeId: childNode.id,
                 status: 'completed',
                 output: actualOutput,
                 completedAt: new Date().toISOString(),
+                durationMs: childDurationMs,
               };
 
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
