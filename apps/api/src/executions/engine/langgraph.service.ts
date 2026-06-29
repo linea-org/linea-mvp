@@ -180,10 +180,18 @@ export class LangGraphService {
         continue;
       }
 
+      const loopChildren = sourceType === 'loop'
+        ? new Set<string>((sourceNode.data as any)?.children ?? [])
+        : null;
+
       for (const edge of edges) {
         const targetNode = definition.nodes.find((n) => n.id === edge.target);
         const targetType = targetNode?.data?.nodeType || targetNode?.type;
         if (!targetNode || targetType === 'note') continue;
+        // Skip graph edges from a loop node to its declared children — those
+        // nodes are executed inline by the loop handler; a graph edge would
+        // cause them to run a second time outside the loop context.
+        if (loopChildren?.has(edge.target)) continue;
         builder.addEdge(sourceId as any, edge.target as any);
       }
     }
@@ -237,7 +245,7 @@ export class LangGraphService {
 
           // If no children are configured, fall through to the regular executor path
           if (children.length === 0) {
-            const { result } = await this.nodeExecutor.execute({
+            const { result, isAgentOutput } = await this.nodeExecutor.execute({
               nodeId: node.id,
               nodeType,
               nodeData: { ...node.data, _nodeId: node.id },
@@ -248,21 +256,29 @@ export class LangGraphService {
               supervisorModelOverride,
             });
             const durationMs = Date.now() - loopStart;
-            onNodeUpdate(node.id, 'completed', result, undefined, durationMs);
+            let actualResult = result;
+            let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+            if (isAgentOutput && result) {
+              if ('__agentValue' in result) actualResult = result.__agentValue;
+              if (result.__usage) usageUpdate = result.__usage as typeof usageUpdate;
+            }
+            onNodeUpdate(node.id, 'completed', actualResult, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
             return {
-              variables: { lastOutput: result, [nodeKey]: result, [node.id]: result },
+              variables: { lastOutput: actualResult, [nodeKey]: actualResult, [node.id]: actualResult },
               chatHistory: [],
               memory: {},
               currentNodeId: node.id,
-              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output: result, completedAt: new Date().toISOString(), durationMs } },
+              nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output: actualResult, completedAt: new Date().toISOString(), durationMs } },
               pendingAuth: null,
-              cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+              cumulativeUsage: usageUpdate,
             };
           }
 
           const iterationResults: unknown[] = [];
           let currentVars: Record<string, any> = { ...state.variables };
+          const childNodeResults: Record<string, any> = {};
+          const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
           for (let i = 0; i < items.length; i++) {
             const item = items[i];
@@ -270,14 +286,17 @@ export class LangGraphService {
 
             for (const childId of children) {
               const childNode = definition.nodes.find((n) => n.id === childId);
-              if (!childNode) continue;
+              if (!childNode) {
+                this.logger.warn(`Loop node ${node.id}: child node '${childId}' not found in definition, skipping`);
+                continue;
+              }
               const childType = childNode.data?.nodeType || childNode.type;
 
               const childState: WorkflowState = {
                 variables: currentVars,
                 chatHistory: state.chatHistory,
                 memory: state.memory ?? {},
-                nodeResults: state.nodeResults,
+                nodeResults: { ...state.nodeResults, ...childNodeResults },
                 pendingAuth: state.pendingAuth,
                 loopResults: state.loopResults,
                 cumulativeUsage: state.cumulativeUsage,
@@ -296,9 +315,22 @@ export class LangGraphService {
               });
 
               let actualOutput = childResult;
-              if (isAgentOutput && childResult && '__agentValue' in childResult) {
-                actualOutput = childResult.__agentValue;
+              if (isAgentOutput && childResult) {
+                if ('__agentValue' in childResult) actualOutput = childResult.__agentValue;
+                if (childResult.__usage) {
+                  const u = childResult.__usage as { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+                  totalUsage.input_tokens += u.input_tokens ?? 0;
+                  totalUsage.output_tokens += u.output_tokens ?? 0;
+                  totalUsage.total_tokens += u.total_tokens ?? 0;
+                }
               }
+
+              childNodeResults[childNode.id] = {
+                nodeId: childNode.id,
+                status: 'completed',
+                output: actualOutput,
+                completedAt: new Date().toISOString(),
+              };
 
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
               currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput };
@@ -317,10 +349,13 @@ export class LangGraphService {
             chatHistory: [],
             memory: {},
             currentNodeId: node.id,
-            nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
+            nodeResults: {
+              ...childNodeResults,
+              [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs },
+            },
             pendingAuth: null,
             loopResults: iterationResults,
-            cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+            cumulativeUsage: totalUsage,
           };
         } catch (error) {
           if (isGraphInterrupt(error)) throw error;
