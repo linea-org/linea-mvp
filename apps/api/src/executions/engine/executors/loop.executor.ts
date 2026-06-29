@@ -14,6 +14,17 @@ export interface LoopOutput {
   items: unknown[];
 }
 
+export const MAX_LOOP_TIMEOUT_MS = 5 * 60 * 1000;
+
+export function checkLoopTimeout(startMs: number, iterationIndex: number): void {
+  if (Date.now() - startMs > MAX_LOOP_TIMEOUT_MS) {
+    throw new Error(
+      `Loop exceeded maximum duration of 5 minutes after ${iterationIndex} iteration${iterationIndex === 1 ? '' : 's'}.`,
+    );
+  }
+}
+
+
 function resolveByPath(
   variables: Record<string, unknown>,
   path: string,

@@ -16,7 +16,7 @@ import { workflows } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 import { NodeExecutorService } from './node-executor.service';
 import type { WorkflowState } from './variable-substitution';
-import { executeLoopNode } from './executors/loop.executor';
+import { executeLoopNode, checkLoopTimeout, MAX_LOOP_TIMEOUT_MS } from './executors/loop.executor';
 import type { LoopNodeData, LoopOutput } from './executors/loop.executor';
 
 export interface WorkflowNode {
@@ -92,6 +92,8 @@ export const WorkflowStateAnnotation = Annotation.Root({
     default: () => ({ input_tokens: 0, output_tokens: 0, total_tokens: 0 }),
   }),
 });
+
+export { MAX_LOOP_TIMEOUT_MS };
 
 @Injectable()
 export class LangGraphService {
@@ -324,6 +326,7 @@ export class LangGraphService {
           let accumulatedMemory: Record<string, any> = { ...(state.memory ?? {}) };
 
           for (let i = 0; i < transformedItems.length; i++) {
+            checkLoopTimeout(loopStart, i);
             const item = transformedItems[i];
             currentVars = { ...currentVars, item, loopItem: item, loopIndex: i };
             let anyChildExecuted = false;
