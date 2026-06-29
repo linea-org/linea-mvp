@@ -8,6 +8,12 @@ export interface LoopNodeData {
   children?: string[];
 }
 
+export interface LoopOutput {
+  results: unknown[];
+  total: number;
+  items: unknown[];
+}
+
 function resolveByPath(
   variables: Record<string, unknown>,
   path: string,

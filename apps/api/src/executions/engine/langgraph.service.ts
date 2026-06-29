@@ -17,7 +17,7 @@ import { DB_TOKEN } from '../../database/database.module';
 import { NodeExecutorService } from './node-executor.service';
 import type { WorkflowState } from './variable-substitution';
 import { executeLoopNode } from './executors/loop.executor';
-import type { LoopNodeData } from './executors/loop.executor';
+import type { LoopNodeData, LoopOutput } from './executors/loop.executor';
 
 export interface WorkflowNode {
   id: string;
@@ -243,22 +243,6 @@ export class LangGraphService {
         const loopData = node.data as LoopNodeData;
         const children = loopData.children ?? [];
 
-        const INTERRUPTIBLE_TYPES = new Set([
-          'approval', 'approval-gate',
-        ]);
-        for (const childId of children) {
-          const childNode = definition.nodes.find((n) => n.id === childId);
-          if (!childNode) continue;
-          const childType = childNode.data?.nodeType || childNode.type;
-          if (INTERRUPTIBLE_TYPES.has(childType)) {
-            throw new Error(
-              `Loop node '${node.id}' contains interruptible child '${childId}' (type: '${childType}'). ` +
-              `Approval nodes cannot be used inside loop children because a mid-loop interrupt cannot be ` +
-              `safely resumed — completed iterations would re-execute, duplicating side-effects.`,
-            );
-          }
-        }
-
         const workflowState: WorkflowState = {
           variables: state.variables,
           chatHistory: state.chatHistory,
@@ -273,10 +257,49 @@ export class LangGraphService {
         const loopStart = Date.now();
 
         try {
+          const INTERRUPTIBLE_TYPES = new Set(['approval', 'approval-gate']);
+          for (const childId of children) {
+            const childNode = definition.nodes.find((n) => n.id === childId);
+            if (!childNode) continue;
+            const childType = childNode.data?.nodeType || childNode.type;
+            if (INTERRUPTIBLE_TYPES.has(childType)) {
+              throw new Error(
+                `Loop node '${node.id}' contains interruptible child '${childId}' (type: '${childType}'). ` +
+                `Approval nodes cannot be used inside loop children because a mid-loop interrupt cannot be ` +
+                `safely resumed — completed iterations would re-execute, duplicating side-effects.`,
+              );
+            }
+          }
+
           const { items, results: transformedItems } = executeLoopNode(loopData, workflowState);
 
           if (children.length === 0) {
-            throw new Error(`Loop node '${node.id}' has no children configured.`);
+            const { result, isAgentOutput } = await this.nodeExecutor.execute({
+              nodeId: node.id,
+              nodeType,
+              nodeData: { ...node.data, _nodeId: node.id },
+              state: workflowState,
+              workspaceId,
+              workflowId,
+              threadId,
+              supervisorModelOverride,
+            });
+            const durationMs = Date.now() - loopStart;
+            let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+            if (isAgentOutput && result?.__usage) usageUpdate = result.__usage as typeof usageUpdate;
+            const output = result as LoopOutput;
+            onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
+            const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+            return {
+              variables: { ...state.variables, lastOutput: output, [nodeKey]: output, [node.id]: output },
+              chatHistory: state.chatHistory,
+              memory: state.memory,
+              currentNodeId: node.id,
+              nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
+              pendingAuth: state.pendingAuth,
+              loopResults: Array.isArray(output?.results) ? output.results : [],
+              cumulativeUsage: usageUpdate,
+            };
           }
 
           const iterationResults: unknown[] = [];
