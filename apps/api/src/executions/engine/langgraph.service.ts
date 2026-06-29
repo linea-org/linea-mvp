@@ -235,38 +235,8 @@ export class LangGraphService {
         try {
           const { items } = executeLoopNode(loopData, workflowState);
 
-          // If no children are configured, fall through to the regular executor path
           if (children.length === 0) {
-            const { result, isAgentOutput } = await this.nodeExecutor.execute({
-              nodeId: node.id,
-              nodeType,
-              nodeData: { ...node.data, _nodeId: node.id },
-              state: workflowState,
-              workspaceId,
-              workflowId,
-              threadId,
-              supervisorModelOverride,
-            });
-            const durationMs = Date.now() - loopStart;
-            let usageUpdate = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-            if (isAgentOutput && result && result.__usage) {
-              usageUpdate = result.__usage as typeof usageUpdate;
-            }
-            // The loop executor already returns a LoopOutput — use it directly
-            // to avoid double-wrapping (results[0] would be a LoopOutput object).
-            const output = result as LoopOutput;
-            onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
-            const nodeKey = node.data?.nodeName || node.data?.name || node.id;
-            return {
-              variables: { ...state.variables, lastOutput: output, [nodeKey]: output, [node.id]: output },
-              chatHistory: state.chatHistory,
-              memory: state.memory,
-              currentNodeId: node.id,
-              nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
-              pendingAuth: state.pendingAuth,
-              loopResults: output.results,
-              cumulativeUsage: usageUpdate,
-            };
+            throw new Error(`Loop node '${node.id}' has no children configured.`);
           }
 
           const iterationResults: unknown[] = [];
