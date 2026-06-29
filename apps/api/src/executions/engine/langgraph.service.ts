@@ -259,7 +259,7 @@ export class LangGraphService {
                 variables: currentVars,
                 chatHistory: state.chatHistory,
                 memory: state.memory ?? {},
-                nodeResults: state.nodeResults,
+                nodeResults: { ...state.nodeResults, ...childNodeResults },
                 pendingAuth: state.pendingAuth,
                 loopResults: state.loopResults,
                 cumulativeUsage: state.cumulativeUsage,
