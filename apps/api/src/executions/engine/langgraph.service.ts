@@ -300,10 +300,13 @@ export class LangGraphService {
             const chatUpdates = isAgentOutput && (result as any)?.__chatHistoryUpdates
               ? (result as any).__chatHistoryUpdates
               : [];
+            const memoryUpdates = isAgentOutput && (result as any)?.__memoryUpdates
+              ? (result as any).__memoryUpdates
+              : {};
             return {
               variables: { ...state.variables, lastOutput: output, [nodeKey]: output, [node.id]: output },
               chatHistory: chatUpdates,
-              memory: {},
+              memory: memoryUpdates,
               currentNodeId: node.id,
               nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
               pendingAuth: state.pendingAuth,
