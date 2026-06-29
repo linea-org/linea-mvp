@@ -241,6 +241,7 @@ export class LangGraphService {
 
           const iterationResults: unknown[] = [];
           let currentVars: Record<string, any> = { ...state.variables };
+          const childNodeResults: Record<string, any> = {};
           const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
           for (let i = 0; i < items.length; i++) {
@@ -249,7 +250,9 @@ export class LangGraphService {
 
             for (const childId of children) {
               const childNode = definition.nodes.find((n) => n.id === childId);
-              if (!childNode) continue;
+              if (!childNode) {
+                throw new Error(`Loop node '${node.id}': child node '${childId}' not found in workflow definition.`);
+              }
               const childType = childNode.data?.nodeType || childNode.type;
 
               const childState: WorkflowState = {
@@ -285,6 +288,12 @@ export class LangGraphService {
                 }
               }
 
+              childNodeResults[childNode.id] = {
+                nodeId: childNode.id,
+                status: 'completed',
+                output: actualOutput,
+                completedAt: new Date().toISOString(),
+              };
               const childKey = childNode.data?.nodeName || childNode.data?.name || childNode.id;
               currentVars = { ...currentVars, lastOutput: actualOutput, [childKey]: actualOutput, [childNode.id]: actualOutput };
             }
@@ -305,7 +314,7 @@ export class LangGraphService {
             chatHistory: state.chatHistory,
             memory: state.memory,
             currentNodeId: node.id,
-            nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
+            nodeResults: { ...state.nodeResults, ...childNodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
             pendingAuth: state.pendingAuth,
             loopResults: iterationResults,
             cumulativeUsage: totalUsage,
