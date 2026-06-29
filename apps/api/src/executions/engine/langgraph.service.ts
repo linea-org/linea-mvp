@@ -264,6 +264,7 @@ export class LangGraphService {
               currentNodeId: node.id,
               nodeResults: { [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
               pendingAuth: state.pendingAuth,
+              loopResults: output.results,
               cumulativeUsage: usageUpdate,
             };
           }
