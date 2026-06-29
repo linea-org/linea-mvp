@@ -224,6 +224,22 @@ export class LangGraphService {
 
     if (nodeType === 'loop') {
       return async (state: typeof WorkflowStateAnnotation.State) => {
+        const preloaded = state.nodeResults?.[node.id];
+        if (preloaded?.__preloaded) {
+          onNodeUpdate(node.id, 'completed', preloaded.output, undefined, 0);
+          const nodeKey = node.data?.nodeName || node.data?.name || node.id;
+          return {
+            variables: { lastOutput: preloaded.output, [nodeKey]: preloaded.output, [node.id]: preloaded.output },
+            chatHistory: [],
+            memory: {},
+            currentNodeId: node.id,
+            nodeResults: { [node.id]: preloaded },
+            pendingAuth: null,
+            loopResults: Array.isArray(preloaded.output?.results) ? preloaded.output.results : [],
+            cumulativeUsage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+          };
+        }
+
         const loopData = node.data as LoopNodeData;
         const children = loopData.children ?? [];
 
