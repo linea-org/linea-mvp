@@ -332,14 +332,6 @@ function StepsTrace({
   const isRunning = steps.some((s) => s.status === 'running');
   const [expanded, setExpanded] = useState(true);
 
-  // Auto-collapse when execution finishes
-  useEffect(() => {
-    if (!isRunning && steps.length > 0) {
-      const t = setTimeout(() => setExpanded(false), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [isRunning, steps.length]);
-
   const totalMs = steps.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
   const hasFailed = steps.some((s) => s.status === 'failed');
 
@@ -349,27 +341,38 @@ function StepsTrace({
         <HugeiconsIcon icon={WorkflowSquare01Icon} className="size-3.5 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
-        {/* Clickable header */}
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground mb-1.5 transition-colors"
-        >
-          {isRunning ? (
-            <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin text-muted-foreground/70" />
-          ) : hasFailed ? (
-            <span className="size-1.5 rounded-full bg-destructive/70" />
-          ) : (
-            <span className="size-1.5 rounded-full bg-foreground/25" />
+        {/* Header row */}
+        <div className="flex items-center justify-between mb-1.5">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isRunning ? (
+              <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin text-muted-foreground/70" />
+            ) : hasFailed ? (
+              <span className="size-1.5 rounded-full bg-destructive/70" />
+            ) : (
+              <span className="size-1.5 rounded-full bg-foreground/25" />
+            )}
+            <span>{steps.length} step{steps.length !== 1 ? 's' : ''}</span>
+            {!isRunning && totalMs > 0 && (
+              <span className="opacity-50">· {fmtMs(totalMs)}</span>
+            )}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              className={`size-2.5 opacity-40 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {!isRunning && expanded && (
+            <button
+              onClick={() => setExpanded(false)}
+              className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              aria-label="Close trace"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} className="size-3" />
+            </button>
           )}
-          <span>{steps.length} step{steps.length !== 1 ? 's' : ''}</span>
-          {!isRunning && totalMs > 0 && (
-            <span className="opacity-50">· {fmtMs(totalMs)}</span>
-          )}
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            className={`size-2.5 opacity-40 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
-          />
-        </button>
+        </div>
 
         {/* Steps list */}
         {expanded && steps.length > 0 && (
