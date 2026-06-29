@@ -311,8 +311,8 @@ export class LangGraphService {
           const { item: _i, loopItem: _li, loopIndex: _lx, ...cleanVars } = currentVars;
           return {
             variables: { ...cleanVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
-            chatHistory: state.chatHistory,
-            memory: state.memory,
+            chatHistory: [],
+            memory: {},
             currentNodeId: node.id,
             nodeResults: { ...state.nodeResults, ...childNodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
             pendingAuth: state.pendingAuth,
