@@ -331,10 +331,10 @@ export class LangGraphService {
           const { item: _i, loopItem: _li, loopIndex: _lx, ...cleanVars } = currentVars;
           return {
             variables: { ...cleanVars, lastOutput: output, [nodeKey]: output, [node.id]: output },
-            chatHistory: accumulatedChatHistory,
-            memory: accumulatedMemory,
+            chatHistory: state.chatHistory,
+            memory: state.memory,
             currentNodeId: node.id,
-            nodeResults: { ...childNodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
+            nodeResults: { ...state.nodeResults, [node.id]: { nodeId: node.id, status: 'completed', output, completedAt: new Date().toISOString(), durationMs } },
             pendingAuth: state.pendingAuth,
             loopResults: iterationResults,
             cumulativeUsage: totalUsage,
