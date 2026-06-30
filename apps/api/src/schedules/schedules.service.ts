@@ -4,7 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { eq, and, lte, count } from 'drizzle-orm';
+import { eq, and, lte, count, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { schedules, pods, workflows } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
@@ -64,6 +64,18 @@ export class SchedulesService {
 
   async findAll(podId: string) {
     return this.db.select().from(schedules).where(eq(schedules.podId, podId));
+  }
+
+  async findOne(podId: string, id: string) {
+    const [record] = await this.db
+      .select()
+      .from(schedules)
+      .where(and(eq(schedules.id, id), eq(schedules.podId, podId)))
+      .limit(1);
+
+    if (!record) throw new NotFoundException(`Schedule ${id} not found`);
+
+    return record;
   }
 
   async update(podId: string, id: string, dto: UpdateScheduleDto) {
@@ -161,6 +173,8 @@ export class SchedulesService {
       .where(and(eq(schedules.enabled, true), lte(schedules.nextRunAt, now)));
 
     for (const schedule of due) {
+      const nextRunAt = this.nextRunDate(schedule.cronExpr);
+
       try {
         await this.executionsService.createFromTrigger(
           schedule.podId,
@@ -169,15 +183,29 @@ export class SchedulesService {
           'schedule',
           schedule.input,
         );
-      } catch {
-        // Don't let one failing schedule block the rest
-      }
 
-      const nextRunAt = this.nextRunDate(schedule.cronExpr);
-      await this.db
-        .update(schedules)
-        .set({ lastRunAt: now, nextRunAt })
-        .where(eq(schedules.id, schedule.id));
+        await this.db
+          .update(schedules)
+          .set({
+            lastRunAt: now,
+            nextRunAt,
+            lastError: null,
+            consecutiveFailures: 0,
+          })
+          .where(eq(schedules.id, schedule.id));
+      } catch (err) {
+        const lastError = err instanceof Error ? err.message : String(err);
+
+        await this.db
+          .update(schedules)
+          .set({
+            lastRunAt: now,
+            nextRunAt,
+            lastError,
+            consecutiveFailures: sql`${schedules.consecutiveFailures} + 1`,
+          })
+          .where(eq(schedules.id, schedule.id));
+      }
     }
   }
 }

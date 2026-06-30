@@ -67,6 +67,15 @@ export class SchedulesController {
     return this.service.findAll(podId);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a schedule' })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'podId' })
+  @ApiParam({ name: 'id' })
+  findOne(@Param('podId') podId: string, @Param('id') id: string) {
+    return this.service.findOne(podId, id);
+  }
+
   @Patch(':id')
   @RequireRole('editor')
   @ApiOperation({ summary: 'Update a schedule (editor+)' })
