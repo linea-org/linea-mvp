@@ -44,6 +44,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { WorkspaceThrottlerGuard } from './common/guards/throttler.guard';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller';
+import { ConnectionsModule } from './connections/connections.module';
 
 @Module({
   imports: [
@@ -136,6 +137,7 @@ import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller
     ModelsModule,
     AuditModule,
     MailModule,
+    ConnectionsModule,
   ],
   controllers: [ClerkWebhookController],
   providers: [

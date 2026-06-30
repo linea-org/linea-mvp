@@ -26,6 +26,7 @@ import type {
 } from '../executions/engine/models/client.factory';
 import type { ToolDefinition } from '../executions/engine/tools/definitions';
 import type { ChatDto } from './dto/chat.dto';
+import { ConnectionsService } from 'src/connections/connections.service';
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
@@ -331,12 +332,13 @@ export class AgentChatService {
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly config: ConfigService,
+    private readonly connectionsService: ConnectionsService,
     private readonly secretsService: SecretsService,
     private readonly executionsService: ExecutionsService,
     private readonly memoryService: MemoryService,
     private readonly checkpointerService: CheckpointerService,
     private readonly mcpService: McpService,
-  ) {}
+  ) { }
 
   async *chat(workspaceId: string, dto: ChatDto): AsyncIterable<object> {
     const threadId = dto.threadId ?? `agent-chat-${workspaceId}-${Date.now()}`;
@@ -387,12 +389,12 @@ export class AgentChatService {
     const memorySection =
       sessionMemory && Object.keys(sessionMemory).length > 0
         ? '\n\n## What you remember about this user\n' +
-          Object.entries(sessionMemory)
-            .map(
-              ([k, v]) =>
-                `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`,
-            )
-            .join('\n')
+        Object.entries(sessionMemory)
+          .map(
+            ([k, v]) =>
+              `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`,
+          )
+          .join('\n')
         : '';
 
     const system =
