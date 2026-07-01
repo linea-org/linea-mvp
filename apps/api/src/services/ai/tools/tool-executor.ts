@@ -1,4 +1,4 @@
-import type { WorkflowState } from '../variable-substitution';
+import { WorkflowState } from '../../../executions/engine/variable-substitution';
 import { assertSafeUrl } from '../../../common/utils/ssrf-guard';
 
 export interface ToolCallRequest {

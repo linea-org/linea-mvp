@@ -9,22 +9,23 @@ import {
   ModelUseCase,
 } from '../types';
 
+export interface ModelChatProps {
+  messages: ChatMessage[];
+  tools?: ToolDefinition[];
+  temperature?: number;
+  toolChoice?: 'auto' | 'required';
+  maxTokens?: number;
+  system?: string;
+  jsonMode?: boolean;
+  onToken?: (delta: string) => void;
+  opts?: any;
+}
+
 export interface ModelClient {
   models: string[];
   embeddingModels: string[];
   displayModels: ModelDefinition[];
-  chat(
-    model: string,
-    messages: ChatMessage[],
-    tools?: ToolDefinition[],
-    temperature?: number,
-    toolChoice?: 'auto' | 'required',
-    maxTokens?: number,
-    system?: string,
-    jsonMode?: boolean,
-    onToken?: (delta: String) => void,
-    opts?: any,
-  ): Promise<CompletionResult>;
+  chat(model: string, options: ModelChatProps): Promise<CompletionResult>;
   embedding(model: string, text: string): Promise<number[] | null>;
 }
 

@@ -11,34 +11,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { IsString, IsArray, IsOptional } from 'class-validator';
 import type { Response } from 'express';
 import { AgentChatService } from './agent-chat.service';
 import { ChatDto } from './dto/chat.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import type { User } from '@linea/db';
-
-class UpsertSessionDto {
-  @IsString()
-  threadId!: string;
-
-  @IsString()
-  title!: string;
-
-  @IsArray()
-  messages!: unknown[];
-}
-
-class PatchSessionDto {
-  @IsString()
-  @IsOptional()
-  title?: string;
-
-  @IsArray()
-  @IsOptional()
-  messages?: unknown[];
-}
+import { PatchSessionDto, UpsertSessionDto } from './dto/session.dto';
 
 @ApiTags('Agent Chat')
 @ApiBearerAuth()

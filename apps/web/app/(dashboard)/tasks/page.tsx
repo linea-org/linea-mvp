@@ -1544,6 +1544,8 @@ function TasksPageInner() {
             : m
         )
       )
+    } else if (evt.type === "error") {
+      console.log(evt)
     }
   }, [])
 
@@ -1607,6 +1609,7 @@ function TasksPageInner() {
               ? { podId: activePod.id, podName: activePod.name }
               : undefined,
             model,
+            provider: "groq",
             threadId: sessionId,
           }),
           signal: abortRef.current.signal,
@@ -1625,7 +1628,9 @@ function TasksPageInner() {
         const lines = buf.split("\n")
         buf = lines.pop() ?? ""
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue
+          if (!line.startsWith("data: ")) {
+            continue
+          }
           try {
             handleEvent(JSON.parse(line.slice(6)) as SSEEvent, assistantId)
           } catch {

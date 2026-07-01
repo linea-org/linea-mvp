@@ -19,10 +19,9 @@ export const configSchema = z.object({
     .string()
     .length(64, 'Must be a 32-byte hex string (64 hex chars)'),
 
-  ENCRYPTION_KEY_1:
-    z
-      .string()
-      .length(64, 'Must be a 32-byte hex string (64 hex chars)'),
+  ENCRYPTION_KEY_1: z
+    .string()
+    .length(64, 'Must be a 32-byte hex string (64 hex chars)'),
 
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),

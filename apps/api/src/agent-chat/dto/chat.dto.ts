@@ -6,6 +6,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { AIProviderType } from 'src/common/utils/config-types';
 
 export class ChatMessage {
   @IsString()
@@ -39,7 +40,10 @@ export class ChatDto {
 
   @IsString()
   @IsOptional()
-  model?: string;
+  model!: string;
+
+  @IsString()
+  provider!: AIProviderType;
 
   @IsString()
   @IsOptional()

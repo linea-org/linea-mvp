@@ -1,7 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { ToolDefinition } from '../tools/definitions';
-import { ChatMessage, CompletionResult, NormalizedToolCall } from '../types';
-import { ModelClient, ModelDefinition } from './interface';
+import { CompletionResult, NormalizedToolCall } from '../types';
+import { ModelChatProps, ModelClient, ModelDefinition } from './interface';
 import { withRetry } from '../helpers';
 
 export class AnthropicClient implements ModelClient {
@@ -84,15 +83,17 @@ export class AnthropicClient implements ModelClient {
 
   async chat(
     model: string,
-    messages: ChatMessage[],
-    tools?: ToolDefinition[],
-    temperature?: number,
-    toolChoice?: 'auto' | 'required',
-    maxTokens?: number,
-    system?: string,
-    jsonMode?: boolean,
-    onToken?: (delta: String) => void,
-    opts?: any,
+    {
+      messages,
+      jsonMode,
+      maxTokens,
+      onToken,
+      opts,
+      system,
+      temperature,
+      toolChoice,
+      tools,
+    }: ModelChatProps,
   ): Promise<CompletionResult> {
     if (!this.models.includes(model)) {
       throw new Error(`Anthropic does not support this model: ${model}`);
