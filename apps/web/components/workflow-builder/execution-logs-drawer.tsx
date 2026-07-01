@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowDown01Icon, ArrowUp01Icon, CheckmarkCircle01Icon, Cancel01Icon, Loading01Icon, ClockIcon } from '@hugeicons/core-free-icons';
+import { ArrowDown01Icon, ArrowUp01Icon, CheckmarkCircle01Icon, Cancel01Icon, ClockIcon } from '@hugeicons/core-free-icons';
 import { createApiClient } from '@/lib/api';
+import { Spinner } from '@linea/ui/components/spinner';
 
 interface Log {
   id: string;
@@ -91,7 +92,7 @@ export function ExecutionLogsDrawer({ executionId, workspaceId, podId, status, t
         <div className="max-h-52 overflow-y-auto border-t border-border">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
-              <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+              <Spinner className="size-3.5" />
               Loading logs…
             </div>
           ) : logs.length === 0 ? (

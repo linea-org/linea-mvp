@@ -11,7 +11,8 @@ import { WelcomeModal } from '@/components/onboarding/welcome-modal';
 import { GettingStarted } from '@/components/onboarding/getting-started';
 import { CommandPalette } from '@/components/command-palette';
 import { KeyboardShortcutsDialog } from '@/components/keyboard-shortcuts-dialog';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 import {
   SidebarProvider,
   Sidebar,
@@ -669,8 +670,8 @@ function NotificationBell() {
       const api = createApiClient(token);
       const data = await api.get<Notification[]>(`/workspaces/${workspaceId}/notifications`);
       setNotifications(data ?? []);
-    } catch {
-      // silently fail
+    } catch (err) {
+      toast.error(friendlyApiError(err));
     } finally {
       setLoadingNotifs(false);
     }
@@ -730,7 +731,9 @@ function NotificationBell() {
       const api = createApiClient(token);
       await api.patch(`/workspaces/${workspaceId}/notifications/${id}/read`);
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   async function markAllRead() {
@@ -741,7 +744,9 @@ function NotificationBell() {
       const api = createApiClient(token);
       await api.patch(`/workspaces/${workspaceId}/notifications/read-all`);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   async function dismiss(id: string) {
@@ -752,7 +757,9 @@ function NotificationBell() {
       const api = createApiClient(token);
       await api.delete(`/workspaces/${workspaceId}/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   const filtered = notifications.filter((n) => matchesFilter(n, typeFilter));

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useApiClient } from '@/hooks/use-api-client';
+import { unwrapList } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { Button } from '@linea/ui/components/button';
@@ -122,7 +123,7 @@ export default function SchedulesPage() {
     queryFn: async () => {
       const api = await getApi();
       const result = await api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${podId}/workflows`);
-      return Array.isArray(result) ? result : result.workflows;
+      return unwrapList(result, 'workflows');
     },
   });
 

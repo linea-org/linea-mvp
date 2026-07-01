@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Cancel01Icon, Loading01Icon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons';
 import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
+import { Spinner } from '@linea/ui/components/spinner';
 
 interface Execution {
   id: string;
@@ -126,7 +127,7 @@ export function HistoryPanel({ workspaceId, podId, workflowId, token, nodes, onC
         <div className="w-44 shrink-0 border-r border-border overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center gap-1.5 py-8 text-xs text-muted-foreground">
-              <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin" />
+              <Spinner className="size-3" />
             </div>
           ) : executions.length === 0 ? (
             <p className="p-3 text-center text-xs text-muted-foreground">No runs yet.</p>
@@ -159,7 +160,7 @@ export function HistoryPanel({ workspaceId, podId, workflowId, token, nodes, onC
             </div>
           ) : logsLoading ? (
             <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-              <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+              <Spinner className="size-3.5" />
             </div>
           ) : logs.length === 0 ? (
             <p className="p-4 text-center text-xs text-muted-foreground">No log entries for this run.</p>

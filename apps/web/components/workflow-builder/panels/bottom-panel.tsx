@@ -18,10 +18,12 @@ import {
   RepeatIcon,
 } from '@hugeicons/core-free-icons';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
+import { Spinner } from '@linea/ui/components/spinner';
 import type { Node } from '@xyflow/react';
 import type { NodeResult } from '../index';
 import type { ValidationState } from '../toolbar';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError, unwrapList } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 
 interface Log {
   id: string;
@@ -248,7 +250,7 @@ function LogsTab({
   if (logsLoading && logs.length === 0) {
     return (
       <div className="flex items-center justify-center gap-2 h-full text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5" />
         Loading logs...
       </div>
     );
@@ -274,7 +276,7 @@ function LogsTab({
     }
     return (
       <div className="flex items-center justify-center gap-2 h-full text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin text-blue-500" />
+        <Spinner className="size-3.5 text-blue-500" />
         Execution started...
       </div>
     );
@@ -496,7 +498,7 @@ function TimelineTab({
   if (entries.length === 0) {
     return (
       <div className="flex items-center justify-center gap-2 h-full text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin text-blue-500" />
+        <Spinner className="size-3.5 text-blue-500" />
         Waiting for nodes to start...
       </div>
     );
@@ -763,8 +765,8 @@ export function BottomPanel({ nodes, nodeResults, validationState, runStatus, wo
         `/workspaces/${workspaceId}/pods/${podId}/executions/${execId}/logs`,
       );
       setLogs(data);
-    } catch {
-      // logs are supplementary; silently fail
+    } catch (err) {
+      toast.error(friendlyApiError(err));
     } finally {
       setLogsLoading(false);
     }
@@ -774,13 +776,12 @@ export function BottomPanel({ nodes, nodeResults, validationState, runStatus, wo
     if (!workflowId) return;
     try {
       const api = createApiClient(token);
-      const data = await api.get<{ executions: HistoryEntry[] }>(
+      const data = await api.get<HistoryEntry[] | { executions: HistoryEntry[] }>(
         `/workspaces/${workspaceId}/pods/${podId}/executions?workflowId=${workflowId}&limit=20`,
       );
-      const list: HistoryEntry[] = (data as any)?.executions ?? (Array.isArray(data) ? data : []);
-      setHistoryList(list);
-    } catch {
-      // silently fail
+      setHistoryList(unwrapList(data, 'executions'));
+    } catch (err) {
+      toast.error(friendlyApiError(err));
     }
   }
 

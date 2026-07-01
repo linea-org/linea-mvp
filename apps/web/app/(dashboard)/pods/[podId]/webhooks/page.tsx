@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, unwrapList } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -164,10 +164,10 @@ export default function WebhooksPage() {
       const token = await getToken();
       if (!token) return [];
       const api = createApiClient(token);
-      const res = await api.get<Workflow[]>(
+      const res = await api.get<Workflow[] | { workflows: Workflow[] }>(
         `/workspaces/${activeWorkspace!.id}/pods/${podId}/workflows`,
       );
-      return (Array.isArray(res) ? res : ((res as any)?.workflows ?? [])) as Workflow[];
+      return unwrapList(res, 'workflows');
     },
   });
 
@@ -227,7 +227,7 @@ export default function WebhooksPage() {
   }
 
   const filtered = useMemo(() => {
-    let list = Array.isArray(webhooks) ? webhooks : [];
+    let list = webhooks;
     if (workflowFilter !== 'all') {
       list = list.filter((wh) => wh.workflowId === workflowFilter);
     }

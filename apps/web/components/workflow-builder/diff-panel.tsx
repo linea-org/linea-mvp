@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { Spinner } from '@linea/ui/components/spinner';
 import {
   Cancel01Icon,
-  Loading01Icon,
   CheckmarkCircle01Icon,
   Add01Icon,
   Delete01Icon,
@@ -352,7 +352,7 @@ export function DiffPanel({
           <div className="absolute inset-0 pt-9">
             {loading && (
               <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
-                <HugeiconsIcon icon={Loading01Icon} className="size-4 animate-spin" />
+                <Spinner className="size-4" />
                 Loading v{targetVersion}...
               </div>
             )}

@@ -2,42 +2,6 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, Inject } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { eq } from 'drizzle-orm';
-
-const EXECUTION_TIMEOUT_MS = 15 * 60 * 1_000; // 15 minutes wall-clock per execution
-
-async function drainWithTimeout<T>(
-  gen: AsyncIterable<T>,
-  timeoutMs: number,
-): Promise<T | undefined> {
-  let last: T | undefined;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () =>
-        reject(
-          new Error(`Execution timed out after ${timeoutMs / 60_000} minutes`),
-        ),
-      timeoutMs,
-    );
-  });
-  try {
-    // Race: each iteration either yields from the generator or the timeout fires
-    for await (const state of {
-      [Symbol.asyncIterator]: () => {
-        const iter = gen[Symbol.asyncIterator]();
-        return {
-          next: () => Promise.race([iter.next(), timeoutPromise]),
-          return: iter.return?.bind(iter),
-        };
-      },
-    } as AsyncIterable<T>) {
-      last = state;
-    }
-    return last;
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
 import type { DrizzleDB } from '@linea/db';
 import { executions, executionLogs, workflows, users } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
@@ -51,6 +15,9 @@ import { QuotasService } from '../../quotas/quotas.service';
 import { MailService } from '../../mail/mail.service';
 import { EXECUTION_QUEUE } from './execution.queue';
 import type { ExecutionJobData } from './execution.queue';
+import { drainWithTimeout } from '../engine/drain-with-timeout';
+
+const EXECUTION_TIMEOUT_MS = 15 * 60 * 1_000; // 15 minutes wall-clock per execution
 
 @Processor(EXECUTION_QUEUE)
 export class ExecutionProcessor extends WorkerHost {

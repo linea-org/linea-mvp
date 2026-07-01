@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 import { Input } from '@linea/ui/components/input';
 import { Textarea } from '@linea/ui/components/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
@@ -37,7 +38,9 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
         const api = createApiClient(token);
         const list = await api.get<McpServer[]>(`/workspaces/${activeWorkspace.id}/mcp-servers`);
         setServers(list);
-      } catch { /* non-fatal */ }
+      } catch (err) {
+        toast.error(friendlyApiError(err));
+      }
     }
     void load();
   }, [activeWorkspace, getToken]);

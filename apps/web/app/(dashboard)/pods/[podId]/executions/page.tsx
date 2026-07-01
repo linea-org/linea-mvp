@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useApiClient } from '@/hooks/use-api-client';
+import { unwrapList } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { formatDurationLong } from '@/lib/format';
@@ -107,7 +108,7 @@ export default function ExecutionsPage() {
     queryFn: async () => {
       const api = await getApi();
       const execList = await api.get<Execution[] | { executions: Execution[] }>(`/workspaces/${wsId}/pods/${podId}/executions`);
-      return Array.isArray(execList) ? execList : (execList?.executions ?? []);
+      return unwrapList(execList, 'executions');
     },
     refetchInterval: (query) => {
       const list = query.state.data ?? [];
@@ -121,7 +122,7 @@ export default function ExecutionsPage() {
     queryFn: async () => {
       const api = await getApi();
       const wfArr = await api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${podId}/workflows`);
-      return Array.isArray(wfArr) ? wfArr : (wfArr?.workflows ?? []);
+      return unwrapList(wfArr, 'workflows');
     },
   });
 

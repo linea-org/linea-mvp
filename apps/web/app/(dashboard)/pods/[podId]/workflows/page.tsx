@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApiClient } from '@/hooks/use-api-client';
+import { unwrapList } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { Button } from '@linea/ui/components/button';
@@ -141,7 +142,7 @@ export default function WorkflowsPage() {
       const data = await api.get<Workflow[] | { workflows: Workflow[]; meta?: unknown }>(
         `/workspaces/${wsId}/pods/${podId}/workflows?${params}`,
       );
-      return Array.isArray(data) ? data : (data?.workflows ?? []);
+      return unwrapList(data, 'workflows');
     },
   });
 

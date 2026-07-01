@@ -60,6 +60,18 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
   return (json as { data: T }).data;
 }
 
+/**
+ * Some list endpoints return a bare array, others wrap it in `{ [key]: [...] }`.
+ * Normalizes both known shapes to a plain array; throws on anything else so a
+ * genuinely broken response surfaces instead of silently becoming an empty list.
+ */
+export function unwrapList<T>(res: T[] | { [key: string]: unknown }, key: string): T[] {
+  if (Array.isArray(res)) return res;
+  const list = res[key];
+  if (Array.isArray(list)) return list as T[];
+  throw new Error(`Expected an array or { ${key}: [...] }, got: ${JSON.stringify(res)}`);
+}
+
 export function createApiClient(token: string) {
   return {
     get: <T>(path: string) => request<T>(path, token),

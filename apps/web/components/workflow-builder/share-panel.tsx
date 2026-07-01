@@ -9,6 +9,7 @@ import { createApiClient, friendlyApiError } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
+import { Spinner } from '@linea/ui/components/spinner';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@linea/ui/components/select';
@@ -172,7 +173,7 @@ export function SharePanel({ workspaceId, podId, workflowId, token, onClose }: P
             </p>
             {loading ? (
               <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
-                <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+                <Spinner className="size-3.5" />
                 Loading…
               </div>
             ) : members.length === 0 ? (

@@ -15,6 +15,7 @@ import {
 import { Button } from '@linea/ui/components/button';
 import { toast } from '@linea/ui/components/sonner';
 import { createApiClient, ApiError, friendlyApiError } from '@/lib/api';
+import { consumeSseStream } from '@/lib/sse';
 import { cn } from '@linea/ui/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { JsonOrPre } from '@/components/ui/json-or-pre';
@@ -956,34 +957,13 @@ export function ChatPreviewPanel({
           if (!resp.ok || !resp.body) break;
 
           const reader = resp.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const lines = buf.split('\n');
-            buf = lines.pop() ?? '';
-            for (const line of lines) {
-              if (line.startsWith('id: ')) { lastEventId = line.slice(4).trim(); continue; }
-              if (!line.startsWith('data: ')) continue;
-              try {
-                const raw = line.slice(6);
-                let parsed = JSON.parse(raw) as any;
-                // NestJS SSE serializes the full MessageEvent object (not just .data),
-                // so the actual event payload is one level down at parsed.data
-                if (parsed && typeof parsed === 'object' && !parsed.type && parsed.data && typeof parsed.data === 'object') {
-                  parsed = parsed.data;
-                }
-                const evt = parsed as SSEEvent;
-                if (evt.type === 'execution_complete' || evt.type === 'execution_failed') {
-                  receivedTerminal = true;
-                }
-                handleSSEEvent(evt, execId);
-              } catch { /* malformed line */ }
+          await consumeSseStream<SSEEvent>(reader, (evt, eventId) => {
+            if (eventId) lastEventId = eventId;
+            if (evt.type === 'execution_complete' || evt.type === 'execution_failed') {
+              receivedTerminal = true;
             }
-          }
+            handleSSEEvent(evt, execId);
+          });
 
           // Stream closed cleanly — exit retry loop, go to fallback
           break;
@@ -1282,7 +1262,9 @@ export function ChatPreviewPanel({
         const freshTok = await getTokenRef.current().catch(() => null) ?? token;
         const api = createApiClient(freshTok);
         await api.delete(`/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}`);
-      } catch { /* ignore */ }
+      } catch (err) {
+        toast.error(friendlyApiError(err));
+      }
     }
   }
 

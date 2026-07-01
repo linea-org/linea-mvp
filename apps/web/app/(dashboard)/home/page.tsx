@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { usePod } from '@/contexts/space-context';
 import { useApiClient } from '@/hooks/use-api-client';
+import { unwrapList } from '@/lib/api';
 import { formatRelativeTime, formatDurationShort } from '@/lib/format';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { Button } from '@linea/ui/components/button';
@@ -81,8 +82,8 @@ export default function HomePage() {
         api.get<Execution[] | { executions: Execution[] }>(`/workspaces/${wsId}/pods/${podId}/executions`),
         api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${podId}/workflows`),
       ]);
-      const executions = (Array.isArray(execList) ? execList : execList.executions).slice(0, 6);
-      const workflows = Array.isArray(wfList) ? wfList : wfList.workflows;
+      const executions = unwrapList(execList, 'executions').slice(0, 6);
+      const workflows = unwrapList(wfList, 'workflows');
       const workflowNames: Record<string, string> = {};
       for (const wf of workflows) workflowNames[wf.id] = wf.name;
       return { metrics: m, executions, workflowNames };

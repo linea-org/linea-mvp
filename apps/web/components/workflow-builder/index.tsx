@@ -31,6 +31,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@linea/ui/components/tooltip';
 import { Kbd } from '@linea/ui/components/kbd';
 import { createApiClient, friendlyApiError } from '@/lib/api';
+import { consumeSseStream } from '@/lib/sse';
+import { useUndoHistory } from './use-undo-history';
 import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
 import { Spinner } from '@linea/ui/components/spinner';
@@ -69,6 +71,7 @@ interface WFEdge {
 interface Workflow {
   id: string; name: string; description?: string;
   definition: { nodes: WFNode[]; edges: WFEdge[] }; podId: string;
+  deployedAt?: string | null;
 }
 interface WorkflowBuilderProps {
   workflowId: string; podId: string; workspaceId: string;
@@ -417,8 +420,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [deployedAt, setDeployedAt] = useState<string | null>(null);
   const [diffVersion, setDiffVersion] = useState<number | null>(null);
   const [autoSave, setAutoSave] = useState(false);
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; description: string; action: string; onConfirm: () => void } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: Node } | null>(null);
   const [editingEdge, setEditingEdge] = useState<{ id: string; x: number; y: number; label: string } | null>(null);
@@ -436,9 +437,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     sourceNodeId: string; sourceHandle: string | null;
   } | null>(null);
 
-  // Undo/redo history
-  const historyStackRef = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([]);
-  const historyIdxRef = useRef(-1);
+  const { canUndo, canRedo, pushHistory, undo: handleUndo, redo: handleRedo } = useUndoHistory(setNodes, setEdges);
   const [isDeployed, setIsDeployed] = useState(false);
 
   const validationState = useMemo(() => getValidationState(nodes, edges), [nodes, edges]);
@@ -667,34 +666,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  function pushHistory(ns: Node[], es: Edge[]) {
-    historyStackRef.current = historyStackRef.current.slice(0, historyIdxRef.current + 1);
-    historyStackRef.current.push({ nodes: ns.map((n) => ({ ...n })), edges: es.map((e) => ({ ...e })) });
-    historyIdxRef.current = historyStackRef.current.length - 1;
-    setCanUndo(historyIdxRef.current > 0);
-    setCanRedo(false);
-  }
-
-  function handleUndo() {
-    if (historyIdxRef.current <= 0) return;
-    historyIdxRef.current--;
-    const snap = historyStackRef.current[historyIdxRef.current]!;
-    setNodes(snap.nodes);
-    setEdges(snap.edges);
-    setCanUndo(historyIdxRef.current > 0);
-    setCanRedo(true);
-  }
-
-  function handleRedo() {
-    if (historyIdxRef.current >= historyStackRef.current.length - 1) return;
-    historyIdxRef.current++;
-    const snap = historyStackRef.current[historyIdxRef.current]!;
-    setNodes(snap.nodes);
-    setEdges(snap.edges);
-    setCanUndo(true);
-    setCanRedo(historyIdxRef.current < historyStackRef.current.length - 1);
-  }
-
   function handleAutoLayout() {
     const positioned = computeAutoLayout(nodesRef.current, edgesRef.current);
     setNodes(positioned);
@@ -729,9 +700,9 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
         );
         setWorkflowName(wf.name);
-        if ((wf as any).deployedAt) {
+        if (wf.deployedAt) {
           setIsDeployed(true);
-          setDeployedAt((wf as any).deployedAt as string);
+          setDeployedAt(wf.deployedAt);
         }
         const savedAutoSave = localStorage.getItem(`linea:autosave:${workflowId}`);
         if (savedAutoSave === 'true') setAutoSave(true);
@@ -766,10 +737,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         const savedCases = (wf.definition as any)?.settings?.testCases as EvalTestCase[] | undefined;
         if (Array.isArray(savedCases)) setTestCases(savedCases);
         // Seed undo history with the loaded state
-        historyStackRef.current = [{ nodes: loadedNodes, edges: loadedEdges }];
-        historyIdxRef.current = 0;
-        setCanUndo(false);
-        setCanRedo(false);
+        pushHistory(loadedNodes, loadedEdges);
         // Fit view after nodes render — use ref so the async closure always sees the current instance
         setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }), 100);
       } catch (err) {
@@ -779,7 +747,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       }
     }
     void fetchWorkflow();
-  }, [workflowId, podId, workspaceId, getToken, setNodes, setEdges]);
+  }, [workflowId, podId, workspaceId, getToken, setNodes, setEdges, pushHistory]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -1369,32 +1337,13 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         if (!resp.ok || !resp.body) return;
 
         const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() ?? '';
-          for (const line of lines) {
-            if (line.startsWith('id: ')) { lastEventId = line.slice(4).trim(); continue; }
-            if (!line.startsWith('data: ')) continue;
-            try {
-              let parsed = JSON.parse(line.slice(6)) as any;
-              // NestJS SSE serializes the full MessageEvent ({data,id}) not just .data
-              if (parsed && typeof parsed === 'object' && !parsed.type && parsed.data && typeof parsed.data === 'object') {
-                parsed = parsed.data;
-              }
-              const evt = parsed as SSEEvent;
-              if (evt.type === 'execution_complete' || evt.type === 'execution_failed') {
-                receivedTerminal = true;
-              }
-              handleSSEEvent(evt, executionId);
-            } catch { /* ignore malformed */ }
+        await consumeSseStream<SSEEvent>(reader, (evt, eventId) => {
+          if (eventId) lastEventId = eventId;
+          if (evt.type === 'execution_complete' || evt.type === 'execution_failed') {
+            receivedTerminal = true;
           }
-        }
+          handleSSEEvent(evt, executionId);
+        });
 
         // Stream ended cleanly — if we missed the terminal event, poll for final status
         if (!receivedTerminal && !ac.signal.aborted) {

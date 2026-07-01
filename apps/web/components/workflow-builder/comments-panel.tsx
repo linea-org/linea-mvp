@@ -10,12 +10,14 @@ import {
 import { Button } from '@linea/ui/components/button';
 import { Textarea } from '@linea/ui/components/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@linea/ui/components/avatar';
+import { Spinner } from '@linea/ui/components/spinner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@linea/ui/components/dropdown-menu';
 import { type Node } from '@xyflow/react';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 
 interface Reaction { emoji: string; count: number; reacted: boolean }
 interface Comment {
@@ -39,6 +41,19 @@ const ELBOW_Y = 20;
 const LINE_X = 8;
 // width of horizontal elbow arm in px
 const ELBOW_W = 12;
+
+function toggleCommentField(
+  list: Comment[],
+  id: string,
+  field: 'resolved' | 'pinned',
+  value: boolean,
+): Comment[] {
+  return list.map((c) =>
+    c.id === id
+      ? { ...c, [field]: value }
+      : { ...c, replies: toggleCommentField(c.replies, id, field, value) },
+  );
+}
 
 function timeAgo(iso: string) {
   const d = Date.now() - new Date(iso).getTime();
@@ -376,8 +391,9 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
         replies: (c.replies ?? []).map(normalise),
       });
       setComments((data ?? []).map(normalise));
-    } catch {
+    } catch (err) {
       setComments([]);
+      toast.error(friendlyApiError(err));
     } finally {
       setLoading(false);
     }
@@ -398,7 +414,9 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
       setBody('');
       setReplyTo(null);
       await load();
-    } catch { /* endpoint may not exist yet */ } finally {
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
       setSubmitting(false);
     }
   }
@@ -406,10 +424,10 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
   async function handleResolve(id: string, resolved: boolean) {
     try {
       await api.patch(`${path}/${id}`, { resolved });
-      const toggle = (c: Comment): Comment =>
-        c.id === id ? { ...c, resolved } : { ...c, replies: c.replies.map(toggle) };
-      setComments((prev) => prev.map(toggle));
-    } catch { /* silently ignore */ }
+      setComments((prev) => toggleCommentField(prev, id, 'resolved', resolved));
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   async function handleDelete(id: string) {
@@ -418,16 +436,18 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
       const remove = (list: Comment[]): Comment[] =>
         list.filter((c) => c.id !== id).map((c) => ({ ...c, replies: remove(c.replies) }));
       setComments((prev) => remove(prev));
-    } catch { /* silently ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   async function handlePin(id: string, pinned: boolean) {
     try {
       await api.patch(`${path}/${id}`, { pinned });
-      const toggle = (c: Comment): Comment =>
-        c.id === id ? { ...c, pinned } : { ...c, replies: c.replies.map(toggle) };
-      setComments((prev) => prev.map(toggle));
-    } catch { /* silently ignore — pin may not be supported yet */ }
+      setComments((prev) => toggleCommentField(prev, id, 'pinned', pinned));
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   async function handleReact(commentId: string, emoji: string) {
@@ -448,7 +468,9 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
         return { ...c, replies: c.replies.map(update) };
       };
       setComments((prev) => prev.map(update));
-    } catch { /* silently ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   function handleReply(id: string, userName: string | null) {
@@ -489,8 +511,9 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
       // 3. Insert the public URL into the comment body
       const label = publicUrl || file.name;
       setBody((b) => b + (b ? '\n' : '') + label);
-    } catch {
-      // Fallback: just insert filename so the user knows what happened
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+      // Fallback: insert filename so the comment still references what was attached
       setBody((b) => b + (b ? ' ' : '') + `[file: ${file.name}]`);
     } finally {
       setUploading(false);
@@ -550,7 +573,7 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <HugeiconsIcon icon={Loading01Icon} className="size-4 animate-spin text-muted-foreground" />
+            <Spinner className="size-4 text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-1.5 text-center">

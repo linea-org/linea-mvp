@@ -84,7 +84,7 @@ function TBtn({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          size={size as any}
+          size={size}
           variant={active ? 'secondary' : variant}
           onClick={onClick}
           disabled={disabled}

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { useApiClient } from '@/hooks/use-api-client';
+import { PageSpinner } from '@linea/ui/components/page-spinner';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -72,7 +73,7 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
   unknown: 'outline',
 };
 
-export default function ConnectionsPage() {
+function ConnectionsPageInner() {
   const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const searchParams = useSearchParams();
@@ -368,5 +369,13 @@ export default function ConnectionsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ConnectionsPage() {
+  return (
+    <Suspense fallback={<PageSpinner />}>
+      <ConnectionsPageInner />
+    </Suspense>
   );
 }

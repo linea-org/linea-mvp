@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useQuery } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import { createApiClient, friendlyApiError } from '@/lib/api';
 import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
+import { PageSpinner } from '@linea/ui/components/page-spinner';
 
 interface PlanInfo {
   key: string;
@@ -49,7 +50,7 @@ const PLAN_LIMITS: Record<string, { executions: string; workflows: string; membe
   enterprise: { executions: 'Unlimited',       workflows: 'Unlimited', members: 'Unlimited' },
 };
 
-export default function BillingPage() {
+function BillingPageInner() {
   const { getToken } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const router = useRouter();
@@ -255,5 +256,13 @@ export default function BillingPage() {
         </a>
       </p>
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<PageSpinner />}>
+      <BillingPageInner />
+    </Suspense>
   );
 }

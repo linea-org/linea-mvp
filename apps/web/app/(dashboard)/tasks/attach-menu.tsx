@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  Add01Icon, Attachment01Icon, WorkflowSquare01Icon, Loading01Icon,
+  Add01Icon, Attachment01Icon, WorkflowSquare01Icon,
   AiBrain01Icon, Database01Icon, LinkSquare01Icon, Settings01Icon,
 } from '@hugeicons/core-free-icons';
 import {
@@ -12,6 +12,7 @@ import {
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from '@linea/ui/components/dropdown-menu';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
+import { Spinner } from '@linea/ui/components/spinner';
 import { CONNECTOR_TYPES } from './constants';
 import type { Attachment } from './types';
 
@@ -55,7 +56,7 @@ export function AttachMenu({
           <DropdownMenuSubContent className="w-52">
             {workflowsLoading ? (
               <DropdownMenuItem disabled>
-                <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+                <Spinner className="size-3.5" />
                 Loading…
               </DropdownMenuItem>
             ) : workflows.length === 0 ? (

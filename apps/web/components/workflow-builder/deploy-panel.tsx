@@ -7,11 +7,13 @@ import {
   CheckmarkCircle01Icon, Alert01Icon, RefreshIcon, EyeIcon, ViewOffIcon,
   CloudUploadIcon, LinkSquare02Icon, AiBrain01Icon, LockIcon, InternetIcon,
 } from '@hugeicons/core-free-icons';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
 import { Switch } from '@linea/ui/components/switch';
 import { Label } from '@linea/ui/components/label';
 import { Separator } from '@linea/ui/components/separator';
+import { Spinner } from '@linea/ui/components/spinner';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@linea/ui/components/select';
@@ -59,7 +61,9 @@ function DeploySection({
       const api = createApiClient(token);
       const data = await api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
       setApiConfig(data);
-    } catch { /* non-critical */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   async function updateApiConfig(patch: Partial<ApiConfig>) {
@@ -74,7 +78,12 @@ function DeploySection({
         { apiEnabled: next.apiEnabled, apiVisibility: next.apiVisibility },
       );
       setApiConfig(updated);
-    } catch { setApiConfig(apiConfig); } finally { setApiSaving(false); }
+    } catch (err) {
+      setApiConfig(apiConfig);
+      toast.error(friendlyApiError(err));
+    } finally {
+      setApiSaving(false);
+    }
   }
 
   async function handleDeploy() {
@@ -225,7 +234,11 @@ function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
       const api = createApiClient(token);
       const data = await api.get<Webhook[]>(`/workspaces/${workspaceId}/pods/${podId}/webhooks`);
       setWebhooks(data);
-    } catch { /* ignore */ } finally { setLoading(false); }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function createWebhook() {
@@ -237,7 +250,11 @@ function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
         { workflowId },
       );
       setWebhooks((prev) => [...prev, created]);
-    } catch { /* ignore */ } finally { setCreating(false); }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function deleteWebhook(id: string) {
@@ -245,7 +262,9 @@ function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
       const api = createApiClient(token);
       await api.delete(`/workspaces/${workspaceId}/pods/${podId}/webhooks/${id}`);
       setWebhooks((prev) => prev.filter((w) => w.id !== id));
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   function copy(text: string, id: string) {
@@ -257,7 +276,7 @@ function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5" />
         Loading…
       </div>
     );
@@ -338,7 +357,11 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
       const api = createApiClient(token);
       const data = await api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
       setConfig(data);
-    } catch { /* ignore */ } finally { setLoading(false); }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function updateConfig(patch: Partial<ApiConfig>) {
@@ -352,7 +375,12 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
         { apiEnabled: next.apiEnabled, apiVisibility: next.apiVisibility },
       );
       setConfig(updated);
-    } catch { setConfig(config); } finally { setSaving(false); }
+    } catch (err) {
+      setConfig(config);
+      toast.error(friendlyApiError(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function rotateKey() {
@@ -364,7 +392,11 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
         {},
       );
       setConfig((c) => ({ ...c, apiKey: res.apiKey }));
-    } catch { /* ignore */ } finally { setRotating(false); }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
+      setRotating(false);
+    }
   }
 
   function copyText(text: string, key: string) {
@@ -380,7 +412,7 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5" />
         Loading…
       </div>
     );
@@ -530,7 +562,11 @@ function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps,
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
       );
       setSupervisorModel(wf.definition?.settings?.supervisorModel ?? '');
-    } catch { /* ignore */ } finally { setLoading(false); }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function save(model: string) {
@@ -550,13 +586,17 @@ function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps,
       );
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch { /* ignore */ } finally { setSaving(false); }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5" />
         Loading…
       </div>
     );

@@ -13,6 +13,7 @@ import {
 import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
+import { Spinner } from '@linea/ui/components/spinner';
 import type { Node, Edge } from '@xyflow/react';
 
 interface VersionEntry {
@@ -124,7 +125,7 @@ export function VersionsPanel({ workspaceId, podId, workflowId, token, onRestore
       <ScrollArea className="flex-1">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-            <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+            <Spinner className="size-3.5" />
           </div>
         ) : versions.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">

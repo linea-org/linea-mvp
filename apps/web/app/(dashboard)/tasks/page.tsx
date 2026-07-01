@@ -17,7 +17,10 @@ import {
 import { usePod } from '@/contexts/space-context';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { useApiClient } from '@/hooks/use-api-client';
+import { friendlyApiError } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
+import { PageSpinner } from '@linea/ui/components/page-spinner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -26,6 +29,7 @@ import { Kbd } from '@linea/ui/components/kbd';
 import { MessageBubble } from './message-bubble';
 import { HistorySidebar } from './history-sidebar';
 import { AttachMenu } from './attach-menu';
+import { useSpeechRecognition } from './use-speech-recognition';
 import {
   API_BASE, MODEL_LIST, MODEL_PROVIDERS, MODELS_BY_PROVIDER,
   SLASH_COMMANDS, PRESETS, TICKER_PROMPTS, PROVIDER_LABELS,
@@ -49,7 +53,6 @@ function TasksPageInner() {
   const [model, setModel] = useState(MODEL_LIST[0]!.id);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down'>>({});
-  const [isListening, setIsListening] = useState(false);
 
   const { data: workflows = [], isLoading: workflowsLoading } = useQuery<{ id: string; name: string }[]>({
     queryKey: ['pod-workflows-list', activeWorkspace?.id, activePod?.id],
@@ -78,8 +81,10 @@ function TasksPageInner() {
   const abortRef       = useRef<AbortController | null>(null);
   const fileInputRef   = useRef<HTMLInputElement>(null);
   const slashScrollRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
+
+  const { isListening, toggle: toggleMic } = useSpeechRecognition((transcript) =>
+    handleInputChange(input ? `${input} ${transcript}` : transcript),
+  );
 
   const hasMessages = messages.length > 0;
 
@@ -100,7 +105,9 @@ function TasksPageInner() {
           createdAt: new Date(r.createdAt).getTime(),
           messages: (r.messages ?? []) as Message[],
         })));
-      } catch { /* ignore */ }
+      } catch (err) {
+        toast.error(friendlyApiError(err));
+      }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace?.id]);
@@ -162,7 +169,9 @@ function TasksPageInner() {
         { threadId: sid, title, messages: msgs },
       );
       setSessions((prev) => prev.map((s) => s.id === sid ? { ...s, dbId: saved.id } : s));
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   function startNewChat() {
@@ -188,7 +197,9 @@ function TasksPageInner() {
       try {
         const api = await getApi();
         await api.delete(`/workspaces/${activeWorkspace.id}/agent/sessions/${session.dbId}`);
-      } catch { /* ignore */ }
+      } catch (err) {
+        toast.error(friendlyApiError(err));
+      }
     }
   }
 
@@ -268,39 +279,6 @@ function TasksPageInner() {
 
   function removeAttachment(id: string) {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
-  }
-
-  function toggleMic() {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const win = window as any;
-    const SpeechRec = win.SpeechRecognition ?? win.webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
-    const recognition = new SpeechRec();
-    recognitionRef.current = recognition;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    recognition.lang = 'en-US';
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    recognition.interimResults = false;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    recognition.maxAlternatives = 1;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    recognition.onresult = (event: { results: { [k: number]: { [k: number]: { transcript: string } } } }) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? '';
-      if (transcript) handleInputChange(input ? `${input} ${transcript}` : transcript);
-    };
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    recognition.onend = () => setIsListening(false);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    recognition.onerror = () => setIsListening(false);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    recognition.start();
-    setIsListening(true);
   }
 
   function handleFeedback(messageId: string, vote: 'up' | 'down') {
@@ -766,7 +744,7 @@ function TasksPageInner() {
 
 export default function TasksPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<PageSpinner />}>
       <TasksPageInner />
     </Suspense>
   );

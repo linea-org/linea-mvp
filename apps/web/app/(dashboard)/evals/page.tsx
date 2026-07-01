@@ -9,7 +9,7 @@ import {
   ArrowDown01Icon, ArrowUp01Icon, Clock01Icon,
 } from '@hugeicons/core-free-icons';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { createApiClient, friendlyApiError, unwrapList } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Badge } from '@linea/ui/components/badge';
 import { Skeleton } from '@linea/ui/components/skeleton';
@@ -73,8 +73,8 @@ export default function EvalsPage() {
       const token = await getToken();
       if (!token) return [];
       const api = createApiClient(token);
-      const res = await api.get<Workflow[]>(`/workspaces/${wsId}/pods/${selectedPodId}/workflows?limit=100`);
-      return Array.isArray(res) ? res : ((res as any)?.workflows ?? []) as Workflow[];
+      const res = await api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${selectedPodId}/workflows?limit=100`);
+      return unwrapList(res, 'workflows');
     },
   });
 

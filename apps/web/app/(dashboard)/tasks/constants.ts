@@ -1,6 +1,6 @@
 import {
   Add01Icon, CloudUploadIcon, Calendar01Icon, Search01Icon, WorkflowSquare01Icon,
-  LinkSquare01Icon, FlowIcon, AiBrain01Icon, Settings01Icon, ArrowDown01Icon,
+  LinkSquare01Icon, FlowIcon, FlowCircleIcon, AiBrain01Icon, Settings01Icon, ArrowDown01Icon,
   HelpCircleIcon, MailSend01Icon, ReloadIcon, SourceCodeSquareIcon, UserGroupIcon,
   Message01Icon, StickyNote01Icon,
 } from '@hugeicons/core-free-icons';
