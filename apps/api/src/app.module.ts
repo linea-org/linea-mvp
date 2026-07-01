@@ -45,6 +45,7 @@ import { WorkspaceThrottlerGuard } from './common/guards/throttler.guard';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller';
 import { ConnectionsModule } from './connections/connections.module';
+import { AIModule } from './agent-chat/ai.module';
 
 @Module({
   imports: [
@@ -110,6 +111,7 @@ import { ConnectionsModule } from './connections/connections.module';
         },
       },
     }),
+
     DatabaseModule,
     AuthModule,
     HealthModule,
@@ -137,6 +139,7 @@ import { ConnectionsModule } from './connections/connections.module';
     ModelsModule,
     AuditModule,
     MailModule,
+    AIModule,
     ConnectionsModule,
   ],
   controllers: [ClerkWebhookController],

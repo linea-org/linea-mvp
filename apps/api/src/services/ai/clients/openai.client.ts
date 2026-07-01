@@ -1,7 +1,6 @@
 import OpenAI from 'openai';
-import { ToolDefinition } from '../tools/definitions';
-import { ChatMessage, CompletionResult, NormalizedToolCall } from '../types';
-import { ModelClient, ModelDefinition } from './interface';
+import { CompletionResult, NormalizedToolCall } from '../types';
+import { ModelChatProps, ModelClient, ModelDefinition } from './interface';
 import { withRetry } from '../helpers';
 import {
   ChatCompletionCreateParamsNonStreaming,
@@ -108,15 +107,17 @@ export class OpenAIClient implements ModelClient {
 
   async chat(
     model: string,
-    messages: ChatMessage[],
-    tools?: ToolDefinition[],
-    temperature?: number,
-    toolChoice?: 'auto' | 'required',
-    maxTokens?: number,
-    system?: string,
-    jsonMode?: boolean,
-    onToken?: (delta: String) => void,
-    opts?: any,
+    {
+      messages,
+      jsonMode,
+      maxTokens,
+      onToken,
+      opts,
+      system,
+      temperature,
+      toolChoice,
+      tools,
+    }: ModelChatProps,
   ): Promise<CompletionResult> {
     if (!this.models.includes(model)) {
       throw new Error(`OpenAI does not support this model: ${model}`);
@@ -188,7 +189,7 @@ export class OpenAIClient implements ModelClient {
           ...options,
           stream: true,
         } as ChatCompletionCreateParamsStreaming,
-        { signal: opts.signal },
+        { signal: opts?.signal },
       );
 
       let text = '';
@@ -227,7 +228,7 @@ export class OpenAIClient implements ModelClient {
             ...options,
             stream: false,
           } as ChatCompletionCreateParamsNonStreaming,
-          { signal: opts.signal },
+          { signal: opts?.signal },
         ),
       );
 

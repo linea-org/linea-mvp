@@ -10,8 +10,16 @@ import type { DrizzleDB } from '@linea/db';
 import { providerConnections } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import type { CreateConnectionDto } from './dto/create-connection.dto';
-import { parseProviderConfig, ProviderConfigMap, ProviderType } from "../common/utils/config-types"
-import { decryptConfig, encryptConfig, EncryptionKeys } from '../common/utils/encryptor';
+import {
+  parseProviderConfig,
+  ProviderConfigMap,
+  ProviderType,
+} from '../common/utils/config-types';
+import {
+  decryptConfig,
+  encryptConfig,
+  EncryptionKeys,
+} from '../common/utils/encryptor';
 
 @Injectable()
 export class ConnectionsService {
@@ -21,22 +29,26 @@ export class ConnectionsService {
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly config: ConfigService,
   ) {
-
     this.encryptionKeys = {
       1: this.config.getOrThrow<string>('ENCRYPTION_KEY_1'), // Current key (latest) make sure it exists
     };
-
   }
 
-  async create(workspaceId: string, provider: ProviderType, dto: CreateConnectionDto) {
+  async create(
+    workspaceId: string,
+    provider: ProviderType,
+    dto: CreateConnectionDto,
+  ) {
     const existing = await this.db
       .select({ id: providerConnections.id })
       .from(providerConnections)
       .where(
-        and(eq(providerConnections.workspaceId, workspaceId), eq(providerConnections.provider, provider)),
+        and(
+          eq(providerConnections.workspaceId, workspaceId),
+          eq(providerConnections.provider, provider),
+        ),
       )
       .limit(1);
-
 
     if (existing.length) {
       throw new ConflictException(
@@ -49,18 +61,27 @@ export class ConnectionsService {
     const key = this.encryptionKeys[this.CURRENT_KEY_VERSION];
 
     if (!key) {
-      throw new Error("Encryption key not found or invalid version");
+      throw new Error('Encryption key not found or invalid version');
     }
 
-    const { encrypted, iv, authTag } = encryptConfig(JSON.stringify(parsedConfig), key);
+    const { encrypted, iv, authTag } = encryptConfig(
+      JSON.stringify(parsedConfig),
+      key,
+    );
 
-
-    const authType = "api_key"; // for now API key on (we don't need this for now)
-
+    const authType = 'api_key'; // for now API key on (we don't need this for now)
 
     const [record] = await this.db
       .insert(providerConnections)
-      .values({ workspaceId, authType, configEncrypted: encrypted, provider, encryptionAuthTag: authTag, encryptionIV: iv, encryptionKeyVersion: this.CURRENT_KEY_VERSION, })
+      .values({
+        workspaceId,
+        authType,
+        configEncrypted: encrypted,
+        provider,
+        encryptionAuthTag: authTag,
+        encryptionIV: iv,
+        encryptionKeyVersion: this.CURRENT_KEY_VERSION,
+      })
       .returning({
         id: providerConnections.id,
       });
@@ -84,11 +105,18 @@ export class ConnectionsService {
     const [row] = await this.db
       .select({ id: providerConnections.id })
       .from(providerConnections)
-      .where(and(eq(providerConnections.id, id), eq(providerConnections.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(providerConnections.id, id),
+          eq(providerConnections.workspaceId, workspaceId),
+        ),
+      )
       .limit(1);
 
     if (!row) throw new NotFoundException(`Secret ${id} not found`);
-    await this.db.delete(providerConnections).where(eq(providerConnections.id, id));
+    await this.db
+      .delete(providerConnections)
+      .where(eq(providerConnections.id, id));
   }
 
   async resolve<T extends ProviderType>(
@@ -115,18 +143,19 @@ export class ConnectionsService {
       return null;
     }
 
-
     const key = this.encryptionKeys[this.CURRENT_KEY_VERSION];
 
     if (!key) {
-      throw new Error("Encryption key not found or invalid version");
+      throw new Error('Encryption key not found or invalid version');
     }
 
-    const decryptedConfig = decryptConfig(row.encrypted, row.iv, row.authTag, key);
+    const decryptedConfig = decryptConfig(
+      row.encrypted,
+      row.iv,
+      row.authTag,
+      key,
+    );
 
     return parseProviderConfig(provider, decryptedConfig);
   }
-
-
-
 }
