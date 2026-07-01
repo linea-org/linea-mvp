@@ -177,4 +177,83 @@ export class AIService {
       throw new Error(`Failed to initialize ai service: ${error}`);
     }
   }
+
+  async initializeWithSys(provider: AIProviderType): Promise<ModelClient> {
+    try {
+      switch (provider) {
+        case 'openai': {
+          const config = this.systemDefault.openai;
+          if (config.apiKey.length == 0) {
+            throw new Error(
+              'Unable to get OpenAI API in workplace config and system defaults.',
+            );
+          }
+
+          return new OpenAIClient(config.apiKey);
+        }
+
+        case 'anthropic': {
+          const config = this.systemDefault.anthropic;
+
+          if (config.apiKey.length == 0) {
+            throw new Error(
+              'Unable to get Anthropic API in workplace config and system defaults.',
+            );
+          }
+
+          return new AnthropicClient(config.apiKey);
+        }
+
+        case 'groq': {
+          const config = this.systemDefault.groq;
+
+          if (config.apiKey.length == 0) {
+            throw new Error(
+              'Unable to get Groq API in workplace config and system defaults.',
+            );
+          }
+
+          return new GroqClient(config.apiKey);
+        }
+        case 'google': {
+          const config = this.systemDefault.google;
+
+          if (config.apiKey.length == 0) {
+            throw new Error(
+              'Unable to get Google Gemini API in workplace config and system defaults.',
+            );
+          }
+
+          return new GoogleClient(config.apiKey);
+        }
+        case 'xai': {
+          const config = this.systemDefault.xai;
+
+          if (config.apiKey.length == 0) {
+            throw new Error(
+              'Unable to get xAI API in workplace config and system defaults.',
+            );
+          }
+
+          return new XAIClient(config.apiKey);
+        }
+        case 'ollama': {
+          const config = this.systemDefault.ollama;
+
+          if (config.host.length == 0) {
+            throw new Error(
+              'Unable to get Ollama host in workplace config and system defaults.',
+            );
+          }
+
+          return new OllamaClient('ollama', config.host);
+        }
+        default: {
+          throw new Error('Unsupported Provider');
+        }
+      }
+    } catch (error) {
+      throw new Error(`Failed to initialize ai service: ${error}`);
+    }
+  }
 }

@@ -2,13 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MemoryService } from './memory.service';
 import { MemoryController } from './memory.controller';
-import { EmbeddingService } from './embedding.service';
 import { ExtractionService } from './extraction.service';
+import { AIModule } from 'src/agent-chat/ai.module';
 
 @Module({
-  imports: [ConfigModule],
-  providers: [MemoryService, EmbeddingService, ExtractionService],
+  imports: [ConfigModule, AIModule],
+  providers: [MemoryService, ExtractionService],
   controllers: [MemoryController],
-  exports: [MemoryService, EmbeddingService, ExtractionService],
+  exports: [MemoryService, ExtractionService],
 })
 export class MemoryModule {}

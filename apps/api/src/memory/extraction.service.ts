@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { AIService } from 'src/services/ai/ai.service';
 
 export interface ExtractedFact {
   content: string;
@@ -12,7 +12,7 @@ const SYSTEM_PROMPT = `Extract atomic facts from the text. Each fact must be:
 - A single self-contained statement
 - Pronouns resolved using context
 - Classified: fact | preference | event | profile | system
-- Given confidence 0.0–1.0
+- Given confidence 0.0-1.0
 - Given eventDate (ISO 8601) if applicable, otherwise omit the field
 
 Return ONLY a JSON array (no markdown, no explanation):
@@ -21,39 +21,21 @@ Return ONLY a JSON array (no markdown, no explanation):
 @Injectable()
 export class ExtractionService {
   private readonly logger = new Logger(ExtractionService.name);
-  private readonly apiKey: string | undefined;
 
-  constructor(private readonly config: ConfigService) {
-    this.apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
-    if (!this.apiKey) {
-      this.logger.warn(
-        'ANTHROPIC_API_KEY not set — extraction will return content as single fact',
-      );
-    }
-  }
+  constructor(private ai: AIService) {}
 
   async extract(content: string): Promise<ExtractedFact[]> {
-    if (!this.apiKey) {
-      return [{ content, factType: 'fact', confidence: 1.0 }];
-    }
-
     try {
-      const Anthropic = (await import('@anthropic-ai/sdk')).default;
-      const client = new Anthropic({ apiKey: this.apiKey });
-
-      const message = await client.messages.create({
-        model: 'claude-haiku-4-5',
-        max_tokens: 1024,
+      // default
+      const client = await this.ai.initializeWithSys('google');
+      const response = await client.chat('gemini-2.0-flash-lite', {
+        maxTokens: 1024,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content }],
+        jsonMode: true,
       });
 
-      const text = message.content
-        .filter((b) => b.type === 'text')
-        .map((b) => (b as { type: 'text'; text: string }).text)
-        .join('');
-
-      const parsed = JSON.parse(text) as unknown;
+      const parsed = JSON.parse(response.text) as unknown;
       if (!Array.isArray(parsed))
         return [{ content, factType: 'fact', confidence: 1.0 }];
 

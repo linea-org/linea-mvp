@@ -10,6 +10,9 @@ const SUPPORTS_DIMENSION_PARAM = new Set([
   'text-embedding-3-large',
 ]);
 
+/**
+ * @deprecated use [AIService]
+ */
 @Injectable()
 export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
