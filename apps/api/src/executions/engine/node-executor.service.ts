@@ -435,7 +435,6 @@ export class NodeExecutorService {
 
         const r = await executeRetrieverNode(nodeData, state, {
           query: async (q, kbId, topK) => {
-            // ── 3-level settings cascade ───────────────────────────────────────
             //   nodeData.[setting] → kbSettings.[setting] → wsSettings → system default
             const [kbRow] = await this.db
               .select({ settings: knowledgeBases.settings })
@@ -473,7 +472,6 @@ export class NodeExecutorService {
               chunkIndex: number | null;
             };
 
-            // ── Run vector + FTS in parallel ───────────────────────────────────
             const [vectorHits, ftsHits] = await Promise.all([
               // Vector arm (pgvector HNSW)
               queryEmbedding
@@ -520,7 +518,6 @@ export class NodeExecutorService {
 
             if (vectorHits.length === 0 && ftsHits.length === 0) return [];
 
-            // ── Reciprocal Rank Fusion — vector 0.7, BM25 0.3 ────────────────
             // score = Σ weight / (60 + rank_i)   k=60 is the standard RRF constant
             const scores = new Map<string, number>();
             const docMap = new Map<string, RagHit>();
@@ -539,7 +536,6 @@ export class NodeExecutorService {
               .slice(0, enableRerank ? rerankTopK : topK)
               .map(([id]) => docMap.get(id)!);
 
-            // ── Optional Cohere Rerank v3.5 — top-50 → top-K ─────────────────
             let ranked = merged;
             if (enableRerank) {
               const cohereKey = await this.memoryService.loadApiKey(
@@ -581,7 +577,6 @@ export class NodeExecutorService {
               ranked = merged.slice(0, topK);
             }
 
-            // ── Optional context expansion — fetch chunk X-1 and X+1 ─────────
             if (!expandContext) {
               return ranked.map(({ content, metadata }) => ({
                 content,

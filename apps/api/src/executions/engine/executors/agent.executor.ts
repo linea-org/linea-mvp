@@ -71,8 +71,6 @@ function wrapOnToken(
   };
 }
 
-// ─── Provider fallback helpers ────────────────────────────────────────────────
-
 function hasApiKey(provider: ModelProvider, apiKeys: ModelApiKeys): boolean {
   if (provider === 'ollama') return true;
   const map: Record<string, keyof ModelApiKeys> = {
@@ -252,15 +250,12 @@ export async function executeAgentNode(
     nodeData.toolApprovals ?? {};
   const tools = getEnabledTools(toolNames, approvalOverrides);
 
-  // ─── Build initial messages ────────────────────────────────────────────────
-
   const instructions = substituteVariables(
     nodeData.instructions || 'Process the input',
     state,
   );
   const lastOutput = state.variables?.lastOutput;
 
-  // ── Long-term memory: load recent facts and inject into context ─────────
   let longTermMemoryCtx = '';
   if (ltmCtx && (nodeData.enableLongTermMemory ?? false)) {
     try {
@@ -343,8 +338,6 @@ export async function executeAgentNode(
     messages.push({ role: 'user', content: userContent });
   }
 
-  // ─── Agentic loop ──────────────────────────────────────────────────────────
-
   const totalUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
   const toolCallLog: AgentResult['__toolCallLog'] = [];
   const variableUpdates: Record<string, unknown> = {};
@@ -390,7 +383,6 @@ export async function executeAgentNode(
     totalUsage.total_tokens +=
       response.usage.inputTokens + response.usage.outputTokens;
 
-    // ── No tool calls — agent has a final answer ─────────────────────────────
     if (!response.toolCalls?.length || response.stopReason === 'end_turn') {
       // Validate JSON when structured output is required; retry once on failure
       if (structuredSchema) {
@@ -431,7 +423,6 @@ export async function executeAgentNode(
       );
     }
 
-    // ── Has tool calls — process them ────────────────────────────────────────
     messages.push({
       role: 'assistant',
       content: response.text,
@@ -452,7 +443,6 @@ export async function executeAgentNode(
     );
 
     if (hasInterruptingTool) {
-      // ── Sequential path: required for interrupt() correctness ──────────────
       for (const toolCall of response.toolCalls) {
         const toolDef = tools.find((t) => t.name === toolCall.name);
 
@@ -577,8 +567,6 @@ export async function executeAgentNode(
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function tryParseJson(text: string): unknown {
   try {
     const cleaned = text
@@ -626,8 +614,6 @@ function buildResult(
     __provider: modelDef.provider,
   };
 }
-
-// ─── Context compaction ───────────────────────────────────────────────────────
 
 const TOOL_RESULT_MAX_CHARS = 8_000; // ~2 000 tokens; prevents single large API response blowing context
 const SUMMARY_KEEP_LAST = 6; // always keep this many recent non-system messages verbatim

@@ -17,8 +17,6 @@ import { MODEL_REGISTRY } from '../executions/engine/models/registry';
 import type { ModelApiKeys } from '../executions/engine/models/client.factory';
 import type { ModelProvider } from '../executions/engine/models/registry';
 
-/* ─── Input Enrichment Helpers ───────────────────────────────────────────── */
-
 /** Scan a workflow definition for all {{input.X}} variable references. */
 function extractInputVars(definition: unknown): string[] {
   const json = JSON.stringify(definition ?? {});
@@ -141,7 +139,6 @@ export class PublicRunService {
       );
     }
 
-    // ── Smart input enrichment ───────────────────────────────────────────
     const enrichedInput = await this.enrichInput(
       input,
       row.definition,

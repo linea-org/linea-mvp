@@ -34,8 +34,6 @@ import type { User, WorkspaceMember } from '@linea/db';
 export class WorkspacesController {
   constructor(private readonly service: WorkspacesService) {}
 
-  // ─── Workspace CRUD ────────────────────────────────────────────────────────
-
   @Post()
   @ApiOperation({ summary: 'Create a workspace' })
   create(@CurrentUser() user: User, @Body() dto: CreateWorkspaceDto) {
@@ -80,8 +78,6 @@ export class WorkspacesController {
     return this.service.delete(id, membership);
   }
 
-  // ─── Settings ──────────────────────────────────────────────────────────────
-
   @Get(':id/settings')
   @UseGuards(WorkspaceGuard)
   @ApiOperation({ summary: 'Get workspace AI settings' })
@@ -103,8 +99,6 @@ export class WorkspacesController {
   ) {
     return this.service.updateSettings(id, membership, dto);
   }
-
-  // ─── Members ───────────────────────────────────────────────────────────────
 
   @Get(':id/members')
   @UseGuards(WorkspaceGuard)
@@ -138,8 +132,6 @@ export class WorkspacesController {
   ) {
     return this.service.removeMember(id, userId, membership);
   }
-
-  // ─── Invites ───────────────────────────────────────────────────────────────
 
   @Post(':id/invites')
   @RequireRole('admin')

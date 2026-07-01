@@ -68,7 +68,6 @@ import {
   SquareLock01Icon,
   AiBrain01Icon,
   GlobalIcon,
-  ComputerCloudIcon,
   Invoice03Icon,
   Home01Icon,
   CheckmarkCircle01Icon,
@@ -312,7 +311,6 @@ const SETTINGS_NAV_SECTIONS = [
       { href: '/settings/model-keys',  label: 'Model Keys',        icon: AiBrain01Icon    },
       { href: '/settings/models',      label: 'Model Preferences', icon: AiMagicIcon      },
       { href: '/settings/connections', label: 'Connections',       icon: GlobalIcon        },
-      { href: '/settings/mcp-servers', label: 'MCP Servers',       icon: ComputerCloudIcon },
     ],
   },
 ];

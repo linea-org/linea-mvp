@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
+import { formatDurationLong as formatDuration } from '@/lib/format';
 import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
@@ -127,13 +128,6 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
 };
 
 const LIVE_STATUSES = new Set(['queued', 'running', 'suspended']);
-
-function formatDuration(ms: number | undefined | null) {
-  if (ms == null) return null;
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
-}
 
 function NodeStatusIcon({ status }: { status: string }) {
   if (status === 'completed') {
@@ -685,106 +679,71 @@ function LogSettingsDialog({
 
 export default function ExecutionDetailPage() {
   const { podId, id } = useParams<{ podId: string; id: string }>();
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
 
-  const [execution, setExecution] = useState<Execution | null>(null);
-  const [logs, setLogs] = useState<ExecutionLog[]>([]);
-  const [workflow, setWorkflow] = useState<WorkflowInfo | null>(null);
-  const [loading, setLoading] = useState(true);
   const [approvalComment, setApprovalComment] = useState('');
   const [humanAnswer, setHumanAnswer] = useState('');
-  const [approving, setApproving] = useState(false);
   const [replaying, setReplaying] = useState(false);
   const [logSettingsOpen, setLogSettingsOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [timelineView, setTimelineView] = useState<'list' | 'gantt'>('list');
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number | null>(null);
-  const [stuckBanner, setStuckBanner] = useState(false);
 
-  async function loadData() {
-    if (!activeWorkspace) return null;
-    try {
-      const token = await getToken();
-      if (!token) return null;
-      const api = createApiClient(token);
-      const base = `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}`;
-      const [ex, logRows] = await Promise.all([
+  const executionKey = ['execution', wsId, podId, id];
+
+  const { data: execData, isLoading: loading } = useQuery<{ execution: Execution; logs: ExecutionLog[] } | null>({
+    queryKey: executionKey,
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const base = `/workspaces/${wsId}/pods/${podId}/executions/${id}`;
+      const [execution, logs] = await Promise.all([
         api.get<Execution>(base),
         api.get<ExecutionLog[]>(`${base}/logs`),
       ]);
-      setExecution(ex);
-      setLogs(logRows);
-      return ex;
-    } catch {
-      return null;
-    }
-  }
+      return { execution, logs };
+    },
+    refetchInterval: (query) => {
+      const ex = query.state.data?.execution;
+      if (!ex || !LIVE_STATUSES.has(ex.status)) { pollStartRef.current = null; return false; }
+      if (pollStartRef.current == null) pollStartRef.current = Date.now();
+      if (Date.now() - pollStartRef.current >= 30 * 60 * 1000) return false;
+      return 3000;
+    },
+  });
 
-  async function loadWorkflow(workflowId: string) {
-    if (!activeWorkspace) return;
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const wf = await api.get<WorkflowInfo>(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${workflowId}`,
-      );
-      setWorkflow(wf);
-    } catch {
-      // workflow may have been deleted — non-fatal
-    }
-  }
+  const execution = execData?.execution ?? null;
+  const logs = execData?.logs ?? [];
+  const stuckBanner = !!execution && LIVE_STATUSES.has(execution.status) &&
+    pollStartRef.current != null && Date.now() - pollStartRef.current >= 30 * 60 * 1000;
 
-  useEffect(() => {
-    if (wsLoading || !activeWorkspace) return;
-
-    setStuckBanner(false);
-    void loadData().then((ex) => {
-      setLoading(false);
-      if (ex?.workflowId) void loadWorkflow(ex.workflowId);
-      if (ex && LIVE_STATUSES.has(ex.status)) {
-        pollStartRef.current = Date.now();
-        pollRef.current = setInterval(async () => {
-          if (Date.now() - pollStartRef.current! >= 30 * 60 * 1000) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-            setStuckBanner(true);
-            return;
-          }
-          const updated = await loadData();
-          if (updated && !LIVE_STATUSES.has(updated.status)) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-          }
-        }, 3000);
+  const { data: workflow = null } = useQuery<WorkflowInfo | null>({
+    queryKey: ['pod-workflow', wsId, podId, execution?.workflowId],
+    enabled: !!wsId && !!execution?.workflowId,
+    queryFn: async () => {
+      const api = await getApi();
+      try {
+        return await api.get<WorkflowInfo>(`/workspaces/${wsId}/pods/${podId}/workflows/${execution!.workflowId}`);
+      } catch {
+        return null; // workflow may have been deleted — non-fatal
       }
-    });
+    },
+  });
 
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspace, wsLoading, podId, id]);
-
-  async function manualRefresh() {
-    const updated = await loadData();
-    if (updated && !LIVE_STATUSES.has(updated.status)) {
-      setStuckBanner(false);
-    }
+  function manualRefresh() {
+    void queryClient.invalidateQueries({ queryKey: executionKey });
   }
 
   async function replay(fromNodeId?: string) {
-    if (!activeWorkspace) return;
     setReplaying(true);
     try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+      const api = await getApi();
       const newExec = await api.post<{ id: string }>(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}/replay`,
+        `/workspaces/${wsId}/pods/${podId}/executions/${id}/replay`,
         fromNodeId ? { fromNodeId } : {},
       );
       router.push(`/pods/${podId}/executions/${newExec.id}`);
@@ -793,59 +752,42 @@ export default function ExecutionDetailPage() {
     }
   }
 
+  const respondMutation = useMutation({
+    mutationFn: async (body: { approved?: boolean; comment?: string; answer?: string }) => {
+      const api = await getApi();
+      await api.patch(`/workspaces/${wsId}/pods/${podId}/executions/${id}/respond`, body);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: executionKey }),
+  });
+
   async function respond(approved: boolean) {
-    if (!activeWorkspace) return;
-    setApproving(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.patch(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}/respond`,
-        { approved, comment: approvalComment.trim() || undefined },
-      );
-      setApprovalComment('');
-      void loadData();
-    } finally {
-      setApproving(false);
-    }
+    await respondMutation.mutateAsync({ approved, comment: approvalComment.trim() || undefined });
+    setApprovalComment('');
   }
 
   async function respondWithAnswer() {
-    if (!activeWorkspace || !humanAnswer.trim()) return;
-    setApproving(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.patch(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}/respond`,
-        { answer: humanAnswer.trim() },
-      );
-      setHumanAnswer('');
-      void loadData();
-    } finally {
-      setApproving(false);
-    }
+    if (!humanAnswer.trim()) return;
+    await respondMutation.mutateAsync({ answer: humanAnswer.trim() });
+    setHumanAnswer('');
   }
 
+  const approving = respondMutation.isPending;
+
   async function saveLogSettings(logLevel: string, logRetentionDays: number | null) {
-    if (!activeWorkspace || !execution?.workflowId) return;
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
+    if (!execution?.workflowId) return;
+    const api = await getApi();
     const updated = await api.patch<WorkflowInfo>(
-      `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${execution.workflowId}/log-settings`,
+      `/workspaces/${wsId}/pods/${podId}/workflows/${execution.workflowId}/log-settings`,
       { logLevel, logRetentionDays },
     );
-    setWorkflow(updated);
+    queryClient.setQueryData(['pod-workflow', wsId, podId, execution.workflowId], updated);
   }
 
   const nodeMap = new Map<string, WorkflowNode>(
     (workflow?.definition?.nodes ?? []).map((n) => [n.id, n]),
   );
 
-  const pendingInterrupt = (execution?.variables as any)?.__pendingInterrupt as PendingInterrupt | undefined;
+  const pendingInterrupt = execution?.variables?.['__pendingInterrupt'] as PendingInterrupt | undefined;
   const interruptType = pendingInterrupt?.type ?? 'approval';
   const interruptPrompt = pendingInterrupt?.question ?? pendingInterrupt?.message ?? pendingInterrupt?.prompt;
 

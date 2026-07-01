@@ -622,7 +622,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
     const mod = navigator.platform.toUpperCase().includes('MAC') ? e.metaKey : e.ctrlKey;
 
-    // ── Modifier shortcuts (always active) ─────────────────────────────────
     if (mod && e.key === 's') { e.preventDefault(); void handleSaveRef.current(); return; }
     if (mod && e.key === 'Enter') { e.preventDefault(); void handleRunRef.current(); return; }
     if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); return; }
@@ -633,7 +632,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     if (mod && e.key === 'f') { e.preventDefault(); setSearchOpen((v) => !v); setSearchQuery(''); return; }
     if (mod && e.key === 'k' && !e.shiftKey) return; // handled globally
 
-    // ── Non-input single-key shortcuts ──────────────────────────────────────
     if (!inInput) {
       if (e.key === 'Escape') {
         if (searchOpen) { setSearchOpen(false); setSearchQuery(''); return; }
@@ -1012,7 +1010,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setSelectedNode(null);
   }, [setNodes, setEdges]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Context menu actions ─────────────────────────────────────── */
   function duplicateNode(node: Node) {
     const newNode: Node = {
       ...node,
@@ -1051,7 +1048,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setContextMenu({ x: e.clientX, y: e.clientY, node });
   }, []);
 
-  /* ── Edge label editing ───────────────────────────────────────── */
   const onEdgeDoubleClick: EdgeMouseHandler = useCallback((e, edge) => {
     setEditingEdge({ id: edge.id, x: e.clientX, y: e.clientY, label: String(edge.label ?? '') });
   }, []);
@@ -1070,7 +1066,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setEditingEdge(null);
   }
 
-  /* ── Multi-select operations ──────────────────────────────────── */
   function duplicateSelected() {
     const selected = nodes.filter((n) => n.selected);
     const newNodes = selected.map((n) => ({
@@ -1182,7 +1177,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setContextMenu(null);
   }
 
-  /* ── Test single node ─────────────────────────────────────────── */
   async function runTestNode() {
     if (!testNodeDialog) return;
     setTestNodeRunning(true);
@@ -2080,7 +2074,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
       </div>
-
 
       {/* Diff viewer */}
       {diffVersion !== null && (

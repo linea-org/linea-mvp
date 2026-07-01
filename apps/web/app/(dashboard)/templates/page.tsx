@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { usePod } from '@/contexts/space-context';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -124,14 +124,12 @@ const NODE_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function TemplatesPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace } = useWorkspace();
   const { pods, activePod } = usePod();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  const [allTemplates, setAllTemplates] = useState<Template[]>([]);
-  const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'internal' | 'community'>('internal');
@@ -143,35 +141,30 @@ export default function TemplatesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [targetPodId, setTargetPodId] = useState<string>('');
   const [workflowName, setWorkflowName] = useState('');
-  const [cloning, setCloning] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const [rows, upvoted] = await Promise.all([
-        api.get<Template[]>('/templates'),
-        api.get<string[]>('/templates/me/upvoted').catch(() => [] as string[]),
-      ]);
-      setAllTemplates(rows);
-      setUpvotedIds(new Set(upvoted));
-    } finally {
-      setLoading(false);
-    }
-  }, [getToken]);
+  const { data: allTemplates = [], isLoading: loading } = useQuery<Template[]>({
+    queryKey: ['templates'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Template[]>('/templates');
+    },
+  });
 
-  useEffect(() => { void loadData(); }, [loadData]);
+  const { data: upvotedIds = new Set<string>() } = useQuery<Set<string>>({
+    queryKey: ['templates-upvoted'],
+    queryFn: async () => {
+      const api = await getApi();
+      const upvoted = await api.get<string[]>('/templates/me/upvoted').catch(() => [] as string[]);
+      return new Set(upvoted);
+    },
+  });
 
   async function openPreview(tpl: Template) {
     setPreviewTemplate(tpl);
     if (!tpl.definition) {
       setPreviewLoading(true);
       try {
-        const token = await getToken();
-        if (!token) return;
-        const api = createApiClient(token);
+        const api = await getApi();
         const full = await api.get<Template>(`/templates/${tpl.id}`);
         setPreviewTemplate(full);
       } finally {
@@ -187,69 +180,58 @@ export default function TemplatesPage() {
     setUseDialogOpen(true);
   }
 
-  async function handleUseTemplate() {
-    if (!selectedTemplate || !activeWorkspace || !targetPodId) return;
-    setCloning(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const wf = await api.post<{ id: string }>(
+  const useTemplate = useMutation({
+    mutationFn: async () => {
+      if (!selectedTemplate || !activeWorkspace || !targetPodId) throw new Error('Missing selection');
+      const api = await getApi();
+      return api.post<{ id: string }>(
         `/workspaces/${activeWorkspace.id}/pods/${targetPodId}/workflows/from-template/${selectedTemplate.id}`,
         { name: workflowName.trim() || selectedTemplate.name },
       );
+    },
+    onSuccess: (wf) => {
       setUseDialogOpen(false);
       setPreviewTemplate(null);
       router.push(`/pods/${targetPodId}/workflows/${wf.id}`);
-    } finally {
-      setCloning(false);
-    }
-  }
+    },
+  });
 
-  async function toggleUpvote(tpl: Template, e: React.MouseEvent) {
-    e.stopPropagation();
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
-    const isUpvoted = upvotedIds.has(tpl.id);
-
-    setUpvotedIds((prev) => {
-      const next = new Set(prev);
-      if (isUpvoted) next.delete(tpl.id); else next.add(tpl.id);
-      return next;
-    });
-    setAllTemplates((prev) =>
-      prev.map((t) =>
-        t.id === tpl.id ? { ...t, upvotes: t.upvotes + (isUpvoted ? -1 : 1) } : t,
-      ),
-    );
-
-    try {
-      const result = await api.post<{ upvoted: boolean; upvotes: number }>(
-        `/templates/${tpl.id}/upvote`,
-        {},
-      );
-      setUpvotedIds((prev) => {
+  const toggleUpvote = useMutation({
+    mutationFn: async (tpl: Template) => {
+      const api = await getApi();
+      return api.post<{ upvoted: boolean; upvotes: number }>(`/templates/${tpl.id}/upvote`, {});
+    },
+    onMutate: async (tpl) => {
+      const isUpvoted = upvotedIds.has(tpl.id);
+      queryClient.setQueryData<Set<string>>(['templates-upvoted'], (prev = new Set()) => {
+        const next = new Set(prev);
+        if (isUpvoted) next.delete(tpl.id); else next.add(tpl.id);
+        return next;
+      });
+      queryClient.setQueryData<Template[]>(['templates'], (prev = []) =>
+        prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: t.upvotes + (isUpvoted ? -1 : 1) } : t)));
+      return { isUpvoted };
+    },
+    onSuccess: (result, tpl) => {
+      queryClient.setQueryData<Set<string>>(['templates-upvoted'], (prev = new Set()) => {
         const next = new Set(prev);
         if (result.upvoted) next.add(tpl.id); else next.delete(tpl.id);
         return next;
       });
-      setAllTemplates((prev) =>
-        prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: result.upvotes } : t)),
-      );
-    } catch {
-      setUpvotedIds((prev) => {
+      queryClient.setQueryData<Template[]>(['templates'], (prev = []) =>
+        prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: result.upvotes } : t)));
+    },
+    onError: (_err, tpl, context) => {
+      if (!context) return;
+      queryClient.setQueryData<Set<string>>(['templates-upvoted'], (prev = new Set()) => {
         const next = new Set(prev);
-        if (isUpvoted) next.add(tpl.id); else next.delete(tpl.id);
+        if (context.isUpvoted) next.add(tpl.id); else next.delete(tpl.id);
         return next;
       });
-      setAllTemplates((prev) =>
-        prev.map((t) =>
-          t.id === tpl.id ? { ...t, upvotes: t.upvotes + (isUpvoted ? 1 : -1) } : t,
-        ),
-      );
-    }
-  }
+      queryClient.setQueryData<Template[]>(['templates'], (prev = []) =>
+        prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: t.upvotes + (context.isUpvoted ? 1 : -1) } : t)));
+    },
+  });
 
   // Split by source
   const internalAll = allTemplates.filter((t) => t.source === 'internal');
@@ -366,7 +348,7 @@ export default function TemplatesPage() {
                 isInternal={activeTab === 'internal'}
                 onPreview={openPreview}
                 onUse={openUseDialog}
-                onToggleUpvote={toggleUpvote}
+                onToggleUpvote={toggleUpvote.mutate}
               />
             </section>
           )}
@@ -381,14 +363,13 @@ export default function TemplatesPage() {
                 isInternal={activeTab === 'internal'}
                 onPreview={openPreview}
                 onUse={openUseDialog}
-                onToggleUpvote={toggleUpvote}
+                onToggleUpvote={toggleUpvote.mutate}
               />
             </section>
           )}
         </>
       )}
 
-      {/* ── Preview modal ─────────────────────────────────────────────────── */}
       <Dialog open={!!previewTemplate} onOpenChange={(o) => { if (!o) setPreviewTemplate(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -499,7 +480,6 @@ export default function TemplatesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Use template dialog ───────────────────────────────────────────── */}
       <Dialog open={useDialogOpen} onOpenChange={setUseDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -571,10 +551,10 @@ export default function TemplatesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setUseDialogOpen(false)}>Cancel</Button>
             <Button
-              disabled={!targetPodId || !workflowName.trim() || cloning || pods.length === 0}
-              onClick={() => void handleUseTemplate()}
+              disabled={!targetPodId || !workflowName.trim() || useTemplate.isPending || pods.length === 0}
+              onClick={() => useTemplate.mutate()}
             >
-              {cloning ? 'Creating…' : 'Create workflow'}
+              {useTemplate.isPending ? 'Creating…' : 'Create workflow'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -596,7 +576,7 @@ function TemplateGrid({
   isInternal: boolean;
   onPreview: (t: Template) => void;
   onUse: (t: Template) => void;
-  onToggleUpvote: (t: Template, e: React.MouseEvent) => void;
+  onToggleUpvote: (t: Template) => void;
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -628,7 +608,7 @@ function TemplateCard({
   isInternal: boolean;
   onPreview: (t: Template) => void;
   onUse: (t: Template) => void;
-  onToggleUpvote: (t: Template, e: React.MouseEvent) => void;
+  onToggleUpvote: (t: Template) => void;
 }) {
   const colorClass = CATEGORY_COLORS[template.category] ?? 'bg-gray-100 text-gray-700';
   const hasPrereqs = template.prerequisites && template.prerequisites.length > 0;
@@ -691,7 +671,7 @@ function TemplateCard({
             )}
             {/* Upvote button */}
             <button
-              onClick={(e) => { e.stopPropagation(); onToggleUpvote(template, e); }}
+              onClick={(e) => { e.stopPropagation(); onToggleUpvote(template); }}
               className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors shrink-0 ${
                 isUpvoted
                   ? 'bg-primary/10 text-primary font-medium'

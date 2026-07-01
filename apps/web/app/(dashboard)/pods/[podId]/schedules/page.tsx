@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -93,47 +93,38 @@ function formatRelative(iso: string | null): string {
 
 export default function SchedulesPage() {
   const { podId } = useParams<{ podId: string }>();
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Schedule | null>(null);
   const [form, setForm] = useState<FormState>(BLANK);
   const [inputPairs, setInputPairs] = useState<InputPair[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [toggling, setToggling] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Schedule | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
   const [page, setPage] = useState(1);
 
-  async function load() {
-    if (!activeWorkspace) return;
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const base = `/workspaces/${activeWorkspace.id}/pods/${podId}`;
-      const [sched, wfsResult] = await Promise.all([
-        api.get<Schedule[]>(`${base}/schedules`),
-        api.get<Workflow[]>(`${base}/workflows`),
-      ]);
-      setSchedules(Array.isArray(sched) ? sched : []);
-      setWorkflows(Array.isArray(wfsResult) ? wfsResult : ((wfsResult as any)?.workflows ?? []));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: schedules = [], isLoading: loading } = useQuery<Schedule[]>({
+    queryKey: ['schedules', wsId, podId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const sched = await api.get<Schedule[]>(`/workspaces/${wsId}/pods/${podId}/schedules`);
+      return Array.isArray(sched) ? sched : [];
+    },
+  });
 
-  useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
-    void load();
-  }, [activeWorkspace, wsLoading, podId]);
+  const { data: workflows = [] } = useQuery<Workflow[]>({
+    queryKey: ['workflows', wsId, podId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const result = await api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${podId}/workflows`);
+      return Array.isArray(result) ? result : result.workflows;
+    },
+  });
 
   function openCreate() {
     setEditTarget(null);
@@ -149,70 +140,53 @@ export default function SchedulesPage() {
     setDialogOpen(true);
   }
 
-  async function handleSave() {
-    if (!activeWorkspace || !form.cronExpr.trim()) return;
-    setSaving(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const base = `/workspaces/${activeWorkspace.id}/pods/${podId}/schedules`;
+  const saveSchedule = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      const base = `/workspaces/${wsId}/pods/${podId}/schedules`;
       const input = Object.fromEntries(
         inputPairs.filter((p) => p.key.trim()).map((p) => [p.key.trim(), p.value]),
       );
       if (editTarget) {
-        const updated = await api.patch<Schedule>(`${base}/${editTarget.id}`, {
-          cronExpr: form.cronExpr.trim(),
-          input,
-        });
-        setSchedules((prev) => prev.map((s) => s.id === updated.id ? updated : s));
-      } else {
-        if (!form.workflowId) return;
-        const created = await api.post<Schedule>(base, {
-          workflowId: form.workflowId,
-          cronExpr: form.cronExpr.trim(),
-          input,
-          enabled: true,
-        });
-        setSchedules((prev) => [created, ...prev]);
+        return api.patch<Schedule>(`${base}/${editTarget.id}`, { cronExpr: form.cronExpr.trim(), input });
       }
+      if (!form.workflowId) throw new Error('No workflow selected');
+      return api.post<Schedule>(base, {
+        workflowId: form.workflowId,
+        cronExpr: form.cronExpr.trim(),
+        input,
+        enabled: true,
+      });
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<Schedule[]>(['schedules', wsId, podId], (prev = []) =>
+        editTarget ? prev.map((s) => (s.id === result.id ? result : s)) : [result, ...prev]);
       setDialogOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  }
+    },
+  });
 
-  async function handleToggle(schedule: Schedule) {
-    if (!activeWorkspace) return;
-    setToggling(schedule.id);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const updated = await api.patch<Schedule>(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/schedules/${schedule.id}`,
-        { enabled: !schedule.enabled },
-      );
-      setSchedules((prev) => prev.map((s) => s.id === updated.id ? updated : s));
-    } finally {
-      setToggling(null);
-    }
-  }
+  const toggleSchedule = useMutation({
+    mutationFn: async (schedule: Schedule) => {
+      const api = await getApi();
+      return api.patch<Schedule>(`/workspaces/${wsId}/pods/${podId}/schedules/${schedule.id}`, { enabled: !schedule.enabled });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Schedule[]>(['schedules', wsId, podId], (prev = []) =>
+        prev.map((s) => (s.id === updated.id ? updated : s)));
+    },
+  });
 
-  async function handleDelete(schedule: Schedule) {
-    if (!activeWorkspace) return;
-    setDeleting(schedule.id);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.delete(`/workspaces/${activeWorkspace.id}/pods/${podId}/schedules/${schedule.id}`);
-      setSchedules((prev) => prev.filter((s) => s.id !== schedule.id));
+  const deleteSchedule = useMutation({
+    mutationFn: async (schedule: Schedule) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/pods/${podId}/schedules/${schedule.id}`);
+      return schedule.id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Schedule[]>(['schedules', wsId, podId], (prev = []) => prev.filter((s) => s.id !== id));
       setDeleteConfirm(null);
-    } finally {
-      setDeleting(null);
-    }
-  }
+    },
+  });
 
   function workflowName(id: string) {
     return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + '…';
@@ -302,8 +276,8 @@ export default function SchedulesPage() {
             <div key={s.id} className="flex items-center gap-4 rounded-lg border p-4">
               <Switch
                 checked={s.enabled}
-                disabled={toggling === s.id}
-                onCheckedChange={() => void handleToggle(s)}
+                disabled={toggleSchedule.isPending && toggleSchedule.variables?.id === s.id}
+                onCheckedChange={() => toggleSchedule.mutate(s)}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -463,10 +437,10 @@ export default function SchedulesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button
-              onClick={() => void handleSave()}
-              disabled={(!editTarget && !form.workflowId) || !form.cronExpr.trim() || saving}
+              onClick={() => saveSchedule.mutate()}
+              disabled={(!editTarget && !form.workflowId) || !form.cronExpr.trim() || saveSchedule.isPending}
             >
-              {saving ? 'Saving…' : editTarget ? 'Update' : 'Add schedule'}
+              {saveSchedule.isPending ? 'Saving…' : editTarget ? 'Update' : 'Add schedule'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -485,10 +459,10 @@ export default function SchedulesPage() {
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
             <Button
               variant="destructive"
-              disabled={deleting === deleteConfirm?.id}
-              onClick={() => deleteConfirm && void handleDelete(deleteConfirm)}
+              disabled={deleteSchedule.isPending && deleteSchedule.variables?.id === deleteConfirm?.id}
+              onClick={() => deleteConfirm && deleteSchedule.mutate(deleteConfirm)}
             >
-              {deleting ? 'Deleting…' : 'Delete'}
+              {deleteSchedule.isPending ? 'Deleting…' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

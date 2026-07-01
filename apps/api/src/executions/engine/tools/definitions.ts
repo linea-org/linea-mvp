@@ -1,4 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
 // Built-in tool definitions — what agents can call
 //
 // Add new tools here. Each tool has:
@@ -6,7 +5,6 @@
 //   description - what the LLM sees (be precise — affects when it chooses the tool)
 //   parameters  - JSON Schema for the tool arguments
 //   approval    - when human confirmation is required
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface ToolParameterSchema {
   type: string;

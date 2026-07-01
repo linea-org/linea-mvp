@@ -21,8 +21,6 @@ export class LineaClient {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
   }
 
-  // ─── Executions ───────────────────────────────────────────────────────────
-
   /** Trigger a workflow execution and return immediately. */
   async trigger(options: TriggerOptions): Promise<Execution> {
     const { workspaceId, podId, workflowId, input = {} } = options;
@@ -150,8 +148,6 @@ export class LineaClient {
     return () => controller.abort();
   }
 
-  // ─── HTTP helpers ─────────────────────────────────────────────────────────
-
   private async get<T>(path: string): Promise<T> {
     return this.request<T>('GET', path);
   }
@@ -186,8 +182,6 @@ export class LineaClient {
     return (json.data ?? json) as T;
   }
 }
-
-// ─── Errors ───────────────────────────────────────────────────────────────────
 
 export class LineaApiError extends Error {
   constructor(

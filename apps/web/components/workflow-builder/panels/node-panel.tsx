@@ -97,7 +97,6 @@ const nodeTypeColors: Record<string, string> = {
   note:        '#ca8a04', frame:      '#6366f1',
 };
 
-/* ─── Connections tab ────────────────────────────────────────────── */
 function ConnectionsTab({ node, nodes, edges }: { node: Node; nodes: Node[]; edges: Edge[] }) {
   const incoming = edges.filter((e) => e.target === node.id);
   const outgoing = edges.filter((e) => e.source === node.id);
@@ -159,7 +158,6 @@ function ConnectionsTab({ node, nodes, edges }: { node: Node; nodes: Node[]; edg
   );
 }
 
-/* ─── Node reference docs ────────────────────────────────────────── */
 interface NodeDoc {
   summary: string;
   fields?: Array<{ name: string; desc: string }>;
@@ -573,7 +571,6 @@ const NODE_DOCS: Record<string, NodeDoc> = {
   },
 };
 
-/* ─── Document tab ───────────────────────────────────────────────── */
 function DocumentTab({ node, className }: { node: Node; className?: string }) {
   const nodeType = (node.data.nodeType as string) ?? node.type ?? '';
   const doc = NODE_DOCS[nodeType];
@@ -672,7 +669,6 @@ function DocumentTab({ node, className }: { node: Node; className?: string }) {
   );
 }
 
-/* ─── Main NodePanel ─────────────────────────────────────────────── */
 export function NodePanel({ node, onClose, onUpdate, onDelete, nodes, edges, nodeResult, token, workspaceId, podId, executionId, onRetry }: NodePanelProps) {
   const [activeTab, setActiveTab] = useState<PanelTab>('editor');
   const [editingName, setEditingName] = useState(false);

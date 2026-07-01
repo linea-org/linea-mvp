@@ -91,7 +91,6 @@ export default function PublicRunPage() {
     }
   }
 
-  // ── Loading ──────────────────────────────────────────────────────────────
   if (state === 'loading') {
     return (
       <Shell>
@@ -104,7 +103,6 @@ export default function PublicRunPage() {
     );
   }
 
-  // ── Not found ────────────────────────────────────────────────────────────
   if (state === 'not-found') {
     return (
       <Shell>
@@ -116,7 +114,6 @@ export default function PublicRunPage() {
     );
   }
 
-  // ── Not public ───────────────────────────────────────────────────────────
   if (state === 'forbidden') {
     return (
       <Shell>
@@ -128,7 +125,6 @@ export default function PublicRunPage() {
     );
   }
 
-  // ── Generic error ─────────────────────────────────────────────────────────
   if (state === 'error') {
     return (
       <Shell>
@@ -139,7 +135,6 @@ export default function PublicRunPage() {
     );
   }
 
-  // ── Success ───────────────────────────────────────────────────────────────
   if (state === 'success') {
     return (
       <Shell>
@@ -170,7 +165,6 @@ export default function PublicRunPage() {
     );
   }
 
-  // ── Form ──────────────────────────────────────────────────────────────────
   return (
     <Shell>
       <h1 className="text-lg font-semibold">{schema?.name}</h1>

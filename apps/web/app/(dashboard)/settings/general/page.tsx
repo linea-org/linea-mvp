@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useMutation } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -18,17 +18,15 @@ import {
 } from '@linea/ui/components/dialog';
 
 export default function GeneralSettingsPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading, removeWorkspace } = useWorkspace();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   // Delete dialog state
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (activeWorkspace) {
@@ -37,35 +35,27 @@ export default function GeneralSettingsPage() {
     }
   }, [activeWorkspace]);
 
-  async function handleSave() {
-    if (!activeWorkspace) return;
-    setSaving(true);
-    setSaved(false);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+  const saveWorkspace = useMutation({
+    mutationFn: async () => {
+      if (!activeWorkspace) throw new Error('No active workspace');
+      const api = await getApi();
       await api.patch(`/workspaces/${activeWorkspace.id}`, { name, slug });
-      setSaved(true);
-    } finally {
-      setSaving(false);
-    }
-  }
+    },
+    onSuccess: () => setSaved(true),
+  });
 
-  async function handleDelete() {
-    if (!activeWorkspace) return;
-    setDeleting(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+  const deleteWorkspace = useMutation({
+    mutationFn: async () => {
+      if (!activeWorkspace) throw new Error('No active workspace');
+      const api = await getApi();
       await api.delete(`/workspaces/${activeWorkspace.id}`);
-      removeWorkspace(activeWorkspace.id);
+      return activeWorkspace.id;
+    },
+    onSuccess: (id) => {
+      removeWorkspace(id);
       window.location.href = '/pods';
-    } finally {
-      setDeleting(false);
-    }
-  }
+    },
+  });
 
   function openDeleteDialog() {
     setDeleteConfirmText('');
@@ -99,8 +89,8 @@ export default function GeneralSettingsPage() {
       </div>
 
       <div className="flex items-center gap-3">
-        <Button onClick={() => void handleSave()} disabled={saving || !name.trim()}>
-          {saving ? 'Saving…' : 'Save changes'}
+        <Button onClick={() => saveWorkspace.mutate()} disabled={saveWorkspace.isPending || !name.trim()}>
+          {saveWorkspace.isPending ? 'Saving…' : 'Save changes'}
         </Button>
         {saved && <p className="text-sm text-green-600">Saved!</p>}
       </div>
@@ -123,7 +113,7 @@ export default function GeneralSettingsPage() {
       </div>
 
       {/* Vercel-style delete confirmation dialog */}
-      <Dialog open={deleteOpen} onOpenChange={(o) => { if (!deleting) setDeleteOpen(o); }}>
+      <Dialog open={deleteOpen} onOpenChange={(o) => { if (!deleteWorkspace.isPending) setDeleteOpen(o); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-destructive">Delete workspace</DialogTitle>
@@ -145,7 +135,7 @@ export default function GeneralSettingsPage() {
                 placeholder={activeWorkspace?.name ?? ''}
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && deleteConfirmed) void handleDelete(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && deleteConfirmed) deleteWorkspace.mutate(); }}
                 autoFocus
                 className="font-mono"
               />
@@ -153,15 +143,15 @@ export default function GeneralSettingsPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleteWorkspace.isPending}>
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => void handleDelete()}
-              disabled={!deleteConfirmed || deleting}
+              onClick={() => deleteWorkspace.mutate()}
+              disabled={!deleteConfirmed || deleteWorkspace.isPending}
             >
-              {deleting ? 'Deleting…' : 'Delete workspace'}
+              {deleteWorkspace.isPending ? 'Deleting…' : 'Delete workspace'}
             </Button>
           </DialogFooter>
         </DialogContent>

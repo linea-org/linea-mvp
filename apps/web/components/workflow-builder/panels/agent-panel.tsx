@@ -43,7 +43,6 @@ const APPROVAL_TAG_LABELS: Record<string, string> = {
   auto: 'auto', mutation: 'needs approval', always: 'always approved',
 };
 
-/* ─── Slash command menu ─────────────────────────────────────────── */
 interface SlashCmd {
   label: string;
   insert: string;
@@ -69,7 +68,6 @@ function buildSlashCommands(nodes: Node[], currentNodeId?: string): SlashCmd[] {
   return [...base, ...nodeRefs];
 }
 
-/* ─── Rich instructions textarea ────────────────────────────────── */
 interface RichTextareaProps {
   value: string;
   onChange: (v: string) => void;
@@ -221,7 +219,6 @@ function RichTextarea({ value, onChange, nodes, currentNodeId, rows = 8, placeho
   );
 }
 
-/* ─── Main panel ─────────────────────────────────────────────────── */
 export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelProps) {
   const instrRef = useRef<HTMLTextAreaElement>(null);
   const instructions = (data.instructions as string) ?? '';
@@ -344,7 +341,6 @@ export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelPro
 
       <Separator />
 
-      {/* ── Tools ───────────────────────────────────────────────────── */}
       <div className="space-y-2">
         <div>
           <Label>Tools</Label>

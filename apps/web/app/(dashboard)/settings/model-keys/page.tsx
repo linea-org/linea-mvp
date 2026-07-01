@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useState } from 'react';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -74,34 +74,21 @@ const PROVIDERS: ModelProvider[] = [
 ];
 
 export default function ModelKeysPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const [secrets, setSecrets] = useState<Secret[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
   const [inputs, setInputs] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<Record<string, boolean>>({});
-  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
 
-  async function load() {
-    if (!activeWorkspace) return;
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const data = await api.get<Secret[]>(`/workspaces/${activeWorkspace.id}/secrets`);
-      setSecrets(data);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
-    void load();
-  }, [activeWorkspace, wsLoading]);
+  const { data: secrets = [], isLoading: loading } = useQuery<Secret[]>({
+    queryKey: ['secrets', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Secret[]>(`/workspaces/${wsId}/secrets`);
+    },
+  });
 
   function isSet(key: string) {
     return secrets.some((s) => s.name === key);
@@ -111,42 +98,36 @@ export default function ModelKeysPage() {
     return secrets.find((s) => s.name === key)?.id;
   }
 
-  async function handleSave(key: string) {
-    const value = inputs[key]?.trim();
-    if (!value || !activeWorkspace) return;
-    setSaving((p) => ({ ...p, [key]: true }));
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+  const saveKey = useMutation({
+    mutationFn: async (key: string) => {
+      const value = inputs[key]?.trim();
+      if (!value) throw new Error('No value entered');
+      const api = await getApi();
       const existing = secretId(key);
-      if (existing) {
-        await api.delete(`/workspaces/${activeWorkspace.id}/secrets/${existing}`);
-      }
-      const created = await api.post<Secret>(`/workspaces/${activeWorkspace.id}/secrets`, { name: key, value });
-      setSecrets((prev) => [...prev.filter((s) => s.name !== key), created]);
+      if (existing) await api.delete(`/workspaces/${wsId}/secrets/${existing}`);
+      const created = await api.post<Secret>(`/workspaces/${wsId}/secrets`, { name: key, value });
+      return { key, created };
+    },
+    onSuccess: ({ key, created }) => {
+      queryClient.setQueryData<Secret[]>(['secrets', wsId], (prev = []) => [...prev.filter((s) => s.name !== key), created]);
       setInputs((p) => ({ ...p, [key]: '' }));
       setSaved((p) => ({ ...p, [key]: true }));
       setTimeout(() => setSaved((p) => ({ ...p, [key]: false })), 2500);
-    } finally {
-      setSaving((p) => ({ ...p, [key]: false }));
-    }
-  }
+    },
+  });
 
-  async function handleDelete(key: string) {
-    const id = secretId(key);
-    if (!id || !activeWorkspace) return;
-    setDeleting((p) => ({ ...p, [key]: true }));
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.delete(`/workspaces/${activeWorkspace.id}/secrets/${id}`);
-      setSecrets((prev) => prev.filter((s) => s.name !== key));
-    } finally {
-      setDeleting((p) => ({ ...p, [key]: false }));
-    }
-  }
+  const deleteKey = useMutation({
+    mutationFn: async (key: string) => {
+      const id = secretId(key);
+      if (!id) throw new Error('No secret set for this key');
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/secrets/${id}`);
+      return key;
+    },
+    onSuccess: (key) => {
+      queryClient.setQueryData<Secret[]>(['secrets', wsId], (prev = []) => prev.filter((s) => s.name !== key));
+    },
+  });
 
   if (wsLoading || loading) {
     return (
@@ -208,10 +189,10 @@ export default function ModelKeysPage() {
                     size="sm"
                     variant="ghost"
                     className="shrink-0 text-destructive hover:text-destructive text-xs"
-                    disabled={deleting[p.key]}
-                    onClick={() => void handleDelete(p.key)}
+                    disabled={deleteKey.isPending && deleteKey.variables === p.key}
+                    onClick={() => deleteKey.mutate(p.key)}
                   >
-                    {deleting[p.key] ? 'Removing…' : 'Remove'}
+                    {deleteKey.isPending && deleteKey.variables === p.key ? 'Removing…' : 'Remove'}
                   </Button>
                 )}
               </div>
@@ -224,17 +205,17 @@ export default function ModelKeysPage() {
                     placeholder={set && p.inputType !== 'text' ? '••••••••••••  (re-enter to rotate)' : p.placeholder}
                     value={inputs[p.key] ?? ''}
                     onChange={(e) => setInputs((prev) => ({ ...prev, [p.key]: e.target.value }))}
-                    onKeyDown={(e) => { if (e.key === 'Enter') void handleSave(p.key); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveKey.mutate(p.key); }}
                     className="font-mono text-sm"
                   />
                 </div>
                 <Button
                   size="sm"
                   className="self-end"
-                  disabled={!inputs[p.key]?.trim() || saving[p.key]}
-                  onClick={() => void handleSave(p.key)}
+                  disabled={!inputs[p.key]?.trim() || (saveKey.isPending && saveKey.variables === p.key)}
+                  onClick={() => saveKey.mutate(p.key)}
                 >
-                  {saving[p.key] ? 'Saving…' : saved[p.key] ? 'Saved!' : set ? 'Rotate' : 'Save'}
+                  {saveKey.isPending && saveKey.variables === p.key ? 'Saving…' : saved[p.key] ? 'Saved!' : set ? 'Rotate' : 'Save'}
                 </Button>
               </div>
             </div>

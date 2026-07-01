@@ -50,7 +50,6 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d`;
 }
 
-/* ── Emoji reaction picker ───────────────────────────────────────────────── */
 function ReactionPicker({ onReact }: { onReact: (e: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -76,7 +75,6 @@ function ReactionPicker({ onReact }: { onReact: (e: string) => void }) {
   );
 }
 
-/* ── ReplyConnector ─────────────────────────────────────────────────────── */
 function ReplyConnector({
   isLast, elbow = true, isCollapsed, onClick,
 }: {
@@ -105,7 +103,6 @@ function ReplyConnector({
   );
 }
 
-/* ── CommentCard ─────────────────────────────────────────────────────────── */
 function CommentCard({
   comment, isTopLevel, currentUserId,
   onResolve, onReply, onReact, onDelete, onPin,
@@ -221,7 +218,6 @@ function CommentCard({
   );
 }
 
-/* ── CommentThread ──────────────────────────────────────────────────────── */
 // When collapsed: hides ALL replies and shows an expand pill.
 // This gives a clear visual signal regardless of reply count.
 function CommentThread({
@@ -309,7 +305,6 @@ function CommentThread({
   );
 }
 
-/* ── AttachBar ─────────────────────────────────────────────────────────── */
 function AttachBar({
   onLink, onFile, uploading,
 }: {
@@ -341,7 +336,6 @@ function AttachBar({
   );
 }
 
-/* ── CommentsPanel ──────────────────────────────────────────────────────── */
 export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, selectedNodeId, currentUserId, onClose }: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);

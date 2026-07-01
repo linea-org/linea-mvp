@@ -16,7 +16,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@linea/ui/components/select';
 
-/* ─── Shared types ────────────────────────────────────────────────── */
 interface Webhook {
   id: string;
   workflowId: string;
@@ -44,7 +43,6 @@ interface PanelProps {
 const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
 const TRIGGER_BASE = `${API_BASE}/v1/webhooks`;
 
-/* ─── Deployment section ──────────────────────────────────────────── */
 function DeploySection({
   isDeployed, deployedAt, onDeploy, onUndeploy,
   workspaceId, podId, workflowId, token,
@@ -212,7 +210,6 @@ function DeploySection({
   );
 }
 
-/* ─── Webhook tab ─────────────────────────────────────────────────── */
 function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
@@ -323,7 +320,6 @@ function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
   );
 }
 
-/* ─── REST API tab ────────────────────────────────────────────────── */
 function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
   const [config, setConfig] = useState<ApiConfig>({ apiEnabled: false, apiVisibility: 'api_key', apiKey: null });
   const [loading, setLoading] = useState(true);
@@ -508,7 +504,6 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
   );
 }
 
-/* ─── Supervisor model options ────────────────────────────────────── */
 const SUPERVISOR_MODELS = [
   { id: 'claude-haiku-4-5',             label: 'Claude Haiku 4.5 (default — fast)',    provider: 'anthropic' },
   { id: 'claude-sonnet-4-6',            label: 'Claude Sonnet 4.6 (balanced)',          provider: 'anthropic' },
@@ -520,7 +515,6 @@ const SUPERVISOR_MODELS = [
   { id: 'gemini-2.0-flash',             label: 'Gemini 2.0 Flash (Google)',             provider: 'google'    },
 ] as const;
 
-/* ─── Settings tab ────────────────────────────────────────────────── */
 function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
   const [supervisorModel, setSupervisorModel] = useState('');
   const [loading, setLoading] = useState(true);
@@ -615,7 +609,6 @@ function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps,
   );
 }
 
-/* ─── Main panel ──────────────────────────────────────────────────── */
 type Tab = 'webhook' | 'rest' | 'settings';
 
 export function DeployPanel({

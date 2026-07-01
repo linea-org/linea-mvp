@@ -48,8 +48,6 @@ export interface ExecutionLog {
   timestamp: Timestamp;
 }
 
-// ─── SSE Event Types (shared between API and SDK) ────────────────────────────
-
 export type ExecutionEvent =
   | { type: 'node.started'; nodeId: string; nodeType: string; timestamp: Timestamp }
   | { type: 'node.completed'; nodeId: string; output: unknown; timestamp: Timestamp }

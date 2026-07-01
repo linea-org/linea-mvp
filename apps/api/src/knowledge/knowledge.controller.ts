@@ -111,8 +111,6 @@ export class KnowledgeController {
     });
   }
 
-  // ─── Entries ────────────────────────────────────────────────────────────────
-
   @Post(':id/entries')
   @RequireRole('editor')
   @ApiOperation({ summary: 'Add an entry to a knowledge base (editor+)' })

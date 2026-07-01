@@ -101,8 +101,6 @@ export function createModelClient(
   }
 }
 
-// ─── Anthropic ────────────────────────────────────────────────────────────────
-
 function createAnthropicClient(modelId: string, apiKey?: string): ModelClient {
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
 
@@ -209,8 +207,6 @@ function createAnthropicClient(modelId: string, apiKey?: string): ModelClient {
     };
   };
 }
-
-// ─── OpenAI / Groq / xAI / Ollama ────────────────────────────────────────────
 
 function createOpenAIClient(
   modelId: string,
@@ -360,8 +356,6 @@ function createOpenAIClient(
     };
   };
 }
-
-// ─── Google Gemini ────────────────────────────────────────────────────────────
 
 function createGoogleClient(modelId: string, apiKey?: string): ModelClient {
   if (!apiKey) throw new Error('GOOGLE_API_KEY is not configured');

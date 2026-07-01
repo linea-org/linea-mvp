@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useState } from 'react';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -23,36 +23,23 @@ interface Secret {
 }
 
 export default function CredentialsPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const [secrets, setSecrets] = useState<Secret[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState('');
   const [value, setValue] = useState('');
   const [nameError, setNameError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
 
-  async function load() {
-    if (!activeWorkspace) return;
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const data = await api.get<Secret[]>(`/workspaces/${activeWorkspace.id}/secrets`);
-      setSecrets(data);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
-    void load();
-  }, [activeWorkspace, wsLoading]);
+  const { data: secrets = [], isLoading: loading } = useQuery<Secret[]>({
+    queryKey: ['secrets', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Secret[]>(`/workspaces/${wsId}/secrets`);
+    },
+  });
 
   function validateName(v: string) {
     if (!v) return 'Name is required';
@@ -60,41 +47,36 @@ export default function CredentialsPage() {
     return '';
   }
 
-  async function handleCreate() {
-    const err = validateName(name);
-    if (err) { setNameError(err); return; }
-    if (!activeWorkspace || !value.trim()) return;
-    setSaving(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const created = await api.post<Secret>(`/workspaces/${activeWorkspace.id}/secrets`, {
-        name: name.trim(),
-        value: value.trim(),
-      });
-      setSecrets((prev) => [...prev, created]);
+  const createSecret = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<Secret>(`/workspaces/${wsId}/secrets`, { name: name.trim(), value: value.trim() });
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData<Secret[]>(['secrets', wsId], (prev = []) => [...prev, created]);
       setDialogOpen(false);
       setName('');
       setValue('');
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+
+  function handleCreate() {
+    const err = validateName(name);
+    if (err) { setNameError(err); return; }
+    if (!value.trim()) return;
+    createSecret.mutate();
   }
 
-  async function handleDelete(id: string) {
-    if (!activeWorkspace) return;
-    setDeleting(id);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.delete(`/workspaces/${activeWorkspace.id}/secrets/${id}`);
-      setSecrets((prev) => prev.filter((s) => s.id !== id));
-    } finally {
-      setDeleting(null);
-    }
-  }
+  const deleteSecret = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/secrets/${id}`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Secret[]>(['secrets', wsId], (prev = []) => prev.filter((s) => s.id !== id));
+    },
+  });
 
   if (wsLoading || loading) {
     return <div className="space-y-2">{[1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
@@ -146,8 +128,8 @@ export default function CredentialsPage() {
                 size="sm"
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
-                disabled={deleting === s.id}
-                onClick={() => void handleDelete(s.id)}
+                disabled={deleteSecret.isPending && deleteSecret.variables === s.id}
+                onClick={() => deleteSecret.mutate(s.id)}
               >
                 Delete
               </Button>
@@ -180,15 +162,15 @@ export default function CredentialsPage() {
                 placeholder="sk-…"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
               />
               <p className="text-xs text-muted-foreground">Stored encrypted. Never retrievable after saving.</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleCreate()} disabled={saving || !name || !value}>
-              {saving ? 'Saving…' : 'Save secret'}
+            <Button onClick={handleCreate} disabled={createSecret.isPending || !name || !value}>
+              {createSecret.isPending ? 'Saving…' : 'Save secret'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -50,8 +50,6 @@ export class WorkspacesService {
     private readonly mail: MailService,
   ) {}
 
-  // ─── Workspaces ────────────────────────────────────────────────────────────
-
   async create(userId: string, dto: CreateWorkspaceDto) {
     const slug = dto.slug ?? this.generateSlug(dto.name);
 
@@ -130,8 +128,6 @@ export class WorkspacesService {
     assertMinRole(membership, 'owner');
     await this.db.delete(workspaces).where(eq(workspaces.id, id));
   }
-
-  // ─── Members ───────────────────────────────────────────────────────────────
 
   async getMembers(workspaceId: string) {
     return this.db
@@ -234,8 +230,6 @@ export class WorkspacesService {
 
     return updated;
   }
-
-  // ─── Invites ───────────────────────────────────────────────────────────────
 
   async getInviteDetails(token: string) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
@@ -399,8 +393,6 @@ export class WorkspacesService {
     return { workspaceId: invite.workspaceId, role: invite.role };
   }
 
-  // ─── Settings ──────────────────────────────────────────────────────────────
-
   async getSettings(
     workspaceId: string,
     _actor: WorkspaceMember,
@@ -430,8 +422,6 @@ export class WorkspacesService {
 
     return updated.settings ?? {};
   }
-
-  // ─── Clerk org sync ────────────────────────────────────────────────────────
 
   async upsertFromClerkOrg(org: {
     id: string;
@@ -529,8 +519,6 @@ export class WorkspacesService {
         ),
       );
   }
-
-  // ─── Helpers ───────────────────────────────────────────────────────────────
 
   private generateSlug(name: string): string {
     const base = name

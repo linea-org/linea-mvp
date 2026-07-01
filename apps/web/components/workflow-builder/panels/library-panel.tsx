@@ -92,7 +92,6 @@ const categories: { label: string; nodes: NodeDef[] }[] = [
   },
 ];
 
-/* ─── Single draggable row ───────────────────────────────────────── */
 function NodeRow({ node }: { node: NodeDef }) {
   return (
     <div
@@ -115,7 +114,6 @@ function NodeRow({ node }: { node: NodeDef }) {
   );
 }
 
-/* ─── Collapsible category ───────────────────────────────────────── */
 function Category({ label, nodes, defaultOpen = true }: { label: string; nodes: NodeDef[]; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -143,7 +141,6 @@ function Category({ label, nodes, defaultOpen = true }: { label: string; nodes: 
   );
 }
 
-/* ─── Main panel ─────────────────────────────────────────────────── */
 export function LibraryPanel() {
   const [query, setQuery] = useState('');
 

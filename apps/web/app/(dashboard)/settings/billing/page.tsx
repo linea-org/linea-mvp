@@ -12,7 +12,6 @@ import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
 
-/* ─── Types ─────────────────────────────────────────────────────────── */
 interface PlanInfo {
   key: string;
   label: string;
@@ -28,7 +27,6 @@ interface PlansResponse {
   currentPlan: string;
 }
 
-/* ─── Static catalogue (used as fallback if API is down) ────────────── */
 const FALLBACK_PLANS: PlanInfo[] = [
   {
     key: 'pro', label: 'Pro', priceUsd: 29,
@@ -51,7 +49,6 @@ const PLAN_LIMITS: Record<string, { executions: string; workflows: string; membe
   enterprise: { executions: 'Unlimited',       workflows: 'Unlimited', members: 'Unlimited' },
 };
 
-/* ─── Component ─────────────────────────────────────────────────────── */
 export default function BillingPage() {
   const { getToken } = useAuth();
   const { activeWorkspace } = useWorkspace();

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
+import { ApiError } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -101,48 +102,27 @@ function timeLabel(iso: string): string {
 }
 
 export default function AuditPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [unavailable, setUnavailable] = useState(false);
+  const wsId = activeWorkspace?.id ?? '';
   const [period, setPeriod] = useState<Period>('7d');
   const [resourceType, setResourceType] = useState('all');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (wsLoading || !activeWorkspace) return;
-    setLoading(true);
-    setUnavailable(false);
+  const { data: logs = [], isLoading: loading, error } = useQuery<AuditLog[]>({
+    queryKey: ['audit-logs', wsId, period, resourceType],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const params = new URLSearchParams();
+      if (period !== 'all') params.set('period', period);
+      if (resourceType !== 'all') params.set('resourceType', resourceType);
+      return api.get<AuditLog[]>(`/workspaces/${wsId}/audit-logs?${params.toString()}`);
+    },
+  });
 
-    async function load() {
-      const token = await getToken();
-      if (!token || !activeWorkspace) return;
-      try {
-        const api = createApiClient(token);
-        const params = new URLSearchParams();
-        if (period !== 'all') params.set('period', period);
-        if (resourceType !== 'all') params.set('resourceType', resourceType);
-        const data = await api.get<AuditLog[]>(
-          `/workspaces/${activeWorkspace.id}/audit-logs?${params.toString()}`,
-        );
-        setLogs(data ?? []);
-      } catch (err: unknown) {
-        const status = (err as { status?: number })?.status;
-        if (status === 404 || status === 501) {
-          setUnavailable(true);
-          setLogs([]);
-        } else {
-          setLogs([]);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void load();
-  }, [activeWorkspace, wsLoading, period, resourceType, getToken]);
+  const unavailable = error instanceof ApiError && (error.status === 404 || error.status === 501);
 
   const filtered = logs.filter((l) => {
     if (!search.trim()) return true;

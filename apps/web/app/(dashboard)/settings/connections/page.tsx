@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -28,8 +28,6 @@ import {
   CheckmarkCircle01Icon,
   LinkSquare01Icon,
 } from '@hugeicons/core-free-icons';
-
-const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3000';
 
 interface OAuthConnection {
   id: string;
@@ -75,64 +73,75 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
 };
 
 export default function ConnectionsPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const searchParams = useSearchParams();
-  const [servers, setServers] = useState<McpServer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<McpServer | null>(null);
   const [form, setForm] = useState<FormState>(BLANK);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
 
-  const [oauthConnections, setOauthConnections] = useState<OAuthConnection[]>([]);
-  const [oauthLoading, setOauthLoading] = useState(true);
-  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const { data: servers = [], isLoading: loading } = useQuery<McpServer[]>({
+    queryKey: ['mcp-servers', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<McpServer[]>(`/workspaces/${wsId}/mcp-servers`);
+    },
+  });
 
-  async function load() {
-    if (!activeWorkspace) return;
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const data = await api.get<McpServer[]>(`/workspaces/${activeWorkspace.id}/mcp-servers`);
-      setServers(data);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: oauthConnections = [], isLoading: oauthLoading } = useQuery<OAuthConnection[]>({
+    queryKey: ['oauth-connections', wsId, searchParams.get('connected')],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<OAuthConnection[]>(`/workspaces/${wsId}/oauth/connections`);
+    },
+  });
 
-  async function loadOAuth() {
-    if (!activeWorkspace) return;
-    setOauthLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const data = await api.get<OAuthConnection[]>(`/workspaces/${activeWorkspace.id}/oauth/connections`);
-      setOauthConnections(data);
-    } catch {
-      setOauthConnections([]);
-    } finally {
-      setOauthLoading(false);
-    }
-  }
+  const saveServer = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      const body: Record<string, string> = {
+        name: form.name.trim(),
+        url: form.url.trim(),
+        authType: form.authType,
+      };
+      if (form.accessToken.trim()) body.accessToken = form.accessToken.trim();
+      return editTarget
+        ? api.patch<McpServer>(`/workspaces/${wsId}/mcp-servers/${editTarget.id}`, body)
+        : api.post<McpServer>(`/workspaces/${wsId}/mcp-servers`, body);
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<McpServer[]>(['mcp-servers', wsId], (prev = []) =>
+        editTarget ? prev.map((s) => (s.id === result.id ? result : s)) : [result, ...prev]);
+      setDialogOpen(false);
+    },
+  });
 
-  useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); setOauthLoading(false); return; }
-    void load();
-    void loadOAuth();
-  }, [activeWorkspace, wsLoading]);
+  const deleteServer = useMutation({
+    mutationFn: async (server: McpServer) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/mcp-servers/${server.id}`);
+      return server.id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<McpServer[]>(['mcp-servers', wsId], (prev = []) => prev.filter((s) => s.id !== id));
+    },
+  });
 
-  useEffect(() => {
-    const connected = searchParams.get('connected');
-    if (connected && activeWorkspace) {
-      void loadOAuth();
-    }
-  }, [searchParams]);
+  const disconnectOAuth = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/oauth/connections/${id}`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<OAuthConnection[]>(['oauth-connections', wsId, searchParams.get('connected')],
+        (prev = []) => prev.filter((c) => c.id !== id));
+    },
+  });
 
   function openCreate() {
     setEditTarget(null);
@@ -146,72 +155,9 @@ export default function ConnectionsPage() {
     setDialogOpen(true);
   }
 
-  async function handleSave() {
-    if (!activeWorkspace || !form.name.trim() || !form.url.trim()) return;
-    setSaving(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const body: Record<string, string> = {
-        name: form.name.trim(),
-        url: form.url.trim(),
-        authType: form.authType,
-      };
-      if (form.accessToken.trim()) body.accessToken = form.accessToken.trim();
-
-      if (editTarget) {
-        const updated = await api.patch<McpServer>(
-          `/workspaces/${activeWorkspace.id}/mcp-servers/${editTarget.id}`,
-          body,
-        );
-        setServers((prev) => prev.map((s) => s.id === updated.id ? updated : s));
-      } else {
-        const created = await api.post<McpServer>(
-          `/workspaces/${activeWorkspace.id}/mcp-servers`,
-          body,
-        );
-        setServers((prev) => [created, ...prev]);
-      }
-      setDialogOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(server: McpServer) {
-    if (!activeWorkspace) return;
-    setDeleting(server.id);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.delete(`/workspaces/${activeWorkspace.id}/mcp-servers/${server.id}`);
-      setServers((prev) => prev.filter((s) => s.id !== server.id));
-    } finally {
-      setDeleting(null);
-    }
-  }
-
-  async function handleDisconnectOAuth(id: string) {
-    if (!activeWorkspace) return;
-    setDisconnecting(id);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.delete(`/workspaces/${activeWorkspace.id}/oauth/connections/${id}`);
-      setOauthConnections((prev) => prev.filter((c) => c.id !== id));
-    } finally {
-      setDisconnecting(null);
-    }
-  }
-
   async function handleConnectOAuth(provider: string) {
     if (!activeWorkspace) return;
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
+    const api = await getApi();
     const data = await api.get<{ url: string }>(`/workspaces/${activeWorkspace.id}/oauth/${provider}/connect-url`);
     window.location.href = data.url;
   }
@@ -276,8 +222,8 @@ export default function ConnectionsPage() {
                 <Button
                   size="icon-sm"
                   variant="destructive"
-                  disabled={deleting === server.id}
-                  onClick={() => void handleDelete(server)}
+                  disabled={deleteServer.isPending && deleteServer.variables?.id === server.id}
+                  onClick={() => deleteServer.mutate(server)}
                 >
                   <HugeiconsIcon icon={Delete01Icon} />
                 </Button>
@@ -335,11 +281,11 @@ export default function ConnectionsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={disconnecting === conn.id}
-                      onClick={() => void handleDisconnectOAuth(conn.id)}
+                      disabled={disconnectOAuth.isPending && disconnectOAuth.variables === conn.id}
+                      onClick={() => disconnectOAuth.mutate(conn.id)}
                     >
                       <HugeiconsIcon icon={Delete01Icon} className="mr-1.5 size-3.5" />
-                      {disconnecting === conn.id ? 'Disconnecting…' : 'Disconnect'}
+                      {disconnectOAuth.isPending && disconnectOAuth.variables === conn.id ? 'Disconnecting…' : 'Disconnect'}
                     </Button>
                   ) : (
                     <Button
@@ -413,10 +359,10 @@ export default function ConnectionsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button
-              onClick={() => void handleSave()}
-              disabled={!form.name.trim() || !form.url.trim() || saving}
+              onClick={() => saveServer.mutate()}
+              disabled={!form.name.trim() || !form.url.trim() || saveServer.isPending}
             >
-              {saving ? 'Saving…' : editTarget ? 'Update' : 'Add connection'}
+              {saveServer.isPending ? 'Saving…' : editTarget ? 'Update' : 'Add connection'}
             </Button>
           </DialogFooter>
         </DialogContent>

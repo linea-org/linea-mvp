@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Skeleton } from '@linea/ui/components/skeleton';
@@ -186,12 +188,13 @@ const SOURCE_COLORS: Record<string, string> = {
 export default function KnowledgeBaseDetailPage() {
   const { kbId } = useParams<{ kbId: string }>();
   const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const router = useRouter();
-
-  const [kb, setKb] = useState<KnowledgeBase | null>(null);
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
+  const entriesKey = ['knowledge-base-entries', wsId, kbId];
+  const kbKey = ['knowledge-base', wsId, kbId];
 
   // Ingestion state
   const [ingestTab, setIngestTab] = useState<IngestTab>('text');
@@ -227,69 +230,38 @@ export default function KnowledgeBaseDetailPage() {
     setSelectedUrls(new Set());
   }
 
-  // Poll status for any entries that are still pending/embedding
-  useEffect(() => {
-    const inflight = entries.filter((e) => e.status === 'pending' || e.status === 'embedding');
-    if (inflight.length === 0 || !activeWorkspace) return;
+  const { data: kb = null, isLoading: kbLoading } = useQuery<KnowledgeBase>({
+    queryKey: kbKey,
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<KnowledgeBase>(`/workspaces/${wsId}/knowledge-bases/${kbId}`);
+    },
+  });
 
-    const interval = setInterval(async () => {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await Promise.allSettled(
-        inflight.map(async (entry) => {
-          try {
-            const updated = await api.get<{ id: string; status: EntryStatus }>(
-              `/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}/entries/${entry.id}/status`,
-            );
-            if (updated.status !== entry.status) {
-              setEntries((prev) =>
-                prev.map((e) => (e.id === entry.id ? { ...e, status: updated.status } : e)),
-              );
-            }
-          } catch {
-            // silently skip — entry may have been deleted
-          }
-        }),
-      );
-    }, 3000);
+  const { data: entries = [], isLoading: entriesLoading } = useQuery<Entry[]>({
+    queryKey: entriesKey,
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Entry[]>(`/workspaces/${wsId}/knowledge-bases/${kbId}/entries`);
+    },
+    refetchInterval: (query) => {
+      const list = query.state.data ?? [];
+      return list.some((e) => e.status === 'pending' || e.status === 'embedding') ? 3000 : false;
+    },
+  });
 
-    return () => clearInterval(interval);
-  }, [entries, activeWorkspace, kbId, getToken]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function load() {
-    if (!activeWorkspace) return;
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const [base, ents] = await Promise.all([
-        api.get<KnowledgeBase>(`/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}`),
-        api.get<Entry[]>(`/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}/entries`),
-      ]);
-      setKb(base);
-      setEntries(ents);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
-    void load();
-  }, [activeWorkspace, wsLoading, kbId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const loading = kbLoading || entriesLoading;
 
   async function addEntry(content: string, source: string, meta?: Record<string, unknown>) {
-    if (!activeWorkspace || !content.trim()) return;
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
+    if (!content.trim()) return;
+    const api = await getApi();
     const entry = await api.post<Entry>(
-      `/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}/entries`,
+      `/workspaces/${wsId}/knowledge-bases/${kbId}/entries`,
       { content: content.trim(), metadata: { source, ...meta } },
     );
-    setEntries((prev) => [entry, ...prev]);
+    queryClient.setQueryData<Entry[]>(entriesKey, (prev = []) => [entry, ...prev]);
     return entry;
   }
 
@@ -433,13 +405,9 @@ export default function KnowledgeBaseDetailPage() {
   }
 
   async function handleIngestSelected() {
-    if (!activeWorkspace?.id || !kbId || selectedUrls.size === 0) return;
+    if (!wsId || !kbId || selectedUrls.size === 0) return;
     const token = await getToken();
     if (!token) return;
-
-    // Capture IDs now — React state can change during the async loop
-    const wsId = activeWorkspace.id;
-    const kbIdSnapshot = kbId;
 
     const urls = [...selectedUrls];
     setWebsitePhase('ingesting');
@@ -453,7 +421,7 @@ export default function KnowledgeBaseDetailPage() {
       urls.map(async (url) => {
         try {
           const res = await fetch(
-            `/api/proxy/workspaces/${wsId}/knowledge-bases/${kbIdSnapshot}/entries/url`,
+            `/api/proxy/workspaces/${wsId}/knowledge-bases/${kbId}/entries/url`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -462,14 +430,14 @@ export default function KnowledgeBaseDetailPage() {
           );
           if (res.ok) {
             const entry = await res.json() as Entry;
-            setEntries((prev) => [entry, ...prev]);
+            queryClient.setQueryData<Entry[]>(entriesKey, (prev = []) => [entry, ...prev]);
           } else {
             // Fallback: store as reference entry
             const entry = await api.post<Entry>(
-              `/workspaces/${wsId}/knowledge-bases/${kbIdSnapshot}/entries`,
+              `/workspaces/${wsId}/knowledge-bases/${kbId}/entries`,
               { content: `[Website] ${url}`, metadata: { source: 'website', url } },
             );
-            setEntries((prev) => [entry, ...prev]);
+            queryClient.setQueryData<Entry[]>(entriesKey, (prev = []) => [entry, ...prev]);
           }
         } catch {
           // Silent fail per URL
@@ -487,25 +455,25 @@ export default function KnowledgeBaseDetailPage() {
     setWebsitePhase('input');
   }
 
-  async function handleDelete(entryId: string) {
-    if (!activeWorkspace) return;
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
-    await api.delete(`/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}/entries/${entryId}`);
-    setEntries((prev) => prev.filter((e) => e.id !== entryId));
-    if (searchResults) setSearchResults((prev) => prev?.filter((e) => e.id !== entryId) ?? null);
-  }
+  const deleteEntry = useMutation({
+    mutationFn: async (entryId: string) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/knowledge-bases/${kbId}/entries/${entryId}`);
+      return entryId;
+    },
+    onSuccess: (entryId) => {
+      queryClient.setQueryData<Entry[]>(entriesKey, (prev = []) => prev.filter((e) => e.id !== entryId));
+      if (searchResults) setSearchResults((prev) => prev?.filter((e) => e.id !== entryId) ?? null);
+    },
+  });
 
   async function handleSearch() {
-    if (!activeWorkspace || !searchQuery.trim()) { setSearchResults(null); return; }
+    if (!searchQuery.trim()) { setSearchResults(null); return; }
     setSearching(true);
     try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+      const api = await getApi();
       const results = await api.post<Entry[]>(
-        `/workspaces/${activeWorkspace.id}/knowledge-bases/${kbId}/search`,
+        `/workspaces/${wsId}/knowledge-bases/${kbId}/search`,
         { query: searchQuery.trim() },
       );
       setSearchResults(results);
@@ -934,7 +902,7 @@ export default function KnowledgeBaseDetailPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => void handleDelete(entry.id)}
+                        onClick={() => deleteEntry.mutate(entry.id)}
                         className="shrink-0 mt-0.5 rounded p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all"
                       >
                         <HugeiconsIcon icon={Delete01Icon} className="size-4" />

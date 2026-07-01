@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -50,11 +50,9 @@ const ALL_MODELS = [
 ];
 
 export default function ModelPreferencesPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const wsId = activeWorkspace?.id ?? '';
 
   const [chain, setChain] = useState<string[]>([]);
   const [addModel, setAddModel] = useState('');
@@ -64,29 +62,40 @@ export default function ModelPreferencesPage() {
   const [supervisorModel, setSupervisorModel] = useState('claude-haiku-4-5');
   const [saved, setSaved] = useState(false);
 
-  async function load() {
-    if (!activeWorkspace) return;
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const data = await api.get<WorkspaceSettings>(`/workspaces/${activeWorkspace.id}/settings`);
-      setChain(data.modelFallbackChain ?? []);
-      setRagThreshold(String(data.ragSimilarityThreshold ?? 0.75));
-      setRagChunkSize(String(data.ragChunkSize ?? 1000));
-      setRagChunkOverlap(String(data.ragChunkOverlap ?? 200));
-      setSupervisorModel(data.supervisorModel ?? 'claude-haiku-4-5');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: settings, isLoading: loading } = useQuery<WorkspaceSettings>({
+    queryKey: ['workspace-settings', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<WorkspaceSettings>(`/workspaces/${wsId}/settings`);
+    },
+  });
 
   useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
-    void load();
-  }, [activeWorkspace, wsLoading]);
+    if (!settings) return;
+    setChain(settings.modelFallbackChain ?? []);
+    setRagThreshold(String(settings.ragSimilarityThreshold ?? 0.75));
+    setRagChunkSize(String(settings.ragChunkSize ?? 1000));
+    setRagChunkOverlap(String(settings.ragChunkOverlap ?? 200));
+    setSupervisorModel(settings.supervisorModel ?? 'claude-haiku-4-5');
+  }, [settings]);
+
+  const saveSettings = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      await api.patch(`/workspaces/${wsId}/settings`, {
+        modelFallbackChain: chain,
+        ragSimilarityThreshold: parseFloat(ragThreshold) || 0.75,
+        ragChunkSize: parseInt(ragChunkSize, 10) || 1000,
+        ragChunkOverlap: parseInt(ragChunkOverlap, 10) || 200,
+        supervisorModel: supervisorModel || 'claude-haiku-4-5',
+      });
+    },
+    onSuccess: () => {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    },
+  });
 
   function moveUp(i: number) {
     if (i === 0) return;
@@ -115,27 +124,6 @@ export default function ModelPreferencesPage() {
     if (!id || chain.includes(id)) return;
     setChain((prev) => [...prev, id]);
     setAddModel('');
-  }
-
-  async function handleSave() {
-    if (!activeWorkspace) return;
-    setSaving(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.patch(`/workspaces/${activeWorkspace.id}/settings`, {
-        modelFallbackChain: chain,
-        ragSimilarityThreshold: parseFloat(ragThreshold) || 0.75,
-        ragChunkSize: parseInt(ragChunkSize, 10) || 1000,
-        ragChunkOverlap: parseInt(ragChunkOverlap, 10) || 200,
-        supervisorModel: supervisorModel || 'claude-haiku-4-5',
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } finally {
-      setSaving(false);
-    }
   }
 
   if (wsLoading || loading) {
@@ -310,8 +298,8 @@ export default function ModelPreferencesPage() {
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={() => void handleSave()} disabled={saving}>
-          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Settings'}
+        <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>
+          {saveSettings.isPending ? 'Saving…' : saved ? 'Saved!' : 'Save Settings'}
         </Button>
       </div>
     </div>

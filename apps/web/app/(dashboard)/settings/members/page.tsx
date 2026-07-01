@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth, useUser } from '@clerk/nextjs';
+import { useState } from 'react';
+import { useUser } from '@clerk/nextjs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -65,50 +66,40 @@ function canManage(actorRole: string, targetRole: string) {
 }
 
 export default function MembersPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { user: clerkUser } = useUser();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const [members, setMembers] = useState<Member[]>([]);
-  const [invites, setInvites] = useState<Invite[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
   const [dialogOpen, setDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer' | 'admin'>('editor');
-  const [inviting, setInviting] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   // Role change state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<Member | null>(null);
   const [newRole, setNewRole] = useState<MemberRole>('editor');
-  const [savingRole, setSavingRole] = useState(false);
 
-  // Remove state
-  const [removing, setRemoving] = useState<string | null>(null);
+  const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
+    queryKey: ['members', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Member[]>(`/workspaces/${wsId}/members`);
+    },
+  });
 
-  async function load() {
-    if (!activeWorkspace) return;
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const [m, i] = await Promise.all([
-        api.get<Member[]>(`/workspaces/${activeWorkspace.id}/members`),
-        api.get<Invite[]>(`/workspaces/${activeWorkspace.id}/invites`),
-      ]);
-      setMembers(m);
-      setInvites(i);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: invites = [], isLoading: invitesLoading } = useQuery<Invite[]>({
+    queryKey: ['invites', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Invite[]>(`/workspaces/${wsId}/invites`);
+    },
+  });
 
-  useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
-    void load();
-  }, [activeWorkspace, wsLoading]);
+  const loading = membersLoading || invitesLoading;
 
   // Derive current user's role from the members list
   const myEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? '';
@@ -116,34 +107,31 @@ export default function MembersPage() {
   const myRole = me?.role ?? 'viewer';
   const isAdmin = (ROLE_LEVEL[myRole] ?? 0) >= (ROLE_LEVEL['admin'] ?? 0);
 
-  async function handleInvite() {
-    if (!activeWorkspace) return;
-    setInviting(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const invite = await api.post<Invite>(`/workspaces/${activeWorkspace.id}/invites`, {
+  const inviteMember = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<Invite>(`/workspaces/${wsId}/invites`, {
         email: inviteEmail || undefined,
         role: inviteRole,
       });
-      const link = `${window.location.origin}/invite/${invite.token}`;
-      setInviteLink(link);
-      setInvites((prev) => [...prev, invite]);
+    },
+    onSuccess: (invite) => {
+      setInviteLink(`${window.location.origin}/invite/${invite.token}`);
+      queryClient.setQueryData<Invite[]>(['invites', wsId], (prev = []) => [...prev, invite]);
       setInviteEmail('');
-    } finally {
-      setInviting(false);
-    }
-  }
+    },
+  });
 
-  async function revokeInvite(inviteId: string) {
-    if (!activeWorkspace) return;
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
-    await api.delete(`/workspaces/${activeWorkspace.id}/invites/${inviteId}`);
-    setInvites((prev) => prev.filter((i) => i.id !== inviteId));
-  }
+  const revokeInvite = useMutation({
+    mutationFn: async (inviteId: string) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/invites/${inviteId}`);
+      return inviteId;
+    },
+    onSuccess: (inviteId) => {
+      queryClient.setQueryData<Invite[]>(['invites', wsId], (prev = []) => prev.filter((i) => i.id !== inviteId));
+    },
+  });
 
   function openRoleDialog(member: Member) {
     setRoleTarget(member);
@@ -151,36 +139,30 @@ export default function MembersPage() {
     setRoleDialogOpen(true);
   }
 
-  async function handleRoleChange() {
-    if (!activeWorkspace || !roleTarget) return;
-    setSavingRole(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.patch(`/workspaces/${activeWorkspace.id}/members/${roleTarget.userId}`, { role: newRole });
-      setMembers((prev) =>
-        prev.map((m) => m.userId === roleTarget.userId ? { ...m, role: newRole } : m),
-      );
+  const changeRole = useMutation({
+    mutationFn: async () => {
+      if (!roleTarget) throw new Error('No target selected');
+      const api = await getApi();
+      await api.patch(`/workspaces/${wsId}/members/${roleTarget.userId}`, { role: newRole });
+      return roleTarget.userId;
+    },
+    onSuccess: (userId) => {
+      queryClient.setQueryData<Member[]>(['members', wsId], (prev = []) =>
+        prev.map((m) => (m.userId === userId ? { ...m, role: newRole } : m)));
       setRoleDialogOpen(false);
-    } finally {
-      setSavingRole(false);
-    }
-  }
+    },
+  });
 
-  async function handleRemoveMember(member: Member) {
-    if (!activeWorkspace) return;
-    setRemoving(member.userId);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.delete(`/workspaces/${activeWorkspace.id}/members/${member.userId}`);
-      setMembers((prev) => prev.filter((m) => m.userId !== member.userId));
-    } finally {
-      setRemoving(null);
-    }
-  }
+  const removeMember = useMutation({
+    mutationFn: async (member: Member) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/members/${member.userId}`);
+      return member.userId;
+    },
+    onSuccess: (userId) => {
+      queryClient.setQueryData<Member[]>(['members', wsId], (prev = []) => prev.filter((m) => m.userId !== userId));
+    },
+  });
 
   if (wsLoading || loading) {
     return (
@@ -222,7 +204,7 @@ export default function MembersPage() {
                 {manageable && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon-sm" variant="ghost" disabled={removing === m.userId}>
+                      <Button size="icon-sm" variant="ghost" disabled={removeMember.isPending && removeMember.variables?.userId === m.userId}>
                         <HugeiconsIcon icon={MoreVerticalIcon} />
                       </Button>
                     </DropdownMenuTrigger>
@@ -234,7 +216,7 @@ export default function MembersPage() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
-                        onClick={() => void handleRemoveMember(m)}
+                        onClick={() => removeMember.mutate(m)}
                       >
                         <HugeiconsIcon icon={Delete01Icon} className="mr-2 size-4" />
                         Remove member
@@ -266,7 +248,7 @@ export default function MembersPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => void revokeInvite(inv.id)}
+                    onClick={() => revokeInvite.mutate(inv.id)}
                     className="text-destructive hover:text-destructive"
                   >
                     Revoke
@@ -331,8 +313,8 @@ export default function MembersPage() {
               {inviteLink ? 'Done' : 'Cancel'}
             </Button>
             {!inviteLink && (
-              <Button onClick={() => void handleInvite()} disabled={inviting}>
-                {inviting ? 'Creating…' : 'Create invite'}
+              <Button onClick={() => inviteMember.mutate()} disabled={inviteMember.isPending}>
+                {inviteMember.isPending ? 'Creating…' : 'Create invite'}
               </Button>
             )}
           </DialogFooter>
@@ -364,8 +346,8 @@ export default function MembersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleRoleChange()} disabled={savingRole || newRole === roleTarget?.role}>
-              {savingRole ? 'Saving…' : 'Save'}
+            <Button onClick={() => changeRole.mutate()} disabled={changeRole.isPending || newRole === roleTarget?.role}>
+              {changeRole.isPending ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

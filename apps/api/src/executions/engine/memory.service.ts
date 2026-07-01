@@ -42,8 +42,6 @@ export class MemoryService {
     }
   }
 
-  // ─── Memory load / save ───────────────────────────────────────────────────
-
   async loadForExecution(
     workspaceId: string,
     workflowId: string | undefined,
@@ -300,8 +298,6 @@ export class MemoryService {
     }
   }
 
-  // ─── Per-workspace API key resolution ────────────────────────────────────
-
   async loadApiKey(
     workspaceId: string,
     provider: string,
@@ -331,8 +327,6 @@ export class MemoryService {
     }
   }
 
-  // ─── Secret resolution ────────────────────────────────────────────────────
-
   async loadSecret(
     workspaceId: string,
     name: string,
@@ -355,7 +349,6 @@ export class MemoryService {
     }
   }
 
-  // ─── OAuth token resolution ───────────────────────────────────────────────
   // Tries the OAuth connections table first; falls back to the plain secrets table.
   async resolveIntegrationToken(
     workspaceId: string,
@@ -391,8 +384,6 @@ export class MemoryService {
     return this.loadSecret(workspaceId, secretName);
   }
 
-  // ─── MCP server resolution ────────────────────────────────────────────────
-
   async loadMcpServer(
     workspaceId: string,
     mcpServerId: string,
@@ -424,8 +415,6 @@ export class MemoryService {
       return undefined;
     }
   }
-
-  // ─── Long-term memory (vector-backed, cross-execution) ───────────────────
 
   /**
    * Generate a 1536-d embedding using the given model and API key.
@@ -619,8 +608,6 @@ export class MemoryService {
       return [];
     }
   }
-
-  // ─── Encryption helpers (AES-256-GCM) ────────────────────────────────────
 
   encrypt(plaintext: string): string {
     const iv = randomBytes(12);

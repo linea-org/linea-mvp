@@ -564,8 +564,6 @@ export class WorkflowsService {
       throw new NotFoundException(`Template ${id} not found`);
   }
 
-  // ─── Workflow favorites (per-user bookmarks) ─────────────────────────────
-
   async favoriteWorkflow(userId: string, workflowId: string): Promise<void> {
     await this.db
       .insert(workflowFavorites)
@@ -598,8 +596,6 @@ export class WorkflowsService {
 
     return rows.map((r) => r.workflowId);
   }
-
-  // ─── Template upvotes + views ─────────────────────────────────────────────
 
   incrementTemplateViews(id: string): void {
     void this.db
