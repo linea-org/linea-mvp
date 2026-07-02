@@ -164,7 +164,7 @@ export class GoogleClient implements ModelClient {
       for await (const chunk of streamResult.stream) {
         const chunkText = chunk.text();
         if (chunkText) {
-          opts.onToken(chunkText);
+          onToken(chunkText);
         }
       }
 

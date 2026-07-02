@@ -181,9 +181,10 @@ export class XAIClient implements ModelClient {
           if (tc.function?.name) e.name += tc.function.name;
           if (tc.function?.arguments) e.args += tc.function.arguments;
         }
+
         usage = {
-          inputTokens: chunk.usage?.completion_tokens ?? 0,
-          outputTokens: chunk.usage?.prompt_tokens ?? 0,
+          outputTokens: chunk.usage?.completion_tokens ?? 0,
+          inputTokens: chunk.usage?.prompt_tokens ?? 0,
         };
       }
 
