@@ -7,6 +7,8 @@ import {
   Param,
   HttpCode,
   UseGuards,
+  ValidationPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,7 +21,7 @@ import { CreateConnectionDto } from './dto/create-connection.dto';
 import { WorkspaceGuard } from '../common/guards/workspace.guard';
 import { RoleGuard } from '../common/guards/role.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
-import { ProviderType } from '../common/utils/config-types';
+import { PROVIDERS, ProviderType } from '../common/utils/config-types';
 
 @ApiTags('Connections')
 @ApiBearerAuth()
@@ -32,12 +34,15 @@ export class ConnectionsController {
   @Post(':provider')
   @ApiOperation({ summary: 'Connect New Provider' })
   @ApiParam({ name: 'workspaceId' })
-  @ApiParam({ name: 'provider' })
+  @ApiParam({ name: 'provider', enum: PROVIDERS })
   create(
     @Param('workspaceId') workspaceId: string,
     @Param('provider') provider: ProviderType,
     @Body() dto: CreateConnectionDto,
   ) {
+    if (!PROVIDERS.includes(provider)) {
+      throw new BadRequestException(`Invalid provider: ${provider}`);
+    }
     return this.service.create(workspaceId, provider, dto);
   }
 
