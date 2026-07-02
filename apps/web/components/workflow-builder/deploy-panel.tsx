@@ -7,7 +7,7 @@ import {
   CheckmarkCircle01Icon, Alert01Icon, RefreshIcon, EyeIcon, ViewOffIcon,
   CloudUploadIcon, LinkSquare02Icon, AiBrain01Icon, LockIcon, InternetIcon,
 } from '@hugeicons/core-free-icons';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { createApiClient, friendlyApiError, API_ORIGIN } from '@/lib/api';
 import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
 import { Switch } from '@linea/ui/components/switch';
@@ -42,8 +42,7 @@ interface PanelProps {
   onClose: () => void;
 }
 
-const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
-const TRIGGER_BASE = `${API_BASE}/v1/webhooks`;
+const TRIGGER_BASE = `${API_ORIGIN}/v1/webhooks`;
 
 function DeploySection({
   isDeployed, deployedAt, onDeploy, onUndeploy,
@@ -347,7 +346,7 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
   const [copied, setCopied] = useState<string | null>(null);
   const [keyVisible, setKeyVisible] = useState(false);
 
-  const endpointUrl = `${API_BASE}/v1/run/${workflowId}`;
+  const endpointUrl = `${API_ORIGIN}/v1/run/${workflowId}`;
 
   useEffect(() => { void fetchConfig(); }, []);
 

@@ -8,10 +8,10 @@ import {
   AiBrain01Icon, RepeatIcon, Loading01Icon,
 } from '@hugeicons/core-free-icons';
 
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 import type { Node, Edge } from '@xyflow/react';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
+import { API_BASE } from '@/lib/api';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
 import { Separator } from '@linea/ui/components/separator';
 import type { NodeResult } from '../index';

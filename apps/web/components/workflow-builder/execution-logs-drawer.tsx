@@ -25,8 +25,6 @@ interface Props {
   nodes: { id: string; data: Record<string, unknown> }[];
 }
 
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
-
 export function ExecutionLogsDrawer({ executionId, workspaceId, podId, status, token, nodes }: Props) {
   const [open, setOpen] = useState(false);
   const [logs, setLogs] = useState<Log[]>([]);

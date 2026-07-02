@@ -30,7 +30,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@linea/ui/components/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@linea/ui/components/tooltip';
 import { Kbd } from '@linea/ui/components/kbd';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { createApiClient, friendlyApiError, API_BASE } from '@/lib/api';
 import { consumeSseStream } from '@/lib/sse';
 import { useUndoHistory } from './use-undo-history';
 import { toast } from '@linea/ui/components/sonner';
@@ -51,8 +51,6 @@ import { CommentsPanel } from './comments-panel';
 import { EvalsPanel } from './evals-panel';
 import { ChatPreviewPanel } from './chat-preview-panel';
 import { useRouter } from 'next/navigation';
-
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */

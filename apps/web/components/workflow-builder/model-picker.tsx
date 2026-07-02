@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@linea/ui/components/popover';
 import { cn } from '@linea/ui/lib/utils';
-
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+import { API_BASE } from '@/lib/api';
 
 interface ModelDef {
   id: string;

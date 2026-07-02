@@ -14,13 +14,12 @@ import {
 } from '@hugeicons/core-free-icons';
 import { Button } from '@linea/ui/components/button';
 import { toast } from '@linea/ui/components/sonner';
-import { createApiClient, ApiError, friendlyApiError } from '@/lib/api';
+import { createApiClient, ApiError, friendlyApiError, API_BASE } from '@/lib/api';
 import { consumeSseStream } from '@/lib/sse';
 import { cn } from '@linea/ui/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { JsonOrPre } from '@/components/ui/json-or-pre';
 
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 const PLACEHOLDER_NODE_ID = '__placeholder';
 
 /* ------------------------------------------------------------------ */

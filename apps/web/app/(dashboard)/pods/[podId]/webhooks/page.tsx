@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient, unwrapList } from '@/lib/api';
+import { createApiClient, unwrapList, API_BASE } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -55,7 +55,6 @@ import {
   Loading01Icon,
 } from '@hugeicons/core-free-icons';
 
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 const PAGE_SIZE = 10;
 
 interface Webhook {

@@ -6,9 +6,7 @@ import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import { Skeleton } from '@linea/ui/components/skeleton';
-import { friendlyApiErrorFromStatus } from '@/lib/api';
-
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+import { friendlyApiErrorFromStatus, API_BASE } from '@/lib/api';
 
 interface InputVariable {
   name: string;

@@ -22,7 +22,7 @@ import { Spinner } from '@linea/ui/components/spinner';
 import type { Node } from '@xyflow/react';
 import type { NodeResult } from '../index';
 import type { ValidationState } from '../toolbar';
-import { createApiClient, friendlyApiError, unwrapList } from '@/lib/api';
+import { createApiClient, friendlyApiError, unwrapList, API_BASE } from '@/lib/api';
 import { toast } from '@linea/ui/components/sonner';
 
 interface Log {
@@ -50,8 +50,6 @@ interface Props {
 }
 
 type BottomTab = 'logs' | 'timeline' | 'issues' | 'variables';
-
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 
 function formatRunTime(iso: string | undefined): string {
   if (!iso) return '—';

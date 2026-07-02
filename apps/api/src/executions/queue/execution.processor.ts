@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, Inject } from '@nestjs/common';
 import type { Job } from 'bullmq';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { executions, executionLogs, workflows, users } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
@@ -22,6 +22,8 @@ const EXECUTION_TIMEOUT_MS = 15 * 60 * 1_000; // 15 minutes wall-clock per execu
 @Processor(EXECUTION_QUEUE)
 export class ExecutionProcessor extends WorkerHost {
   private readonly logger = new Logger(ExecutionProcessor.name);
+  private readonly FAILURE_NOTIFY_THRESHOLD = 3;
+  private readonly FAILURE_NOTIFY_INTERVAL = 10;
 
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
@@ -54,15 +56,18 @@ export class ExecutionProcessor extends WorkerHost {
     );
 
     let wf: typeof workflows.$inferSelect | undefined;
+    let triggeredBy: typeof executions.$inferSelect.triggeredBy = 'manual';
 
     try {
-      await this.db
+      const [execRow] = await this.db
         .update(executions)
         .set({
           status: 'running',
           startedAt: isResume ? undefined : new Date(),
         })
-        .where(eq(executions.id, executionId));
+        .where(eq(executions.id, executionId))
+        .returning({ triggeredBy: executions.triggeredBy });
+      triggeredBy = execRow?.triggeredBy ?? 'manual';
 
       [wf] = await this.db
         .select()
@@ -237,17 +242,11 @@ export class ExecutionProcessor extends WorkerHost {
           output: finalOutput,
         });
 
-        void this.quotas.incrementUsed(workspaceId, usage?.total_tokens ?? 0);
-
-        if (userId) {
-          void this.notifications.create(
-            userId,
-            'execution_complete',
-            'Execution completed',
-            `Execution ${executionId} finished successfully.`,
-            workspaceId,
-          );
-        }
+        void this.quotas.incrementUsed(
+          workspaceId,
+          usage?.total_tokens ?? 0,
+          userId,
+        );
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -260,13 +259,21 @@ export class ExecutionProcessor extends WorkerHost {
       this.events.emit(executionId, { type: 'execution_failed', error: msg });
 
       if (userId) {
-        void this.notifications.create(
-          userId,
-          'execution_failed',
-          'Execution failed',
-          msg,
-          workspaceId,
-        );
+        // Unattended triggers (schedule/webhook/sdk) have nobody watching the run live,
+        // unlike manual runs where the user is already in the builder — only notify those,
+        // and only once a failure streak crosses a threshold so a broken cron doesn't spam.
+        if (triggeredBy !== 'manual') {
+          const streak = await this.getConsecutiveFailureCount(workflowId);
+          if (this.shouldNotifyFailureStreak(streak)) {
+            void this.notifications.create(
+              userId,
+              'execution_failed',
+              'Workflow repeatedly failing',
+              `${wf?.name ?? workflowId} has failed ${streak} times in a row (${triggeredBy}). Latest error: ${msg}`,
+              workspaceId,
+            );
+          }
+        }
         void this.sendFailureEmail(
           userId,
           wf?.name ?? workflowId,
@@ -279,6 +286,27 @@ export class ExecutionProcessor extends WorkerHost {
 
       throw error;
     }
+  }
+
+  private shouldNotifyFailureStreak(streak: number): boolean {
+    if (streak < this.FAILURE_NOTIFY_THRESHOLD) return false;
+    return (streak - this.FAILURE_NOTIFY_THRESHOLD) % this.FAILURE_NOTIFY_INTERVAL === 0;
+  }
+
+  private async getConsecutiveFailureCount(workflowId: string): Promise<number> {
+    const recent = await this.db
+      .select({ status: executions.status })
+      .from(executions)
+      .where(eq(executions.workflowId, workflowId))
+      .orderBy(desc(executions.createdAt))
+      .limit(50);
+
+    let streak = 0;
+    for (const row of recent) {
+      if (row.status !== 'failed') break;
+      streak++;
+    }
+    return streak;
   }
 
   private async sendFailureEmail(

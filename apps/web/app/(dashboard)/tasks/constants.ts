@@ -5,8 +5,7 @@ import {
   Message01Icon, StickyNote01Icon,
 } from '@hugeicons/core-free-icons';
 import type { ModelOption } from './types';
-
-export const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+export { API_BASE } from '@/lib/api';
 
 export const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Anthropic', openai: 'OpenAI', xai: 'xAI (Grok)',

@@ -12,9 +12,7 @@ import {
 import { Button } from '@linea/ui/components/button';
 import { Kbd } from '@linea/ui/components/kbd';
 import type { Node, Edge } from '@xyflow/react';
-import { ApiError, friendlyApiError } from '@/lib/api';
-
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+import { ApiError, friendlyApiError, API_BASE } from '@/lib/api';
 
 export interface GenerateEvent {
   type: 'progress' | 'node_added' | 'edge_added' | 'complete' | 'error';

@@ -11,7 +11,7 @@ import { WelcomeModal } from '@/components/onboarding/welcome-modal';
 import { GettingStarted } from '@/components/onboarding/getting-started';
 import { CommandPalette } from '@/components/command-palette';
 import { KeyboardShortcutsDialog } from '@/components/keyboard-shortcuts-dialog';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { createApiClient, friendlyApiError, API_BASE } from '@/lib/api';
 import { toast } from '@linea/ui/components/sonner';
 import {
   SidebarProvider,
@@ -647,8 +647,6 @@ function timeAgoShort(iso: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
-const NOTIF_API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
-
 function NotificationBell() {
   const { getToken } = useAuth();
   const { activeWorkspace } = useWorkspace();
@@ -686,7 +684,7 @@ function NotificationBell() {
       const token = await getToken();
       if (!token) return;
       const resp = await fetch(
-        `${NOTIF_API_BASE}/workspaces/${workspaceId}/notifications/stream`,
+        `${API_BASE}/workspaces/${workspaceId}/notifications/stream`,
         { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal },
       );
       if (!resp.ok || !resp.body) return;

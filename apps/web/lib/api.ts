@@ -1,4 +1,5 @@
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+export const API_ORIGIN = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+export const API_BASE = `${API_ORIGIN}/v1`;
 
 export class ApiError extends Error {
   constructor(
