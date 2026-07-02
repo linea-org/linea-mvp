@@ -80,7 +80,6 @@ export class GoogleClient implements ModelClient {
       jsonMode,
       maxTokens,
       onToken,
-      opts,
       system,
       temperature,
       toolChoice,
