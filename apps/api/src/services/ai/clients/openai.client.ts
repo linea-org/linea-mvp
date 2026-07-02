@@ -188,6 +188,9 @@ export class OpenAIClient implements ModelClient {
         {
           ...options,
           stream: true,
+          stream_options: {
+            include_usage: true,
+          },
         } as ChatCompletionCreateParamsStreaming,
         { signal: opts?.signal },
       );
