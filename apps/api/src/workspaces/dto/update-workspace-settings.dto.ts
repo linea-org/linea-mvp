@@ -48,7 +48,8 @@ export class UpdateWorkspaceSettingsDto {
   ragChunkOverlap?: number;
 
   @ApiPropertyOptional({
-    description: 'Model ID used by the execution supervisor to decide retry/skip/abort on node failures',
+    description:
+      'Model ID used by the execution supervisor to decide retry/skip/abort on node failures',
   })
   @IsOptional()
   @IsString()

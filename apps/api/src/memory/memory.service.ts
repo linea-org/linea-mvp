@@ -26,7 +26,7 @@ export class MemoryService {
     const createdIds: string[] = [];
     const updatedIds: string[] = [];
 
-    const client = await this.ai.initializeWithSys('google');
+    const client = this.ai.initializeWithSys('google');
 
     for (const fact of facts) {
       // text-embedding-005
@@ -133,7 +133,7 @@ export class MemoryService {
   async search(workspaceId: string, dto: SearchMemoryDto) {
     const limit = dto.limit ?? 10;
 
-    const client = await this.ai.initializeWithSys('google');
+    const client = this.ai.initializeWithSys('google');
     const vec = await client.embedding('text-embedding-005', dto.query);
     if (vec == null) {
       throw new Error('Failed to generate embeddings');

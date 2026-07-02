@@ -31,9 +31,7 @@ export const BUILT_IN_TEMPLATES: Array<{
             nodeType: 'start',
             label: 'Start',
             triggerType: 'webhook',
-            inputVariables: [
-              { name: 'url', type: 'string', required: true },
-            ],
+            inputVariables: [{ name: 'url', type: 'string', required: true }],
             testInput: {
               url: 'https://example.com',
             },

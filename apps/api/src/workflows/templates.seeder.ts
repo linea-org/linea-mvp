@@ -41,7 +41,7 @@ export class TemplatesSeeder implements OnApplicationBootstrap {
             prerequisites: tpl.prerequisites ?? null,
             definition: tpl.definition as any,
           })
-          .where(eq(templates.id, existing[0]!.id));
+          .where(eq(templates.id, existing[0].id));
         updated++;
         continue;
       }

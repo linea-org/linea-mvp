@@ -27,7 +27,7 @@ import { ProviderType } from '../common/utils/config-types';
 @UseGuards(WorkspaceGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/connections')
 export class ConnectionsController {
-  constructor(private readonly service: ConnectionsService) { }
+  constructor(private readonly service: ConnectionsService) {}
 
   @Post()
   @ApiOperation({ summary: 'Connect New Provider' })

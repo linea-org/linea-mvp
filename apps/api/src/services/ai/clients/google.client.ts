@@ -161,12 +161,10 @@ export class GoogleClient implements ModelClient {
 
     if (onToken) {
       const streamResult = await chat.sendMessageStream(lastMsg);
-      let text = '';
       for await (const chunk of streamResult.stream) {
         const chunkText = chunk.text();
         if (chunkText) {
           opts.onToken(chunkText);
-          text += chunkText;
         }
       }
 

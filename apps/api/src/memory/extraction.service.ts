@@ -27,7 +27,7 @@ export class ExtractionService {
   async extract(content: string): Promise<ExtractedFact[]> {
     try {
       // default
-      const client = await this.ai.initializeWithSys('google');
+      const client = this.ai.initializeWithSys('google');
       const response = await client.chat('gemini-2.0-flash-lite', {
         maxTokens: 1024,
         system: SYSTEM_PROMPT,

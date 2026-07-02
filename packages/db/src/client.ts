@@ -13,6 +13,6 @@ export function createDb(connectionString: string) {
 
   return drizzle(client, {
     schema,
-    logger: false || process.env["NODE_ENV"] === "development",
+    logger: process.env["NODE_ENV"] === "development",
   })
 }

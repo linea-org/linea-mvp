@@ -798,7 +798,7 @@ export class AgentChatService {
           : '');
 
       return system;
-    } catch (error) {
+    } catch (_) {
       throw new Error('Failed to prepare system prompt');
     }
   }
