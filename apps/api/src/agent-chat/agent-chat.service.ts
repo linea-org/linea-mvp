@@ -379,9 +379,6 @@ export class AgentChatService {
         toolChoice: 'auto',
         system: ctx.system,
         onToken: (delta) => {
-          this.logger.warn(config.configurable);
-          this.logger.warn(ctx);
-          this.logger.warn(typeof ctx.emit);
           ctx.emit({ type: 'text_delta', delta });
         },
       });
