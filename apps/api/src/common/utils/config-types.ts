@@ -22,10 +22,16 @@ export type ProviderConfigMap = {
   [K in ProviderType]: z.infer<(typeof providerConfigSchemas)[K]>;
 };
 
-export type AIProviderType = Extract<
-  ProviderType,
-  'anthropic' | 'openai' | 'groq' | 'google' | 'ollama' | 'xai'
->;
+export const AI_PROVIDERS = [
+  'anthropic',
+  'openai',
+  'groq',
+  'google',
+  'ollama',
+  'xai',
+] as const;
+
+export type AIProviderType = (typeof AI_PROVIDERS)[number];
 
 export type AIProviderConfigMap = {
   [K in AIProviderType]: z.infer<(typeof providerConfigSchemas)[K]>;

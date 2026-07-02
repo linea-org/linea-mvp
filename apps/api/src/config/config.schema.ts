@@ -19,9 +19,10 @@ export const configSchema = z.object({
     .string()
     .length(64, 'Must be a 32-byte hex string (64 hex chars)'),
 
+  // generate via openssl rand -base64 32
   ENCRYPTION_KEY_1: z
     .string()
-    .length(64, 'Must be a 32-byte hex string (64 hex chars)'),
+    .length(64, 'Must be 32 random bytes (equivalent to 256 bits)'),
 
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
