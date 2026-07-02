@@ -7,7 +7,6 @@ import {
   Param,
   HttpCode,
   UseGuards,
-  ValidationPipe,
   BadRequestException,
 } from '@nestjs/common';
 import {
