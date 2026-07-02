@@ -14,11 +14,6 @@ export const configSchema = z.object({
   CLERK_PUBLISHABLE_KEY: z.string().min(1),
   CLERK_WEBHOOK_SECRET: z.string().min(1),
 
-  // TODO: migrate to version based encryption key if in future we need to rotate key this will prevent breakdown.
-  ENCRYPTION_KEY: z
-    .string()
-    .length(64, 'Must be a 32-byte hex string (64 hex chars)'),
-
   // generate via openssl rand -base64 32
   ENCRYPTION_KEY_1: z
     .string()
