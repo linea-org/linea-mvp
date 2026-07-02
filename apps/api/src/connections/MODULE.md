@@ -1,41 +1,45 @@
 # Connections Module
 
-> Encrypted workspace secrets — AI providers API keys and other connections.
-
-
-TODO: NOT FINISHED
-
+> Manage encrypted AI provider connections for a workspace.
 
 ## Base Path
+
 `/v1/workspaces/:workspaceId/connections`
 
 ## Endpoints
 
-| Method | Path | Role | Description |
-|--------|------|------|-------------|
-| POST | `/` | admin+ | Store a secret encrypted at rest. Body: `{ name, value }`. AES-256 encrypts `value`. Returns `{ id, name, createdAt }` — value never returned. |
-| GET | `/` | admin+ | List secrets. Returns `[{ id, name, createdAt }]` — encrypted values are never exposed. |
-| DELETE | `/:id` | admin+ | Delete a secret. Returns 204. |
+| Method | Path         | Role   | Description                                                                                                                                                                                                                                                      |
+| ------ | ------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/:provider` | admin+ | Create or update a connection for the specified AI provider. The provider is supplied as a path parameter. The request body contains the provider-specific credentials and configuration. Secrets are encrypted at rest and are never returned in API responses. |
+| GET    | `/`          | admin+ | List all configured providers for the workspace. Returns connection metadata (such as provider, enabled status, and timestamps). Secret values are never exposed.                                                                                                |
+| DELETE | `/:id`       | admin+ | Delete a configured provider connection. Returns `204 No Content`.                                                                                                                                                                                               |
+
+## Supported Providers
+
+The `provider` path parameter must be one of:
+
+- `anthropic`
+- `openai`
+- `google`
+- `groq`
+- `ollama`
+- `xai`
+
+Requests with any other provider value return `400 Bad Request`.
 
 ## Business Logic
 
-- Values are encrypted with `ENCRYPTION_KEY` (AES-256) before storage in `secrets.value_encrypted`
-- Secret values are **never** returned via the API after creation; only names are listed
-- Workflow nodes reference secrets by name; `NodeExecutorService` decrypts at execution time
+- API keys and other sensitive credentials are encrypted using `ENCRYPTION_KEY_1` (AES-256) before being persisted.
+- Secret values are never returned after creation.
+- Each workspace manages its own provider connections.
+- Only workspace administrators can create, list, or delete connections.
+- Provider validation is performed before the connection is created.
 
 ## Dependencies
 
-- `WorkspacesModule` — workspace guard
-
-## Changelog
-
-_No recent changes._
-
-## Missing / Gaps
-
-- **Secret update**: no `PATCH /:id` to rotate a secret value — must delete and recreate, breaking all nodes that reference the old name if the name changes
-- **Secret versioning**: only the latest value is stored; there's no rollback to a prior value
-- **Usage audit**: no tracking of which workflows reference a given secret — can't safely delete without knowing the blast radius
+- `WorkspacesModule` — workspace resolution and authorization
+- `WorkspaceGuard` — validates workspace access
+- `RoleGuard` — enforces administrator permissions
 
 ## Status
 
