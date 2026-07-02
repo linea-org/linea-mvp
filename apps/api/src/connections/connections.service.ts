@@ -143,10 +143,10 @@ export class ConnectionsService {
       return null;
     }
 
-    const key = this.encryptionKeys[this.CURRENT_KEY_VERSION];
+    const key = this.encryptionKeys[row.keyVersion];
 
     if (!key) {
-      throw new Error('Encryption key not found or invalid version');
+      throw new Error(`Encryption key not found for version ${row.keyVersion}`);
     }
 
     const decryptedConfig = decryptConfig(

@@ -5,7 +5,7 @@ CREATE TABLE "provider_connections" (
 	"auth_type" text NOT NULL,
 	"config_encrypted" text NOT NULL,
 	"encryption_key_Version" integer DEFAULT 1 NOT NULL,
-	"encryption_vi" text NOT NULL,
+	"encryption_iv" text NOT NULL,
 	"encryption_auth_tag" text NOT NULL,
 	"provider_user_id" text,
 	"provider_email" text,
