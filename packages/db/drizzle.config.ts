@@ -5,7 +5,6 @@ import { defineConfig } from "drizzle-kit"
 // pnpm sets CWD to packages/db when running scripts; ../../.env = repo root .env
 // Falls back to .env in CWD for other contexts
 config({ path: resolve("../../.env") })
-config({ path: resolve(".env") }) // no-op if ../../.env already loaded DATABASE_URL
 
 export default defineConfig({
   schema: "./src/schema/index.ts",
