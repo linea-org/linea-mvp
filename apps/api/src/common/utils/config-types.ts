@@ -16,6 +16,7 @@ export const providerConfigSchemas = {
 } satisfies Record<string, z.ZodTypeAny>;
 
 export type ProviderType = keyof typeof providerConfigSchemas;
+export const PROVIDERS = Object.keys(providerConfigSchemas) as ProviderType[];
 
 export type ProviderConfigMap = {
   [K in ProviderType]: z.infer<(typeof providerConfigSchemas)[K]>;
