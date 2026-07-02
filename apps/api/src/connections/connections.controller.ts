@@ -29,7 +29,7 @@ import { ProviderType } from '../common/utils/config-types';
 export class ConnectionsController {
   constructor(private readonly service: ConnectionsService) {}
 
-  @Post()
+  @Post(':provider')
   @ApiOperation({ summary: 'Connect New Provider' })
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'provider' })

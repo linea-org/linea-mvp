@@ -3076,8 +3076,8 @@
           "notNull": true,
           "default": 1
         },
-        "encryption_vi": {
-          "name": "encryption_vi",
+        "encryption_iv": {
+          "name": "encryption_iv",
           "type": "text",
           "primaryKey": false,
           "notNull": true
