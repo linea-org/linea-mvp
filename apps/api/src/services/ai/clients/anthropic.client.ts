@@ -85,10 +85,8 @@ export class AnthropicClient implements ModelClient {
     model: string,
     {
       messages,
-      jsonMode,
       maxTokens,
       onToken,
-      opts,
       system,
       temperature,
       toolChoice,
@@ -189,7 +187,7 @@ export class AnthropicClient implements ModelClient {
       },
     };
   }
-  embedding(model: string, text: string): Promise<number[] | null> {
+  embedding(_model: string, _text: string): Promise<number[] | null> {
     throw new Error("Anthropic don't have embedding models");
   }
 }

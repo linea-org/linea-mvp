@@ -311,8 +311,8 @@ export class LangGraphService {
               output_tokens: 0,
               total_tokens: 0,
             };
-            if (isAgentOutput && (result as any)?.__usage) {
-              usageUpdate = (result as any).__usage as typeof usageUpdate;
+            if (isAgentOutput && result?.__usage) {
+              usageUpdate = result.__usage as typeof usageUpdate;
             }
             const output = result as LoopOutput;
             if (
@@ -327,12 +327,12 @@ export class LangGraphService {
             onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
             const chatUpdates =
-              isAgentOutput && (result as any)?.__chatHistoryUpdates
-                ? (result as any).__chatHistoryUpdates
+              isAgentOutput && result?.__chatHistoryUpdates
+                ? result.__chatHistoryUpdates
                 : [];
             const memoryUpdates =
-              isAgentOutput && (result as any)?.__memoryUpdates
-                ? (result as any).__memoryUpdates
+              isAgentOutput && result?.__memoryUpdates
+                ? result.__memoryUpdates
                 : {};
             return {
               variables: {

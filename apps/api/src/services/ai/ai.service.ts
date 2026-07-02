@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   AIProviderConfigMap,
@@ -178,7 +178,7 @@ export class AIService {
     }
   }
 
-  async initializeWithSys(provider: AIProviderType): Promise<ModelClient> {
+  initializeWithSys(provider: AIProviderType): ModelClient {
     try {
       switch (provider) {
         case 'openai': {

@@ -7,7 +7,6 @@ import {
   numeric,
   bigint,
   pgEnum,
-  unique,
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import { workspaces } from "./workspaces"

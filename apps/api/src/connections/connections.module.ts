@@ -8,4 +8,4 @@ import { RoleGuard } from '../common/guards/role.guard';
   controllers: [ConnectionsController],
   exports: [ConnectionsService],
 })
-export class ConnectionsModule { }
+export class ConnectionsModule {}
