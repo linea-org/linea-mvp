@@ -753,7 +753,7 @@ export function NodePanel({ node, onClose, onUpdate, onDelete, nodes, edges, nod
       case 'retriever':return <RetrieverPanel data={nodeData} onUpdate={handleUpdate} nodes={nodes} nodeId={node!.id} />;
       case 'guardrails':  return <GuardrailsPanel  data={nodeData} onUpdate={handleUpdate} />;
       case 'code':        return <CodePanel        data={nodeData} onUpdate={handleUpdate} />;
-      case 'loop':        return <LoopPanel        data={nodeData} onUpdate={handleUpdate} nodes={nodes} nodeId={node!.id} />;
+      case 'loop':        return <LoopPanel        data={nodeData} onUpdate={handleUpdate} nodes={nodes} edges={edges} nodeId={node!.id} />;
       case 'parallel':    return <ParallelPanel    data={nodeData} onUpdate={handleUpdate} />;
       case 'wait':        return <WaitPanel        data={nodeData} onUpdate={handleUpdate} />;
       case 'variables':   return <VariablesPanel   data={nodeData} onUpdate={handleUpdate} nodes={nodes} nodeId={node!.id} />;
