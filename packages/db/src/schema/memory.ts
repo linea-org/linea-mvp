@@ -45,7 +45,7 @@ export const memories = pgTable("memories", {
   }),
   scope: memoryScopeEnum("scope").notNull(),
   content: text("content").notNull(),
-  embedding: vector("embedding", { dimensions: 768 }),
+  embedding: vector("embedding", { dimensions: 1536 }),
   source: memorySourceEnum("source").default("manual").notNull(),
   factType: memoryFactTypeEnum("fact_type"),
   eventDate: timestamp("event_date", { withTimezone: true }),
