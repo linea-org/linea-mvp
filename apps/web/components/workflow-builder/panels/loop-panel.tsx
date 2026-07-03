@@ -28,7 +28,7 @@ export function LoopPanel({ data, onUpdate, nodes = [], edges = [], nodeId }: Lo
     .filter((e) => e.source === nodeId)
     .map((e) => {
       const node = nodes.find((n) => n.id === e.target);
-      return (node?.data?.nodeName as string) || (node?.data?.name as string) || (node?.data?.label as string) || e.target;
+      return (node?.data?.nodeName as string) ?? (node?.data?.label as string) ?? node?.type ?? e.target;
     });
 
   // Union with children stored in data (may not match current edges yet)
@@ -36,7 +36,7 @@ export function LoopPanel({ data, onUpdate, nodes = [], edges = [], nodeId }: Lo
     ? childNodeNames
     : children.map((id) => {
         const node = nodes.find((n) => n.id === id);
-        return (node?.data?.nodeName as string) || (node?.data?.name as string) || id;
+        return (node?.data?.nodeName as string) ?? (node?.data?.label as string) ?? node?.type ?? id;
       });
 
   return (
