@@ -20,6 +20,6 @@ export default defineConfig({
     "!checkpoints",
     "!checkpoint_writes",
   ],
-  verbose: true,
+  verbose: false,
   strict: true,
 })

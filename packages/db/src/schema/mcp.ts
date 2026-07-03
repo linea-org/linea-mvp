@@ -47,7 +47,7 @@ export const mcpTools = pgTable("mcp_tools", {
   name: text("name").notNull(),
   description: text("description"),
   inputSchema: jsonb("input_schema").$type<Record<string, unknown>>(),
-  embedding: vector("embedding", { dimensions: 1536 }),
+  embedding: vector("embedding", { dimensions: 768 }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
