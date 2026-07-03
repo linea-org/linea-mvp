@@ -14,9 +14,10 @@ export const configSchema = z.object({
   CLERK_PUBLISHABLE_KEY: z.string().min(1),
   CLERK_WEBHOOK_SECRET: z.string().min(1),
 
-  ENCRYPTION_KEY: z
+  // generate via openssl rand -base64 32
+  ENCRYPTION_KEY_1: z
     .string()
-    .length(64, 'Must be a 32-byte hex string (64 hex chars)'),
+    .length(44, 'Must be a base64-encoded 32-byte key (44 chars)'),
 
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),

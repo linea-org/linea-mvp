@@ -13,3 +13,4 @@ export const BUILT_IN_TEMPLATES: TemplateDefinition[] = [
   ...AI_OPS_TEMPLATES,
   ...INTEGRATION_TEMPLATES,
 ];
+

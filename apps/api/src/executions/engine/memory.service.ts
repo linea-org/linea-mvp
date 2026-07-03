@@ -96,6 +96,7 @@ export class MemoryService {
           /* skip */
         }
       }
+
       return merged;
     } catch (err) {
       this.logger.warn(`Failed to load memory for thread ${threadId}: ${err}`);

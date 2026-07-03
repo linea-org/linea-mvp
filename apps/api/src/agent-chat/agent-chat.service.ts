@@ -1,7 +1,12 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { eq, and, desc } from 'drizzle-orm';
-import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
+import {
+  StateGraph,
+  Annotation,
+  START,
+  END,
+  LangGraphRunnableConfig,
+} from '@langchain/langgraph';
 import type { DrizzleDB } from '@linea/db';
 import {
   pods,
@@ -16,263 +21,181 @@ import { ExecutionsService } from '../executions/executions.service';
 import { MemoryService } from '../executions/engine/memory.service';
 import { CheckpointerService } from '../executions/engine/checkpointer.service';
 import { McpService } from '../mcp/mcp.service';
-import { createModelClient } from '../executions/engine/models/client.factory';
-import { MODEL_REGISTRY } from '../executions/engine/models/registry';
 import type {
-  ModelApiKeys,
   ChatMessage as ModelChatMessage,
   NormalizedToolCall,
-  ModelClient,
 } from '../executions/engine/models/client.factory';
 import { SYSTEM_PROMPT, AGENT_TOOLS } from './agent-chat.prompt';
 import type { ChatDto } from './dto/chat.dto';
-
-const PROVIDER_KEY_MAP: Partial<Record<string, keyof ModelApiKeys>> = {
-  anthropic: 'ANTHROPIC_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  groq: 'GROQ_API_KEY',
-  google: 'GOOGLE_API_KEY',
-  xai: 'XAI_API_KEY',
-};
+import { AIService } from 'src/services/ai/ai.service';
+import { createEventChannel, EventChannel } from './event.channel';
+import { AgentContext, AgentEvent } from './types';
+import { PinoLogger } from 'nestjs-pino';
 
 const AgentStateAnnotation = Annotation.Root({
-  // REPLACE reducer: each invoke passes the full message history, so we always
-  // want the latest snapshot rather than appending to a stale checkpoint.
   messages: Annotation<ModelChatMessage[]>({
-    reducer: (_, r) => r,
+    reducer: (_, next) => next,
     default: () => [],
   }),
   pendingTools: Annotation<NormalizedToolCall[] | null>({
-    reducer: (_, r) => r,
+    reducer: (_, next) => next,
     default: () => null,
   }),
 });
 
 type AgentStateType = typeof AgentStateAnnotation.State;
 
-function createEventChannel() {
-  const DONE = Symbol('done');
-  const queue: Array<object | symbol> = [];
-  let resolver: (() => void) | null = null;
-
-  const push = (item: object | symbol) => {
-    queue.push(item);
-    const r = resolver;
-    resolver = null;
-    r?.();
-  };
-
-  async function* read(): AsyncGenerator<object> {
-    while (true) {
-      while (queue.length > 0) {
-        const item = queue.shift()!;
-        if (item === DONE) return;
-        yield item as object;
-      }
-      await new Promise<void>((r) => {
-        resolver = r;
-      });
-    }
-  }
-
-  return { emit: (evt: object) => push(evt), done: () => push(DONE), read };
-}
-
 @Injectable()
 export class AgentChatService {
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
-    private readonly config: ConfigService,
+    private readonly ai: AIService,
     private readonly secretsService: SecretsService,
     private readonly executionsService: ExecutionsService,
     private readonly memoryService: MemoryService,
     private readonly checkpointerService: CheckpointerService,
     private readonly mcpService: McpService,
+    private readonly logger: PinoLogger,
   ) {}
 
-  async *chat(workspaceId: string, dto: ChatDto): AsyncIterable<object> {
+  async *chat(workspaceId: string, dto: ChatDto): AsyncIterable<AgentEvent> {
     const threadId = dto.threadId ?? `agent-chat-${workspaceId}-${Date.now()}`;
 
-    // Load workspace API keys (fall back to server env vars)
-    const [anthropicKey, openaiKey, groqKey, googleKey, xaiKey, sessionMemory] =
-      await Promise.all([
-        this.memoryService.loadApiKey(workspaceId, 'anthropic'),
-        this.memoryService.loadApiKey(workspaceId, 'openai'),
-        this.memoryService.loadApiKey(workspaceId, 'groq'),
-        this.memoryService.loadApiKey(workspaceId, 'google'),
-        this.memoryService.loadApiKey(workspaceId, 'xai'),
-        this.memoryService.loadForExecution(workspaceId, undefined, threadId),
-      ]);
+    const initialMessages: ModelChatMessage[] = dto.messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
 
-    const apiKeys: ModelApiKeys = {
-      ANTHROPIC_API_KEY:
-        anthropicKey ?? this.config.get<string>('ANTHROPIC_API_KEY'),
-      OPENAI_API_KEY: openaiKey ?? this.config.get<string>('OPENAI_API_KEY'),
-      GROQ_API_KEY: groqKey ?? this.config.get<string>('GROQ_API_KEY'),
-      GOOGLE_API_KEY: googleKey ?? this.config.get<string>('GOOGLE_API_KEY'),
-      XAI_API_KEY: xaiKey ?? this.config.get<string>('XAI_API_KEY'),
+    const client = await this.ai.initialize(workspaceId, dto.provider);
+    const system = await this.prepareSystemPrompt(workspaceId, threadId, dto);
+    const channel = createEventChannel<AgentEvent>();
+
+    const context: AgentContext = {
+      workspaceId,
+      threadId,
+      dto,
+      model: dto.model,
+      system,
+      client,
+      emit: channel.emit.bind(channel),
     };
 
-    // Resolve model — validate provider key is available
-    let modelDef = dto.model ? MODEL_REGISTRY[dto.model] : null;
-    modelDef ??= MODEL_REGISTRY['claude-sonnet-4-6'];
+    const graph = this.createGraph();
 
-    const requiredKey = PROVIDER_KEY_MAP[modelDef.provider];
-    if (
-      requiredKey &&
-      !apiKeys[requiredKey] &&
-      modelDef.provider !== 'ollama'
-    ) {
-      const fallback = Object.values(MODEL_REGISTRY)
-        .filter(
-          (m) =>
-            !m.useCases.includes('embedding') &&
-            (m.provider === 'ollama' ||
-              (PROVIDER_KEY_MAP[m.provider] != null &&
-                apiKeys[PROVIDER_KEY_MAP[m.provider]!] != null)),
-        )
-        .sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input)[0];
-      if (fallback) modelDef = fallback;
+    void this.runGraph(graph, context, initialMessages, channel);
+
+    for await (const event of channel.read()) {
+      yield event;
     }
 
-    // Inject session memory into system prompt when available
-    const memorySection =
-      sessionMemory && Object.keys(sessionMemory).length > 0
-        ? '\n\n## What you remember about this user\n' +
-          Object.entries(sessionMemory)
-            .map(
-              ([k, v]) =>
-                `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`,
-            )
-            .join('\n')
-        : '';
+    yield {
+      type: 'done',
+    };
+  }
 
-    const system =
-      SYSTEM_PROMPT +
-      memorySection +
-      (dto.context?.podId
-        ? `\n\nActive pod: ${dto.context.podId}${dto.context.podName ? ` (${dto.context.podName})` : ''}`
-        : '');
-
-    const client = createModelClient(modelDef.id, modelDef.provider, apiKeys);
-
-    const initialMessages: ModelChatMessage[] = [
-      { role: 'system', content: system },
-      ...dto.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    ];
-
-    // Build async event channel — nodes push events, generator yields them
-    const channel = createEventChannel();
-
-    const graph = new StateGraph(AgentStateAnnotation)
-      .addNode('callModel', async (state: AgentStateType, config: any) => {
-        const { _emit, _client } = config.configurable as {
-          _emit: typeof channel.emit;
-          _client: ModelClient;
-        };
-
-        const result = await _client(state.messages, {
-          maxTokens: 4096,
-          tools: AGENT_TOOLS,
-          toolChoice: 'auto',
-          onToken: (delta: string) => _emit({ type: 'text_delta', delta }),
-        });
-
-        if (result.toolCalls?.length && result.stopReason === 'tool_use') {
-          return {
-            messages: [
-              {
-                role: 'assistant' as const,
-                content: result.text,
-                toolCalls: result.toolCalls,
-              },
-            ],
-            pendingTools: result.toolCalls,
-          };
-        }
-
-        return {
-          messages: [{ role: 'assistant' as const, content: result.text }],
-          pendingTools: null,
-        };
-      })
-      .addNode('callTools', async (state: AgentStateType, config: any) => {
-        const { _emit, _workspaceId, _dto, _threadId } =
-          config.configurable as {
-            _emit: typeof channel.emit;
-            _workspaceId: string;
-            _dto: ChatDto;
-            _threadId: string;
-          };
-
-        // Execute all tool calls in parallel — no interrupts in agent-chat
-        const results = await Promise.all(
-          (state.pendingTools ?? []).map(async (tc) => {
-            _emit({ type: 'step_start', id: tc.id, name: tc.name });
-            _emit({
-              type: 'tool_call',
-              id: tc.id,
-              name: tc.name,
-              input: tc.arguments,
-            });
-            const result = await this.executeTool(
-              _workspaceId,
-              _threadId,
-              tc.name,
-              tc.arguments,
-              _dto,
-            );
-            _emit({ type: 'tool_result', id: tc.id, name: tc.name, result });
-            return { tc, result };
-          }),
-        );
-
-        const newMsgs: ModelChatMessage[] = results.map(({ tc, result }) => ({
-          role: 'tool' as const,
-          content: JSON.stringify(result),
-          toolCallId: tc.id,
-        }));
-
-        return { messages: newMsgs, pendingTools: null };
-      })
-      .addEdge(START, 'callModel' as any)
-      .addConditionalEdges('callModel' as any, (state: AgentStateType) =>
-        (state.pendingTools?.length ?? 0) > 0 ? 'callTools' : END,
+  private createGraph() {
+    return new StateGraph(AgentStateAnnotation)
+      .addNode('callModel', this.createModelNode())
+      .addNode('callTools', this.createToolNode())
+      .addEdge(START, 'callModel')
+      .addConditionalEdges('callModel', (state) =>
+        state.pendingTools?.length ? 'callTools' : END,
       )
-      .addEdge('callTools' as any, 'callModel' as any)
-      .compile({ checkpointer: this.checkpointerService.checkpointer });
+      .addEdge('callTools', 'callModel')
+      .compile({
+        checkpointer: this.checkpointerService.checkpointer,
+      });
+  }
 
-    graph
-      .invoke(
-        { messages: initialMessages, pendingTools: null },
+  private async runGraph(
+    graph: ReturnType<typeof this.createGraph>,
+    context: AgentContext,
+    messages: ModelChatMessage[],
+    channel: EventChannel<AgentEvent>,
+  ) {
+    try {
+      await graph.invoke(
+        { messages, pendingTools: null },
         {
-          configurable: {
-            thread_id: threadId,
-            _emit: channel.emit,
-            _client: client,
-            _workspaceId: workspaceId,
-            _dto: dto,
-            _threadId: threadId,
-          },
+          configurable: { thread_id: context.threadId, context },
         },
-      )
-      .then(() => channel.done())
-      .catch((err: unknown) => {
-        channel.emit({
-          type: 'error',
-          error: err instanceof Error ? err.message : String(err),
-        });
-        channel.done();
+      );
+    } catch (e) {
+      channel.emit({
+        type: 'error',
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      channel.done();
+    }
+  }
+
+  private createModelNode() {
+    return async (state: AgentStateType, config: LangGraphRunnableConfig) => {
+      const ctx = config.configurable?.context as AgentContext;
+      const result = await ctx.client.chat(ctx.model, {
+        messages: state.messages,
+        maxTokens: 4096,
+        tools: AGENT_TOOLS,
+        toolChoice: 'auto',
+        system: ctx.system,
+        onToken: (delta) => {
+          ctx.emit({ type: 'text_delta', delta });
+        },
       });
 
-    for await (const evt of channel.read()) {
-      yield evt;
-    }
+      if (result.toolCalls?.length && result.stopReason === 'tool_use') {
+        return {
+          messages: [
+            {
+              role: 'assistant' as const,
+              content: result.text,
+              toolCalls: result.toolCalls,
+            },
+          ],
+          pendingTools: result.toolCalls,
+        };
+      }
 
-    yield { type: 'done' };
+      return {
+        messages: [{ role: 'assistant' as const, content: result.text }],
+        pendingTools: null,
+      };
+    };
+  }
+
+  private createToolNode() {
+    return async (state: AgentStateType, config: LangGraphRunnableConfig) => {
+      const ctx = config.configurable?.context as AgentContext;
+      const results = await Promise.all(
+        (state.pendingTools ?? []).map(async (tc) => {
+          ctx.emit({ type: 'step_start', id: tc.id, name: tc.name });
+          ctx.emit({
+            type: 'tool_call',
+            id: tc.id,
+            name: tc.name,
+            input: tc.arguments,
+          });
+          const result = await this.executeTool(
+            ctx.workspaceId,
+            ctx.threadId,
+            tc.name,
+            tc.arguments,
+            ctx.dto,
+          );
+          ctx.emit({ type: 'tool_result', id: tc.id, name: tc.name, result });
+          return { tc, result };
+        }),
+      );
+
+      const newMsgs: ModelChatMessage[] = results.map(({ tc, result }) => ({
+        role: 'tool' as const,
+        content: JSON.stringify(result),
+        toolCallId: tc.id,
+      }));
+
+      return { messages: newMsgs, pendingTools: null };
+    };
   }
 
   private async executeTool(
@@ -285,6 +208,7 @@ export class AgentChatService {
     try {
       return await this.runTool(workspaceId, threadId, name, input, dto);
     } catch (err) {
+      this.logger.error(err);
       return { error: err instanceof Error ? err.message : String(err) };
     }
   }
@@ -598,6 +522,42 @@ export class AgentChatService {
 
       default:
         return { error: `Unknown tool: ${name}` };
+    }
+  }
+
+  private async prepareSystemPrompt(
+    workspaceId: string,
+    threadId: string,
+    dto: ChatDto,
+  ) {
+    try {
+      const sessionMemory = await this.memoryService.loadForExecution(
+        workspaceId,
+        undefined,
+        threadId,
+      );
+
+      const memorySection =
+        Object.keys(sessionMemory).length > 0
+          ? '\n\n## What you remember about this user\n' +
+            Object.entries(sessionMemory)
+              .map(
+                ([k, v]) =>
+                  `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`,
+              )
+              .join('\n')
+          : '';
+
+      const system =
+        SYSTEM_PROMPT +
+        memorySection +
+        (dto.context?.podId
+          ? `\n\nActive pod: ${dto.context.podId}${dto.context.podName ? ` (${dto.context.podName})` : ''}`
+          : '');
+
+      return system;
+    } catch (_) {
+      throw new Error('Failed to prepare system prompt');
     }
   }
 

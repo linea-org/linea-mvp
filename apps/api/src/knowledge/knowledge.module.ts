@@ -6,12 +6,14 @@ import { KnowledgeController } from './knowledge.controller';
 import { KnowledgeEmbedProcessor } from './knowledge.processor';
 import { AuditModule } from '../audit/audit.module';
 import { RAG_EMBED_QUEUE } from './knowledge.queue';
+import { AIModule } from 'src/agent-chat/ai.module';
 
 @Module({
   imports: [
     MemoryModule,
     AuditModule,
     BullModule.registerQueue({ name: RAG_EMBED_QUEUE }),
+    AIModule,
   ],
   providers: [KnowledgeService, KnowledgeEmbedProcessor],
   controllers: [KnowledgeController],

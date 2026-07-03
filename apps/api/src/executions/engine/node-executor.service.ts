@@ -127,7 +127,9 @@ export class NodeExecutorService {
 
     let attempt = 0;
     let lastError: unknown;
-    let resolvedApiKeys: Awaited<ReturnType<typeof this.resolveApiKeys>> | undefined;
+    let resolvedApiKeys:
+      | Awaited<ReturnType<typeof this.resolveApiKeys>>
+      | undefined;
     let resolvedSupervisorModel: string | undefined;
 
     while (attempt <= maxRetries) {

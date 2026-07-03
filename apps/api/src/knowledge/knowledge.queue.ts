@@ -1,3 +1,5 @@
+import { AIProviderType } from '../common/utils/config-types';
+
 export const RAG_EMBED_QUEUE = 'rag-embed';
 
 export interface RagEmbedJobData {
@@ -10,4 +12,6 @@ export interface RagEmbedJobData {
   contentHash: string;
   /** Embedding model to use (OpenAI 1536d models only) */
   embeddingModel: string;
+  /** AI Provider */
+  provider: AIProviderType;
 }

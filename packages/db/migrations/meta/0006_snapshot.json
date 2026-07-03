@@ -1,5 +1,5 @@
 {
-  "id": "77130f6d-bc86-4a53-950a-5b1ef0cf803f",
+  "id": "480271d2-8266-4395-8a2e-f89e008fde92",
   "prevId": "54298dab-99f6-4552-8bda-d5f696726463",
   "version": "7",
   "dialect": "postgresql",
@@ -829,23 +829,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "workflow_versions_workflow_id_idx": {
-          "name": "workflow_versions_workflow_id_idx",
-          "columns": [
-            {
-              "expression": "workflow_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "workflow_versions_workflow_id_workflows_id_fk": {
           "name": "workflow_versions_workflow_id_workflows_id_fk",
@@ -1018,23 +1002,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "workflows_pod_id_idx": {
-          "name": "workflows_pod_id_idx",
-          "columns": [
-            {
-              "expression": "pod_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "workflows_pod_id_pods_id_fk": {
           "name": "workflows_pod_id_pods_id_fk",
@@ -1133,23 +1101,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "execution_logs_execution_id_idx": {
-          "name": "execution_logs_execution_id_idx",
-          "columns": [
-            {
-              "expression": "execution_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "execution_logs_execution_id_executions_id_fk": {
           "name": "execution_logs_execution_id_executions_id_fk",
@@ -1293,59 +1245,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "executions_workspace_id_created_at_idx": {
-          "name": "executions_workspace_id_created_at_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "executions_workflow_id_idx": {
-          "name": "executions_workflow_id_idx",
-          "columns": [
-            {
-              "expression": "workflow_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "executions_pod_id_idx": {
-          "name": "executions_pod_id_idx",
-          "columns": [
-            {
-              "expression": "pod_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "executions_workflow_id_workflows_id_fk": {
           "name": "executions_workflow_id_workflows_id_fk",
@@ -2538,23 +2438,7 @@
           "notNull": false
         }
       },
-      "indexes": {
-        "approvals_execution_id_idx": {
-          "name": "approvals_execution_id_idx",
-          "columns": [
-            {
-              "expression": "execution_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "approvals_execution_id_executions_id_fk": {
           "name": "approvals_execution_id_executions_id_fk",
@@ -2645,29 +2529,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "audit_logs_workspace_id_created_at_idx": {
-          "name": "audit_logs_workspace_id_created_at_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "audit_logs_workspace_id_workspaces_id_fk": {
           "name": "audit_logs_workspace_id_workspaces_id_fk",
@@ -2846,29 +2708,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "notifications_user_id_workspace_id_idx": {
-          "name": "notifications_user_id_workspace_id_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "notifications_user_id_users_id_fk": {
           "name": "notifications_user_id_users_id_fk",
@@ -2966,44 +2806,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "schedules_enabled_next_run_at_idx": {
-          "name": "schedules_enabled_next_run_at_idx",
-          "columns": [
-            {
-              "expression": "enabled",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "next_run_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "schedules_workflow_id_idx": {
-          "name": "schedules_workflow_id_idx",
-          "columns": [
-            {
-              "expression": "workflow_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "schedules_pod_id_pods_id_fk": {
           "name": "schedules_pod_id_pods_id_fk",
@@ -3108,23 +2911,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "workflow_comments_workflow_id_idx": {
-          "name": "workflow_comments_workflow_id_idx",
-          "columns": [
-            {
-              "expression": "workflow_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "workflow_comments_workflow_id_workflows_id_fk": {
           "name": "workflow_comments_workflow_id_workflows_id_fk",
@@ -3240,6 +3027,131 @@
           "columns": [
             "workflow_id",
             "user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.provider_connections": {
+      "name": "provider_connections",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "auth_type": {
+          "name": "auth_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "config_encrypted": {
+          "name": "config_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encryption_key_Version": {
+          "name": "encryption_key_Version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "encryption_iv": {
+          "name": "encryption_iv",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encryption_auth_tag": {
+          "name": "encryption_auth_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_user_id": {
+          "name": "provider_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_email": {
+          "name": "provider_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "provider_connections_workspace_id_workspaces_id_fk": {
+          "name": "provider_connections_workspace_id_workspaces_id_fk",
+          "tableFrom": "provider_connections",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "provider_connections_workspace_id_provider_unique": {
+          "name": "provider_connections_workspace_id_provider_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "workspace_id",
+            "provider"
           ]
         }
       },

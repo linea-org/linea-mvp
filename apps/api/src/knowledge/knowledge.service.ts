@@ -11,13 +11,13 @@ import type {
 } from '@linea/db';
 import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
-import { EmbeddingService } from '../memory/embedding.service';
 import type { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
 import type { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto';
 import type { CreateEntryDto } from './dto/create-entry.dto';
 import type { SearchEntriesDto } from './dto/search-entries.dto';
 import { RAG_EMBED_QUEUE } from './knowledge.queue';
 import type { RagEmbedJobData } from './knowledge.queue';
+import { AIService } from '../services/ai/ai.service';
 
 @Injectable()
 export class KnowledgeService {
@@ -25,9 +25,9 @@ export class KnowledgeService {
 
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
-    private readonly embeddingService: EmbeddingService,
     @InjectQueue(RAG_EMBED_QUEUE)
     private readonly embedQueue: Queue<RagEmbedJobData>,
+    private readonly ai: AIService,
   ) {}
 
   async createBase(workspaceId: string, dto: CreateKnowledgeBaseDto) {
@@ -238,8 +238,9 @@ export class KnowledgeService {
       return existing;
     }
 
-    const embeddingModel =
-      kbSettings.embeddingModel ?? 'text-embedding-3-small';
+    // TODO: get them from kb settings
+    const embeddingModel = 'text-embedding-005';
+    const provider = 'google';
     const chunks = this.splitSentenceAware(
       dto.content,
       CHUNK_SIZE,
@@ -284,6 +285,7 @@ export class KnowledgeService {
           content: chunk,
           contentHash: chunkHash,
           embeddingModel,
+          provider,
         } satisfies RagEmbedJobData,
         {
           attempts: 3,
@@ -636,10 +638,17 @@ export class KnowledgeService {
 
     let queryEmbedding: number[] | null = null;
     try {
-      const vec = await this.embeddingService.embed(
-        dto.query,
-        kbSettings.embeddingModel,
-      );
+      // todo get from kb settings
+      const client = await this.ai.initialize(workspaceId, 'google');
+      // text-embedding-005
+      const vec = await client.embedding('text-embedding-005', dto.query);
+      if (vec == null) {
+        throw new Error('Failed to generate embeddings');
+      }
+      // const vec = await this.embeddingService.embed(
+      //   dto.query,
+      //   kbSettings.embeddingModel,
+      // );
       const isZero = vec.every((v) => v === 0);
       if (!isZero) queryEmbedding = vec;
     } catch {

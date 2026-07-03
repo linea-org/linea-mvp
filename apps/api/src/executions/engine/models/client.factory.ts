@@ -279,7 +279,7 @@ function createOpenAIClient(
     if (opts.onToken) {
       const stream: any = await client.chat.completions.create(
         { ...baseParams, stream: true },
-        { signal: opts.signal },
+        { signal: opts?.signal },
       );
       let text = '';
       const tcMap: Record<number, { id: string; name: string; args: string }> =
@@ -325,7 +325,7 @@ function createOpenAIClient(
     }
 
     const response = await withRetry(() =>
-      client.chat.completions.create(baseParams, { signal: opts.signal }),
+      client.chat.completions.create(baseParams, { signal: opts?.signal }),
     );
 
     const choice = response.choices[0];
