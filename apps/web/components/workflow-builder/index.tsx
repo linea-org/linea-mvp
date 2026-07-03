@@ -36,17 +36,17 @@ import { Spinner } from '@linea/ui/components/spinner';
 import { nodeTypes } from './nodes/node-types';
 import { Toolbar } from './toolbar';
 import { LibraryPanel } from './panels/library-panel';
-import { NodePanel } from './panels/node-panel';
+import { NodePanel } from './panels/node-panel/node-panel';
 import { GenerateDialog, type GenerateEvent } from './generate-dialog';
-import { BottomPanel } from './panels/bottom-panel';
-import { DeployPanel } from './deploy-panel';
-import { HistoryPanel } from './history-panel';
-import { VersionsPanel } from './versions-panel';
-import { DiffPanel } from './diff-panel';
-import { SharePanel } from './share-panel';
-import { CommentsPanel } from './comments-panel';
-import { EvalsPanel } from './evals-panel';
-import { ChatPreviewPanel } from './chat-preview-panel';
+import { BottomPanel } from './panels/bottom-panel/bottom-panel';
+import { DeployPanel } from './side-panels/deploy-panel';
+import { HistoryPanel } from './side-panels/history-panel';
+import { VersionsPanel } from './side-panels/versions-panel';
+import { DiffPanel } from './side-panels/diff-panel';
+import { SharePanel } from './side-panels/share-panel';
+import { CommentsPanel } from './side-panels/comments-panel';
+import { EvalsPanel } from './evals/evals-panel';
+import { ChatPreviewPanel } from './chat-preview/chat-preview-panel';
 import { useRouter } from 'next/navigation';
 import type { WFNode, WFEdge, Workflow, WorkflowBuilderProps, EvalTestCase, SSEEvent, NodeResult } from './workflow-builder.types';
 import { NODE_COLORS, QUICK_NODE_TYPES, getValidationState } from './workflow-validation';
@@ -54,9 +54,7 @@ import { computeAutoLayout } from './workflow-auto-layout';
 import { CanvasControls } from './canvas-controls';
 import { useWorkflowSSE } from './use-workflow-sse';
 
-/* ------------------------------------------------------------------ */
-/*  Inner builder (must be inside ReactFlowProvider)                   */
-/* ------------------------------------------------------------------ */
+// Must render inside ReactFlowProvider — useReactFlow() is used by children.
 function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) {
   const { getToken, userId } = useAuth();
   const router = useRouter();
@@ -367,7 +365,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     }));
   }
 
-  /* ---- Fetch workflow ------------------------------------------ */
   const { data: wf, isLoading: loading, error: workflowQueryError } = useQuery({
     queryKey: ['workflow-full-definition', workspaceId, podId, workflowId],
     queryFn: async () => {
@@ -992,7 +989,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     }
   }
 
-  /* ---- Loading / Error states -------------------------------- */
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-muted/30">
@@ -1061,7 +1057,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Library panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${libraryOpen ? ' border-r border-border' : ''}`}
           style={{ width: libraryOpen ? 240 : 0 }}
@@ -1069,7 +1064,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           {libraryOpen && <LibraryPanel />}
         </div>
 
-        {/* Library toggle */}
         <button
           onClick={() => setLibraryOpen((v) => !v)}
           title={libraryOpen ? 'Collapse library' : 'Expand library'}
@@ -1082,17 +1076,14 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           />
         </button>
 
-        {/* Center column: canvas + bottom panel */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
 
-        {/* Canvas */}
         <div
           ref={reactFlowWrapper}
           className="relative flex-1 min-h-0"
           onDragOver={isGenerating ? undefined : onDragOver}
           onDrop={isGenerating ? undefined : onDrop}
         >
-          {/* Canvas node search (Ctrl+F) */}
           {searchOpen && (
             <>
               <div className="absolute inset-0 z-[90]" onClick={() => { setSearchOpen(false); setSearchQuery(''); }} />
@@ -1152,7 +1143,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </>
           )}
 
-          {/* Read-only overlay during AI generation */}
           {isGenerating && (
             <div className="absolute inset-0 z-10 flex items-end justify-center pb-6 pointer-events-none">
               <div className="flex items-center gap-2 rounded-full border bg-background/90 px-4 py-2 shadow-lg text-sm font-medium text-violet-600 backdrop-blur-sm">
@@ -1196,7 +1186,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               onInteractiveToggle={() => setIsInteractive((v) => !v)}
             />
 
-            {/* Minimap with chevron toggle */}
             <Panel position="bottom-right" className="!m-0 !p-0">
               <div className="flex flex-col items-end">
                 <button
@@ -1221,7 +1210,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </Panel>
           </ReactFlow>
 
-          {/* Multi-select toolbar */}
           {(() => {
             const sel = nodes.filter((n) => n.selected);
             if (sel.length < 2) return null;
@@ -1258,7 +1246,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             );
           })()}
 
-          {/* Edge label editor */}
           {editingEdge && (
             <>
               <div className="fixed inset-0 z-[198]" onClick={commitEdgeLabel} />
@@ -1282,7 +1269,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </>
           )}
 
-          {/* Quick-connect node picker */}
           {quickConnect && (
             <>
               <div className="fixed inset-0 z-[98]" onClick={() => setQuickConnect(null)} />
@@ -1312,7 +1298,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </>
           )}
 
-          {/* Context menu */}
           {contextMenu && (
             <>
               <div className="fixed inset-0 z-[99]" onClick={() => setContextMenu(null)} />
@@ -1355,7 +1340,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Bottom panel — centered under canvas only */}
         <BottomPanel
           nodes={nodes}
           nodeResults={nodeResults}
@@ -1368,9 +1352,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           onRetryNode={handleRetryNode}
           executionOutput={executionOutput}
         />
-        </div>{/* end center column */}
+        </div>
 
-        {/* Node config panel (right side) */}
         <div
           className={`shrink-0 overflow-hidden transition-all duration-200${selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen ? ' border-l border-border' : ''}`}
           style={{ width: selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen ? 340 : 0 }}
@@ -1393,7 +1376,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Generate panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${generateOpen ? ' border-l border-border' : ''}`}
           style={{ width: generateOpen ? 400 : 0 }}
@@ -1411,7 +1393,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Deploy panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${deployPanelOpen ? ' border-l border-border' : ''}`}
           style={{ width: deployPanelOpen ? 360 : 0 }}
@@ -1430,7 +1411,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* History panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${historyOpen ? ' border-l border-border' : ''}`}
           style={{ width: historyOpen ? 400 : 0 }}
@@ -1446,7 +1426,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Versions panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${versionsOpen ? ' border-l border-border' : ''}`}
           style={{ width: versionsOpen ? 280 : 0 }}
@@ -1463,7 +1442,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Share panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${shareOpen ? ' border-l border-border' : ''}`}
           style={{ width: shareOpen ? 300 : 0 }}
@@ -1478,7 +1456,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Comments panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${commentsOpen ? ' border-l border-border' : ''}`}
           style={{ width: commentsOpen ? 320 : 0 }}
@@ -1496,7 +1473,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Evals panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${evalsOpen ? ' border-l border-border' : ''}`}
           style={{ width: evalsOpen ? 380 : 0 }}
@@ -1519,7 +1495,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Chat Preview panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${chatPreviewOpen ? ' border-l border-border' : ''}`}
           style={{ width: chatPreviewOpen ? 400 : 0 }}
@@ -1543,7 +1518,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         </div>
       </div>
 
-      {/* Diff viewer */}
       {diffVersion !== null && (
         <DiffPanel
           workspaceId={workspaceId}
@@ -1556,7 +1530,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         />
       )}
 
-      {/* Suspension banner — approval or ask_human (hidden when chat panel is open; chat handles it inline) */}
       {isSuspended && !chatPreviewOpen && (
         <div className="shrink-0 border-t border-amber-300 bg-amber-50 px-5 py-3 dark:border-amber-800 dark:bg-amber-950/30">
           <div className="flex items-center justify-between gap-4">
@@ -1617,7 +1590,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         </div>
       )}
 
-      {/* Test node dialog */}
       <Dialog open={!!testNodeDialog} onOpenChange={(o) => { if (!o) setTestNodeDialog(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -1682,9 +1654,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Exported component                                                  */
-/* ------------------------------------------------------------------ */
 export function WorkflowBuilder(props: WorkflowBuilderProps) {
   return (
     <TooltipProvider delayDuration={400}>

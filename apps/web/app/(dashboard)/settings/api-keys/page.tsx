@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useApiClient } from '@/hooks/use-api-client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
@@ -34,9 +35,12 @@ export default function ApiKeysPage() {
   const queryClient = useQueryClient();
   const wsId = activeWorkspace?.id ?? '';
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [label, setLabel] = useState('');
-  const [expiresIn, setExpiresIn] = useState<'30d' | '90d' | '365d' | 'never'>('never');
   const [newKey, setNewKey] = useState<string | null>(null);
+
+  interface ApiKeyForm { label: string; expiresIn: '30d' | '90d' | '365d' | 'never' }
+  const { register, handleSubmit, reset } = useForm<ApiKeyForm>({
+    defaultValues: { label: '', expiresIn: 'never' },
+  });
 
   const { data: keys = [], isLoading: loading } = useQuery<ApiKey[]>({
     queryKey: ['api-keys', wsId],
@@ -48,11 +52,11 @@ export default function ApiKeysPage() {
   });
 
   const createKey = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: ApiKeyForm) => {
       const api = await getApi();
       return api.post<ApiKey & { key: string }>(
         `/workspaces/${wsId}/api-keys`,
-        { label: label.trim() || undefined, expiresIn: expiresIn === 'never' ? undefined : expiresIn },
+        { label: values.label.trim() || undefined, expiresIn: values.expiresIn === 'never' ? undefined : values.expiresIn },
       );
     },
     onSuccess: (result) => {
@@ -63,6 +67,8 @@ export default function ApiKeysPage() {
       }]);
     },
   });
+
+  const onCreate = handleSubmit((values) => createKey.mutate(values));
 
   const revokeKey = useMutation({
     mutationFn: async (id: string) => {
@@ -78,8 +84,7 @@ export default function ApiKeysPage() {
   function closeDialog() {
     setDialogOpen(false);
     setNewKey(null);
-    setLabel('');
-    setExpiresIn('never');
+    reset();
   }
 
   if (wsLoading || loading) {
@@ -158,30 +163,21 @@ export default function ApiKeysPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-4 py-2">
+            <form onSubmit={onCreate} className="space-y-4 py-2">
               <div className="space-y-1.5">
                 <Label>Label (optional)</Label>
-                <Input
-                  placeholder="e.g. Production"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') createKey.mutate(); }}
-                />
+                <Input placeholder="e.g. Production" {...register('label')} />
               </div>
               <div className="space-y-1.5">
                 <Label>Expiry</Label>
-                <NativeSelect
-                  value={expiresIn}
-                  onChange={(e) => setExpiresIn(e.target.value as typeof expiresIn)}
-                  className="h-9 text-sm"
-                >
+                <NativeSelect className="h-9 text-sm" {...register('expiresIn')}>
                   <NativeSelectOption value="never">Never</NativeSelectOption>
                   <NativeSelectOption value="30d">30 days</NativeSelectOption>
                   <NativeSelectOption value="90d">90 days</NativeSelectOption>
                   <NativeSelectOption value="365d">1 year</NativeSelectOption>
                 </NativeSelect>
               </div>
-            </div>
+            </form>
           )}
 
           <DialogFooter>
@@ -189,7 +185,7 @@ export default function ApiKeysPage() {
               {newKey ? 'Done' : 'Cancel'}
             </Button>
             {!newKey && (
-              <Button onClick={() => createKey.mutate()} disabled={createKey.isPending}>
+              <Button onClick={onCreate} disabled={createKey.isPending}>
                 {createKey.isPending ? 'Creating…' : 'Create'}
               </Button>
             )}

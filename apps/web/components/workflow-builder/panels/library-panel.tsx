@@ -154,9 +154,9 @@ export function LibraryPanel() {
     );
   }, [query, allNodes]);
 
+  // The scrollable list below is a plain div (not flex/grid) so its height propagates correctly.
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Search */}
       <div className="shrink-0 border-b border-border px-2.5 py-2">
         <div className="relative">
           <HugeiconsIcon
@@ -173,7 +173,6 @@ export function LibraryPanel() {
         </div>
       </div>
 
-      {/* Scrollable list — plain div so height propagates correctly */}
       <div className="flex-1 overflow-y-auto py-1.5">
         {filtered ? (
           filtered.length === 0 ? (

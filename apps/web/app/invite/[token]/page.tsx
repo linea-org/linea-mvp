@@ -87,9 +87,7 @@ export default function InvitePage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <div className="w-full max-w-sm">
-        {/* Card */}
         <div className="rounded-xl border bg-background p-8 shadow-sm space-y-6">
-          {/* Icon */}
           <div className="flex justify-center">
             <div className="flex size-14 items-center justify-center rounded-full bg-primary/10">
               <HugeiconsIcon icon={UserAdd01Icon} className="size-7 text-primary" />

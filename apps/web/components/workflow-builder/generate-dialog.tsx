@@ -228,7 +228,6 @@ export function GenerateDialog({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2 shrink-0">
         <div className="flex items-center gap-2">
           <HugeiconsIcon icon={AiMagicIcon} className="size-4 text-foreground" />
@@ -244,7 +243,6 @@ export function GenerateDialog({
         </Button>
       </div>
 
-      {/* Chat area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-8">
@@ -317,10 +315,8 @@ export function GenerateDialog({
         )}
       </div>
 
-      {/* Input */}
       <div className="shrink-0 px-3 pb-3 pt-1">
         <div className="relative">
-          {/* Slash command menu */}
           {slashOpen && filteredCmds.length > 0 && (
             <div className="absolute bottom-full left-0 mb-1 w-full rounded-md border border-border bg-popover shadow-lg overflow-hidden z-50 animate-in fade-in-0 slide-in-from-bottom-2 duration-150">
               <div className="no-scrollbar overflow-y-auto" style={{ maxHeight: 200 }}>

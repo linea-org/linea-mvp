@@ -106,7 +106,6 @@ export default function UsagePage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold">Usage &amp; Cost</h1>
@@ -152,7 +151,6 @@ export default function UsagePage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Summary cards — always shown */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <BigStat
               label="Total tokens"
@@ -171,7 +169,6 @@ export default function UsagePage() {
             />
           </div>
 
-          {/* Token breakdown — only when token data exists */}
           {hasTokenData && tokens ? (
             <>
               <div className="rounded-xl border bg-card p-5 space-y-4">
@@ -215,7 +212,6 @@ export default function UsagePage() {
             </div>
           )}
 
-          {/* Per-workflow usage */}
           {(data?.topWorkflows?.length ?? 0) > 0 && (
             <div className="space-y-3">
               <p className="text-sm font-semibold">By workflow</p>
@@ -258,7 +254,6 @@ export default function UsagePage() {
             </div>
           )}
 
-          {/* Link to full metrics */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <HugeiconsIcon icon={FlowCircleIcon} className="size-3.5" />
             <span>For execution counts, duration, and success rates, see</span>

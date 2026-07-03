@@ -7,8 +7,8 @@ import { Textarea } from '@linea/ui/components/textarea';
 import { Label } from '@linea/ui/components/label';
 import { Separator } from '@linea/ui/components/separator';
 import { Input } from '@linea/ui/components/input';
-import { VariableChips } from '../variable-picker';
-import { ModelPicker } from '../model-picker';
+import { VariableChips } from '../../variable-picker';
+import { ModelPicker } from '../../model-picker';
 import { cn } from '@linea/ui/lib/utils';
 
 interface AgentPanelProps {

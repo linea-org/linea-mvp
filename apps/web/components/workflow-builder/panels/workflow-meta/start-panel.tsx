@@ -7,13 +7,12 @@ import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
 import { cn } from '@linea/ui/lib/utils';
+import type { InputVar } from '../../evals/eval-input-form';
 
 interface StartPanelProps {
   data: Record<string, unknown>;
   onUpdate: (data: Record<string, unknown>) => void;
 }
-
-interface InputVar { name: string; type: 'string' | 'number' | 'boolean' | 'object'; required: boolean }
 
 type TriggerType = 'manual' | 'webhook' | 'schedule';
 
@@ -117,7 +116,6 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
 
   return (
     <div className="space-y-4">
-      {/* Trigger type selector */}
       <div className="space-y-2">
         <Label>Trigger</Label>
         <div className="grid grid-cols-3 gap-1.5">
@@ -143,10 +141,8 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </p>
       </div>
 
-      {/* Schedule config */}
       {triggerType === 'schedule' && (
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-          {/* Human-readable preview */}
           <div className="rounded-md bg-primary/5 border border-primary/20 px-2.5 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/60 mb-0.5">Preview</p>
             <p className="text-xs font-medium text-primary">{describeCron(cronExpression)}</p>
@@ -204,7 +200,6 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-      {/* Webhook info */}
       {triggerType === 'webhook' && (
         <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5">
           <p className="text-xs font-medium">Webhook Trigger</p>
@@ -216,7 +211,6 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-      {/* Input variable schema */}
       {(triggerType === 'manual' || triggerType === 'webhook') && (
         <div className="space-y-3 border-t border-border pt-3">
           <div className="flex items-center justify-between">
@@ -279,7 +273,6 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-      {/* Extraction model — shown when there are input variables (public API enrichment) */}
       {(triggerType === 'manual' || triggerType === 'webhook') && (
         <div className="space-y-1.5 border-t border-border pt-3">
           <Label>Input Extraction Model</Label>
@@ -298,7 +291,6 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-      {/* Test values — manual and webhook */}
       {(triggerType === 'manual' || triggerType === 'webhook') && vars.filter((v) => v.name).length > 0 && (
         <div className="space-y-2.5 border-t border-border pt-3">
           <div>

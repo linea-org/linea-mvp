@@ -30,7 +30,6 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
 
   return (
     <div className="space-y-4">
-      {/* Mode */}
       <div className="space-y-1.5">
         <Label>Mode</Label>
         <Select value={mode} onValueChange={(v) => onUpdate({ memoryMode: v })}>
@@ -49,7 +48,6 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
         </p>
       </div>
 
-      {/* Scope */}
       <div className="space-y-1.5">
         <Label>Scope</Label>
         <Select value={scope} onValueChange={(v) => onUpdate({ memoryScope: v })}>
@@ -64,7 +62,6 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
         </Select>
       </div>
 
-      {/* Session key */}
       {showSessionKey && (
         <div className="space-y-1.5">
           <Label>Session Key</Label>
@@ -79,7 +76,6 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
         </div>
       )}
 
-      {/* Key — write / delete */}
       {showKey && (
         <div className="space-y-1.5">
           <Label>Key</Label>
@@ -91,7 +87,6 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
         </div>
       )}
 
-      {/* Value — write only */}
       {showValue && (
         <div className="space-y-1.5">
           <Label>Value</Label>
@@ -107,7 +102,6 @@ export function MemoryPanel({ data, onUpdate }: MemoryPanelProps) {
         </div>
       )}
 
-      {/* Query — retrieve only */}
       {showQuery && (
         <>
           <div className="space-y-1.5">

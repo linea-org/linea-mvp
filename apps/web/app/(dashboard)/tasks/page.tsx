@@ -558,7 +558,6 @@ function TasksPageInner() {
 
   const inputBox = (
     <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm transition-all focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/50">
-      {/* Slash command menu */}
       {slashOpen && filteredSlash.length > 0 && (
         <div className="animate-in border-b border-border/50 duration-150 fade-in-0 slide-in-from-bottom-2">
           <div
@@ -606,7 +605,6 @@ function TasksPageInner() {
         </div>
       )}
 
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -615,7 +613,6 @@ function TasksPageInner() {
         onChange={handleFileSelect}
       />
 
-      {/* Attachment chips */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-1.5 px-4 pt-3 pb-1">
           {attachments.map((a) => (
@@ -645,7 +642,6 @@ function TasksPageInner() {
         </div>
       )}
 
-      {/* Textarea row */}
       <div className="flex items-end gap-2 px-3 py-3">
         <div className="relative min-h-[1.5rem] flex-1">
           <textarea
@@ -660,7 +656,6 @@ function TasksPageInner() {
             rows={1}
             className="max-h-40 min-h-[1.5rem] w-full resize-none bg-transparent text-sm leading-relaxed text-foreground outline-none"
           />
-          {/* Animated ticker placeholder */}
           {!input && (
             <p
               aria-hidden
@@ -677,7 +672,6 @@ function TasksPageInner() {
           )}
         </div>
 
-        {/* Right side: mic + send/stop */}
         <div className="flex shrink-0 items-center gap-1.5 self-end">
           <button
             onClick={toggleMic}
@@ -712,7 +706,6 @@ function TasksPageInner() {
         </div>
       </div>
 
-      {/* Bottom toolbar */}
       <div className="flex items-center gap-0.5 border-t border-border/50 px-3 py-1.5">
         <AttachMenu
           disabled={isStreaming}
@@ -726,7 +719,6 @@ function TasksPageInner() {
         />
         <div className="flex-1" />
 
-        {/* Model selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
@@ -823,7 +815,6 @@ function TasksPageInner() {
       </div>
 
       <div className="flex flex-1 flex-col min-w-0">
-        {/* Top bar */}
         <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-4 py-2">
           <div className="flex items-center gap-2">
             <Button

@@ -187,7 +187,6 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Notifications</h1>
@@ -203,9 +202,7 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-3">
-        {/* Read filter */}
         <div className="flex gap-4">
           {(['all', 'unread'] as const).map((t) => (
             <button
@@ -217,7 +214,6 @@ export default function NotificationsPage() {
             </button>
           ))}
         </div>
-        {/* Type filter */}
         <div className="flex items-center gap-1">
           {TYPE_FILTERS.map((f) => (
             <button

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -36,6 +36,11 @@ interface Invite {
   expiresAt: string;
 }
 
+interface InviteFormValues {
+  email: string;
+  role: 'admin' | 'editor' | 'viewer';
+}
+
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Owner', admin: 'Admin', editor: 'Editor', viewer: 'Viewer',
 };
@@ -63,9 +68,10 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
   const getApi = useApiClient();
   const shareKey = ['workspace-share', workspaceId];
 
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'admin' | 'editor' | 'viewer'>('editor');
-  const [sendError, setSendError] = useState('');
+  const { control, handleSubmit, watch, reset } = useForm<InviteFormValues>({
+    defaultValues: { email: '', role: 'editor' },
+  });
+  const email = watch('email');
 
   const { data, isLoading: loading } = useQuery({
     queryKey: shareKey,
@@ -85,20 +91,20 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
   const invites = data?.invites ?? [];
 
   const sendInviteMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: InviteFormValues) => {
       const api = await getApi();
-      return api.post<Invite>(`/workspaces/${workspaceId}/invites`, { email: email.trim(), role });
+      return api.post<Invite>(`/workspaces/${workspaceId}/invites`, { email: values.email.trim(), role: values.role });
     },
     onSuccess: (invite) => {
       queryClient.setQueryData(shareKey, (prev: { members: Member[]; invites: Invite[] } | undefined) =>
         prev ? { ...prev, invites: [...prev.invites, invite] } : prev,
       );
-      setEmail('');
-      setSendError('');
+      reset();
     },
-    onError: (err) => setSendError(friendlyApiError(err)),
     meta: { skipGlobalErrorToast: true },
   });
+  const sendError = sendInviteMutation.error ? friendlyApiError(sendInviteMutation.error) : '';
+  const onSubmitInvite = handleSubmit((values) => sendInviteMutation.mutate(values));
 
   const revokeInviteMutation = useMutation({
     mutationFn: async (inviteId: string) => {
@@ -115,7 +121,6 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
         <div>
           <p className="text-sm font-semibold">Share & collaborate</p>
@@ -129,34 +134,44 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
       <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-5 p-4">
 
-          {/* Invite by email */}
           <div className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Invite people</p>
             <div className="flex gap-2">
-              <Input
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setSendError(''); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') sendInviteMutation.mutate(); }}
-                placeholder="Email address"
-                type="email"
-                className="flex-1 text-xs h-8"
+              <Controller
+                control={control}
+                name="email"
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void onSubmitInvite(); }}
+                    placeholder="Email address"
+                    type="email"
+                    className="flex-1 text-xs h-8"
+                  />
+                )}
               />
-              <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
-                <SelectTrigger className="w-24 h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="viewer">Viewer</SelectItem>
-                  <SelectItem value="editor">Editor</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
+              <Controller
+                control={control}
+                name="role"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-24 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                      <SelectItem value="editor">Editor</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             {sendError && <p className="text-[11px] text-destructive">{sendError}</p>}
             <Button
               size="sm"
               className="w-full gap-1.5"
-              onClick={() => sendInviteMutation.mutate()}
+              onClick={() => void onSubmitInvite()}
               disabled={sendInviteMutation.isPending || !email.trim()}
             >
               {sendInviteMutation.isPending
@@ -166,7 +181,6 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
             </Button>
           </div>
 
-          {/* Members with access */}
           <div className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Members with access
@@ -200,7 +214,6 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
             )}
           </div>
 
-          {/* Pending invites */}
           {invites.length > 0 && (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

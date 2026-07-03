@@ -496,7 +496,6 @@ function DashboardSidebar() {
 
       <GettingStarted />
       <SidebarFooter className="px-3 py-3 space-y-1">
-        {/* Theme toggle */}
         <div className="flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
           {([
             { key: 'light',  icon: Sun01Icon,     title: 'Light' },
@@ -796,7 +795,6 @@ function NotificationBell() {
             </div>
           </SheetHeader>
 
-          {/* Type filter pills */}
           <div className="flex items-center gap-1 overflow-x-auto px-4 py-2 border-b border-border/50 shrink-0">
             {NOTIF_FILTERS.map((f) => (
               <button
@@ -946,7 +944,6 @@ function NotificationBell() {
             )}
           </ScrollArea>
 
-          {/* Footer */}
           <div className="border-t px-4 py-3 shrink-0">
             <Link
               href="/notifications"

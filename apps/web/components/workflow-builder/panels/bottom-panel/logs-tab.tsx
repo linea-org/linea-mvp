@@ -13,7 +13,7 @@ import {
 import { Spinner } from '@linea/ui/components/spinner';
 import { useMutation } from '@tanstack/react-query';
 import type { Node } from '@xyflow/react';
-import type { NodeResult } from '../workflow-builder.types';
+import type { NodeResult } from '../../workflow-builder.types';
 import { useApiClient } from '@/hooks/use-api-client';
 import { StatusIcon, statusColor, statusLabel, type Log } from './bottom-panel-shared';
 

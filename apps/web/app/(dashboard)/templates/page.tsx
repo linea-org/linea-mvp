@@ -255,7 +255,6 @@ export default function TemplatesPage() {
         <p className="text-sm text-muted-foreground">Start with a pre-built workflow and customise it.</p>
       </div>
 
-      {/* Tab: Internal / Community */}
       <div className="flex items-center gap-1 border-b">
         {(['internal', 'community'] as const).map((tab) => (
           <button
@@ -275,7 +274,6 @@ export default function TemplatesPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 flex-wrap items-center">
         <Input
           placeholder="Search templates…"
@@ -306,7 +304,6 @@ export default function TemplatesPage() {
         </div>
       </div>
 
-      {/* Grid */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -389,7 +386,6 @@ export default function TemplatesPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Prerequisites */}
             {previewTemplate?.prerequisites && previewTemplate.prerequisites.length > 0 && (
               <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/10 p-3 space-y-2">
                 <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
@@ -408,7 +404,6 @@ export default function TemplatesPage() {
               </div>
             )}
 
-            {/* Node list */}
             {previewLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 rounded-md" />)}
@@ -490,7 +485,6 @@ export default function TemplatesPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Prerequisites checklist */}
             {selectedTemplate?.prerequisites && selectedTemplate.prerequisites.length > 0 && (
               <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/10 p-3 space-y-2">
                 <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
@@ -512,7 +506,6 @@ export default function TemplatesPage() {
               </div>
             )}
 
-            {/* Workflow name */}
             <div className="space-y-1.5">
               <Label htmlFor="wf-name">Workflow name</Label>
               <Input
@@ -524,7 +517,6 @@ export default function TemplatesPage() {
               />
             </div>
 
-            {/* Pod selector */}
             <div className="space-y-1.5">
               <Label>Pod</Label>
               {pods.length === 0 ? (
@@ -641,12 +633,10 @@ function TemplateCard({
         <p className="text-xs text-muted-foreground line-clamp-2">{template.description}</p>
       )}
       <div className="mt-auto flex items-center justify-between gap-2">
-        {/* Footer: internal shows "Built-in", community shows creator + upvotes */}
         {isInternal ? (
           <span className="text-[11px] text-muted-foreground">Built-in</span>
         ) : (
           <div className="flex items-center gap-2 min-w-0">
-            {/* Creator info */}
             {(template.creatorName || template.creatorAvatarUrl || template.creatorEmail) ? (
               <div className="flex items-center gap-1 min-w-0">
                 {template.creatorAvatarUrl ? (
@@ -669,7 +659,6 @@ function TemplateCard({
                 {template.downloads > 0 ? `${template.downloads} uses` : 'Community'}
               </span>
             )}
-            {/* Upvote button */}
             <button
               onClick={(e) => { e.stopPropagation(); onToggleUpvote(template); }}
               className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors shrink-0 ${

@@ -137,7 +137,6 @@ function CommentCard({
 
   return (
     <div className={`group rounded-lg border border-border px-3 py-2.5 space-y-1.5 transition-opacity ${comment.resolved ? 'opacity-40' : ''} ${comment.pinned ? 'border-primary/30 bg-primary/5' : ''}`}>
-      {/* Meta row */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <Avatar className="size-5 shrink-0">
@@ -153,7 +152,6 @@ function CommentCard({
           )}
         </div>
 
-        {/* Resolve + more menu */}
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           {isTopLevel && (
             <button
@@ -199,10 +197,8 @@ function CommentCard({
         </div>
       </div>
 
-      {/* Body */}
       <p className="text-xs leading-relaxed text-foreground/90">{comment.body}</p>
 
-      {/* Reactions + quick actions */}
       <div className="flex items-center gap-1 flex-wrap">
         {visibleReactions.map((r) => (
           <button
@@ -219,7 +215,6 @@ function CommentCard({
           </button>
         ))}
 
-        {/* Quick action icons — appear on hover */}
         <div className="ml-auto flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <ReactionPicker onReact={(e) => onReact(comment.id, e)} />
           <button
@@ -256,13 +251,14 @@ function CommentThread({
   const toggleThis = () => onToggle(comment.id);
   const sharedProps = { onResolve, onReply, onReact, onDelete, onPin, currentUserId };
 
+  // Reply thread lines are built from absolutely-positioned spans: a vertical bridge from the
+  // parent card, then (when collapsed) a short stub + horizontal arm forming an elbow to the pill.
   return (
     <div>
       <CommentCard comment={comment} isTopLevel={depth === 0} {...sharedProps} />
 
       {hasReplies && (
         <div className="ml-2.5">
-          {/* Bridge from parent card to reply block */}
           <div className="relative h-1.5">
             <span
               className="absolute w-px bg-border/50"
@@ -271,19 +267,16 @@ function CommentThread({
           </div>
 
           {isCollapsed ? (
-            /* ── Collapsed: show expand pill connected to line ── */
             <div className="flex items-center">
               <button
                 onClick={toggleThis}
                 className="group/line relative w-5 shrink-0 self-stretch cursor-pointer"
                 title="Expand replies"
               >
-                {/* Short vertical stub to the pill */}
                 <span
                   className="absolute w-px rounded-full bg-border/60 group-hover/line:bg-primary/60 transition-colors"
                   style={{ left: LINE_X, top: 0, height: 16 }}
                 />
-                {/* Horizontal arm */}
                 <span
                   className="absolute h-px rounded-full bg-border/60 group-hover/line:bg-primary/60 transition-colors"
                   style={{ left: LINE_X, top: 16, width: ELBOW_W }}
@@ -560,7 +553,6 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <HugeiconsIcon icon={BubbleChatAddIcon} className="size-4 text-muted-foreground" />
@@ -576,7 +568,6 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
         </Button>
       </div>
 
-      {/* Node filter */}
       {nodeOptions.length > 0 && (
         <div className="no-scrollbar overflow-x-auto border-b border-border">
           <div className="flex items-center gap-0.5 px-2 py-1.5 min-w-max">
@@ -599,7 +590,6 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
         </div>
       )}
 
-      {/* Comment list */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -632,9 +622,7 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
         )}
       </div>
 
-      {/* Compose */}
       <div className="border-t border-border p-3 space-y-2">
-        {/* Reply context */}
         {replyTo && (
           <div className="flex items-center justify-between rounded-md bg-muted/50 px-2 py-1.5">
             <p className="text-[11px] text-muted-foreground truncate">
@@ -647,7 +635,6 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
           </div>
         )}
 
-        {/* Link input */}
         {linkPrompt && (
           <div className="flex items-center gap-1.5">
             <input
@@ -670,10 +657,8 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
           </div>
         )}
 
-        {/* Hidden file input */}
         <input ref={fileInputRef} type="file" className="sr-only" onChange={handleFileSelect} />
 
-        {/* Textarea + send */}
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}
@@ -699,7 +684,6 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
           </Button>
         </div>
 
-        {/* Attach actions */}
         <div className="flex items-center gap-1 -mt-0.5">
           <AttachBar
             onFile={() => !uploading && fileInputRef.current?.click()}

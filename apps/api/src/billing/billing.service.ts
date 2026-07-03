@@ -11,7 +11,7 @@ import type { DrizzleDB } from '@linea/db';
 import { workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 
-export const PLANS: Record<
+const PLANS: Record<
   string,
   {
     name: string;

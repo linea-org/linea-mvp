@@ -15,9 +15,6 @@ import {
 import { cn } from '@linea/ui/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@linea/ui/components/tooltip';
 
-/* ------------------------------------------------------------------ */
-/*  Theme map                                                           */
-/* ------------------------------------------------------------------ */
 interface Theme { icon: IconSvgElement; color: string }
 const defaultTheme: Theme = { icon: Robot01Icon, color: '#3b82f6' };
 const themes: Record<string, Theme> = {
@@ -51,9 +48,6 @@ const themes: Record<string, Theme> = {
   datetime:    { icon: Calendar01Icon,          color: '#0d9488' },
 };
 
-/* ------------------------------------------------------------------ */
-/*  Inline property extractor                                           */
-/* ------------------------------------------------------------------ */
 function fmt(v: unknown, max = 26): string {
   const s = String(v ?? '');
   return s.length > max ? s.slice(0, max) + '…' : s;
@@ -162,9 +156,6 @@ function getNodeProperties(nodeType: string, data: Record<string, unknown>): Arr
   return rows.filter((r): r is { key: string; value: string } => r !== null).slice(0, 3);
 }
 
-/* ------------------------------------------------------------------ */
-/*  Status dot                                                          */
-/* ------------------------------------------------------------------ */
 function StatusDot({ status }: { status?: string }) {
   if (!status) return null;
   const cls =
@@ -175,9 +166,6 @@ function StatusDot({ status }: { status?: string }) {
   return <span className={cls} />;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Handle classes                                                      */
-/* ------------------------------------------------------------------ */
 const TARGET_CLS =
   '!size-3 !rounded-full !border-[2px] !border-muted-foreground/60 !bg-background ' +
   'hover:!border-foreground hover:!scale-125 transition-transform duration-150';
@@ -191,9 +179,6 @@ const FALSE_CLS =
   '!size-3 !rounded-full !border-[2px] !border-background !bg-red-400 ' +
   'hover:!bg-red-500 hover:!scale-125 transition-transform duration-150';
 
-/* ------------------------------------------------------------------ */
-/*  Status ring map                                                     */
-/* ------------------------------------------------------------------ */
 const STATUS_RING: Record<string, { border: string; shadow: string; animate?: string }> = {
   running:   { border: 'rgb(59,130,246)',  shadow: '0 0 0 3px rgba(59,130,246,0.45)', animate: 'animate-pulse' },
   completed: { border: 'rgb(34,197,94)',   shadow: '0 0 0 2px rgba(34,197,94,0.55)'  },
@@ -201,9 +186,6 @@ const STATUS_RING: Record<string, { border: string; shadow: string; animate?: st
   suspended: { border: 'rgb(245,158,11)',  shadow: '0 0 0 2px rgba(245,158,11,0.55)' },
 };
 
-/* ------------------------------------------------------------------ */
-/*  NodeShell                                                           */
-/* ------------------------------------------------------------------ */
 function NodeShell({
   nodeType, label, status, selected,
   properties, posLocked, delLocked,
@@ -237,7 +219,6 @@ function NodeShell({
       )}
       style={{ borderColor: borderColor ?? 'hsl(var(--border))', boxShadow }}
     >
-      {/* Header */}
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: theme.color }}>
           <HugeiconsIcon icon={theme.icon} className="size-3.5 text-white" strokeWidth={1.5} />
@@ -256,7 +237,6 @@ function NodeShell({
             </div>
           ) : null}
         </div>
-        {/* Port-orientation toggle */}
         <button
           title={portsVertical ? 'Switch to horizontal ports' : 'Switch to vertical ports'}
           onClick={(e) => { e.stopPropagation(); onTogglePorts(); }}
@@ -271,7 +251,6 @@ function NodeShell({
         </button>
       </div>
 
-      {/* Inline property chips */}
       {properties.length > 0 && (
         <div className="flex flex-wrap gap-1 px-2.5 pb-2">
           {properties.map(({ key, value }) => (
@@ -287,7 +266,6 @@ function NodeShell({
         </div>
       )}
 
-      {/* Output preview strip */}
       {outputPreview && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -305,13 +283,6 @@ function NodeShell({
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  CustomNode                                                          */
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-/*  Connection-rule helpers                                             */
-/* ------------------------------------------------------------------ */
 
 /** Nodes whose target handle accepts more than 1 incoming connection */
 const MULTI_TARGET_NODES = new Set(['merge', 'end']);
@@ -379,10 +350,8 @@ export const CustomNode = memo(function CustomNode({ id, data, selected }: NodeP
       portsVertical={portsVertical} onTogglePorts={togglePorts}
       outputPreview={outputPreview}
     >
-      {/* Target handle */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
 
-      {/* Source handles */}
       {isBranching && branchTrue && branchFalse ? (
         <>
           {portsVertical ? (
@@ -430,9 +399,6 @@ export const CustomNode = memo(function CustomNode({ id, data, selected }: NodeP
   );
 });
 
-/* ------------------------------------------------------------------ */
-/*  StartNode                                                           */
-/* ------------------------------------------------------------------ */
 export const StartNode = memo(function StartNode({ id, data, selected }: NodeProps) {
   const { setNodes } = useReactFlow();
   const label         = (data.nodeName       as string)  ?? (data.label as string) ?? 'Start';
@@ -459,9 +425,6 @@ export const StartNode = memo(function StartNode({ id, data, selected }: NodePro
   );
 });
 
-/* ------------------------------------------------------------------ */
-/*  EndNode                                                             */
-/* ------------------------------------------------------------------ */
 export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) {
   const { setNodes } = useReactFlow();
   const label         = (data.nodeName       as string)  ?? (data.label as string) ?? 'End';
@@ -474,21 +437,18 @@ export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) 
     setNodes((nds) => nds.map((n) => n.id === id ? { ...n, data: { ...n.data, portsVertical: !portsVertical } } : n));
   }
 
+  // End accepts any number of incoming connections — multiple branches can converge here
   return (
     <NodeShell
       nodeType="end" label={label} selected={!!selected}
       properties={[]} posLocked={posLocked} delLocked={delLocked}
       portsVertical={portsVertical} onTogglePorts={togglePorts}
     >
-      {/* End accepts any number of incoming connections — multiple branches can converge here */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
     </NodeShell>
   );
 });
 
-/* ------------------------------------------------------------------ */
-/*  FrameNode                                                           */
-/* ------------------------------------------------------------------ */
 const FRAME_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
 export const FrameNode = memo(function FrameNode({ id, data, selected }: NodeProps) {
@@ -575,7 +535,6 @@ export const FrameNode = memo(function FrameNode({ id, data, selected }: NodePro
         onResize={handleResize}
       />
 
-      {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-2">
         <button
           onClick={toggleCollapse}
@@ -608,7 +567,6 @@ export const FrameNode = memo(function FrameNode({ id, data, selected }: NodePro
           </span>
         )}
 
-        {/* Color picker — only when selected */}
         {selected && !editingLabel && (
           <div className="nodrag flex items-center gap-0.5">
             {FRAME_COLORS.map((c) => (
@@ -630,9 +588,6 @@ export const FrameNode = memo(function FrameNode({ id, data, selected }: NodePro
   );
 });
 
-/* ------------------------------------------------------------------ */
-/*  NoteNode                                                            */
-/* ------------------------------------------------------------------ */
 export const NoteNode = memo(function NoteNode({ data, selected }: NodeProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState((data.noteText as string) ?? '');

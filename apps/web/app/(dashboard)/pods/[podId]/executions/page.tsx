@@ -177,7 +177,6 @@ export default function ExecutionsPage() {
           {refreshing && <HugeiconsIcon icon={ReloadIcon} className="size-3.5 text-muted-foreground animate-spin" />}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Search */}
           <div className="relative">
             <HugeiconsIcon icon={Search01Icon} className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
@@ -187,7 +186,6 @@ export default function ExecutionsPage() {
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
-          {/* Date filter pills */}
           <div className="flex items-center gap-1 rounded-lg border p-0.5">
             {DATE_FILTERS.map((f) => (
               <button
@@ -204,7 +202,6 @@ export default function ExecutionsPage() {
             ))}
           </div>
 
-          {/* Workflow filter */}
           {workflows.length > 0 && (
             <Select value={workflowFilter} onValueChange={(v) => { setWorkflowFilter(v); setPage(1); }}>
               <SelectTrigger className="w-44">
@@ -219,7 +216,6 @@ export default function ExecutionsPage() {
             </Select>
           )}
 
-          {/* Status filter */}
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="All statuses" />

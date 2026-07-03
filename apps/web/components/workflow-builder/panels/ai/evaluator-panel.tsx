@@ -5,8 +5,8 @@ import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import { Textarea } from '@linea/ui/components/textarea';
 import type { Node } from '@xyflow/react';
-import { VariableChips } from '../variable-picker';
-import { ModelPicker } from '../model-picker';
+import { VariableChips } from '../../variable-picker';
+import { ModelPicker } from '../../model-picker';
 
 interface EvaluatorPanelProps {
   data: Record<string, unknown>;

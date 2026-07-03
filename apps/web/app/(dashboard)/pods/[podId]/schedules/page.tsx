@@ -221,7 +221,6 @@ export default function SchedulesPage() {
         </Button>
       </div>
 
-      {/* Search + filter bar */}
       {!loading && !wsLoading && schedules.length > 0 && (
         <div className="flex items-center gap-2">
           <div className="relative flex-1 max-w-xs">
@@ -317,7 +316,6 @@ export default function SchedulesPage() {
               </div>
             </div>
           ))}
-          {/* Pagination */}
           {filtered.length > PAGE_SIZE && (
             <div className="flex items-center justify-between border-t border-border px-1 pt-3">
               <span className="text-xs text-muted-foreground">
@@ -445,7 +443,6 @@ export default function SchedulesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Delete confirm */}
       <Dialog open={!!deleteConfirm} onOpenChange={(o) => !o && setDeleteConfirm(null)}>
         <DialogContent>
           <DialogHeader>

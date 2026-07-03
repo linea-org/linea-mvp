@@ -1,4 +1,4 @@
-import type { EvalOperator, EvalTestCase } from './workflow-builder.types';
+import type { EvalOperator, EvalTestCase } from '../workflow-builder.types';
 
 export type Operator = EvalOperator;
 export type TestCase = EvalTestCase;

@@ -16,11 +16,7 @@ import { workflows } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 import { NodeExecutorService } from './node-executor.service';
 import type { WorkflowState } from './variable-substitution';
-import {
-  executeLoopNode,
-  checkLoopTimeout,
-  MAX_LOOP_TIMEOUT_MS,
-} from './executors/loop.executor';
+import { executeLoopNode, checkLoopTimeout } from './executors/loop.executor';
 import type { LoopNodeData, LoopOutput } from './executors/loop.executor';
 import type { AgentResult } from './executors/agent.executor';
 import { drainWithTimeout } from './drain-with-timeout';
@@ -34,7 +30,7 @@ export interface WorkflowNode {
   position: { x: number; y: number };
 }
 
-export interface WorkflowEdge {
+interface WorkflowEdge {
   id: string;
   source: string;
   target: string;
@@ -58,7 +54,7 @@ export type NodeUpdateCallback = (
 
 export type AgentTokenCallback = (nodeId: string, delta: string) => void;
 
-export const WorkflowStateAnnotation = Annotation.Root({
+const WorkflowStateAnnotation = Annotation.Root({
   variables: Annotation<Record<string, any>>({
     reducer: (l, r) => ({ ...l, ...r }),
     default: () => ({ input: '', lastOutput: '' }),
@@ -100,8 +96,6 @@ export const WorkflowStateAnnotation = Annotation.Root({
     default: () => ({ input_tokens: 0, output_tokens: 0, total_tokens: 0 }),
   }),
 });
-
-export { MAX_LOOP_TIMEOUT_MS };
 
 @Injectable()
 export class LangGraphService {

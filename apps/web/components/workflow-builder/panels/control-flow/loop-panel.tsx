@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import type { Node } from '@xyflow/react';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
-import { VariableChips } from '../variable-picker';
+import { VariableChips } from '../../variable-picker';
 
 interface LoopPanelProps {
   data: Record<string, unknown>;

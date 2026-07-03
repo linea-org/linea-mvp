@@ -241,7 +241,6 @@ function GanttTimeline({
 
   return (
     <div className="space-y-1">
-      {/* Time axis */}
       <div className="relative h-5 ml-36">
         {marks.map((m) => (
           <span
@@ -254,7 +253,6 @@ function GanttTimeline({
         ))}
       </div>
 
-      {/* Rows */}
       <div className="space-y-1.5">
         {rows.map(({ nodeId, name, status, startMs, endMs, durMs }) => {
           const barLeft = startMs != null ? ((startMs - effectiveStart) / totalMs) * 100 : 0;
@@ -281,7 +279,6 @@ function GanttTimeline({
         })}
       </div>
 
-      {/* Legend */}
       <div className="flex flex-wrap gap-3 pt-2 text-[10px] text-muted-foreground">
         {Object.entries({ completed: 'bg-green-500', failed: 'bg-red-500', running: 'bg-blue-500', suspended: 'bg-amber-400', skipped: 'bg-muted-foreground/30' }).map(([s, c]) => (
           <span key={s} className="flex items-center gap-1 capitalize">
@@ -551,7 +548,6 @@ function ExecutionCanvas({
         onClick={onClose}
       />
       <div className="fixed inset-4 z-[201] flex flex-col rounded-xl border bg-background shadow-2xl overflow-hidden">
-        {/* Header */}
         <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <span className="text-sm font-semibold">Canvas view</span>
           <div className="flex items-center gap-6">
@@ -573,7 +569,6 @@ function ExecutionCanvas({
             </button>
           </div>
         </div>
-        {/* Canvas */}
         <div className="flex-1 relative">
           <ReactFlow
             nodes={rfNodes}
@@ -824,7 +819,6 @@ export default function ExecutionDetailPage() {
           </Button>
         </div>
       )}
-      {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="font-mono text-sm text-muted-foreground">{execution.id}</h1>
         <Badge variant={STATUS_VARIANT[execution.status] ?? 'secondary'}>
@@ -878,7 +872,6 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Meta row */}
       <div className="grid grid-cols-3 gap-4 text-sm">
         <div>
           <p className="text-muted-foreground text-xs">Trigger</p>
@@ -904,7 +897,6 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Suspension panel */}
       {execution.status === 'suspended' && (
         <>
           <Separator />
@@ -972,7 +964,6 @@ export default function ExecutionDetailPage() {
 
       <Separator />
 
-      {/* Node timeline + Gantt */}
       <div>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-3">
@@ -1016,7 +1007,6 @@ export default function ExecutionDetailPage() {
 
       <Separator />
 
-      {/* Input / Output */}
       <div className="grid grid-cols-2 gap-6">
         <div>
           <p className="mb-2 text-sm font-medium">Input</p>
@@ -1032,7 +1022,6 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Canvas view */}
       {workflow && (
         <ExecutionCanvas
           workflow={workflow}
@@ -1042,7 +1031,6 @@ export default function ExecutionDetailPage() {
         />
       )}
 
-      {/* Log settings dialog */}
       {workflow && logSettingsOpen && (
         <LogSettingsDialog
           open={logSettingsOpen}

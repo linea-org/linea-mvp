@@ -83,7 +83,6 @@ export function WorkflowRunner({
 
   return (
     <div className={`linea-runner${className ? ` ${className}` : ''}`} data-status={status}>
-      {/* Input fields */}
       {inputs.length > 0 && (
         <div className="linea-runner__fields">
           {inputs.map((field) => (
@@ -119,8 +118,6 @@ export function WorkflowRunner({
           ))}
         </div>
       )}
-
-      {/* Run / Reset button */}
       <div className="linea-runner__actions">
         {(status === 'idle' || status === 'running') && (
           <button
@@ -144,8 +141,6 @@ export function WorkflowRunner({
           </button>
         )}
       </div>
-
-      {/* Node progress */}
       {nodeEvents.length > 0 && (
         <ul className="linea-runner__nodes" aria-label="Node progress">
           {nodeEvents.map((ev) => (
@@ -156,8 +151,6 @@ export function WorkflowRunner({
           ))}
         </ul>
       )}
-
-      {/* Suspension UI */}
       {status === 'suspended' && interrupt && (
         <div className="linea-runner__suspend" role="region" aria-label="Workflow paused">
           <p className="linea-runner__suspend-title">
@@ -212,8 +205,6 @@ export function WorkflowRunner({
           )}
         </div>
       )}
-
-      {/* Result */}
       {status === 'completed' && execution?.output != null && (
         <div className="linea-runner__result">
           <p className="linea-runner__result-label">Result</p>
@@ -226,8 +217,6 @@ export function WorkflowRunner({
           )}
         </div>
       )}
-
-      {/* Error */}
       {status === 'failed' && error && (
         <div className="linea-runner__error" role="alert">
           <span className="linea-runner__error-icon" aria-hidden>✕</span>

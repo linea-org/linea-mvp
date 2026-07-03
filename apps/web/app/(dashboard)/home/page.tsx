@@ -101,7 +101,6 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold">Welcome back, {firstName}</h1>
@@ -129,7 +128,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Stats */}
       {loading || wsLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
@@ -157,7 +155,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Recent runs */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold">Recent runs</p>
@@ -222,7 +219,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Top workflows */}
       {!loading && metrics && metrics.topWorkflows.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">

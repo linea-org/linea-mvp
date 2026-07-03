@@ -126,7 +126,6 @@ export default function EvalsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Evals</h1>
         <div className="flex items-center gap-2 flex-wrap">
@@ -192,7 +191,6 @@ export default function EvalsPage() {
         </div>
       )}
 
-      {/* Empty state */}
       {!selectedPodId && (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <p className="text-sm font-medium text-muted-foreground">Select a pod and workflow to get started</p>
@@ -207,7 +205,6 @@ export default function EvalsPage() {
         </div>
       )}
 
-      {/* Eval cases */}
       {selectedWfId && testCases.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -333,7 +330,6 @@ export default function EvalsPage() {
         </div>
       )}
 
-      {/* Run history */}
       {selectedWfId && (runHistory?.length ?? 0) > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">

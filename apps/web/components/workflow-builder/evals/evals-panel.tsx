@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Add01Icon, Cancel01Icon, Loading01Icon, PlayIcon, TestTube01Icon,
@@ -47,50 +48,65 @@ export function EvalsPanel({
   const [results, setResults] = useState<TestCaseResult[] | null>(null);
   const [expandedCase, setExpandedCase] = useState<string | null>(testCases[0]?.id ?? null);
 
+  const { control, watch, getValues, reset } = useForm<{ testCases: TestCase[] }>({
+    defaultValues: { testCases },
+  });
+  const { fields, append, remove, update } = useFieldArray({ control, name: 'testCases', keyName: '_fieldKey' });
+
+  const testCasesRef = useRef(testCases);
+  testCasesRef.current = testCases;
+
+  // Re-seed only when a different workflow loads — testCases itself isn't a dep,
+  // since onTestCasesChange below would otherwise echo straight back into a reset loop.
+  useEffect(() => {
+    reset({ testCases: testCasesRef.current });
+  }, [workflowId, reset]);
+
+  useEffect(() => {
+    const sub = watch((value) => onTestCasesChange((value.testCases ?? []) as TestCase[]));
+    return () => sub.unsubscribe();
+  }, [watch, onTestCasesChange]);
+
   function addCase() {
     const c = newCase();
-    onTestCasesChange([...testCases, c]);
+    append(c);
     setExpandedCase(c.id);
   }
 
-  function removeCase(id: string) {
-    onTestCasesChange(testCases.filter((c) => c.id !== id));
+  function removeCase(index: number, id: string) {
+    remove(index);
     if (expandedCase === id) setExpandedCase(null);
   }
 
-  function updateCase(id: string, patch: Partial<TestCase>) {
-    onTestCasesChange(testCases.map((c) => c.id === id ? { ...c, ...patch } : c));
+  function updateCase(index: number, patch: Partial<TestCase>) {
+    update(index, { ...getValues().testCases[index]!, ...patch });
   }
 
-  function addAssertion(caseId: string) {
-    updateCase(caseId, {
-      assertions: [
-        ...(testCases.find((c) => c.id === caseId)?.assertions ?? []),
-        newAssertion(),
-      ],
+  function addAssertion(index: number) {
+    const current = getValues().testCases[index]!;
+    update(index, { ...current, assertions: [...current.assertions, newAssertion()] });
+  }
+
+  function updateAssertion(index: number, idx: number, patch: Partial<Assertion>) {
+    const current = getValues().testCases[index]!;
+    update(index, {
+      ...current,
+      assertions: current.assertions.map((a, i) => i === idx ? { ...a, ...patch } : a),
     });
   }
 
-  function updateAssertion(caseId: string, idx: number, patch: Partial<Assertion>) {
-    const tc = testCases.find((c) => c.id === caseId);
-    if (!tc) return;
-    updateCase(caseId, {
-      assertions: tc.assertions.map((a, i) => i === idx ? { ...a, ...patch } : a),
-    });
-  }
-
-  function removeAssertion(caseId: string, idx: number) {
-    const tc = testCases.find((c) => c.id === caseId);
-    if (!tc) return;
-    updateCase(caseId, { assertions: tc.assertions.filter((_, i) => i !== idx) });
+  function removeAssertion(index: number, idx: number) {
+    const current = getValues().testCases[index]!;
+    update(index, { ...current, assertions: current.assertions.filter((_, i) => i !== idx) });
   }
 
   async function runAll() {
-    if (testCases.length === 0) return;
+    const currentCases = getValues().testCases;
+    if (currentCases.length === 0) return;
     setRunning(true);
     setResults(null);
 
-    const payload = testCases.map((tc) => {
+    const payload = currentCases.map((tc) => {
       let input: Record<string, unknown> = {};
       try { input = JSON.parse(tc.input) as Record<string, unknown>; } catch { input = {}; }
       return {
@@ -154,7 +170,7 @@ export function EvalsPanel({
           <Button
             size="xs"
             onClick={() => void runAll()}
-            disabled={running || testCases.length === 0}
+            disabled={running || fields.length === 0}
           >
             <HugeiconsIcon icon={running ? Loading01Icon : PlayIcon} className={running ? 'animate-spin' : ''} />
             {running ? 'Running…' : 'Run all'}
@@ -175,7 +191,7 @@ export function EvalsPanel({
       )}
 
       <div className="flex-1 overflow-y-auto">
-        {testCases.length === 0 ? (
+        {fields.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2">
             <HugeiconsIcon icon={TestTube01Icon} className="size-8 text-muted-foreground/30" />
             <p className="text-xs text-muted-foreground">No eval cases yet.</p>
@@ -186,27 +202,27 @@ export function EvalsPanel({
           </div>
         ) : (
           <div className="space-y-0">
-            {testCases.map((tc) => (
+            {fields.map((tc, index) => (
               <EvalCaseCard
-                key={tc.id}
+                key={tc._fieldKey}
                 testCase={tc}
                 result={results?.find((r) => r.caseId === tc.id)}
                 isExpanded={expandedCase === tc.id}
                 onToggleExpand={() => setExpandedCase(expandedCase === tc.id ? null : tc.id)}
                 inputVariables={inputVariables}
                 workflowNodes={workflowNodes}
-                onUpdate={(patch) => updateCase(tc.id, patch)}
-                onRemove={() => removeCase(tc.id)}
-                onAddAssertion={() => addAssertion(tc.id)}
-                onUpdateAssertion={(idx, patch) => updateAssertion(tc.id, idx, patch)}
-                onRemoveAssertion={(idx) => removeAssertion(tc.id, idx)}
+                onUpdate={(patch) => updateCase(index, patch)}
+                onRemove={() => removeCase(index, tc.id)}
+                onAddAssertion={() => addAssertion(index)}
+                onUpdateAssertion={(idx, patch) => updateAssertion(index, idx, patch)}
+                onRemoveAssertion={(idx) => removeAssertion(index, idx)}
               />
             ))}
           </div>
         )}
       </div>
 
-      {testCases.length > 0 && !running && (
+      {fields.length > 0 && !running && (
         <div className="shrink-0 border-t border-border px-4 py-2">
           <p className="text-[10px] text-muted-foreground leading-snug">
             Eval cases are saved with the workflow. Save the workflow to persist them.

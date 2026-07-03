@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
@@ -124,7 +124,7 @@ export function WelcomeModal() {
   const { getToken } = useAuth();
   const router = useRouter();
 
-  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [step, setStep] = useState<Step>('welcome');
   const [podName, setPodName] = useState('');
   const [createdPodId, setCreatedPodId] = useState<string | null>(null);
@@ -141,9 +141,7 @@ export function WelcomeModal() {
     },
   });
 
-  useEffect(() => {
-    if (me && !me.onboardedAt) setOpen(true);
-  }, [me]);
+  const open = !dismissed && !!me && !me.onboardedAt;
 
   async function markOnboarded() {
     const token = await getToken();
@@ -154,7 +152,7 @@ export function WelcomeModal() {
 
   function dismiss() {
     void markOnboarded();
-    setOpen(false);
+    setDismissed(true);
   }
 
   const createPodMutation = useMutation({
@@ -210,7 +208,7 @@ export function WelcomeModal() {
         router.push(`/pods/${createdPodId}/workflows`);
       }
     }
-    setOpen(false);
+    setDismissed(true);
   }
 
   return (

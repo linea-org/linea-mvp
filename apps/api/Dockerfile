@@ -1,4 +1,4 @@
-# ── Stage 1: builder ─────────────────────────────────────────────────────────
+# Stage 1: builder
 FROM node:20-bookworm-slim AS builder
 
 RUN apt-get update \
@@ -16,7 +16,7 @@ RUN pnpm install --frozen-lockfile --filter=api...
 RUN pnpm --filter=@linea/db build
 RUN pnpm --filter=api build
 
-# ── Stage 2: runner ───────────────────────────────────────────────────────────
+# Stage 2: runner
 FROM node:20-bookworm-slim AS runner
 
 RUN apt-get update \

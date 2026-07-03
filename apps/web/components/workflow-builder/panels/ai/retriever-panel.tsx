@@ -5,8 +5,8 @@ import type { Node } from '@xyflow/react';
 import { Input } from '@linea/ui/components/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
 import { Label } from '@linea/ui/components/label';
-import { VariableChips } from '../variable-picker';
-import { ModelPicker } from '../model-picker';
+import { VariableChips } from '../../variable-picker';
+import { ModelPicker } from '../../model-picker';
 
 interface RetrieverPanelProps {
   data: Record<string, unknown>;

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useApiClient } from '@/hooks/use-api-client';
 import { useMutation } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
@@ -17,29 +18,32 @@ import {
   DialogFooter,
 } from '@linea/ui/components/dialog';
 
+interface GeneralFormValues {
+  name: string;
+  slug: string;
+}
+
 export default function GeneralSettingsPage() {
   const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading, removeWorkspace } = useWorkspace();
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
   const [saved, setSaved] = useState(false);
+  const { register, handleSubmit, reset, watch, formState: { isValid } } = useForm<GeneralFormValues>({
+    defaultValues: { name: '', slug: '' },
+    mode: 'onChange',
+  });
 
-  // Delete dialog state
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  const [syncedWorkspaceId, setSyncedWorkspaceId] = useState(activeWorkspace?.id);
-  if (activeWorkspace && activeWorkspace.id !== syncedWorkspaceId) {
-    setSyncedWorkspaceId(activeWorkspace.id);
-    setName(activeWorkspace.name);
-    setSlug(activeWorkspace.slug);
-  }
+  useEffect(() => {
+    if (activeWorkspace) reset({ name: activeWorkspace.name, slug: activeWorkspace.slug });
+  }, [activeWorkspace, reset]);
 
   const saveWorkspace = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: GeneralFormValues) => {
       if (!activeWorkspace) throw new Error('No active workspace');
       const api = await getApi();
-      await api.patch(`/workspaces/${activeWorkspace.id}`, { name, slug });
+      await api.patch(`/workspaces/${activeWorkspace.id}`, values);
     },
     onSuccess: () => setSaved(true),
   });
@@ -63,41 +67,42 @@ export default function GeneralSettingsPage() {
   }
 
   const deleteConfirmed = deleteConfirmText === activeWorkspace?.name;
+  const name = watch('name');
 
   if (wsLoading) return <Skeleton className="h-40 w-full" />;
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4">
+      <form onSubmit={handleSubmit((values) => saveWorkspace.mutate(values))} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="ws-name">Workspace name</Label>
           <Input
             id="ws-name"
-            value={name}
-            onChange={(e) => { setName(e.target.value); setSaved(false); }}
+            {...register('name', {
+              required: true,
+              onChange: () => setSaved(false),
+            })}
           />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="ws-slug">Slug</Label>
           <Input
             id="ws-slug"
-            value={slug}
-            onChange={(e) => { setSlug(e.target.value); setSaved(false); }}
+            {...register('slug', { onChange: () => setSaved(false) })}
           />
           <p className="text-xs text-muted-foreground">Used in URLs. Only lowercase letters, numbers, and hyphens.</p>
         </div>
-      </div>
 
-      <div className="flex items-center gap-3">
-        <Button onClick={() => saveWorkspace.mutate()} disabled={saveWorkspace.isPending || !name.trim()}>
-          {saveWorkspace.isPending ? 'Saving…' : 'Save changes'}
-        </Button>
-        {saved && <p className="text-sm text-green-600">Saved!</p>}
-      </div>
+        <div className="flex items-center gap-3">
+          <Button type="submit" disabled={saveWorkspace.isPending || !isValid || !name?.trim()}>
+            {saveWorkspace.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+          {saved && <p className="text-sm text-green-600">Saved!</p>}
+        </div>
+      </form>
 
       <Separator />
 
-      {/* Danger zone */}
       <div className="space-y-3 rounded-lg border border-destructive/40 p-5">
         <div>
           <p className="text-sm font-semibold text-destructive">Delete workspace</p>
@@ -112,7 +117,6 @@ export default function GeneralSettingsPage() {
         </Button>
       </div>
 
-      {/* Vercel-style delete confirmation dialog */}
       <Dialog open={deleteOpen} onOpenChange={(o) => { if (!deleteWorkspace.isPending) setDeleteOpen(o); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

@@ -8,6 +8,7 @@ import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
 import { Spinner } from '@linea/ui/components/spinner';
+import type { Log } from '../panels/bottom-panel/bottom-panel-shared';
 
 interface Execution {
   id: string;
@@ -15,15 +16,6 @@ interface Execution {
   triggeredBy: string;
   createdAt: string;
   finishedAt: string | null;
-}
-
-interface Log {
-  id: string;
-  nodeId: string;
-  level: 'info' | 'error';
-  data?: { output?: unknown; error?: string } | null;
-  durationMs?: number | null;
-  timestamp: string;
 }
 
 interface Props {
@@ -93,7 +85,6 @@ export function HistoryPanel({ workspaceId, podId, workflowId, nodes, onClose }:
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
         <div>
           <p className="text-sm font-semibold">Run History</p>
@@ -110,7 +101,6 @@ export function HistoryPanel({ workspaceId, podId, workflowId, nodes, onClose }:
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Execution list */}
         <div className="w-44 shrink-0 border-r border-border overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center gap-1.5 py-8 text-xs text-muted-foreground">
@@ -138,7 +128,6 @@ export function HistoryPanel({ workspaceId, podId, workflowId, nodes, onClose }:
           )}
         </div>
 
-        {/* Log detail */}
         <ScrollArea className="flex-1">
           {!selectedId ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">

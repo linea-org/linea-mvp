@@ -110,7 +110,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </div>
         </CommandEmpty>
 
-        {/* Navigate */}
         {filteredNav.length > 0 && (
           <CommandGroup heading="Navigate">
             {filteredNav.map(({ label, icon, href, shortcut }) => (
@@ -129,7 +128,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </CommandGroup>
         )}
 
-        {/* Create actions */}
         {podBase && (!search || 'new workflow create'.includes(search.toLowerCase())) && (
           <>
             <CommandSeparator />
@@ -146,7 +144,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </>
         )}
 
-        {/* Recent workflows */}
         {filteredWorkflows.length > 0 && (
           <>
             <CommandSeparator />
@@ -165,7 +162,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </>
         )}
 
-        {/* Switch pod */}
         {otherPods.length > 0 && (!search || otherPods.some((p) => p.name.toLowerCase().includes(search.toLowerCase()))) && (
           <>
             <CommandSeparator />
@@ -186,7 +182,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </>
         )}
 
-        {/* Help */}
         {(!search || 'keyboard shortcuts help'.includes(search.toLowerCase())) && (
           <>
             <CommandSeparator />

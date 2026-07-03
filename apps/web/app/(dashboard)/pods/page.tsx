@@ -71,11 +71,9 @@ function PodCard({
       className="group relative flex flex-col rounded-xl border border-border bg-card hover:border-border/80 hover:shadow-sm transition-all duration-150 cursor-pointer overflow-hidden"
       onClick={onOpen}
     >
-      {/* Colored top strip */}
       <div className="h-1 w-full shrink-0" style={{ backgroundColor: color }} />
 
       <div className="flex flex-col gap-3 p-4 flex-1">
-        {/* Header row */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <span
@@ -118,14 +116,12 @@ function PodCard({
           </DropdownMenu>
         </div>
 
-        {/* Description */}
         {pod.description ? (
           <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{pod.description}</p>
         ) : (
           <p className="text-xs text-muted-foreground/40 italic">No description</p>
         )}
 
-        {/* Footer */}
         <div className="flex items-center justify-between mt-auto pt-1">
           <p className="text-[11px] text-muted-foreground">
             Created {new Date(pod.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -328,7 +324,6 @@ export default function PodsPage() {
         </div>
       )}
 
-      {/* Edit dialog */}
       <Dialog open={!!editPod} onOpenChange={(o) => { if (!o) setEditPod(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit pod</DialogTitle></DialogHeader>
@@ -351,7 +346,6 @@ export default function PodsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm — Vercel-style name confirmation */}
       <Dialog open={!!deletePod} onOpenChange={(o) => { if (!deletePodMutation.isPending && !o) setDeletePod(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -395,7 +389,6 @@ export default function PodsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create dialog */}
       <Dialog open={podDialogOpen} onOpenChange={setPodDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Create pod</DialogTitle></DialogHeader>

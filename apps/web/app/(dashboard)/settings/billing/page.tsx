@@ -108,7 +108,6 @@ function BillingPageInner() {
 
   return (
     <div className="space-y-6">
-      {/* Success banner */}
       {successPlan && (
         <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
           <HugeiconsIcon icon={Tick01Icon} className="size-4 shrink-0 text-green-500" />
@@ -121,14 +120,12 @@ function BillingPageInner() {
         </div>
       )}
 
-      {/* Error */}
       {payError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {payError}
         </div>
       )}
 
-      {/* Current plan */}
       <div className="rounded-lg border border-border bg-card p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -156,7 +153,6 @@ function BillingPageInner() {
         </div>
       </div>
 
-      {/* Upgrade plans */}
       {currentPlan !== 'enterprise' && (
         <div className="space-y-3">
           <p className="text-sm font-semibold">Upgrade your plan</p>
@@ -237,7 +233,6 @@ function BillingPageInner() {
         </div>
       )}
 
-      {/* Enterprise CTA */}
       <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-3">
         <p className="text-sm font-semibold">Need Enterprise?</p>
         <p className="text-xs text-muted-foreground max-w-sm mx-auto">
@@ -248,7 +243,6 @@ function BillingPageInner() {
         </Button>
       </div>
 
-      {/* Powered by Polar */}
       <p className="text-center text-[10px] text-muted-foreground/50">
         Payments powered by{' '}
         <a href="https://polar.sh" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-muted-foreground">

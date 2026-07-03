@@ -44,9 +44,12 @@ pnpm install
 pnpm infra:up
 
 # 3. Configure environment
-cp .env.example .env
+cp .env.example .env               # DATABASE_URL for db tooling (migrations, studio)
+cp apps/api/.env.example apps/api/.env
 # Fill in CLERK_SECRET_KEY, CLERK_PUBLISHABLE_KEY, CLERK_WEBHOOK_SECRET,
-# ENCRYPTION_KEY, and at least one LLM provider key (ANTHROPIC_API_KEY etc.)
+# ENCRYPTION_KEY_1, and at least one LLM provider key (ANTHROPIC_API_KEY etc.)
+cp apps/web/.env.example apps/web/.env.local
+# Fill in NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY
 
 # 4. Push database schema
 pnpm db:push

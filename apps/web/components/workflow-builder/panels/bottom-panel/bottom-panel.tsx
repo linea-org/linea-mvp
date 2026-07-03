@@ -9,8 +9,8 @@ import {
   Search01Icon,
 } from '@hugeicons/core-free-icons';
 import type { Node } from '@xyflow/react';
-import type { NodeResult } from '../workflow-builder.types';
-import type { ValidationState } from '../toolbar';
+import type { NodeResult } from '../../workflow-builder.types';
+import type { ValidationState } from '../../toolbar';
 import { friendlyApiError, unwrapList } from '@/lib/api';
 import { useApiClient } from '@/hooks/use-api-client';
 import { toast } from '@linea/ui/components/sonner';

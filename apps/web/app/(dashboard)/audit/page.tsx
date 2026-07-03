@@ -138,15 +138,12 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-xl font-semibold">Audit Log</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Track who changed what across your workspace</p>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Search */}
         <div className="relative flex-1 min-w-[180px] max-w-xs">
           <HugeiconsIcon
             icon={Search01Icon}
@@ -161,7 +158,6 @@ export default function AuditPage() {
           />
         </div>
 
-        {/* Resource type */}
         <Select value={resourceType} onValueChange={setResourceType}>
           <SelectTrigger className="w-40 h-9 text-xs">
             <SelectValue />
@@ -173,7 +169,6 @@ export default function AuditPage() {
           </SelectContent>
         </Select>
 
-        {/* Period */}
         <div className="flex gap-0.5 rounded-lg border p-0.5">
           {PERIODS.map(({ label, value }) => (
             <button
@@ -202,7 +197,6 @@ export default function AuditPage() {
         )}
       </div>
 
-      {/* Content */}
       {loading || wsLoading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
@@ -246,12 +240,10 @@ export default function AuditPage() {
                     onClick={() => hasMetadata && setExpanded(isExpanded ? null : log.id)}
                     disabled={!hasMetadata}
                   >
-                    {/* Action icon */}
                     <span className={`shrink-0 ${color}`}>
                       <HugeiconsIcon icon={ActionIcon} className="size-4" />
                     </span>
 
-                    {/* Action + resource */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-sm font-medium">{formatAction(log.action)}</span>
@@ -275,7 +267,6 @@ export default function AuditPage() {
                       </div>
                     </div>
 
-                    {/* Time + expand */}
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {timeLabel(log.createdAt)}

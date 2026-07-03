@@ -5,7 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { CodeIcon, Copy01Icon } from '@hugeicons/core-free-icons';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
 import type { Node } from '@xyflow/react';
-import type { NodeResult } from '../workflow-builder.types';
+import type { NodeResult } from '../../workflow-builder.types';
 
 export function VariablesTab({ nodes, nodeResults }: { nodes: Node[]; nodeResults: Record<string, NodeResult> }) {
   const [copied, setCopied] = useState<string | null>(null);

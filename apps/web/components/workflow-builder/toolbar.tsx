@@ -62,9 +62,6 @@ interface ToolbarProps {
   onAutoSaveToggle: () => void;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Tooltip button helper                                               */
-/* ------------------------------------------------------------------ */
 function TBtn({
   icon, label, shortcut, description, onClick, disabled, variant = 'outline', active, className, size = 'icon-sm',
 }: {
@@ -103,9 +100,6 @@ function TBtn({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Keyboard shortcuts panel                                            */
-/* ------------------------------------------------------------------ */
 const SHORTCUT_GROUPS = [
   {
     label: 'Canvas',
@@ -143,15 +137,12 @@ const SHORTCUT_GROUPS = [
 function ShortcutsPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
-      {/* Blurred backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Panel */}
       <div className="relative z-10 w-[520px] max-h-[80vh] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2.5">
             <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
@@ -170,7 +161,6 @@ function ShortcutsPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* Body -- two-column grid */}
         <div className="overflow-y-auto p-5">
           <div className="grid grid-cols-2 gap-x-8 gap-y-6">
             {SHORTCUT_GROUPS.map((group) => (
@@ -204,9 +194,6 @@ function ShortcutsPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Validation badge                                                    */
-/* ------------------------------------------------------------------ */
 function ValidationBadge({ state }: { state: ValidationState }) {
   const [open, setOpen] = useState(false);
   const { level, issues } = state;
@@ -252,9 +239,6 @@ const STATUS_COLOR: Record<string, string> = {
   suspended: 'text-amber-500',
 };
 
-/* ------------------------------------------------------------------ */
-/*  Toolbar                                                             */
-/* ------------------------------------------------------------------ */
 export function Toolbar({
   workflowName, isSaving, isRunning, isGenerating, runStatus, validationState,
   deployPanelOpen, historyOpen, versionsOpen, shareOpen, commentsOpen, evalsOpen,

@@ -3,7 +3,7 @@
 import { HugeiconsIcon } from '@hugeicons/react';
 import { CheckmarkCircle01Icon, Alert02Icon } from '@hugeicons/core-free-icons';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
-import type { ValidationState } from '../toolbar';
+import type { ValidationState } from '../../toolbar';
 
 export function IssuesTab({ validationState }: { validationState: ValidationState }) {
   if (validationState.issues.length === 0) {

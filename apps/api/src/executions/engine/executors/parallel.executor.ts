@@ -5,7 +5,7 @@ export interface ParallelBranch {
   config: Record<string, unknown>;
 }
 
-export interface ParallelNodeData {
+interface ParallelNodeData {
   branches?: ParallelBranch[];
   failFast?: boolean;
 }

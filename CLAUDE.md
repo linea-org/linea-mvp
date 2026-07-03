@@ -41,6 +41,11 @@ These rules apply to every file touched in this repo. Follow them strictly — d
 - Co-locate state as close to where it is used as possible. Lift only when truly shared.
 - No prop drilling beyond two levels — use context or a dedicated hook.
 
+## Forms
+- Any new form (multiple related input fields with validation and/or a submit action) must use `react-hook-form` (`useForm`, `register`/`Controller`) rather than one `useState` per field.
+- Existing useState-based forms are not migrated as of this rule's introduction — don't rewrite one incidentally while touching nearby code; only convert it if the user asks.
+- A single standalone input with no validation (e.g. a search box, an inline rename field) doesn't need react-hook-form — reserve it for actual forms.
+
 ## TypeScript
 - No `any` unless interfacing with an untyped external boundary, and even then confine it to one cast at the boundary.
 - Prefer `type` over `interface` for object shapes that won't be extended. Use `interface` for contracts that will be implemented or extended.

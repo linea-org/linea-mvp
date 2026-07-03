@@ -7,7 +7,7 @@ import { Label } from '@linea/ui/components/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@linea/ui/components/select';
-import { VariableChips } from '../variable-picker';
+import { VariableChips } from '../../variable-picker';
 
 interface ExtractPanelProps {
   data: Record<string, unknown>;

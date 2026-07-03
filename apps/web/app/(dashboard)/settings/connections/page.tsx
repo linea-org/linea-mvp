@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
@@ -81,7 +82,7 @@ function ConnectionsPageInner() {
   const wsId = activeWorkspace?.id ?? '';
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<McpServer | null>(null);
-  const [form, setForm] = useState<FormState>(BLANK);
+  const { register, handleSubmit, reset, watch } = useForm<FormState>({ defaultValues: BLANK });
 
   const { data: servers = [], isLoading: loading } = useQuery<McpServer[]>({
     queryKey: ['mcp-servers', wsId],
@@ -102,14 +103,14 @@ function ConnectionsPageInner() {
   });
 
   const saveServer = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: FormState) => {
       const api = await getApi();
       const body: Record<string, string> = {
-        name: form.name.trim(),
-        url: form.url.trim(),
-        authType: form.authType,
+        name: values.name.trim(),
+        url: values.url.trim(),
+        authType: values.authType,
       };
-      if (form.accessToken.trim()) body.accessToken = form.accessToken.trim();
+      if (values.accessToken.trim()) body.accessToken = values.accessToken.trim();
       return editTarget
         ? api.patch<McpServer>(`/workspaces/${wsId}/mcp-servers/${editTarget.id}`, body)
         : api.post<McpServer>(`/workspaces/${wsId}/mcp-servers`, body);
@@ -146,13 +147,13 @@ function ConnectionsPageInner() {
 
   function openCreate() {
     setEditTarget(null);
-    setForm(BLANK);
+    reset(BLANK);
     setDialogOpen(true);
   }
 
   function openEdit(server: McpServer) {
     setEditTarget(server);
-    setForm({ name: server.name, url: server.url, authType: server.authType, accessToken: '' });
+    reset({ name: server.name, url: server.url, authType: server.authType, accessToken: '' });
     setDialogOpen(true);
   }
 
@@ -163,7 +164,11 @@ function ConnectionsPageInner() {
     window.location.href = data.url;
   }
 
-  const needsToken = form.authType !== 'none';
+  const authType = watch('authType');
+  const nameValue = watch('name');
+  const urlValue = watch('url');
+  const needsToken = authType !== 'none';
+  const onSave = handleSubmit((values) => saveServer.mutate(values));
 
   return (
     <div className="space-y-6">
@@ -236,7 +241,6 @@ function ConnectionsPageInner() {
 
       <Separator />
 
-      {/* OAuth Connected Apps */}
       <div className="space-y-4">
         <div>
           <h2 className="text-base font-semibold">Connected Apps</h2>
@@ -309,31 +313,18 @@ function ConnectionsPageInner() {
           <DialogHeader>
             <DialogTitle>{editTarget ? 'Edit connection' : 'Add MCP connection'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <form onSubmit={onSave} className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label>Name</Label>
-              <Input
-                placeholder="e.g. Firecrawl, Browserbase"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                autoFocus
-              />
+              <Input placeholder="e.g. Firecrawl, Browserbase" autoFocus {...register('name')} />
             </div>
             <div className="space-y-1.5">
               <Label>Server URL</Label>
-              <Input
-                placeholder="https://mcp.example.com"
-                value={form.url}
-                onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-              />
+              <Input placeholder="https://mcp.example.com" {...register('url')} />
             </div>
             <div className="space-y-1.5">
               <Label>Auth type</Label>
-              <NativeSelect
-                value={form.authType}
-                onChange={(e) => setForm((f) => ({ ...f, authType: e.target.value as FormState['authType'] }))}
-                className="w-full"
-              >
+              <NativeSelect className="w-full" {...register('authType')}>
                 <NativeSelectOption value="none">None</NativeSelectOption>
                 <NativeSelectOption value="bearer">Bearer token</NativeSelectOption>
                 <NativeSelectOption value="api_key">API key</NativeSelectOption>
@@ -351,17 +342,16 @@ function ConnectionsPageInner() {
                 <Input
                   type="password"
                   placeholder={editTarget?.hasToken ? '••••••••' : 'Paste token…'}
-                  value={form.accessToken}
-                  onChange={(e) => setForm((f) => ({ ...f, accessToken: e.target.value }))}
+                  {...register('accessToken')}
                 />
               </div>
             )}
-          </div>
+          </form>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button
-              onClick={() => saveServer.mutate()}
-              disabled={!form.name.trim() || !form.url.trim() || saveServer.isPending}
+              onClick={onSave}
+              disabled={!nameValue.trim() || !urlValue.trim() || saveServer.isPending}
             >
               {saveServer.isPending ? 'Saving…' : editTarget ? 'Update' : 'Add connection'}
             </Button>

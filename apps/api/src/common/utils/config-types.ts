@@ -1,6 +1,6 @@
 import z from 'zod';
 
-export const providerConfigSchemas = {
+const providerConfigSchemas = {
   openai: z.object({ apiKey: z.string().min(1) }),
   anthropic: z.object({ apiKey: z.string().min(1) }),
   groq: z.object({ apiKey: z.string().min(1) }),

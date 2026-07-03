@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { useUser } from '@clerk/nextjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
@@ -52,6 +53,15 @@ interface Invite {
 
 type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
 
+interface InviteFormValues {
+  email: string;
+  role: 'editor' | 'viewer' | 'admin';
+}
+
+interface RoleFormValues {
+  role: MemberRole;
+}
+
 const ROLE_BADGE: Record<string, 'default' | 'secondary' | 'outline'> = {
   owner: 'default',
   admin: 'secondary',
@@ -72,14 +82,13 @@ export default function MembersPage() {
   const queryClient = useQueryClient();
   const wsId = activeWorkspace?.id ?? '';
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'editor' | 'viewer' | 'admin'>('editor');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const inviteForm = useForm<InviteFormValues>({ defaultValues: { email: '', role: 'editor' } });
 
-  // Role change state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<Member | null>(null);
-  const [newRole, setNewRole] = useState<MemberRole>('editor');
+  const roleForm = useForm<RoleFormValues>({ defaultValues: { role: 'editor' } });
+  const currentNewRole = roleForm.watch('role');
 
   const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
     queryKey: ['members', wsId],
@@ -101,24 +110,23 @@ export default function MembersPage() {
 
   const loading = membersLoading || invitesLoading;
 
-  // Derive current user's role from the members list
   const myEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? '';
   const me = members.find((m) => m.user.email === myEmail);
   const myRole = me?.role ?? 'viewer';
   const isAdmin = (ROLE_LEVEL[myRole] ?? 0) >= (ROLE_LEVEL['admin'] ?? 0);
 
   const inviteMember = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: InviteFormValues) => {
       const api = await getApi();
       return api.post<Invite>(`/workspaces/${wsId}/invites`, {
-        email: inviteEmail || undefined,
-        role: inviteRole,
+        email: values.email || undefined,
+        role: values.role,
       });
     },
     onSuccess: (invite) => {
       setInviteLink(`${window.location.origin}/invite/${invite.token}`);
       queryClient.setQueryData<Invite[]>(['invites', wsId], (prev = []) => [...prev, invite]);
-      setInviteEmail('');
+      inviteForm.setValue('email', '');
     },
   });
 
@@ -135,20 +143,20 @@ export default function MembersPage() {
 
   function openRoleDialog(member: Member) {
     setRoleTarget(member);
-    setNewRole(member.role as MemberRole);
+    roleForm.reset({ role: member.role as MemberRole });
     setRoleDialogOpen(true);
   }
 
   const changeRole = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: RoleFormValues) => {
       if (!roleTarget) throw new Error('No target selected');
       const api = await getApi();
-      await api.patch(`/workspaces/${wsId}/members/${roleTarget.userId}`, { role: newRole });
-      return roleTarget.userId;
+      await api.patch(`/workspaces/${wsId}/members/${roleTarget.userId}`, { role: values.role });
+      return { userId: roleTarget.userId, role: values.role };
     },
-    onSuccess: (userId) => {
+    onSuccess: ({ userId, role }) => {
       queryClient.setQueryData<Member[]>(['members', wsId], (prev = []) =>
-        prev.map((m) => (m.userId === userId ? { ...m, role: newRole } : m)));
+        prev.map((m) => (m.userId === userId ? { ...m, role } : m)));
       setRoleDialogOpen(false);
     },
   });
@@ -174,7 +182,6 @@ export default function MembersPage() {
 
   return (
     <div className="space-y-8">
-      {/* Members */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium">Members ({members.length})</h2>
@@ -230,7 +237,6 @@ export default function MembersPage() {
         </div>
       </div>
 
-      {/* Pending invites */}
       {invites.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-medium">Pending invites</h2>
@@ -260,7 +266,6 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* Invite dialog */}
       <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setInviteLink(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -282,30 +287,36 @@ export default function MembersPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-4 py-2">
+            <form
+              id="invite-member-form"
+              onSubmit={inviteForm.handleSubmit((values) => inviteMember.mutate(values))}
+              className="space-y-4 py-2"
+            >
               <div className="space-y-1.5">
                 <Label>Email (optional)</Label>
-                <Input
-                  placeholder="colleague@company.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                />
+                <Input placeholder="colleague@company.com" {...inviteForm.register('email')} />
                 <p className="text-xs text-muted-foreground">Leave blank to create a general invite link.</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>
-                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as typeof inviteRole)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer — read only</SelectItem>
-                    <SelectItem value="editor">Editor — can create and run workflows</SelectItem>
-                    <SelectItem value="admin">Admin — full access except billing</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Controller
+                  control={inviteForm.control}
+                  name="role"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="viewer">Viewer — read only</SelectItem>
+                        <SelectItem value="editor">Editor — can create and run workflows</SelectItem>
+                        <SelectItem value="admin">Admin — full access except billing</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
-            </div>
+            </form>
           )}
 
           <DialogFooter>
@@ -313,7 +324,7 @@ export default function MembersPage() {
               {inviteLink ? 'Done' : 'Cancel'}
             </Button>
             {!inviteLink && (
-              <Button onClick={() => inviteMember.mutate()} disabled={inviteMember.isPending}>
+              <Button type="submit" form="invite-member-form" disabled={inviteMember.isPending}>
                 {inviteMember.isPending ? 'Creating…' : 'Create invite'}
               </Button>
             )}
@@ -321,32 +332,45 @@ export default function MembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Role change dialog */}
       <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change role</DialogTitle>
           </DialogHeader>
-          <div className="py-2 space-y-3">
+          <form
+            id="change-role-form"
+            onSubmit={roleForm.handleSubmit((values) => changeRole.mutate(values))}
+            className="py-2 space-y-3"
+          >
             <p className="text-sm text-muted-foreground">
               Changing role for <span className="font-medium text-foreground">{roleTarget?.user.name ?? roleTarget?.user.email}</span>
             </p>
-            <Select value={newRole} onValueChange={(v) => setNewRole(v as MemberRole)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="viewer">Viewer — read only</SelectItem>
-                <SelectItem value="editor">Editor — can create and run workflows</SelectItem>
-                {myRole === 'owner' && (
-                  <SelectItem value="admin">Admin — full access except billing</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+            <Controller
+              control={roleForm.control}
+              name="role"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="viewer">Viewer — read only</SelectItem>
+                    <SelectItem value="editor">Editor — can create and run workflows</SelectItem>
+                    {myRole === 'owner' && (
+                      <SelectItem value="admin">Admin — full access except billing</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </form>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => changeRole.mutate()} disabled={changeRole.isPending || newRole === roleTarget?.role}>
+            <Button
+              type="submit"
+              form="change-role-form"
+              disabled={changeRole.isPending || currentNewRole === roleTarget?.role}
+            >
               {changeRole.isPending ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>

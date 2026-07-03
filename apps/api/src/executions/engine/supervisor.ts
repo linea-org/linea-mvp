@@ -5,7 +5,7 @@ import { createModelClient } from './models/client.factory';
 import type { ModelApiKeys } from './models/client.factory';
 import type { WorkflowState } from './variable-substitution';
 
-export type SupervisorAction = 'retry' | 'skip' | 'abort' | 'continue';
+type SupervisorAction = 'retry' | 'skip' | 'abort' | 'continue';
 
 export interface SupervisorContext {
   nodeId: string;

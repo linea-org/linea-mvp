@@ -50,14 +50,12 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header note */}
       <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
         <p className="text-[11px] text-muted-foreground leading-snug">
           Routes are evaluated <span className="font-semibold text-foreground">top to bottom</span>. The first matching condition fires. If no route matches, execution stops.
         </p>
       </div>
 
-      {/* Routes list */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Routes <span className="text-muted-foreground font-normal text-[10px]">({routes.length}/{MAX_ROUTES})</span></Label>
@@ -76,7 +74,6 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
           <div className="space-y-2">
             {routes.map((route, i) => (
               <div key={route.id} className="rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
-                {/* Route header */}
                 <div className="flex items-center gap-1.5">
                   <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-[10px] font-bold text-foreground">
                     {i + 1}
@@ -111,7 +108,6 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
                   </div>
                 </div>
 
-                {/* Label */}
                 <div className="space-y-1">
                   <label className="text-[10px] text-muted-foreground font-medium">Label</label>
                   <Input
@@ -122,7 +118,6 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
                   />
                 </div>
 
-                {/* Condition */}
                 <div className="space-y-1">
                   <label className="text-[10px] text-muted-foreground font-medium">Condition</label>
                   <Input
@@ -138,7 +133,6 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
         )}
       </div>
 
-      {/* Fallback note */}
       {routes.length > 0 && (
         <div className="space-y-2">
           <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 dark:border-amber-900 dark:bg-amber-950/30">

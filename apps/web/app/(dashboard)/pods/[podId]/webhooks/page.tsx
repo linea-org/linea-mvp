@@ -261,7 +261,6 @@ export default function WebhooksPage() {
         </Button>
       </div>
 
-      {/* Search + filter bar */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-xs">
           <HugeiconsIcon
@@ -378,7 +377,6 @@ export default function WebhooksPage() {
         </div>
       )}
 
-      {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
@@ -420,7 +418,6 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Secret reveal dialog — shown after create or rotate */}
       <Dialog open={!!revealSecret} onOpenChange={() => setRevealSecret(null)}>
         <DialogContent>
           <DialogHeader>
@@ -467,7 +464,6 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

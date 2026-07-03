@@ -99,7 +99,6 @@ function DeploySection({
 
   return (
     <div className="space-y-3 p-4">
-      {/* Status card */}
       <div className={`flex items-start gap-3 rounded-lg border p-3 ${
         isDeployed
           ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
@@ -122,7 +121,6 @@ function DeploySection({
         </div>
       </div>
 
-      {/* Action buttons */}
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -159,7 +157,6 @@ function DeploySection({
         </p>
       )}
 
-      {/* REST API visibility — surfaced prominently */}
       {apiConfig && (
         <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
           <div className="flex items-center justify-between">
@@ -595,7 +592,6 @@ function SettingsTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDep
 
   return (
     <div className="space-y-5 p-4">
-      {/* Supervisor model */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <HugeiconsIcon icon={AiBrain01Icon} className="size-4 text-primary shrink-0" />
@@ -656,7 +652,6 @@ export function DeployPanel({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
         <div>
           <p className="text-sm font-semibold">Deploy & Publish</p>
@@ -668,7 +663,6 @@ export function DeployPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Deploy section */}
         <DeploySection
           isDeployed={isDeployed}
           deployedAt={deployedAt}
@@ -681,12 +675,10 @@ export function DeployPanel({
 
         <Separator />
 
-        {/* Triggers section */}
         <div className="px-4 pt-3 pb-1">
           <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">Triggers</p>
         </div>
 
-        {/* Tab bar */}
         <div className="flex border-b border-border">
           {tabs.map((tab) => (
             <button

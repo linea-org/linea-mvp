@@ -520,7 +520,6 @@ export default function WorkflowsPage() {
                 <DialogDescription>Start blank or pick a template to get going faster.</DialogDescription>
               </DialogHeader>
 
-              {/* Blank option */}
               <button
                 className="flex items-center gap-3 rounded-lg border-2 border-dashed p-4 hover:border-primary hover:bg-muted/40 transition-colors text-left w-full group"
                 onClick={() => {
@@ -539,14 +538,12 @@ export default function WorkflowsPage() {
                 </div>
               </button>
 
-              {/* Divider */}
               <div className="flex items-center gap-3 my-1">
                 <div className="h-px flex-1 bg-border" />
                 <span className="text-xs text-muted-foreground">or start from a template</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
 
-              {/* Template search */}
               <div className="relative">
                 <HugeiconsIcon
                   icon={Search01Icon}
@@ -560,7 +557,6 @@ export default function WorkflowsPage() {
                 />
               </div>
 
-              {/* Template mini-grid */}
               {loadingTemplates ? (
                 <div className="grid grid-cols-2 gap-2">
                   {Array.from({ length: 6 }).map((_, i) => (
@@ -665,7 +661,6 @@ export default function WorkflowsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Publish to gallery dialog */}
       <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
         <DialogContent>
           <DialogHeader>
@@ -726,7 +721,6 @@ export default function WorkflowsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Permanent delete confirm */}
       <Dialog open={!!hardDeleteTarget} onOpenChange={(o) => { if (!o) setHardDeleteTarget(null); }}>
         <DialogContent>
           <DialogHeader>

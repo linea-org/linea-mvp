@@ -21,7 +21,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Dialog, DialogContent, DialogTitle } from '@linea/ui/components/dialog';
 import { useApiClient } from '@/hooks/use-api-client';
-import { nodeTypes } from './nodes/node-types';
+import { nodeTypes } from '../nodes/node-types';
 
 type DiffStatus = 'added' | 'removed' | 'changed' | 'unchanged';
 
@@ -127,7 +127,6 @@ function computeDiff(
   };
 }
 
-/* ---- Fit-on-load inner canvas -------------------------------- */
 function DiffCanvas({ nodes, edges }: { nodes: Node[]; edges: Edge[] }) {
   const { fitView } = useReactFlow();
   useEffect(() => {
@@ -153,7 +152,6 @@ function DiffCanvas({ nodes, edges }: { nodes: Node[]; edges: Edge[] }) {
   );
 }
 
-/* ---- Main component ------------------------------------------ */
 interface DiffPanelProps {
   workspaceId: string;
   podId: string;
@@ -210,7 +208,6 @@ export function DiffPanel({
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-[96vw] sm:max-w-[96vw] h-[90vh] p-0 flex overflow-hidden gap-0">
-        {/* Left sidebar */}
         <div className="w-56 shrink-0 border-r border-border flex flex-col bg-background">
           <div className="shrink-0 border-b border-border px-3 py-2.5">
             <DialogTitle className="text-sm font-semibold leading-tight">Compare versions</DialogTitle>
@@ -220,7 +217,6 @@ export function DiffPanel({
           </div>
 
           <div className="flex-1 overflow-auto p-3 space-y-4">
-            {/* Legend */}
             <div className="space-y-1.5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Legend</p>
               {[
@@ -239,7 +235,6 @@ export function DiffPanel({
               ))}
             </div>
 
-            {/* Summary counts */}
             {diff && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Changes</p>
@@ -294,7 +289,6 @@ export function DiffPanel({
               </div>
             )}
 
-            {/* Changed node list */}
             {diff && !isClean && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Affected nodes</p>
@@ -318,9 +312,7 @@ export function DiffPanel({
           </div>
         </div>
 
-        {/* Canvas area */}
         <div className="relative flex-1">
-          {/* Header bar */}
           <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-3 py-1.5 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -341,7 +333,6 @@ export function DiffPanel({
             </button>
           </div>
 
-          {/* Canvas */}
           <div className="absolute inset-0 pt-9">
             {loading && (
               <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">

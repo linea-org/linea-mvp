@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 
-export function InlineText({ text }: { text: string }) {
+function InlineText({ text }: { text: string }) {
   const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return (
     <>

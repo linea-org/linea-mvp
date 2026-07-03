@@ -5,7 +5,7 @@ import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import type { Node } from '@xyflow/react';
-import { VariableChips } from '../variable-picker';
+import { VariableChips } from '../../variable-picker';
 
 interface VariableEntry {
   key: string;

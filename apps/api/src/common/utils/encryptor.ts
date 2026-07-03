@@ -4,7 +4,7 @@ export type EncryptionKeys = {
   [key: number]: string | undefined;
 };
 
-export type EncryptedData = {
+type EncryptedData = {
   encrypted: string;
   iv: string;
   authTag: string;

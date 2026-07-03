@@ -41,13 +41,11 @@ export function AttachMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-52">
-        {/* Upload file */}
         <DropdownMenuItem onSelect={onFile}>
           <HugeiconsIcon icon={Attachment01Icon} className="size-3.5 text-muted-foreground" />
           Add photos &amp; files
         </DropdownMenuItem>
 
-        {/* Workflows sub-menu */}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <HugeiconsIcon icon={WorkflowSquare01Icon} className="size-3.5 text-muted-foreground" />
@@ -77,7 +75,6 @@ export function AttachMenu({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        {/* Knowledge & memory */}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <HugeiconsIcon icon={AiBrain01Icon} className="size-3.5 text-muted-foreground" />
@@ -101,7 +98,6 @@ export function AttachMenu({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        {/* External connectors */}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <HugeiconsIcon icon={LinkSquare01Icon} className="size-3.5 text-muted-foreground" />
@@ -129,7 +125,6 @@ export function AttachMenu({
 
         <DropdownMenuSeparator />
 
-        {/* Slash commands hint */}
         <DropdownMenuItem disabled>
           <span className="text-xs font-mono text-muted-foreground font-bold">/</span>
           <span>Type <kbd className="font-mono text-[10px] bg-muted px-1 rounded">/</kbd> for commands</span>

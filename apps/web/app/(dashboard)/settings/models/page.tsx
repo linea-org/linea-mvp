@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { useApiClient } from '@/hooks/use-api-client';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
@@ -17,6 +18,14 @@ interface WorkspaceSettings {
   ragChunkSize?: number;
   ragChunkOverlap?: number;
   supervisorModel?: string;
+}
+
+interface ModelsFormValues {
+  chain: { modelId: string }[];
+  ragThreshold: string;
+  ragChunkSize: string;
+  ragChunkOverlap: string;
+  supervisorModel: string;
 }
 
 const ALL_MODELS = [
@@ -54,13 +63,20 @@ export default function ModelPreferencesPage() {
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const wsId = activeWorkspace?.id ?? '';
 
-  const [chain, setChain] = useState<string[]>([]);
   const [addModel, setAddModel] = useState('');
-  const [ragThreshold, setRagThreshold] = useState('0.75');
-  const [ragChunkSize, setRagChunkSize] = useState('1000');
-  const [ragChunkOverlap, setRagChunkOverlap] = useState('200');
-  const [supervisorModel, setSupervisorModel] = useState('claude-haiku-4-5');
   const [saved, setSaved] = useState(false);
+
+  const { register, handleSubmit, control, reset, watch } = useForm<ModelsFormValues>({
+    defaultValues: {
+      chain: [],
+      ragThreshold: '0.75',
+      ragChunkSize: '1000',
+      ragChunkOverlap: '200',
+      supervisorModel: 'claude-haiku-4-5',
+    },
+  });
+  const { fields, append, remove, move } = useFieldArray({ control, name: 'chain' });
+  const chain = watch('chain');
 
   const { data: settings, isLoading: loading } = useQuery<WorkspaceSettings>({
     queryKey: ['workspace-settings', wsId],
@@ -72,24 +88,27 @@ export default function ModelPreferencesPage() {
   });
 
   const [syncedWsId, setSyncedWsId] = useState<string | null>(null);
-  if (settings && wsId !== syncedWsId) {
+  useEffect(() => {
+    if (!settings || wsId === syncedWsId) return;
     setSyncedWsId(wsId);
-    setChain(settings.modelFallbackChain ?? []);
-    setRagThreshold(String(settings.ragSimilarityThreshold ?? 0.75));
-    setRagChunkSize(String(settings.ragChunkSize ?? 1000));
-    setRagChunkOverlap(String(settings.ragChunkOverlap ?? 200));
-    setSupervisorModel(settings.supervisorModel ?? 'claude-haiku-4-5');
-  }
+    reset({
+      chain: (settings.modelFallbackChain ?? []).map((modelId) => ({ modelId })),
+      ragThreshold: String(settings.ragSimilarityThreshold ?? 0.75),
+      ragChunkSize: String(settings.ragChunkSize ?? 1000),
+      ragChunkOverlap: String(settings.ragChunkOverlap ?? 200),
+      supervisorModel: settings.supervisorModel ?? 'claude-haiku-4-5',
+    });
+  }, [settings, wsId, syncedWsId, reset]);
 
   const saveSettings = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: ModelsFormValues) => {
       const api = await getApi();
       await api.patch(`/workspaces/${wsId}/settings`, {
-        modelFallbackChain: chain,
-        ragSimilarityThreshold: parseFloat(ragThreshold) || 0.75,
-        ragChunkSize: parseInt(ragChunkSize, 10) || 1000,
-        ragChunkOverlap: parseInt(ragChunkOverlap, 10) || 200,
-        supervisorModel: supervisorModel || 'claude-haiku-4-5',
+        modelFallbackChain: values.chain.map((f) => f.modelId),
+        ragSimilarityThreshold: parseFloat(values.ragThreshold) || 0.75,
+        ragChunkSize: parseInt(values.ragChunkSize, 10) || 1000,
+        ragChunkOverlap: parseInt(values.ragChunkOverlap, 10) || 200,
+        supervisorModel: values.supervisorModel || 'claude-haiku-4-5',
       });
     },
     onSuccess: () => {
@@ -98,32 +117,10 @@ export default function ModelPreferencesPage() {
     },
   });
 
-  function moveUp(i: number) {
-    if (i === 0) return;
-    setChain((prev) => {
-      const next = [...prev];
-      [next[i - 1], next[i]] = [next[i]!, next[i - 1]!];
-      return next;
-    });
-  }
-
-  function moveDown(i: number) {
-    setChain((prev) => {
-      if (i >= prev.length - 1) return prev;
-      const next = [...prev];
-      [next[i], next[i + 1]] = [next[i + 1]!, next[i]!];
-      return next;
-    });
-  }
-
-  function removeModel(i: number) {
-    setChain((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
   function addToChain() {
     const id = addModel.trim();
-    if (!id || chain.includes(id)) return;
-    setChain((prev) => [...prev, id]);
+    if (!id || chain.some((f) => f.modelId === id)) return;
+    append({ modelId: id });
     setAddModel('');
   }
 
@@ -135,10 +132,10 @@ export default function ModelPreferencesPage() {
     );
   }
 
-  const availableToAdd = ALL_MODELS.filter((m) => !chain.includes(m.id));
+  const availableToAdd = ALL_MODELS.filter((m) => !chain.some((f) => f.modelId === m.id));
 
   return (
-    <div className="space-y-8">
+    <form onSubmit={handleSubmit((values) => saveSettings.mutate(values))} className="space-y-8">
       <div>
         <h2 className="text-sm font-medium">Model Preferences</h2>
         <p className="text-xs text-muted-foreground mt-0.5">
@@ -146,7 +143,6 @@ export default function ModelPreferencesPage() {
         </p>
       </div>
 
-      {/* ── Fallback chain ── */}
       <div className="space-y-3">
         <div>
           <p className="text-sm font-medium">Fallback Model Chain</p>
@@ -156,30 +152,30 @@ export default function ModelPreferencesPage() {
           </p>
         </div>
 
-        {chain.length === 0 && (
+        {fields.length === 0 && (
           <p className="text-xs text-muted-foreground rounded-lg border border-dashed p-4 text-center">
             No fallbacks configured. Add models below.
           </p>
         )}
 
         <div className="space-y-2">
-          {chain.map((modelId, i) => {
-            const info = ALL_MODELS.find((m) => m.id === modelId);
+          {fields.map((field, i) => {
+            const info = ALL_MODELS.find((m) => m.id === field.modelId);
             return (
-              <div key={modelId} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+              <div key={field.id} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
                 <span className="text-xs text-muted-foreground w-5 shrink-0 text-right">{i + 1}.</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{info?.label ?? modelId}</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">{modelId}</p>
+                  <p className="text-sm font-medium truncate">{info?.label ?? field.modelId}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">{field.modelId}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button size="icon" variant="ghost" className="size-7" onClick={() => moveUp(i)} disabled={i === 0}>
+                  <Button size="icon" variant="ghost" className="size-7" onClick={() => move(i, i - 1)} disabled={i === 0}>
                     <HugeiconsIcon icon={ArrowUp01Icon} className="size-3.5" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="size-7" onClick={() => moveDown(i)} disabled={i === chain.length - 1}>
+                  <Button size="icon" variant="ghost" className="size-7" onClick={() => move(i, i + 1)} disabled={i === fields.length - 1}>
                     <HugeiconsIcon icon={ArrowDown01Icon} className="size-3.5" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => removeModel(i)}>
+                  <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => remove(i)}>
                     <HugeiconsIcon icon={Delete02Icon} className="size-3.5" />
                   </Button>
                 </div>
@@ -199,7 +195,7 @@ export default function ModelPreferencesPage() {
               <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
             ))}
           </select>
-          <Button size="sm" variant="outline" onClick={addToChain} disabled={!addModel}>
+          <Button type="button" size="sm" variant="outline" onClick={addToChain} disabled={!addModel}>
             <HugeiconsIcon icon={Add01Icon} className="size-3.5 mr-1" />
             Add
           </Button>
@@ -214,15 +210,14 @@ export default function ModelPreferencesPage() {
             placeholder="Custom model ID, e.g. llama3.2"
             value={addModel}
             onChange={(e) => setAddModel(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') addToChain(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addToChain(); } }}
           />
-          <Button size="sm" variant="outline" onClick={addToChain} disabled={!addModel.trim()}>
+          <Button type="button" size="sm" variant="outline" onClick={addToChain} disabled={!addModel.trim()}>
             Add
           </Button>
         </div>
       </div>
 
-      {/* ── Supervisor model ── */}
       <div className="space-y-3" data-tour="supervisor-model">
         <div>
           <p className="text-sm font-medium">Execution Supervisor Model</p>
@@ -233,8 +228,7 @@ export default function ModelPreferencesPage() {
         </div>
         <select
           className="w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm"
-          value={supervisorModel}
-          onChange={(e) => setSupervisorModel(e.target.value)}
+          {...register('supervisorModel')}
         >
           {ALL_MODELS.map((m) => (
             <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
@@ -246,7 +240,6 @@ export default function ModelPreferencesPage() {
         </p>
       </div>
 
-      {/* ── RAG settings ── */}
       <div className="space-y-3">
         <div>
           <p className="text-sm font-medium">RAG Retrieval Settings</p>
@@ -263,9 +256,8 @@ export default function ModelPreferencesPage() {
               step="0.05"
               min="0"
               max="1"
-              value={ragThreshold}
-              onChange={(e) => setRagThreshold(e.target.value)}
               className="font-mono text-sm"
+              {...register('ragThreshold')}
             />
             <p className="text-[10px] text-muted-foreground">0.0–1.0. Higher = stricter (0.75 default)</p>
           </div>
@@ -276,9 +268,8 @@ export default function ModelPreferencesPage() {
               type="number"
               step="100"
               min="100"
-              value={ragChunkSize}
-              onChange={(e) => setRagChunkSize(e.target.value)}
               className="font-mono text-sm"
+              {...register('ragChunkSize')}
             />
             <p className="text-[10px] text-muted-foreground">Characters per chunk (1000 default)</p>
           </div>
@@ -289,9 +280,8 @@ export default function ModelPreferencesPage() {
               type="number"
               step="50"
               min="0"
-              value={ragChunkOverlap}
-              onChange={(e) => setRagChunkOverlap(e.target.value)}
               className="font-mono text-sm"
+              {...register('ragChunkOverlap')}
             />
             <p className="text-[10px] text-muted-foreground">Overlap between chunks (200 default)</p>
           </div>
@@ -299,10 +289,10 @@ export default function ModelPreferencesPage() {
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>
+        <Button type="submit" disabled={saveSettings.isPending}>
           {saveSettings.isPending ? 'Saving…' : saved ? 'Saved!' : 'Save Settings'}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }

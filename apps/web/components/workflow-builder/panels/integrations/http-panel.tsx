@@ -9,7 +9,7 @@ import { Switch } from '@linea/ui/components/switch';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@linea/ui/components/select';
-import { VariableChips } from '../variable-picker';
+import { VariableChips } from '../../variable-picker';
 
 interface HttpPanelProps {
   data: Record<string, unknown>;
@@ -68,7 +68,6 @@ export function HttpPanel({ data, onUpdate, nodes = [], nodeId }: HttpPanelProps
         fieldRef={urlRef}
       />
 
-      {/* Auth */}
       <div className="space-y-2">
         <div className="space-y-1.5">
           <Label>Authentication</Label>
@@ -134,7 +133,6 @@ export function HttpPanel({ data, onUpdate, nodes = [], nodeId }: HttpPanelProps
         </div>
       )}
 
-      {/* Response processing */}
       <div className="space-y-3 border-t pt-3">
         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Response</Label>
 

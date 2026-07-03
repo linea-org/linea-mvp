@@ -5,7 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { LayoutTable01Icon } from '@hugeicons/core-free-icons';
 import { Spinner } from '@linea/ui/components/spinner';
 import type { Node } from '@xyflow/react';
-import type { NodeResult } from '../workflow-builder.types';
+import type { NodeResult } from '../../workflow-builder.types';
 import type { Log } from './bottom-panel-shared';
 
 interface TimelineEntry {
