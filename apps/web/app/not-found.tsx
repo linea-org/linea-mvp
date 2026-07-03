@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { Button } from '@linea/ui/components/button';
+import Link from "next/link"
+import { Button } from "@linea/ui/components/button"
 
 export default function NotFound() {
   return (
@@ -15,5 +15,5 @@ export default function NotFound() {
         <Link href="/">Go to dashboard</Link>
       </Button>
     </div>
-  );
+  )
 }

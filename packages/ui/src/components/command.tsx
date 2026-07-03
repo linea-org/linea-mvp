@@ -69,8 +69,15 @@ function CommandInput({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div data-slot="command-input-wrapper" className="flex items-center gap-2 border-b border-border/50 px-3">
-      <HugeiconsIcon icon={SearchIcon} strokeWidth={2} className="size-3.5 shrink-0 text-muted-foreground" />
+    <div
+      data-slot="command-input-wrapper"
+      className="flex items-center gap-2 border-b border-border/50 px-3"
+    >
+      <HugeiconsIcon
+        icon={SearchIcon}
+        strokeWidth={2}
+        className="size-3.5 shrink-0 text-muted-foreground"
+      />
       <CommandPrimitive.Input
         data-slot="command-input"
         className={cn(
@@ -156,7 +163,11 @@ function CommandItem({
       {...props}
     >
       {children}
-      <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
+      <HugeiconsIcon
+        icon={Tick02Icon}
+        strokeWidth={2}
+        className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100"
+      />
     </CommandPrimitive.Item>
   )
 }

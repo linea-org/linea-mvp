@@ -1,104 +1,131 @@
-'use client';
+"use client"
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { Badge } from '@linea/ui/components/badge';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
+import { useEffect, useState } from "react"
+import { useAuth } from "@clerk/nextjs"
+import { useWorkspace } from "@/contexts/workspace-context"
+import { createApiClient } from "@/lib/api"
+import { Button } from "@linea/ui/components/button"
+import { Input } from "@linea/ui/components/input"
+import { Label } from "@linea/ui/components/label"
+import { Badge } from "@linea/ui/components/badge"
+import { Skeleton } from "@linea/ui/components/skeleton"
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@linea/ui/components/native-select"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@linea/ui/components/dialog';
+} from "@linea/ui/components/dialog"
 
 interface ApiKey {
-  id: string;
-  label: string | null;
-  lastUsedAt: string | null;
-  expiresAt: string | null;
-  revokedAt: string | null;
-  status: 'active' | 'expired';
-  createdAt: string;
+  id: string
+  label: string | null
+  lastUsedAt: string | null
+  expiresAt: string | null
+  revokedAt: string | null
+  status: "active" | "expired"
+  createdAt: string
 }
 
 export default function ApiKeysPage() {
-  const { getToken } = useAuth();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [label, setLabel] = useState('');
-  const [expiresIn, setExpiresIn] = useState<'30d' | '90d' | '365d' | 'never'>('never');
-  const [creating, setCreating] = useState(false);
-  const [newKey, setNewKey] = useState<string | null>(null);
+  const { getToken } = useAuth()
+  const { activeWorkspace, loading: wsLoading } = useWorkspace()
+  const [keys, setKeys] = useState<ApiKey[]>([])
+  const [loading, setLoading] = useState(true)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [label, setLabel] = useState("")
+  const [expiresIn, setExpiresIn] = useState<"30d" | "90d" | "365d" | "never">(
+    "never"
+  )
+  const [creating, setCreating] = useState(false)
+  const [newKey, setNewKey] = useState<string | null>(null)
 
   async function loadKeys() {
-    if (!activeWorkspace) return;
-    setLoading(true);
+    if (!activeWorkspace) return
+    setLoading(true)
     try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const data = await api.get<ApiKey[]>(`/workspaces/${activeWorkspace.id}/api-keys`);
-      setKeys(data);
+      const token = await getToken()
+      if (!token) return
+      const api = createApiClient(token)
+      const data = await api.get<ApiKey[]>(
+        `/workspaces/${activeWorkspace.id}/api-keys`
+      )
+      setKeys(data)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
-    void loadKeys();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspace, wsLoading]);
+    if (wsLoading) return
+    if (!activeWorkspace) {
+      setLoading(false)
+      return
+    }
+    void loadKeys()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspace, wsLoading])
 
   async function handleCreate() {
-    if (!activeWorkspace) return;
-    setCreating(true);
+    if (!activeWorkspace) return
+    setCreating(true)
     try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+      const token = await getToken()
+      if (!token) return
+      const api = createApiClient(token)
       const result = await api.post<ApiKey & { key: string }>(
         `/workspaces/${activeWorkspace.id}/api-keys`,
-        { label: label.trim() || undefined, expiresIn: expiresIn === 'never' ? undefined : expiresIn },
-      );
-      setNewKey(result.key);
-      setKeys((prev) => [...prev, {
-        id: result.id, label: result.label, lastUsedAt: result.lastUsedAt,
-        expiresAt: result.expiresAt, revokedAt: null, status: 'active', createdAt: result.createdAt,
-      }]);
+        {
+          label: label.trim() || undefined,
+          expiresIn: expiresIn === "never" ? undefined : expiresIn,
+        }
+      )
+      setNewKey(result.key)
+      setKeys((prev) => [
+        ...prev,
+        {
+          id: result.id,
+          label: result.label,
+          lastUsedAt: result.lastUsedAt,
+          expiresAt: result.expiresAt,
+          revokedAt: null,
+          status: "active",
+          createdAt: result.createdAt,
+        },
+      ])
     } finally {
-      setCreating(false);
+      setCreating(false)
     }
   }
 
   async function handleRevoke(id: string) {
-    if (!activeWorkspace) return;
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
-    await api.delete(`/workspaces/${activeWorkspace.id}/api-keys/${id}`);
-    setKeys((prev) => prev.filter((k) => k.id !== id));
+    if (!activeWorkspace) return
+    const token = await getToken()
+    if (!token) return
+    const api = createApiClient(token)
+    await api.delete(`/workspaces/${activeWorkspace.id}/api-keys/${id}`)
+    setKeys((prev) => prev.filter((k) => k.id !== id))
   }
 
   function closeDialog() {
-    setDialogOpen(false);
-    setNewKey(null);
-    setLabel('');
-    setExpiresIn('never');
+    setDialogOpen(false)
+    setNewKey(null)
+    setLabel("")
+    setExpiresIn("never")
   }
 
   if (wsLoading || loading) {
-    return <div className="space-y-2">{[1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+    return (
+      <div className="space-y-2">
+        {[1, 2].map((i) => (
+          <Skeleton key={i} className="h-12 w-full" />
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -106,11 +133,14 @@ export default function ApiKeysPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-medium">API Keys</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Use <code className="text-xs bg-muted px-1 rounded">lnk_…</code> keys to authenticate SDK and programmatic requests.
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Use <code className="rounded bg-muted px-1 text-xs">lnk_…</code>{" "}
+            keys to authenticate SDK and programmatic requests.
           </p>
         </div>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>New key</Button>
+        <Button size="sm" onClick={() => setDialogOpen(true)}>
+          New key
+        </Button>
       </div>
 
       {keys.length === 0 ? (
@@ -119,22 +149,30 @@ export default function ApiKeysPage() {
         <div className="divide-y rounded-lg border">
           {keys.map((k) => (
             <div key={k.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">{k.label ?? 'Unnamed key'}</p>
+                  <p className="text-sm font-medium">
+                    {k.label ?? "Unnamed key"}
+                  </p>
                   <Badge
-                    variant={k.status === 'active' ? 'default' : 'destructive'}
-                    className={k.status === 'active'
-                      ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400 text-[10px] px-1.5 py-0'
-                      : 'text-[10px] px-1.5 py-0'}
+                    variant={k.status === "active" ? "default" : "destructive"}
+                    className={
+                      k.status === "active"
+                        ? "bg-green-100 px-1.5 py-0 text-[10px] text-green-700 dark:bg-green-950/40 dark:text-green-400"
+                        : "px-1.5 py-0 text-[10px]"
+                    }
                   >
                     {k.status}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Created {new Date(k.createdAt).toLocaleDateString()}
-                  {k.lastUsedAt ? ` · Last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : ' · Never used'}
-                  {k.expiresAt ? ` · Expires ${new Date(k.expiresAt).toLocaleDateString()}` : ''}
+                  {k.lastUsedAt
+                    ? ` · Last used ${new Date(k.lastUsedAt).toLocaleDateString()}`
+                    : " · Never used"}
+                  {k.expiresAt
+                    ? ` · Expires ${new Date(k.expiresAt).toLocaleDateString()}`
+                    : ""}
                 </p>
               </div>
               <Button
@@ -150,7 +188,13 @@ export default function ApiKeysPage() {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); else setDialogOpen(true); }}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(o) => {
+          if (!o) closeDialog()
+          else setDialogOpen(true)
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create API key</DialogTitle>
@@ -180,14 +224,18 @@ export default function ApiKeysPage() {
                   placeholder="e.g. Production"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleCreate()
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label>Expiry</Label>
                 <NativeSelect
                   value={expiresIn}
-                  onChange={(e) => setExpiresIn(e.target.value as typeof expiresIn)}
+                  onChange={(e) =>
+                    setExpiresIn(e.target.value as typeof expiresIn)
+                  }
                   className="h-9 text-sm"
                 >
                   <NativeSelectOption value="never">Never</NativeSelectOption>
@@ -201,16 +249,16 @@ export default function ApiKeysPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>
-              {newKey ? 'Done' : 'Cancel'}
+              {newKey ? "Done" : "Cancel"}
             </Button>
             {!newKey && (
               <Button onClick={() => void handleCreate()} disabled={creating}>
-                {creating ? 'Creating…' : 'Create'}
+                {creating ? "Creating…" : "Create"}
               </Button>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

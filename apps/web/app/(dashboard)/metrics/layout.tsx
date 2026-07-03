@@ -1,7 +1,11 @@
-import type { Metadata } from 'next';
+import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: 'Metrics' };
+export const metadata: Metadata = { title: "Metrics" }
 
-export default function MetricsLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+export default function MetricsLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return <>{children}</>
 }
