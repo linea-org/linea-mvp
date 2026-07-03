@@ -7,8 +7,8 @@ import type { CreateMemoryDto } from './dto/create-memory.dto';
 import type { ListMemoriesDto } from './dto/list-memories.dto';
 import type { IngestMemoryDto } from './dto/ingest-memory.dto';
 import type { SearchMemoryDto } from './dto/search-memory.dto';
-import { EmbeddingService } from './embedding.service';
 import { ExtractionService } from './extraction.service';
+import { AIService } from '../services/ai/ai.service';
 
 const SUPERSEDE_THRESHOLD = 0.88;
 const CANDIDATE_POOL = 20;
@@ -17,7 +17,7 @@ const CANDIDATE_POOL = 20;
 export class MemoryService {
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
-    private readonly embedding: EmbeddingService,
+    private readonly ai: AIService,
     private readonly extraction: ExtractionService,
   ) {}
 
@@ -26,10 +26,15 @@ export class MemoryService {
     const createdIds: string[] = [];
     const updatedIds: string[] = [];
 
-    for (const fact of facts) {
-      const vec = await this.embedding.embed(fact.content);
-      const vecStr = this.embedding.toVectorString(vec);
+    const client = this.ai.initializeWithSys('google');
 
+    for (const fact of facts) {
+      // text-embedding-005
+      const vec = await client.embedding('text-embedding-005', fact.content);
+      if (vec == null) {
+        throw new Error('Failed to generate embeddings');
+      }
+      const vecStr = this.toVectorString(vec);
       const neighbor = await this.db.execute<{
         id: string;
         similarity: number;
@@ -127,9 +132,13 @@ export class MemoryService {
 
   async search(workspaceId: string, dto: SearchMemoryDto) {
     const limit = dto.limit ?? 10;
-    const vec = await this.embedding.embed(dto.query);
-    const vecStr = this.embedding.toVectorString(vec);
 
+    const client = this.ai.initializeWithSys('google');
+    const vec = await client.embedding('text-embedding-005', dto.query);
+    if (vec == null) {
+      throw new Error('Failed to generate embeddings');
+    }
+    const vecStr = this.toVectorString(vec);
     // Build parameterized WHERE clause — never interpolate user values into sql.raw
     const scopeFilter = dto.scope ? sql`AND m.scope = ${dto.scope}` : sql``;
     const userFilter = dto.userId ? sql`AND m.user_id = ${dto.userId}` : sql``;
@@ -285,5 +294,9 @@ export class MemoryService {
       .returning();
 
     if (!deleted.length) throw new NotFoundException(`Memory ${id} not found`);
+  }
+
+  toVectorString(embedding: number[]): string {
+    return `[${embedding.join(',')}]`;
   }
 }

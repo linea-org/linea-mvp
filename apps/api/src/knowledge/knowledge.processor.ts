@@ -5,9 +5,9 @@ import { eq } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { knowledgeEntries } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
-import { EmbeddingService } from '../memory/embedding.service';
 import { RAG_EMBED_QUEUE } from './knowledge.queue';
 import type { RagEmbedJobData } from './knowledge.queue';
+import { AIService } from '../services/ai/ai.service';
 
 @Processor(RAG_EMBED_QUEUE)
 export class KnowledgeEmbedProcessor extends WorkerHost {
@@ -15,13 +15,14 @@ export class KnowledgeEmbedProcessor extends WorkerHost {
 
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
-    private readonly embeddingService: EmbeddingService,
+    private readonly ai: AIService,
   ) {
     super();
   }
 
   async process(job: Job<RagEmbedJobData>): Promise<void> {
-    const { entryId, content, embeddingModel } = job.data;
+    const { entryId, content, embeddingModel, workspaceId, provider } =
+      job.data;
 
     this.logger.debug(
       `Embedding entry ${entryId} with model ${embeddingModel}`,
@@ -34,9 +35,13 @@ export class KnowledgeEmbedProcessor extends WorkerHost {
       .where(eq(knowledgeEntries.id, entryId));
 
     try {
-      // EmbeddingService falls back to system OPENAI_API_KEY if no override provided
-      // BYOK support: future enhancement to pass workspace-level key
-      const vec = await this.embeddingService.embed(content, embeddingModel);
+      const client = await this.ai.initialize(workspaceId, provider);
+
+      // text-embedding-005
+      const vec = await client.embedding('text-embedding-005', content);
+      if (vec == null) {
+        throw new Error('Failed to generate embeddings');
+      }
       const isZero = vec.every((v) => v === 0);
 
       await this.db
