@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from '@/hooks/use-api-client';
+import { friendlyApiError } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -28,45 +30,35 @@ const ROLE_DESCRIPTION: Record<string, string> = {
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
-  const { getToken, isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
+  const getApi = useApiClient();
 
-  const [details, setDetails] = useState<InviteDetails | null>(null);
-  const [loadingDetails, setLoadingDetails] = useState(true);
   const [accepting, setAccepting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    if (!isSignedIn) {
+    if (isLoaded && !isSignedIn) {
       router.push(`/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`);
-      return;
     }
+  }, [isLoaded, isSignedIn, router]);
 
-    async function fetchDetails() {
-      try {
-        const authToken = await getToken();
-        if (!authToken) return;
-        const api = createApiClient(authToken);
-        const data = await api.get<InviteDetails>(`/invites/${token}`);
-        setDetails(data);
-      } catch (err) {
-        setError(friendlyApiError(err));
-      } finally {
-        setLoadingDetails(false);
-      }
-    }
-
-    void fetchDetails();
-  }, [isLoaded, isSignedIn, token, getToken, router]);
+  const { data: details, isLoading: loadingDetails, error: queryError } = useQuery({
+    queryKey: ['invite-details', token],
+    enabled: isLoaded && isSignedIn,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<InviteDetails>(`/invites/${token}`);
+    },
+    retry: false,
+  });
+  const error = acceptError ?? (queryError ? friendlyApiError(queryError) : null);
 
   async function handleAccept() {
     setAccepting(true);
-    setError(null);
+    setAcceptError(null);
     try {
-      const authToken = await getToken();
-      if (!authToken) return;
-      const api = createApiClient(authToken);
+      const api = await getApi();
       await api.post(`/invites/${token}/accept`);
       setDone(true);
       // Brief pause then redirect to the workspace
@@ -74,7 +66,7 @@ export default function InvitePage() {
         router.push('/pods');
       }, 1500);
     } catch (err) {
-      setError(friendlyApiError(err));
+      setAcceptError(friendlyApiError(err));
     } finally {
       setAccepting(false);
     }

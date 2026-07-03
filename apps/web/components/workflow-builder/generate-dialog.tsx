@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { HugeiconsIcon } from '@hugeicons/react';
+import { useAuth } from '@clerk/nextjs';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
   AiMagicIcon, Cancel01Icon, Loading03Icon, PlaneIcon,
   Tick02Icon, Alert02Icon, WorkflowSquare01Icon,
@@ -13,6 +14,7 @@ import { Button } from '@linea/ui/components/button';
 import { Kbd } from '@linea/ui/components/kbd';
 import type { Node, Edge } from '@xyflow/react';
 import { ApiError, friendlyApiError, API_BASE } from '@/lib/api';
+import { consumeSseStream } from '@/lib/sse';
 
 export interface GenerateEvent {
   type: 'progress' | 'node_added' | 'edge_added' | 'complete' | 'error';
@@ -30,7 +32,6 @@ interface GenerateDialogProps {
   workspaceId: string;
   podId: string;
   workflowId: string;
-  token: string;
   nodes: Node[];
   edges: Edge[];
   onEvent: (event: GenerateEvent) => void;
@@ -43,8 +44,7 @@ type Turn =
 
 interface SlashCmd {
   cmd: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
+  icon: IconSvgElement;
   description: string;
 }
 
@@ -71,8 +71,9 @@ const EXAMPLES = [
 ];
 
 export function GenerateDialog({
-  workspaceId, podId, workflowId, token, nodes, edges, onEvent, onClose,
+  workspaceId, podId, workflowId, nodes, edges, onEvent, onClose,
 }: GenerateDialogProps) {
+  const { getToken } = useAuth();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -106,15 +107,21 @@ export function GenerateDialog({
     }, 10);
   }
 
+  const selectSlashCommandRef = useRef(selectSlashCommand);
+  selectSlashCommandRef.current = selectSlashCommand;
+  const closeMenuRef = useRef(closeMenu);
+  closeMenuRef.current = closeMenu;
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (slashOpen && filteredCmds.length > 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx((i) => (i + 1) % filteredCmds.length); return; }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setSlashIdx((i) => (i - 1 + filteredCmds.length) % filteredCmds.length); return; }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); const cmd = filteredCmds[slashIdx]; if (cmd) selectSlashCommand(cmd); return; }
-      if (e.key === 'Escape') { e.preventDefault(); closeMenu(); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); const cmd = filteredCmds[slashIdx]; if (cmd) selectSlashCommandRef.current(cmd); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeMenuRef.current(); return; }
     }
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend(); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSendRef.current(); }
   }, [slashOpen, filteredCmds, slashIdx]);
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -168,6 +175,8 @@ export function GenerateDialog({
     abortRef.current = ac;
 
     try {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
       const resp = await fetch(
         `${API_BASE}/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/generate`,
         {
@@ -181,40 +190,25 @@ export function GenerateDialog({
       if (!resp.ok || !resp.body) throw new ApiError(resp.status, resp.statusText || `Request failed with status ${resp.status}`);
 
       const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const event: GenerateEvent = JSON.parse(line.slice(6));
-            onEvent(event);
-            setTurns((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              if (!last || last.kind !== 'assistant') return prev;
-              if (event.type === 'progress' && event.message)
-                return [...next.slice(0, -1), { ...last, progress: [...last.progress, event.message] }];
-              if (event.type === 'node_added')
-                return [...next.slice(0, -1), { ...last, nodeCount: last.nodeCount + 1 }];
-              if (event.type === 'complete') {
-                const summary = `Built ${event.definition?.nodes.length ?? 0} nodes, ${event.definition?.edges.length ?? 0} edges`;
-                return [...next.slice(0, -1), { ...last, progress: [...last.progress, summary], done: true }];
-              }
-              if (event.type === 'error')
-                return [...next.slice(0, -1), { ...last, progress: [...last.progress, event.message ?? 'Unknown error'], done: true, error: event.message }];
-              return prev;
-            });
-          } catch { /* malformed chunk */ }
-        }
-      }
+      await consumeSseStream<GenerateEvent>(reader, (event) => {
+        onEvent(event);
+        setTurns((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (!last || last.kind !== 'assistant') return prev;
+          if (event.type === 'progress' && event.message)
+            return [...next.slice(0, -1), { ...last, progress: [...last.progress, event.message] }];
+          if (event.type === 'node_added')
+            return [...next.slice(0, -1), { ...last, nodeCount: last.nodeCount + 1 }];
+          if (event.type === 'complete') {
+            const summary = `Built ${event.definition?.nodes.length ?? 0} nodes, ${event.definition?.edges.length ?? 0} edges`;
+            return [...next.slice(0, -1), { ...last, progress: [...last.progress, summary], done: true }];
+          }
+          if (event.type === 'error')
+            return [...next.slice(0, -1), { ...last, progress: [...last.progress, event.message ?? 'Unknown error'], done: true, error: event.message }];
+          return prev;
+        });
+      });
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         const msg = friendlyApiError(err);

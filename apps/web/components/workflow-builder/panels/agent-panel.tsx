@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import type { Node } from '@xyflow/react';
 import { Switch } from '@linea/ui/components/switch';
 import { Textarea } from '@linea/ui/components/textarea';
@@ -89,13 +89,13 @@ function RichTextarea({ value, onChange, nodes, currentNodeId, rows = 8, placeho
     ? allCmds.filter((c) => c.label.toLowerCase().includes(slashQuery.toLowerCase()) || c.desc.toLowerCase().includes(slashQuery.toLowerCase()))
     : allCmds;
 
-  function closeMenu() {
+  const closeMenu = useCallback(() => {
     setSlashOpen(false);
     setSlashQuery('');
     setSlashIdx(0);
-  }
+  }, []);
 
-  function insertCommand(cmd: SlashCmd) {
+  const insertCommand = useCallback((cmd: SlashCmd) => {
     const el = ref.current;
     if (!el) return;
     const before = value.slice(0, slashPos - 1); // remove the '/'
@@ -108,7 +108,7 @@ function RichTextarea({ value, onChange, nodes, currentNodeId, rows = 8, placeho
       el.selectionStart = el.selectionEnd = pos;
       el.focus();
     });
-  }
+  }, [value, slashPos, onChange, closeMenu]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!slashOpen) return;
@@ -125,8 +125,7 @@ function RichTextarea({ value, onChange, nodes, currentNodeId, rows = 8, placeho
       e.preventDefault();
       closeMenu();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slashOpen, filtered, slashIdx]);
+  }, [slashOpen, filtered, slashIdx, insertCommand, closeMenu]);
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value;
@@ -144,7 +143,8 @@ function RichTextarea({ value, onChange, nodes, currentNodeId, rows = 8, placeho
     } else if (slashOpen) {
       // Update query: everything typed since the '/'
       const afterSlash = next.slice(slashPos, caret);
-      if (/\s/.test(afterSlash) || caret < slashPos) {
+      const nextFiltered = allCmds.filter((c) => c.label.toLowerCase().includes(afterSlash.toLowerCase()) || c.desc.toLowerCase().includes(afterSlash.toLowerCase()));
+      if (/\s/.test(afterSlash) || caret < slashPos || nextFiltered.length === 0) {
         closeMenu();
       } else {
         setSlashQuery(afterSlash);
@@ -166,11 +166,6 @@ function RichTextarea({ value, onChange, nodes, currentNodeId, rows = 8, placeho
     };
     reader.readAsText(file);
   }
-
-  useEffect(() => {
-    if (slashOpen && filtered.length === 0) closeMenu();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered.length, slashOpen]);
 
   return (
     <div className="relative">

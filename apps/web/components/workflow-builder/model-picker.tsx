@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Popover, PopoverContent, PopoverTrigger } from '@linea/ui/components/popover';
 import { cn } from '@linea/ui/lib/utils';
 import { API_BASE } from '@/lib/api';
@@ -59,24 +60,20 @@ export function ModelPicker({
   className,
   placeholder = 'Select a model…',
 }: ModelPickerProps) {
-  const [models, setModels] = useState<ModelDef[]>([]);
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetch(`${API_BASE}/models`)
-      .then((r) => r.json())
-      .then((data: unknown) => {
-        const raw = (data as { data?: unknown }).data ?? data;
-        const list = Array.isArray(raw) ? (raw as ModelDef[]) : [];
-        setModels(list);
-      })
-      .catch(() => setModels([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: models = [], isLoading: loading } = useQuery<ModelDef[]>({
+    queryKey: ['models-list'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/models`);
+      const data: unknown = await res.json();
+      const raw = (data as { data?: unknown }).data ?? data;
+      return Array.isArray(raw) ? (raw as ModelDef[]) : [];
+    },
+  });
 
   useEffect(() => {
     if (open) {

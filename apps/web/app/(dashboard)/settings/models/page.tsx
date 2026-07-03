@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useApiClient } from '@/hooks/use-api-client';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
@@ -71,14 +71,15 @@ export default function ModelPreferencesPage() {
     },
   });
 
-  useEffect(() => {
-    if (!settings) return;
+  const [syncedWsId, setSyncedWsId] = useState<string | null>(null);
+  if (settings && wsId !== syncedWsId) {
+    setSyncedWsId(wsId);
     setChain(settings.modelFallbackChain ?? []);
     setRagThreshold(String(settings.ragSimilarityThreshold ?? 0.75));
     setRagChunkSize(String(settings.ragChunkSize ?? 1000));
     setRagChunkOverlap(String(settings.ragChunkOverlap ?? 200));
     setSupervisorModel(settings.supervisorModel ?? 'claude-haiku-4-5');
-  }, [settings]);
+  }
 
   const saveSettings = useMutation({
     mutationFn: async () => {

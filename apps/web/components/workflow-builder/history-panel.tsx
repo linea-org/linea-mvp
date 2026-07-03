@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
 import { Spinner } from '@linea/ui/components/spinner';
@@ -29,7 +30,6 @@ interface Props {
   workspaceId: string;
   podId: string;
   workflowId: string;
-  token: string;
   nodes: { id: string; data: Record<string, unknown> }[];
   onClose: () => void;
 }
@@ -52,46 +52,33 @@ const STATUS_DOT: Record<string, string> = {
   suspended: 'bg-amber-400',
 };
 
-export function HistoryPanel({ workspaceId, podId, workflowId, token, nodes, onClose }: Props) {
-  const [executions, setExecutions] = useState<Execution[]>([]);
-  const [loading, setLoading] = useState(true);
+export function HistoryPanel({ workspaceId, podId, workflowId, nodes, onClose }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [logs, setLogs] = useState<Log[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
+  const getApi = useApiClient();
 
-  useEffect(() => { void fetchExecutions(); }, []);
-
-  async function fetchExecutions() {
-    setLoading(true);
-    try {
-      const api = createApiClient(token);
+  const { data: executions = [], isLoading: loading, refetch } = useQuery<Execution[]>({
+    queryKey: ['workflow-executions-history', workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi();
       const data = await api.get<{ executions: Execution[] }>(
         `/workspaces/${workspaceId}/pods/${podId}/executions?workflowId=${workflowId}&limit=20`,
       );
-      setExecutions(data.executions);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
+      return data.executions;
+    },
+  });
+
+  function fetchExecutions() {
+    void refetch();
   }
 
-  async function selectExecution(id: string) {
-    setSelectedId(id);
-    setLogs([]);
-    setLogsLoading(true);
-    try {
-      const api = createApiClient(token);
-      const data = await api.get<Log[]>(
-        `/workspaces/${workspaceId}/pods/${podId}/executions/${id}/logs`,
-      );
-      setLogs(data);
-    } catch {
-      // ignore
-    } finally {
-      setLogsLoading(false);
-    }
-  }
+  const { data: logs = [], isLoading: logsLoading } = useQuery<Log[]>({
+    queryKey: ['workflow-execution-logs', workspaceId, podId, selectedId],
+    enabled: !!selectedId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Log[]>(`/workspaces/${workspaceId}/pods/${podId}/executions/${selectedId}/logs`);
+    },
+  });
 
   function getNodeName(nodeId: string): string {
     const node = nodes.find((n) => n.id === nodeId);
@@ -113,7 +100,7 @@ export function HistoryPanel({ workspaceId, podId, workflowId, token, nodes, onC
           <p className="text-[11px] text-muted-foreground">Past executions of this workflow</p>
         </div>
         <div className="flex items-center gap-1">
-          <Button size="icon-sm" variant="ghost" onClick={() => void fetchExecutions()} title="Refresh">
+          <Button size="icon-sm" variant="ghost" onClick={fetchExecutions} title="Refresh">
             <HugeiconsIcon icon={ReloadIcon} className="size-3.5" />
           </Button>
           <Button size="icon-sm" variant="ghost" onClick={onClose}>
@@ -135,7 +122,7 @@ export function HistoryPanel({ workspaceId, podId, workflowId, token, nodes, onC
             executions.map((ex) => (
               <button
                 key={ex.id}
-                onClick={() => void selectExecution(ex.id)}
+                onClick={() => setSelectedId(ex.id)}
                 className={`w-full text-left px-2.5 py-2 border-b border-border/50 hover:bg-muted/30 transition-colors ${selectedId === ex.id ? 'bg-muted/50' : ''}`}
               >
                 <div className="flex items-center gap-1.5">

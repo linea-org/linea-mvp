@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useWorkspace } from '@/contexts/workspace-context';
@@ -126,25 +127,23 @@ export function WelcomeModal() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('welcome');
   const [podName, setPodName] = useState('');
-  const [creating, setCreating] = useState(false);
   const [createdPodId, setCreatedPodId] = useState<string | null>(null);
   const [createdWorkflowId, setCreatedWorkflowId] = useState<string | null>(null);
-  const [creatingTemplate, setCreatingTemplate] = useState(false);
+
+  const { data: me } = useQuery({
+    queryKey: ['user-onboarding-status'],
+    enabled: !wsLoading && !podLoading && !!activeWorkspace && pods.length === 0,
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+      const api = createApiClient(token);
+      return api.get<{ onboardedAt: string | null }>('/users/me');
+    },
+  });
 
   useEffect(() => {
-    if (wsLoading || podLoading) return;
-    if (!activeWorkspace || pods.length > 0) return;
-
-    async function checkOnboarded() {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const me = await api.get<{ onboardedAt: string | null }>('/users/me');
-      if (!me.onboardedAt) setOpen(true);
-    }
-
-    void checkOnboarded();
-  }, [wsLoading, podLoading, pods.length, activeWorkspace, getToken]);
+    if (me && !me.onboardedAt) setOpen(true);
+  }, [me]);
 
   async function markOnboarded() {
     const token = await getToken();
@@ -158,45 +157,49 @@ export function WelcomeModal() {
     setOpen(false);
   }
 
-  async function handleCreatePod() {
-    if (!activeWorkspace || !podName.trim()) return;
-    setCreating(true);
-    try {
+  const createPodMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeWorkspace) throw new Error('No active workspace');
       const token = await getToken();
-      if (!token) return;
+      if (!token) throw new Error('Not authenticated');
       const api = createApiClient(token);
-      const pod = await api.post<{ id: string; name: string }>(
+      return api.post<{ id: string; name: string }>(
         `/workspaces/${activeWorkspace.id}/pods`,
         { name: podName.trim() },
       );
+    },
+    onSuccess: (pod) => {
       setCreatedPodId(pod.id);
       void reloadPods();
       void markOnboarded();
       localStorage.setItem('linea_gs_pod', 'true');
       setStep('template');
-    } finally {
-      setCreating(false);
-    }
+    },
+  });
+
+  function handleCreatePod() {
+    if (!activeWorkspace || !podName.trim()) return;
+    createPodMutation.mutate();
   }
 
-  async function handleSelectTemplate(template: StarterTemplate) {
-    if (!activeWorkspace || !createdPodId) return;
-    setCreatingTemplate(true);
-    try {
+  const createWorkflowMutation = useMutation({
+    mutationFn: async (template: StarterTemplate) => {
+      if (!activeWorkspace || !createdPodId) throw new Error('No active pod');
       const token = await getToken();
-      if (!token) return;
+      if (!token) throw new Error('Not authenticated');
       const api = createApiClient(token);
-      const wf = await api.post<{ id: string }>(
+      return api.post<{ id: string }>(
         `/workspaces/${activeWorkspace.id}/pods/${createdPodId}/workflows`,
         { name: template.name, definition: template.definition },
       );
-      setCreatedWorkflowId(wf.id);
-    } catch {
-      // silently skip — user can still create workflows manually
-    } finally {
-      setCreatingTemplate(false);
-      setStep('ready');
-    }
+    },
+    onSuccess: (wf) => setCreatedWorkflowId(wf.id),
+    onSettled: () => setStep('ready'),
+  });
+
+  function handleSelectTemplate(template: StarterTemplate) {
+    if (!activeWorkspace || !createdPodId) return;
+    createWorkflowMutation.mutate(template);
   }
 
   function handleGoToBuilder() {
@@ -222,13 +225,13 @@ export function WelcomeModal() {
             value={podName}
             onChange={setPodName}
             onSubmit={handleCreatePod}
-            loading={creating}
+            loading={createPodMutation.isPending}
             onSkip={dismiss}
           />
         )}
         {step === 'template' && (
           <TemplateStep
-            loading={creatingTemplate}
+            loading={createWorkflowMutation.isPending}
             onSelect={handleSelectTemplate}
             onSkip={() => setStep('ready')}
           />
@@ -314,7 +317,7 @@ function PodStep({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onSubmit: () => Promise<void>;
+  onSubmit: () => void;
   loading: boolean;
   onSkip: () => void;
 }) {
@@ -338,7 +341,7 @@ function PodStep({
             placeholder="e.g. Production, Research, Sales"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !loading) void onSubmit(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !loading) onSubmit(); }}
             autoFocus
           />
         </div>
@@ -351,7 +354,7 @@ function PodStep({
         >
           Skip for now
         </button>
-        <Button onClick={() => void onSubmit()} disabled={!value.trim() || loading}>
+        <Button onClick={onSubmit} disabled={!value.trim() || loading}>
           {loading ? 'Creating…' : 'Create pod'}
           {!loading && <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />}
         </Button>
@@ -366,7 +369,7 @@ function TemplateStep({
   onSkip,
 }: {
   loading: boolean;
-  onSelect: (t: StarterTemplate) => Promise<void>;
+  onSelect: (t: StarterTemplate) => void;
   onSkip: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -387,7 +390,7 @@ function TemplateStep({
             disabled={loading}
             onClick={() => {
               setSelected(t.id);
-              void onSelect(t);
+              onSelect(t);
             }}
             className={`relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all hover:shadow-sm focus:outline-none disabled:opacity-60 ${t.accent} ${selected === t.id ? 'ring-2 ring-primary' : ''}`}
           >

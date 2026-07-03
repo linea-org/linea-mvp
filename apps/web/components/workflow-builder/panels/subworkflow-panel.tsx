@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from '@/hooks/use-api-client';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
 import { Label } from '@linea/ui/components/label';
 import {
   Select,
@@ -27,28 +26,20 @@ interface SubworkflowPanelProps {
 
 export function SubworkflowPanel({ data, onUpdate }: SubworkflowPanelProps) {
   const { podId } = useParams<{ podId: string }>();
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace } = useWorkspace();
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      if (!activeWorkspace || !podId) return;
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const api = createApiClient(token);
-        const res = await api.get<{ workflows: Workflow[] }>(
-          `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows`,
-        );
-        setWorkflows(res.workflows ?? []);
-      } finally {
-        setLoading(false);
-      }
-    }
-    void load();
-  }, [activeWorkspace, podId]);
+  const { data: workflows = [], isLoading: loading } = useQuery<Workflow[]>({
+    queryKey: ['pod-workflows', activeWorkspace?.id, podId],
+    enabled: !!activeWorkspace && !!podId,
+    queryFn: async () => {
+      const api = await getApi();
+      const res = await api.get<{ workflows: Workflow[] }>(
+        `/workspaces/${activeWorkspace!.id}/pods/${podId}/workflows`,
+      );
+      return res.workflows ?? [];
+    },
+  });
 
   const selected = (data.workflowId as string) ?? '';
 

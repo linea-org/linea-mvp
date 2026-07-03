@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Cancel01Icon, Copy01Icon, Add01Icon, Delete01Icon, Loading01Icon,
   CheckmarkCircle01Icon, Alert01Icon, RefreshIcon, EyeIcon, ViewOffIcon,
   CloudUploadIcon, LinkSquare02Icon, AiBrain01Icon, LockIcon, InternetIcon,
 } from '@hugeicons/core-free-icons';
-import { createApiClient, friendlyApiError, API_ORIGIN } from '@/lib/api';
-import { toast } from '@linea/ui/components/sonner';
+import { API_ORIGIN } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { Switch } from '@linea/ui/components/switch';
 import { Label } from '@linea/ui/components/label';
@@ -34,7 +35,6 @@ interface PanelProps {
   workspaceId: string;
   podId: string;
   workflowId: string;
-  token: string;
   isDeployed: boolean;
   deployedAt: string | null;
   onDeploy: () => Promise<void>;
@@ -46,43 +46,45 @@ const TRIGGER_BASE = `${API_ORIGIN}/v1/webhooks`;
 
 function DeploySection({
   isDeployed, deployedAt, onDeploy, onUndeploy,
-  workspaceId, podId, workflowId, token,
-}: Pick<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'workspaceId' | 'podId' | 'workflowId' | 'token'>) {
+  workspaceId, podId, workflowId,
+}: Pick<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'workspaceId' | 'podId' | 'workflowId'>) {
+  const getApi = useApiClient();
   const [deploying, setDeploying] = useState(false);
   const [undeploying, setUndeploying] = useState(false);
-  const [apiConfig, setApiConfig] = useState<ApiConfig | null>(null);
-  const [apiSaving, setApiSaving] = useState(false);
+  const queryClient = useQueryClient();
+  const apiConfigKey = ['workflow-api-config', workspaceId, podId, workflowId];
 
-  useEffect(() => { void fetchApiConfig(); }, []);
+  const { data: apiConfig } = useQuery<ApiConfig>({
+    queryKey: apiConfigKey,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
+    },
+  });
 
-  async function fetchApiConfig() {
-    try {
-      const api = createApiClient(token);
-      const data = await api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
-      setApiConfig(data);
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    }
-  }
-
-  async function updateApiConfig(patch: Partial<ApiConfig>) {
-    if (!apiConfig) return;
-    const next = { ...apiConfig, ...patch };
-    setApiConfig(next);
-    setApiSaving(true);
-    try {
-      const api = createApiClient(token);
-      const updated = await api.patch<ApiConfig>(
+  const updateApiConfigMutation = useMutation({
+    mutationFn: async (patch: Partial<ApiConfig>) => {
+      const current = queryClient.getQueryData<ApiConfig>(apiConfigKey)!;
+      const next = { ...current, ...patch };
+      const api = await getApi();
+      return api.patch<ApiConfig>(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`,
         { apiEnabled: next.apiEnabled, apiVisibility: next.apiVisibility },
       );
-      setApiConfig(updated);
-    } catch (err) {
-      setApiConfig(apiConfig);
-      toast.error(friendlyApiError(err));
-    } finally {
-      setApiSaving(false);
-    }
+    },
+    onMutate: async (patch) => {
+      const previous = queryClient.getQueryData<ApiConfig>(apiConfigKey);
+      if (previous) queryClient.setQueryData(apiConfigKey, { ...previous, ...patch });
+      return { previous };
+    },
+    onError: (_err, _patch, context) => {
+      if (context?.previous) queryClient.setQueryData(apiConfigKey, context.previous);
+    },
+    onSuccess: (data) => queryClient.setQueryData(apiConfigKey, data),
+  });
+
+  function updateApiConfig(patch: Partial<ApiConfig>) {
+    updateApiConfigMutation.mutate(patch);
   }
 
   async function handleDeploy() {
@@ -158,7 +160,7 @@ function DeploySection({
       )}
 
       {/* REST API visibility — surfaced prominently */}
-      {apiConfig !== null && (
+      {apiConfig && (
         <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
@@ -180,7 +182,7 @@ function DeploySection({
             <Switch
               checked={apiConfig.apiEnabled}
               onCheckedChange={(v) => void updateApiConfig({ apiEnabled: v })}
-              disabled={apiSaving}
+              disabled={updateApiConfigMutation.isPending}
             />
           </div>
 
@@ -218,52 +220,49 @@ function DeploySection({
   );
 }
 
-function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
-  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+function WebhookTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const getApi = useApiClient();
   const [copied, setCopied] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const webhooksKey = ['pod-webhooks', workspaceId, podId];
+
+  const { data: webhooks = [], isLoading: loading } = useQuery<Webhook[]>({
+    queryKey: webhooksKey,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Webhook[]>(`/workspaces/${workspaceId}/pods/${podId}/webhooks`);
+    },
+  });
 
   const workflowWebhooks = webhooks.filter((w) => w.workflowId === workflowId);
 
-  useEffect(() => { void fetchWebhooks(); }, []);
+  const createWebhookMutation = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<Webhook>(`/workspaces/${workspaceId}/pods/${podId}/webhooks`, { workflowId });
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData<Webhook[]>(webhooksKey, (prev) => [...(prev ?? []), created]);
+    },
+  });
 
-  async function fetchWebhooks() {
-    try {
-      const api = createApiClient(token);
-      const data = await api.get<Webhook[]>(`/workspaces/${workspaceId}/pods/${podId}/webhooks`);
-      setWebhooks(data);
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function createWebhook() {
-    setCreating(true);
-    try {
-      const api = createApiClient(token);
-      const created = await api.post<Webhook>(
-        `/workspaces/${workspaceId}/pods/${podId}/webhooks`,
-        { workflowId },
-      );
-      setWebhooks((prev) => [...prev, created]);
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function deleteWebhook(id: string) {
-    try {
-      const api = createApiClient(token);
+  const deleteWebhookMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
       await api.delete(`/workspaces/${workspaceId}/pods/${podId}/webhooks/${id}`);
-      setWebhooks((prev) => prev.filter((w) => w.id !== id));
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    }
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Webhook[]>(webhooksKey, (prev) => prev?.filter((w) => w.id !== id) ?? []);
+    },
+  });
+
+  function createWebhook() {
+    createWebhookMutation.mutate();
+  }
+
+  function deleteWebhook(id: string) {
+    deleteWebhookMutation.mutate(id);
   }
 
   function copy(text: string, id: string) {
@@ -289,8 +288,8 @@ function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
             <p className="text-xs font-medium">No webhook yet</p>
             <p className="text-[11px] text-muted-foreground">Create a webhook to trigger this workflow from external systems.</p>
           </div>
-          <Button size="sm" className="w-full" onClick={() => void createWebhook()} disabled={creating}>
-            <HugeiconsIcon icon={creating ? Loading01Icon : Add01Icon} className={creating ? 'animate-spin' : ''} />
+          <Button size="sm" className="w-full" onClick={createWebhook} disabled={createWebhookMutation.isPending}>
+            <HugeiconsIcon icon={createWebhookMutation.isPending ? Loading01Icon : Add01Icon} className={createWebhookMutation.isPending ? 'animate-spin' : ''} />
             Create Webhook
           </Button>
         </>
@@ -304,7 +303,7 @@ function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     ID: {wh.id.slice(0, 8)}…
                   </span>
-                  <Button size="icon-xs" variant="ghost" className="text-muted-foreground hover:text-red-500" onClick={() => void deleteWebhook(wh.id)}>
+                  <Button size="icon-xs" variant="ghost" className="text-muted-foreground hover:text-red-500" onClick={() => deleteWebhook(wh.id)}>
                     <HugeiconsIcon icon={Delete01Icon} />
                   </Button>
                 </div>
@@ -338,64 +337,60 @@ function WebhookTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
   );
 }
 
-function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
-  const [config, setConfig] = useState<ApiConfig>({ apiEnabled: false, apiVisibility: 'api_key', apiKey: null });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [rotating, setRotating] = useState(false);
+function RestApiTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const getApi = useApiClient();
   const [copied, setCopied] = useState<string | null>(null);
   const [keyVisible, setKeyVisible] = useState(false);
+  const queryClient = useQueryClient();
+  const apiConfigKey = ['workflow-api-config', workspaceId, podId, workflowId];
+
+  const { data: config = { apiEnabled: false, apiVisibility: 'api_key' as const, apiKey: null }, isLoading: loading } = useQuery<ApiConfig>({
+    queryKey: apiConfigKey,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
+    },
+  });
 
   const endpointUrl = `${API_ORIGIN}/v1/run/${workflowId}`;
 
-  useEffect(() => { void fetchConfig(); }, []);
-
-  async function fetchConfig() {
-    setLoading(true);
-    try {
-      const api = createApiClient(token);
-      const data = await api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
-      setConfig(data);
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function updateConfig(patch: Partial<ApiConfig>) {
-    const next = { ...config, ...patch };
-    setConfig(next);
-    setSaving(true);
-    try {
-      const api = createApiClient(token);
-      const updated = await api.patch<ApiConfig>(
+  const updateConfigMutation = useMutation({
+    mutationFn: async (patch: Partial<ApiConfig>) => {
+      const current = queryClient.getQueryData<ApiConfig>(apiConfigKey) ?? config;
+      const next = { ...current, ...patch };
+      const api = await getApi();
+      return api.patch<ApiConfig>(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`,
         { apiEnabled: next.apiEnabled, apiVisibility: next.apiVisibility },
       );
-      setConfig(updated);
-    } catch (err) {
-      setConfig(config);
-      toast.error(friendlyApiError(err));
-    } finally {
-      setSaving(false);
-    }
+    },
+    onMutate: async (patch) => {
+      const previous = queryClient.getQueryData<ApiConfig>(apiConfigKey) ?? config;
+      queryClient.setQueryData(apiConfigKey, { ...previous, ...patch });
+      return { previous };
+    },
+    onError: (_err, _patch, context) => {
+      if (context?.previous) queryClient.setQueryData(apiConfigKey, context.previous);
+    },
+    onSuccess: (data) => queryClient.setQueryData(apiConfigKey, data),
+  });
+
+  const rotateKeyMutation = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<{ apiKey: string }>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api/rotate-key`, {});
+    },
+    onSuccess: (res) => {
+      queryClient.setQueryData<ApiConfig>(apiConfigKey, (prev) => prev ? { ...prev, apiKey: res.apiKey } : prev);
+    },
+  });
+
+  function updateConfig(patch: Partial<ApiConfig>) {
+    updateConfigMutation.mutate(patch);
   }
 
-  async function rotateKey() {
-    setRotating(true);
-    try {
-      const api = createApiClient(token);
-      const res = await api.post<{ apiKey: string }>(
-        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api/rotate-key`,
-        {},
-      );
-      setConfig((c) => ({ ...c, apiKey: res.apiKey }));
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    } finally {
-      setRotating(false);
-    }
+  function rotateKey() {
+    rotateKeyMutation.mutate();
   }
 
   function copyText(text: string, key: string) {
@@ -424,7 +419,7 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
           <Label className="cursor-pointer">Enable REST endpoint</Label>
           <p className="text-[10px] text-muted-foreground mt-0.5">Expose this workflow as an HTTP endpoint</p>
         </div>
-        <Switch checked={config.apiEnabled} onCheckedChange={(v) => void updateConfig({ apiEnabled: v })} disabled={saving} />
+        <Switch checked={config.apiEnabled} onCheckedChange={(v) => updateConfig({ apiEnabled: v })} disabled={updateConfigMutation.isPending} />
       </div>
 
       {config.apiEnabled && (
@@ -441,7 +436,7 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
                     name="rest-visibility-dp"
                     value={val}
                     checked={config.apiVisibility === val}
-                    onChange={() => void updateConfig({ apiVisibility: val })}
+                    onChange={() => updateConfig({ apiVisibility: val })}
                     className="mt-0.5 shrink-0"
                   />
                   <div>
@@ -489,15 +484,15 @@ function RestApiTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 
                     </button>
                   </div>
                   {copied === 'key' && <p className="text-[10px] text-green-600">Copied!</p>}
-                  <Button size="sm" variant="outline" onClick={() => void rotateKey()} disabled={rotating} className="w-full text-xs">
-                    <HugeiconsIcon icon={rotating ? Loading01Icon : RefreshIcon} className={`size-3.5 ${rotating ? 'animate-spin' : ''}`} />
+                  <Button size="sm" variant="outline" onClick={rotateKey} disabled={rotateKeyMutation.isPending} className="w-full text-xs">
+                    <HugeiconsIcon icon={rotateKeyMutation.isPending ? Loading01Icon : RefreshIcon} className={`size-3.5 ${rotateKeyMutation.isPending ? 'animate-spin' : ''}`} />
                     Rotate key
                   </Button>
                   <p className="text-[10px] text-muted-foreground">Rotating invalidates the current key immediately.</p>
                 </div>
               ) : (
-                <Button size="sm" variant="outline" onClick={() => void rotateKey()} disabled={rotating} className="w-full text-xs">
-                  <HugeiconsIcon icon={rotating ? Loading01Icon : RefreshIcon} className={`size-3.5 ${rotating ? 'animate-spin' : ''}`} />
+                <Button size="sm" variant="outline" onClick={rotateKey} disabled={rotateKeyMutation.isPending} className="w-full text-xs">
+                  <HugeiconsIcon icon={rotateKeyMutation.isPending ? Loading01Icon : RefreshIcon} className={`size-3.5 ${rotateKeyMutation.isPending ? 'animate-spin' : ''}`} />
                   Generate API key
                 </Button>
               )}
@@ -546,50 +541,47 @@ const SUPERVISOR_MODELS = [
   { id: 'gemini-2.0-flash',             label: 'Gemini 2.0 Flash (Google)',             provider: 'google'    },
 ] as const;
 
-function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+function SettingsTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const getApi = useApiClient();
   const [supervisorModel, setSupervisorModel] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [initializedFor, setInitializedFor] = useState<string | null>(null);
 
-  useEffect(() => { void fetchSettings(); }, []);
+  const { data: wf, isLoading: loading } = useQuery<{ definition?: { settings?: { supervisorModel?: string } } }>({
+    queryKey: ['workflow-definition-settings', workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`);
+    },
+  });
 
-  async function fetchSettings() {
-    try {
-      const api = createApiClient(token);
-      const wf = await api.get<{ definition?: { settings?: { supervisorModel?: string } } }>(
-        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
-      );
-      setSupervisorModel(wf.definition?.settings?.supervisorModel ?? '');
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    } finally {
-      setLoading(false);
-    }
+  if (wf && initializedFor !== workflowId) {
+    setInitializedFor(workflowId);
+    setSupervisorModel(wf.definition?.settings?.supervisorModel ?? '');
   }
 
-  async function save(model: string) {
-    setSupervisorModel(model);
-    setSaving(true);
-    try {
-      const api = createApiClient(token);
-      /* Fetch current definition to avoid overwriting other settings */
-      const wf = await api.get<{ definition?: Record<string, unknown> }>(
+  const saveMutation = useMutation({
+    mutationFn: async (model: string) => {
+      const api = await getApi();
+      const current = await api.get<{ definition?: Record<string, unknown> }>(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
       );
-      const currentDef = wf.definition ?? {};
+      const currentDef = current.definition ?? {};
       const currentSettings = (currentDef.settings as Record<string, unknown>) ?? {};
       await api.patch(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
         { definition: { ...currentDef, settings: { ...currentSettings, supervisorModel: model || null } } },
       );
+    },
+    onSuccess: () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+
+  function save(model: string) {
+    setSupervisorModel(model);
+    saveMutation.mutate(model);
   }
 
   if (loading) {
@@ -617,8 +609,8 @@ function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps,
         <div className="flex items-center gap-2">
           <Select
             value={supervisorModel || '__default__'}
-            onValueChange={(v) => void save(v === '__default__' ? '' : v)}
-            disabled={saving}
+            onValueChange={(v) => save(v === '__default__' ? '' : v)}
+            disabled={saveMutation.isPending}
           >
             <SelectTrigger className="flex-1 text-xs">
               <SelectValue />
@@ -630,7 +622,7 @@ function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps,
               ))}
             </SelectContent>
           </Select>
-          {saving && <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin text-muted-foreground shrink-0" />}
+          {saveMutation.isPending && <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin text-muted-foreground shrink-0" />}
           {saved && <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-3.5 text-green-500 shrink-0" />}
         </div>
       </div>
@@ -651,7 +643,7 @@ function SettingsTab({ workspaceId, podId, workflowId, token }: Omit<PanelProps,
 type Tab = 'webhook' | 'rest' | 'settings';
 
 export function DeployPanel({
-  workspaceId, podId, workflowId, token,
+  workspaceId, podId, workflowId,
   isDeployed, deployedAt, onDeploy, onUndeploy, onClose,
 }: PanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('webhook');
@@ -685,7 +677,6 @@ export function DeployPanel({
           workspaceId={workspaceId}
           podId={podId}
           workflowId={workflowId}
-          token={token}
         />
 
         <Separator />
@@ -713,11 +704,11 @@ export function DeployPanel({
         </div>
 
         {activeTab === 'webhook' ? (
-          <WebhookTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} token={token} />
+          <WebhookTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
         ) : activeTab === 'rest' ? (
-          <RestApiTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} token={token} />
+          <RestApiTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
         ) : (
-          <SettingsTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} token={token} />
+          <SettingsTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
         )}
       </div>
     </div>

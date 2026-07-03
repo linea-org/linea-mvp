@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Cancel01Icon, Loading01Icon, CheckmarkCircle01Icon, ArrowUp01Icon,
@@ -16,7 +17,8 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@linea/ui/components/dropdown-menu';
 import { type Node } from '@xyflow/react';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { friendlyApiError } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { toast } from '@linea/ui/components/sonner';
 
 interface Reaction { emoji: string; count: number; reacted: boolean }
@@ -27,7 +29,7 @@ interface Comment {
   reactions: Reaction[]; replies: Comment[];
 }
 interface Props {
-  token: string; workspaceId: string; podId: string; workflowId: string;
+  workspaceId: string; podId: string; workflowId: string;
   nodes: Node[]; selectedNodeId?: string | null; currentUserId?: string; onClose: () => void;
 }
 
@@ -351,13 +353,12 @@ function AttachBar({
   );
 }
 
-export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, selectedNodeId, currentUserId, onClose }: Props) {
+export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedNodeId, currentUserId, onClose }: Props) {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [filterNodeId, setFilterNodeId] = useState<string | 'all'>('all');
   const [body, setBody] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: string; userName: string | null } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [linkPrompt, setLinkPrompt] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -365,12 +366,14 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const api = createApiClient(token);
+  const getApi = useApiClient();
   const path = BASE_PATH(workspaceId, podId, workflowId);
 
-  useEffect(() => {
+  const [prevSelectedNodeId, setPrevSelectedNodeId] = useState(selectedNodeId);
+  if (selectedNodeId !== prevSelectedNodeId) {
+    setPrevSelectedNodeId(selectedNodeId);
     if (selectedNodeId) setFilterNodeId(selectedNodeId);
-  }, [selectedNodeId]);
+  }
 
   function toggleCollapse(id: string) {
     setCollapsedIds((prev) => {
@@ -381,78 +384,102 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
     });
   }
 
-  async function load() {
-    setLoading(true);
-    try {
+  const { data: fetchedComments, isLoading: loading, refetch } = useQuery({
+    queryKey: ['workflow-comments', workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi();
       const data = await api.get<Comment[]>(path);
       const normalise = (c: Comment): Comment => ({
         ...c,
         reactions: c.reactions ?? [],
         replies: (c.replies ?? []).map(normalise),
       });
-      setComments((data ?? []).map(normalise));
-    } catch (err) {
-      setComments([]);
-      toast.error(friendlyApiError(err));
-    } finally {
-      setLoading(false);
-    }
+      return (data ?? []).map(normalise);
+    },
+  });
+
+  if (fetchedComments && loadedFor !== path) {
+    setLoadedFor(path);
+    setComments(fetchedComments);
   }
 
-  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleSubmit() {
-    const trimmed = body.trim();
-    if (!trimmed) return;
-    setSubmitting(true);
-    try {
+  async function load() {
+    const result = await refetch();
+    if (result.data) setComments(result.data);
+  }
+
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
       await api.post(path, {
-        body: trimmed,
+        body: body.trim(),
         nodeId: filterNodeId !== 'all' ? filterNodeId : null,
         parentId: replyTo?.id ?? undefined,
       });
+    },
+    onSuccess: async () => {
       setBody('');
       setReplyTo(null);
       await load();
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    } finally {
-      setSubmitting(false);
-    }
+    },
+  });
+
+  function handleSubmit() {
+    if (!body.trim()) return;
+    submitMutation.mutate();
   }
 
-  async function handleResolve(id: string, resolved: boolean) {
-    try {
+  const resolveMutation = useMutation({
+    mutationFn: async ({ id, resolved }: { id: string; resolved: boolean }) => {
+      const api = await getApi();
       await api.patch(`${path}/${id}`, { resolved });
-      setComments((prev) => toggleCommentField(prev, id, 'resolved', resolved));
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    }
+      return { id, resolved };
+    },
+    onSuccess: ({ id, resolved }) => setComments((prev) => toggleCommentField(prev, id, 'resolved', resolved)),
+  });
+
+  function handleResolve(id: string, resolved: boolean) {
+    resolveMutation.mutate({ id, resolved });
   }
 
-  async function handleDelete(id: string) {
-    try {
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
       await api.delete(`${path}/${id}`);
+      return id;
+    },
+    onSuccess: (id) => {
       const remove = (list: Comment[]): Comment[] =>
         list.filter((c) => c.id !== id).map((c) => ({ ...c, replies: remove(c.replies) }));
       setComments((prev) => remove(prev));
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    }
+    },
+  });
+
+  function handleDelete(id: string) {
+    deleteMutation.mutate(id);
   }
 
-  async function handlePin(id: string, pinned: boolean) {
-    try {
+  const pinMutation = useMutation({
+    mutationFn: async ({ id, pinned }: { id: string; pinned: boolean }) => {
+      const api = await getApi();
       await api.patch(`${path}/${id}`, { pinned });
-      setComments((prev) => toggleCommentField(prev, id, 'pinned', pinned));
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    }
+      return { id, pinned };
+    },
+    onSuccess: ({ id, pinned }) => setComments((prev) => toggleCommentField(prev, id, 'pinned', pinned)),
+  });
+
+  function handlePin(id: string, pinned: boolean) {
+    pinMutation.mutate({ id, pinned });
   }
 
-  async function handleReact(commentId: string, emoji: string) {
-    try {
+  const reactMutation = useMutation({
+    mutationFn: async ({ commentId, emoji }: { commentId: string; emoji: string }) => {
+      const api = await getApi();
       await api.post(`${path}/${commentId}/react`, { emoji });
+      return { commentId, emoji };
+    },
+    onSuccess: ({ commentId, emoji }) => {
       const update = (c: Comment): Comment => {
         if (c.id === commentId) {
           const existing = c.reactions.find((r) => r.emoji === emoji);
@@ -468,9 +495,11 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
         return { ...c, replies: c.replies.map(update) };
       };
       setComments((prev) => prev.map(update));
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    }
+    },
+  });
+
+  function handleReact(commentId: string, emoji: string) {
+    reactMutation.mutate({ commentId, emoji });
   }
 
   function handleReply(id: string, userName: string | null) {
@@ -496,6 +525,7 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
     try {
       // 1. Get a presigned URL from the API
       const presignPath = `/workspaces/${workspaceId}/uploads/presign`;
+      const api = await getApi();
       const { presignedUrl, publicUrl } = await api.post<{ presignedUrl: string; publicUrl: string; key: string }>(
         presignPath,
         { filename: file.name, contentType: file.type, size: file.size },
@@ -650,7 +680,7 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSubmit(); }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
             }}
             placeholder={replyTo ? 'Write a reply…' : 'Add a comment…'}
             className="min-h-[56px] resize-none text-xs"
@@ -658,13 +688,13 @@ export function CommentsPanel({ token, workspaceId, podId, workflowId, nodes, se
           />
           <Button
             size="icon-sm"
-            onClick={() => void handleSubmit()}
-            disabled={!body.trim() || submitting}
+            onClick={handleSubmit}
+            disabled={!body.trim() || submitMutation.isPending}
             className="self-end shrink-0"
           >
             <HugeiconsIcon
-              icon={submitting ? Loading01Icon : ArrowUp01Icon}
-              className={`size-3.5 ${submitting ? 'animate-spin' : ''}`}
+              icon={submitMutation.isPending ? Loading01Icon : ArrowUp01Icon}
+              className={`size-3.5 ${submitMutation.isPending ? 'animate-spin' : ''}`}
             />
           </Button>
         </div>

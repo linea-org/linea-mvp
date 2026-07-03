@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
 import { usePod } from '@/contexts/space-context';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import {
   CommandDialog,
   CommandInput,
@@ -45,36 +45,28 @@ interface RecentWorkflow {
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter();
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activePod, pods, setActivePod } = usePod();
   const { activeWorkspace } = useWorkspace();
   const [search, setSearch] = useState('');
-  const [recentWorkflows, setRecentWorkflows] = useState<RecentWorkflow[]>([]);
 
   const podBase = activePod ? `/pods/${activePod.id}` : null;
 
-  const loadRecent = useCallback(async () => {
-    if (!activePod || !activeWorkspace) return;
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+  const { data: recentWorkflows = [] } = useQuery<RecentWorkflow[]>({
+    queryKey: ['recent-workflows', activeWorkspace?.id, activePod?.id],
+    enabled: open && !!activePod && !!activeWorkspace,
+    queryFn: async () => {
+      const api = await getApi();
       const data = await api.get<{ workflows: RecentWorkflow[] }>(
-        `/workspaces/${activeWorkspace.id}/pods/${activePod.id}/workflows?limit=5`,
+        `/workspaces/${activeWorkspace!.id}/pods/${activePod!.id}/workflows?limit=5`,
       );
-      setRecentWorkflows(data.workflows ?? []);
-    } catch {
-      // silently ignore
-    }
-  }, [activePod, activeWorkspace, getToken]);
+      return data.workflows ?? [];
+    },
+  });
 
   useEffect(() => {
-    if (open) {
-      void loadRecent();
-    } else {
-      setSearch('');
-    }
-  }, [open, loadRecent]);
+    if (!open) setSearch('');
+  }, [open]);
 
   function run(fn: () => void) {
     fn();

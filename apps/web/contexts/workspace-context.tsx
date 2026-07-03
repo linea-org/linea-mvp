@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError } from '@/lib/api';
+import { toast } from '@linea/ui/components/sonner';
 
 interface Workspace {
   id: string;
@@ -48,8 +49,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         const storedId = localStorage.getItem('activeWorkspaceId');
         const active = data.find((w) => w.id === storedId) ?? data[0] ?? null;
         setActiveWorkspaceState(active);
-      } catch {
-        // silently fail — user may not have a workspace yet
+      } catch (err) {
+        toast.error(friendlyApiError(err));
       } finally {
         setLoading(false);
       }

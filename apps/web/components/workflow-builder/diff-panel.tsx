@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Spinner } from '@linea/ui/components/spinner';
 import {
@@ -19,7 +20,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Dialog, DialogContent, DialogTitle } from '@linea/ui/components/dialog';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { nodeTypes } from './nodes/node-types';
 
 type DiffStatus = 'added' | 'removed' | 'changed' | 'unchanged';
@@ -157,7 +158,6 @@ interface DiffPanelProps {
   workspaceId: string;
   podId: string;
   workflowId: string;
-  token: string;
   currentNodes: Node[];
   currentEdges: Edge[];
   targetVersion: number;
@@ -165,38 +165,31 @@ interface DiffPanelProps {
 }
 
 export function DiffPanel({
-  workspaceId, podId, workflowId, token,
+  workspaceId, podId, workflowId,
   currentNodes, currentEdges,
   targetVersion, onClose,
 }: DiffPanelProps) {
-  const [loading, setLoading] = useState(true);
-  const [diff, setDiff] = useState<DiffResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    void fetchAndDiff();
-  }, [targetVersion]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function fetchAndDiff() {
-    setLoading(true);
-    setError(null);
-    try {
-      const api = createApiClient(token);
-      const data = await api.get<{ definition: { nodes: RawNode[]; edges: RawEdge[] } }>(
+  const getApi = useApiClient();
+  const { data: versionDef, isLoading: loading, error: fetchError } = useQuery({
+    queryKey: ['workflow-version-diff', workspaceId, podId, workflowId, targetVersion],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<{ definition: { nodes: RawNode[]; edges: RawEdge[] } }>(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/versions/${targetVersion}`,
       );
-      const result = computeDiff(
-        currentNodes, currentEdges,
-        data.definition?.nodes ?? [],
-        data.definition?.edges ?? [],
-      );
-      setDiff(result);
-    } catch {
-      setError('Failed to load version data.');
-    } finally {
-      setLoading(false);
-    }
-  }
+    },
+  });
+
+  const error = fetchError ? 'Failed to load version data.' : null;
+
+  const diff: DiffResult | null = useMemo(() => {
+    if (!versionDef) return null;
+    return computeDiff(
+      currentNodes, currentEdges,
+      versionDef.definition?.nodes ?? [],
+      versionDef.definition?.edges ?? [],
+    );
+  }, [versionDef, currentNodes, currentEdges]);
 
   const rfNodes: Node[] = useMemo(() => {
     if (!diff) return [];

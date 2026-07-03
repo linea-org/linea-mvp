@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useClerk, useUser, useAuth } from '@clerk/nextjs';
@@ -12,6 +12,7 @@ import { GettingStarted } from '@/components/onboarding/getting-started';
 import { CommandPalette } from '@/components/command-palette';
 import { KeyboardShortcutsDialog } from '@/components/keyboard-shortcuts-dialog';
 import { createApiClient, friendlyApiError, API_BASE } from '@/lib/api';
+import { consumeSseStream } from '@/lib/sse';
 import { toast } from '@linea/ui/components/sonner';
 import {
   SidebarProvider,
@@ -659,7 +660,7 @@ function NotificationBell() {
   const workspaceId = activeWorkspace?.id;
   const unread = notifications.filter((n) => !n.read).length;
 
-  async function loadNotifs() {
+  const loadNotifs = useCallback(async () => {
     if (!workspaceId) return;
     setLoadingNotifs(true);
     try {
@@ -673,9 +674,9 @@ function NotificationBell() {
     } finally {
       setLoadingNotifs(false);
     }
-  }
+  }, [workspaceId, getToken]);
 
-  async function startSSE() {
+  const startSSE = useCallback(async () => {
     if (!workspaceId) return;
     sseAbortRef.current?.abort();
     const ac = new AbortController();
@@ -689,18 +690,7 @@ function NotificationBell() {
       );
       if (!resp.ok || !resp.body) return;
       const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) void loadNotifs();
-        }
-      }
+      await consumeSseStream(reader, () => void loadNotifs());
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
     }
@@ -708,18 +698,14 @@ function NotificationBell() {
     if (!sseAbortRef.current?.signal.aborted) {
       setTimeout(() => void startSSE(), 2_000);
     }
-  }
+  }, [workspaceId, getToken, loadNotifs]);
 
   useEffect(() => {
     if (!workspaceId) return;
     void loadNotifs();
     void startSSE();
     return () => { sseAbortRef.current?.abort(); };
-  }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (open) void loadNotifs();
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspaceId, loadNotifs, startSSE]);
 
   async function markRead(id: string) {
     if (!workspaceId) return;
@@ -767,7 +753,7 @@ function NotificationBell() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); void loadNotifs(); }}
         className="relative p-1.5 rounded-md hover:bg-muted transition-colors"
         title="Notifications"
       >

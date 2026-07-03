@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useApiClient } from '@/hooks/use-api-client';
 import { unwrapList } from '@/lib/api';
@@ -189,9 +189,9 @@ export default function SchedulesPage() {
     },
   });
 
-  function workflowName(id: string) {
+  const workflowName = useCallback((id: string) => {
     return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + '…';
-  }
+  }, [workflows]);
 
   const filtered = useMemo(() => {
     let list = schedules;
@@ -203,8 +203,7 @@ export default function SchedulesPage() {
       list = list.filter((s) => workflowName(s.workflowId).toLowerCase().includes(q));
     }
     return list;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedules, workflows, statusFilter, search]);
+  }, [schedules, workflows, statusFilter, search, workflowName]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

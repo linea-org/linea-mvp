@@ -39,7 +39,6 @@ interface ToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   autoSave: boolean;
-  token?: string;
   workspaceId?: string;
   podId?: string;
   workflowId?: string;
@@ -260,7 +259,7 @@ export function Toolbar({
   workflowName, isSaving, isRunning, isGenerating, runStatus, validationState,
   deployPanelOpen, historyOpen, versionsOpen, shareOpen, commentsOpen, evalsOpen,
   isDeployed, canUndo, canRedo, autoSave,
-  token, workspaceId, podId, workflowId,
+  workspaceId, podId, workflowId,
   onSave, onRun, onStop, onDeployPanel, onBack, onNameChange, onGenerate,
   onHistory, onVersions, onShare, onComments, onEvals,
   onExport, onImport, onUndo, onRedo, onAutoLayout, onAutoSaveToggle,
@@ -270,7 +269,6 @@ export function Toolbar({
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setLocalName(workflowName); }, [workflowName]);
   useEffect(() => { if (editingName) inputRef.current?.focus(); }, [editingName]);
 
   // "?" shortcut
@@ -321,7 +319,7 @@ export function Toolbar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={() => setEditingName(true)}
+                  onClick={() => { setLocalName(workflowName); setEditingName(true); }}
                   className="max-w-64 truncate text-sm font-semibold text-foreground hover:text-muted-foreground cursor-text"
                 >
                   {workflowName}
@@ -355,8 +353,8 @@ export function Toolbar({
             </>
           )}
 
-          {token && workspaceId && podId && workflowId && (
-            <PresenceAvatars token={token} workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
+          {workspaceId && podId && workflowId && (
+            <PresenceAvatars workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
           )}
 
           <TBtn icon={UndoIcon} label="Undo" shortcut="Ctrl+Z" onClick={onUndo} disabled={!canUndo} />

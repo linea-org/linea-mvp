@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
@@ -24,42 +25,58 @@ interface WorkflowSchema {
 }
 
 type PageState = 'loading' | 'ready' | 'submitting' | 'success' | 'error' | 'forbidden' | 'not-found';
+type SchemaOutcome =
+  | { kind: 'ok'; schema: WorkflowSchema }
+  | { kind: 'not-found' }
+  | { kind: 'forbidden' }
+  | { kind: 'error' };
 
 export default function PublicRunPage() {
   const { workflowId } = useParams<{ workflowId: string }>();
-  const [state, setState] = useState<PageState>('loading');
-  const [schema, setSchema] = useState<WorkflowSchema | null>(null);
+  const [formState, setFormState] = useState<'ready' | 'submitting' | 'success'>('ready');
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [defaultsFor, setDefaultsFor] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
+  const { data: outcome, isLoading: schemaLoading } = useQuery<SchemaOutcome>({
+    queryKey: ['public-run-schema', workflowId],
+    retry: false,
+    queryFn: async () => {
       try {
         const res = await fetch(`${API_BASE}/run/${workflowId}`);
-        if (res.status === 404) { setState('not-found'); return; }
-        if (res.status === 403) { setState('forbidden'); return; }
-        if (!res.ok) { setState('error'); return; }
+        if (res.status === 404) return { kind: 'not-found' };
+        if (res.status === 403) return { kind: 'forbidden' };
+        if (!res.ok) return { kind: 'error' };
         const data = (await res.json()) as WorkflowSchema;
-        setSchema(data);
-        // Pre-fill defaults
-        const defaults: Record<string, string> = {};
-        for (const v of data.inputVariables) {
-          if (v.defaultValue) defaults[v.name] = v.defaultValue;
-        }
-        setInputs(defaults);
-        setState('ready');
+        return { kind: 'ok', schema: data };
       } catch {
-        setState('error');
+        return { kind: 'error' };
       }
+    },
+  });
+
+  const schema = outcome?.kind === 'ok' ? outcome.schema : null;
+
+  if (schema && defaultsFor !== workflowId) {
+    setDefaultsFor(workflowId);
+    const defaults: Record<string, string> = {};
+    for (const v of schema.inputVariables) {
+      if (v.defaultValue) defaults[v.name] = v.defaultValue;
     }
-    void load();
-  }, [workflowId]);
+    setInputs(defaults);
+  }
+
+  const state: PageState = schemaLoading ? 'loading'
+    : !outcome || outcome.kind === 'error' ? 'error'
+    : outcome.kind === 'not-found' ? 'not-found'
+    : outcome.kind === 'forbidden' ? 'forbidden'
+    : formState;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!schema) return;
-    setState('submitting');
+    setFormState('submitting');
     setErrorMsg('');
     try {
       const res = await fetch(`${API_BASE}/run/${workflowId}`, {
@@ -77,15 +94,15 @@ export default function PublicRunPage() {
           ? 'This workflow is not publicly accessible.'
           : friendlyApiErrorFromStatus(res.status);
         setErrorMsg(mappedMsg ?? bodyMsg ?? 'Failed to start. Please try again.');
-        setState('ready');
+        setFormState('ready');
         return;
       }
       const result = (await res.json()) as { executionId: string };
       setExecutionId(result.executionId);
-      setState('success');
+      setFormState('success');
     } catch {
       setErrorMsg('Connection failed. Check your internet.');
-      setState('ready');
+      setFormState('ready');
     }
   }
 
@@ -155,7 +172,7 @@ export default function PublicRunPage() {
           variant="outline"
           size="sm"
           className="mt-6"
-          onClick={() => { setInputs({}); setState('ready'); setExecutionId(null); }}
+          onClick={() => { setInputs({}); setFormState('ready'); setExecutionId(null); }}
         >
           Submit another
         </Button>

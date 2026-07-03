@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowDown01Icon, ArrowUp01Icon, CheckmarkCircle01Icon, Cancel01Icon, ClockIcon } from '@hugeicons/core-free-icons';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Spinner } from '@linea/ui/components/spinner';
 
 interface Log {
@@ -21,43 +22,29 @@ interface Props {
   workspaceId: string;
   podId: string;
   status: string;
-  token: string;
   nodes: { id: string; data: Record<string, unknown> }[];
 }
 
-export function ExecutionLogsDrawer({ executionId, workspaceId, podId, status, token, nodes }: Props) {
+export function ExecutionLogsDrawer({ executionId, workspaceId, podId, status, nodes }: Props) {
   const [open, setOpen] = useState(false);
-  const [logs, setLogs] = useState<Log[]>([]);
-  const [loading, setLoading] = useState(false);
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
+  const getApi = useApiClient();
 
   const isDone = status === 'completed' || status === 'failed';
 
-  useEffect(() => {
-    if (open && isDone && logs.length === 0) {
-      void fetchLogs();
-    }
-  }, [open, isDone]);
+  const { data: logs = [], isLoading: loading } = useQuery<Log[]>({
+    queryKey: ['execution-logs', workspaceId, podId, executionId],
+    enabled: open && isDone,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Log[]>(`/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/logs`);
+    },
+  });
 
   // Auto-open when execution completes/fails
   useEffect(() => {
     if (isDone) setOpen(true);
   }, [isDone]);
-
-  async function fetchLogs() {
-    setLoading(true);
-    try {
-      const api = createApiClient(token);
-      const data = await api.get<Log[]>(
-        `/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/logs`,
-      );
-      setLogs(data);
-    } catch {
-      // silently fail — logs are supplementary
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function getNodeName(nodeId: string): string {
     const node = nodes.find((n) => n.id === nodeId);

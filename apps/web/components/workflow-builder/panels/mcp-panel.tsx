@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from '@/hooks/use-api-client';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient, friendlyApiError } from '@/lib/api';
-import { toast } from '@linea/ui/components/sonner';
 import { Input } from '@linea/ui/components/input';
 import { Textarea } from '@linea/ui/components/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
@@ -25,25 +23,18 @@ const OUTPUT_OPTIONS = [
 ];
 
 export function McpPanel({ data, onUpdate }: McpPanelProps) {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace } = useWorkspace();
-  const [servers, setServers] = useState<McpServer[]>([]);
 
-  useEffect(() => {
-    async function load() {
-      if (!activeWorkspace) return;
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const api = createApiClient(token);
-        const list = await api.get<McpServer[]>(`/workspaces/${activeWorkspace.id}/mcp-servers`);
-        setServers(list);
-      } catch (err) {
-        toast.error(friendlyApiError(err));
-      }
-    }
-    void load();
-  }, [activeWorkspace, getToken]);
+  const { data: servers = [] } = useQuery<McpServer[]>({
+    queryKey: ['mcp-servers', activeWorkspace?.id],
+    enabled: !!activeWorkspace,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<McpServer[]>(`/workspaces/${activeWorkspace!.id}/mcp-servers`);
+    },
+  });
+
 
   const selectedServerId = (data.mcpServerId as string) ?? '';
 

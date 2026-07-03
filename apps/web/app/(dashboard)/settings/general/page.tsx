@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useApiClient } from '@/hooks/use-api-client';
 import { useMutation } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
@@ -28,12 +28,12 @@ export default function GeneralSettingsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  useEffect(() => {
-    if (activeWorkspace) {
-      setName(activeWorkspace.name);
-      setSlug(activeWorkspace.slug);
-    }
-  }, [activeWorkspace]);
+  const [syncedWorkspaceId, setSyncedWorkspaceId] = useState(activeWorkspace?.id);
+  if (activeWorkspace && activeWorkspace.id !== syncedWorkspaceId) {
+    setSyncedWorkspaceId(activeWorkspace.id);
+    setName(activeWorkspace.name);
+    setSlug(activeWorkspace.slug);
+  }
 
   const saveWorkspace = useMutation({
     mutationFn: async () => {

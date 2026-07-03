@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@linea/ui/components/avatar';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 
 interface Presence {
   userId: string;
@@ -12,21 +12,21 @@ interface Presence {
 }
 
 interface Props {
-  token: string;
   workspaceId: string;
   podId: string;
   workflowId: string;
 }
 
-export function PresenceAvatars({ token, workspaceId, podId, workflowId }: Props) {
+export function PresenceAvatars({ workspaceId, podId, workflowId }: Props) {
   const [others, setOthers] = useState<Presence[]>([]);
+  const getApi = useApiClient();
 
   useEffect(() => {
-    const api = createApiClient(token);
     const path = `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/presence`;
 
     async function ping() {
       try {
+        const api = await getApi();
         const data = await api.post<Presence[]>(path, {});
         setOthers(data ?? []);
       } catch {
@@ -37,7 +37,7 @@ export function PresenceAvatars({ token, workspaceId, podId, workflowId }: Props
     void ping();
     const interval = setInterval(() => void ping(), 20_000);
     return () => clearInterval(interval);
-  }, [token, workspaceId, podId, workflowId]);
+  }, [getApi, workspaceId, podId, workflowId]);
 
   if (others.length === 0) return null;
 

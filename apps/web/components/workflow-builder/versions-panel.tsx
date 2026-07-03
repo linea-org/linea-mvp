@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Cancel01Icon,
@@ -10,7 +10,7 @@ import {
   ArrowTurnBackwardIcon,
   GitCompareIcon,
 } from '@hugeicons/core-free-icons';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
 import { Spinner } from '@linea/ui/components/spinner';
@@ -31,38 +31,29 @@ interface Props {
   workspaceId: string;
   podId: string;
   workflowId: string;
-  token: string;
   onRestore: (nodes: Node[], edges: Edge[]) => void;
   onDiff?: (version: number) => void;
   onClose: () => void;
 }
 
-export function VersionsPanel({ workspaceId, podId, workflowId, token, onRestore, onDiff, onClose }: Props) {
-  const [versions, setVersions] = useState<VersionEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [restoring, setRestoring] = useState<number | null>(null);
+export function VersionsPanel({ workspaceId, podId, workflowId, onRestore, onDiff, onClose }: Props) {
+  const getApi = useApiClient();
 
-  useEffect(() => { void fetchVersions(); }, []);
+  const { data: versions = [], isLoading: loading, refetch } = useQuery<VersionEntry[]>({
+    queryKey: ['workflow-versions', workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<VersionEntry[]>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/versions`);
+    },
+  });
 
-  async function fetchVersions() {
-    setLoading(true);
-    try {
-      const api = createApiClient(token);
-      const data = await api.get<VersionEntry[]>(
-        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/versions`,
-      );
-      setVersions(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
+  function fetchVersions() {
+    void refetch();
   }
 
-  async function handleRestore(version: number) {
-    setRestoring(version);
-    try {
-      const api = createApiClient(token);
+  const restoreMutation = useMutation({
+    mutationFn: async (version: number) => {
+      const api = await getApi();
       const data = await api.get<VersionDetail>(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/versions/${version}`,
       );
@@ -86,14 +77,13 @@ export function VersionsPanel({ workspaceId, podId, workflowId, token, onRestore
         targetHandle: e.targetHandle,
         label: e.label,
       }));
+      return { restoredNodes, restoredEdges };
+    },
+    onSuccess: ({ restoredNodes, restoredEdges }) => {
       onRestore(restoredNodes, restoredEdges);
       onClose();
-    } catch {
-      // ignore
-    } finally {
-      setRestoring(null);
-    }
-  }
+    },
+  });
 
   function timeAgo(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
@@ -113,7 +103,7 @@ export function VersionsPanel({ workspaceId, podId, workflowId, token, onRestore
           <p className="text-[11px] text-muted-foreground">Restore a previous snapshot</p>
         </div>
         <div className="flex items-center gap-1">
-          <Button size="icon-sm" variant="ghost" onClick={() => void fetchVersions()} title="Refresh">
+          <Button size="icon-sm" variant="ghost" onClick={fetchVersions} title="Refresh">
             <HugeiconsIcon icon={ReloadIcon} className="size-3.5" />
           </Button>
           <Button size="icon-sm" variant="ghost" onClick={onClose}>
@@ -166,15 +156,15 @@ export function VersionsPanel({ workspaceId, podId, workflowId, token, onRestore
                     variant="ghost"
                     className="h-6 px-2 text-[11px]"
                     title={`Restore v${v.version}`}
-                    disabled={restoring === v.version}
-                    onClick={() => void handleRestore(v.version)}
+                    disabled={restoreMutation.isPending && restoreMutation.variables === v.version}
+                    onClick={() => restoreMutation.mutate(v.version)}
                   >
-                    {restoring === v.version ? (
+                    {restoreMutation.isPending && restoreMutation.variables === v.version ? (
                       <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin" />
                     ) : (
                       <HugeiconsIcon icon={ArrowTurnBackwardIcon} className="size-3 mr-1" />
                     )}
-                    {restoring === v.version ? '' : 'Restore'}
+                    {restoreMutation.isPending && restoreMutation.variables === v.version ? '' : 'Restore'}
                   </Button>
                 </div>
               </div>

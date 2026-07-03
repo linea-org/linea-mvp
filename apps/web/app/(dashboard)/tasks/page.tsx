@@ -18,6 +18,7 @@ import { usePod } from '@/contexts/space-context';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { useApiClient } from '@/hooks/use-api-client';
 import { friendlyApiError } from '@/lib/api';
+import { consumeSseStream } from '@/lib/sse';
 import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
 import { PageSpinner } from '@linea/ui/components/page-spinner';
@@ -109,8 +110,7 @@ function TasksPageInner() {
         toast.error(friendlyApiError(err));
       }
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspace?.id]);
+  }, [activeWorkspace?.id, getApi]);
 
   // Auto-load session from URL ?s=<threadId> once sessions are available
   useEffect(() => {
@@ -124,8 +124,7 @@ function TasksPageInner() {
       setIsStreaming(false);
       setAttachments([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, searchParams]);
+  }, [sessions, searchParams, sessionId]);
 
   useEffect(() => { if (hasMessages) bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, hasMessages]);
   useEffect(() => {
@@ -382,19 +381,7 @@ function TasksPageInner() {
       if (!res.ok || !res.body) throw new Error('Stream failed');
 
       const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try { handleEvent(JSON.parse(line.slice(6)) as SSEEvent, assistantId); } catch { /* ignore */ }
-        }
-      }
+      await consumeSseStream<SSEEvent>(reader, (evt) => handleEvent(evt, assistantId));
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       setMessages((prev) => prev.map((m) =>

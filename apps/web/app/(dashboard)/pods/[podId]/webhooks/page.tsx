@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -221,9 +221,9 @@ export default function WebhooksPage() {
     return `${API_BASE}/webhooks/${id}/trigger`;
   }
 
-  function workflowName(id: string) {
+  const workflowName = useCallback((id: string) => {
     return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + '…';
-  }
+  }, [workflows]);
 
   const filtered = useMemo(() => {
     let list = webhooks;

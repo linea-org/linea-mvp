@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Cancel01Icon, Loading01Icon, UserAdd01Icon, Delete01Icon,
 } from '@hugeicons/core-free-icons';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { friendlyApiError } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { ScrollArea } from '@linea/ui/components/scroll-area';
@@ -18,7 +20,6 @@ interface Props {
   workspaceId: string;
   podId: string;
   workflowId: string;
-  token: string;
   onClose: () => void;
 }
 
@@ -57,61 +58,60 @@ function Avatar({ name, email }: { name: string | null; email: string }) {
   );
 }
 
-export function SharePanel({ workspaceId, podId, workflowId, token, onClose }: Props) {
-  const [members, setMembers] = useState<Member[]>([]);
-  const [invites, setInvites] = useState<Invite[]>([]);
-  const [loading, setLoading] = useState(true);
+export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
+  const queryClient = useQueryClient();
+  const getApi = useApiClient();
+  const shareKey = ['workspace-share', workspaceId];
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'admin' | 'editor' | 'viewer'>('editor');
-  const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
 
-
-  useEffect(() => { void load(); }, []);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const api = createApiClient(token);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: shareKey,
+    queryFn: async () => {
+      const api = await getApi();
       const [membersData, invitesData] = await Promise.all([
         api.get<Member[]>(`/workspaces/${workspaceId}/members`),
         api.get<Invite[]>(`/workspaces/${workspaceId}/invites`).catch(() => [] as Invite[]),
       ]);
-      setMembers(Array.isArray(membersData) ? membersData : []);
-      setInvites(Array.isArray(invitesData) ? invitesData : []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }
+      return {
+        members: Array.isArray(membersData) ? membersData : [],
+        invites: Array.isArray(invitesData) ? invitesData : [],
+      };
+    },
+  });
+  const members = data?.members ?? [];
+  const invites = data?.invites ?? [];
 
-  async function sendInvite() {
-    if (!email.trim()) return;
-    setSending(true);
-    setSendError('');
-    try {
-      const api = createApiClient(token);
-      const invite = await api.post<Invite>(`/workspaces/${workspaceId}/invites`, { email: email.trim(), role });
-      setInvites((prev) => [...prev, invite]);
+  const sendInviteMutation = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<Invite>(`/workspaces/${workspaceId}/invites`, { email: email.trim(), role });
+    },
+    onSuccess: (invite) => {
+      queryClient.setQueryData(shareKey, (prev: { members: Member[]; invites: Invite[] } | undefined) =>
+        prev ? { ...prev, invites: [...prev.invites, invite] } : prev,
+      );
       setEmail('');
-    } catch (err) {
-      setSendError(friendlyApiError(err));
-    } finally {
-      setSending(false);
-    }
-  }
+      setSendError('');
+    },
+    onError: (err) => setSendError(friendlyApiError(err)),
+    meta: { skipGlobalErrorToast: true },
+  });
 
-  async function revokeInvite(inviteId: string) {
-    try {
-      const api = createApiClient(token);
+  const revokeInviteMutation = useMutation({
+    mutationFn: async (inviteId: string) => {
+      const api = await getApi();
       await api.delete(`/workspaces/${workspaceId}/invites/${inviteId}`);
-      setInvites((prev) => prev.filter((i) => i.id !== inviteId));
-    } catch {
-      // ignore
-    }
-  }
+      return inviteId;
+    },
+    onSuccess: (inviteId) => {
+      queryClient.setQueryData(shareKey, (prev: { members: Member[]; invites: Invite[] } | undefined) =>
+        prev ? { ...prev, invites: prev.invites.filter((i) => i.id !== inviteId) } : prev,
+      );
+    },
+  });
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -136,7 +136,7 @@ export function SharePanel({ workspaceId, podId, workflowId, token, onClose }: P
               <Input
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setSendError(''); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') void sendInvite(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') sendInviteMutation.mutate(); }}
                 placeholder="Email address"
                 type="email"
                 className="flex-1 text-xs h-8"
@@ -156,10 +156,10 @@ export function SharePanel({ workspaceId, podId, workflowId, token, onClose }: P
             <Button
               size="sm"
               className="w-full gap-1.5"
-              onClick={() => void sendInvite()}
-              disabled={sending || !email.trim()}
+              onClick={() => sendInviteMutation.mutate()}
+              disabled={sendInviteMutation.isPending || !email.trim()}
             >
-              {sending
+              {sendInviteMutation.isPending
                 ? <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
                 : <HugeiconsIcon icon={UserAdd01Icon} className="size-3.5" />}
               Send invite
@@ -217,7 +217,7 @@ export function SharePanel({ workspaceId, podId, workflowId, token, onClose }: P
                       <p className="text-[10px] text-muted-foreground capitalize">{inv.role} · pending</p>
                     </div>
                     <button
-                      onClick={() => void revokeInvite(inv.id)}
+                      onClick={() => revokeInviteMutation.mutate(inv.id)}
                       title="Revoke invite"
                       className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
                     >
