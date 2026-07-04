@@ -1,7 +1,13 @@
 "use client"
 
+<<<<<<< HEAD
 import { useCallback, useEffect, useRef, useState } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
+=======
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   AiMagicIcon,
   Cancel01Icon,
@@ -19,6 +25,7 @@ import {
   CloudUploadIcon,
   ReloadIcon,
   Calendar01Icon,
+<<<<<<< HEAD
 } from "@hugeicons/core-free-icons"
 import { Button } from "@linea/ui/components/button"
 import { Kbd } from "@linea/ui/components/kbd"
@@ -26,6 +33,14 @@ import type { Node, Edge } from "@xyflow/react"
 import { ApiError, friendlyApiError } from "@/lib/api"
 
 const API_BASE = `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"}/v1`
+=======
+} from '@hugeicons/core-free-icons';
+import { Button } from '@linea/ui/components/button';
+import { Kbd } from '@linea/ui/components/kbd';
+import type { Node, Edge } from '@xyflow/react';
+import { ApiError, friendlyApiError, API_BASE } from '@/lib/api';
+import { consumeSseStream } from '@/lib/sse';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 export interface GenerateEvent {
   type: "progress" | "node_added" | "edge_added" | "complete" | "error"
@@ -62,6 +77,7 @@ export interface GenerateEvent {
 }
 
 interface GenerateDialogProps {
+<<<<<<< HEAD
   workspaceId: string
   podId: string
   workflowId: string
@@ -70,6 +86,15 @@ interface GenerateDialogProps {
   edges: Edge[]
   onEvent: (event: GenerateEvent) => void
   onClose: () => void
+=======
+  workspaceId: string;
+  podId: string;
+  workflowId: string;
+  nodes: Node[];
+  edges: Edge[];
+  onEvent: (event: GenerateEvent) => void;
+  onClose: () => void;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }
 
 type Turn =
@@ -83,10 +108,16 @@ type Turn =
     }
 
 interface SlashCmd {
+<<<<<<< HEAD
   cmd: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any
   description: string
+=======
+  cmd: string;
+  icon: IconSvgElement;
+  description: string;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }
 
 const NODE_SLASH_CMDS: SlashCmd[] = [
@@ -148,6 +179,7 @@ const EXAMPLES = [
 ]
 
 export function GenerateDialog({
+<<<<<<< HEAD
   workspaceId,
   podId,
   workflowId,
@@ -163,6 +195,17 @@ export function GenerateDialog({
   const [slashOpen, setSlashOpen] = useState(false)
   const [slashQuery, setSlashQuery] = useState("")
   const [slashIdx, setSlashIdx] = useState(0)
+=======
+  workspaceId, podId, workflowId, nodes, edges, onEvent, onClose,
+}: GenerateDialogProps) {
+  const { getToken } = useAuth();
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashQuery, setSlashQuery] = useState('');
+  const [slashIdx, setSlashIdx] = useState(0);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -187,6 +230,7 @@ export function GenerateDialog({
     setSlashIdx(0)
   }
 
+<<<<<<< HEAD
   function selectSlashCommand(cmd: SlashCmd) {
     setInput(cmd.cmd + " ")
     closeMenu()
@@ -233,6 +277,24 @@ export function GenerateDialog({
     },
     [slashOpen, filteredCmds, slashIdx]
   )
+=======
+  const selectSlashCommandRef = useRef(selectSlashCommand);
+  selectSlashCommandRef.current = selectSlashCommand;
+  const closeMenuRef = useRef(closeMenu);
+  closeMenuRef.current = closeMenu;
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (slashOpen && filteredCmds.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx((i) => (i + 1) % filteredCmds.length); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setSlashIdx((i) => (i - 1 + filteredCmds.length) % filteredCmds.length); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); const cmd = filteredCmds[slashIdx]; if (cmd) selectSlashCommandRef.current(cmd); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeMenuRef.current(); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSendRef.current(); }
+  }, [slashOpen, filteredCmds, slashIdx]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value
@@ -296,6 +358,8 @@ export function GenerateDialog({
     abortRef.current = ac
 
     try {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
       const resp = await fetch(
         `${API_BASE}/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/generate`,
         {
@@ -319,6 +383,7 @@ export function GenerateDialog({
           resp.statusText || `Request failed with status ${resp.status}`
         )
 
+<<<<<<< HEAD
       const reader = resp.body.getReader()
       const decoder = new TextDecoder()
       let buf = ""
@@ -380,6 +445,28 @@ export function GenerateDialog({
           }
         }
       }
+=======
+      const reader = resp.body.getReader();
+      await consumeSseStream<GenerateEvent>(reader, (event) => {
+        onEvent(event);
+        setTurns((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (!last || last.kind !== 'assistant') return prev;
+          if (event.type === 'progress' && event.message)
+            return [...next.slice(0, -1), { ...last, progress: [...last.progress, event.message] }];
+          if (event.type === 'node_added')
+            return [...next.slice(0, -1), { ...last, nodeCount: last.nodeCount + 1 }];
+          if (event.type === 'complete') {
+            const summary = `Built ${event.definition?.nodes.length ?? 0} nodes, ${event.definition?.edges.length ?? 0} edges`;
+            return [...next.slice(0, -1), { ...last, progress: [...last.progress, summary], done: true }];
+          }
+          if (event.type === 'error')
+            return [...next.slice(0, -1), { ...last, progress: [...last.progress, event.message ?? 'Unknown error'], done: true, error: event.message }];
+          return prev;
+        });
+      });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         const msg = friendlyApiError(err)
@@ -407,8 +494,12 @@ export function GenerateDialog({
 
   return (
     <div className="flex h-full flex-col bg-background">
+<<<<<<< HEAD
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+=======
+      <div className="flex items-center justify-between border-b border-border px-3 py-2 shrink-0">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="flex items-center gap-2">
           <HugeiconsIcon
             icon={AiMagicIcon}
@@ -426,11 +517,15 @@ export function GenerateDialog({
         </Button>
       </div>
 
+<<<<<<< HEAD
       {/* Chat area */}
       <div
         ref={scrollRef}
         className="flex-1 space-y-4 overflow-y-auto px-3 py-3"
       >
+=======
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         {isEmpty ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 py-8 text-center">
             <div>
@@ -536,10 +631,13 @@ export function GenerateDialog({
         )}
       </div>
 
+<<<<<<< HEAD
       {/* Input */}
       <div className="shrink-0 px-3 pt-1 pb-3">
+=======
+      <div className="shrink-0 px-3 pb-3 pt-1">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="relative">
-          {/* Slash command menu */}
           {slashOpen && filteredCmds.length > 0 && (
             <div className="absolute bottom-full left-0 z-50 mb-1 w-full animate-in overflow-hidden rounded-md border border-border bg-popover shadow-lg duration-150 fade-in-0 slide-in-from-bottom-2">
               <div

@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
@@ -10,6 +11,18 @@ import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
 import { Skeleton } from "@linea/ui/components/skeleton"
+=======
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { usePod } from '@/contexts/space-context';
+import { useApiClient } from '@/hooks/use-api-client';
+import { Button } from '@linea/ui/components/button';
+import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
+import { Skeleton } from '@linea/ui/components/skeleton';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -130,6 +143,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
 }
 
 export default function TemplatesPage() {
+<<<<<<< HEAD
   const { getToken } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const { pods, activePod } = usePod()
@@ -143,10 +157,22 @@ export default function TemplatesPage() {
   const [activeTab, setActiveTab] = useState<"internal" | "community">(
     "internal"
   )
+=======
+  const getApi = useApiClient();
+  const { activeWorkspace } = useWorkspace();
+  const { pods, activePod } = usePod();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'internal' | 'community'>('internal');
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
+<<<<<<< HEAD
   const [useDialogOpen, setUseDialogOpen] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
     null
@@ -175,17 +201,46 @@ export default function TemplatesPage() {
   useEffect(() => {
     void loadData()
   }, [loadData])
+=======
+  const [useDialogOpen, setUseDialogOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [targetPodId, setTargetPodId] = useState<string>('');
+  const [workflowName, setWorkflowName] = useState('');
+
+  const { data: allTemplates = [], isLoading: loading } = useQuery<Template[]>({
+    queryKey: ['templates'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Template[]>('/templates');
+    },
+  });
+
+  const { data: upvotedIds = new Set<string>() } = useQuery<Set<string>>({
+    queryKey: ['templates-upvoted'],
+    queryFn: async () => {
+      const api = await getApi();
+      const upvoted = await api.get<string[]>('/templates/me/upvoted').catch(() => [] as string[]);
+      return new Set(upvoted);
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   async function openPreview(tpl: Template) {
     setPreviewTemplate(tpl)
     if (!tpl.definition) {
       setPreviewLoading(true)
       try {
+<<<<<<< HEAD
         const token = await getToken()
         if (!token) return
         const api = createApiClient(token)
         const full = await api.get<Template>(`/templates/${tpl.id}`)
         setPreviewTemplate(full)
+=======
+        const api = await getApi();
+        const full = await api.get<Template>(`/templates/${tpl.id}`);
+        setPreviewTemplate(full);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       } finally {
         setPreviewLoading(false)
       }
@@ -199,6 +254,7 @@ export default function TemplatesPage() {
     setUseDialogOpen(true)
   }
 
+<<<<<<< HEAD
   async function handleUseTemplate() {
     if (!selectedTemplate || !activeWorkspace || !targetPodId) return
     setCloning(true)
@@ -271,6 +327,60 @@ export default function TemplatesPage() {
       )
     }
   }
+=======
+  const useTemplate = useMutation({
+    mutationFn: async () => {
+      if (!selectedTemplate || !activeWorkspace || !targetPodId) throw new Error('Missing selection');
+      const api = await getApi();
+      return api.post<{ id: string }>(
+        `/workspaces/${activeWorkspace.id}/pods/${targetPodId}/workflows/from-template/${selectedTemplate.id}`,
+        { name: workflowName.trim() || selectedTemplate.name },
+      );
+    },
+    onSuccess: (wf) => {
+      setUseDialogOpen(false);
+      setPreviewTemplate(null);
+      router.push(`/pods/${targetPodId}/workflows/${wf.id}`);
+    },
+  });
+
+  const toggleUpvote = useMutation({
+    mutationFn: async (tpl: Template) => {
+      const api = await getApi();
+      return api.post<{ upvoted: boolean; upvotes: number }>(`/templates/${tpl.id}/upvote`, {});
+    },
+    onMutate: async (tpl) => {
+      const isUpvoted = upvotedIds.has(tpl.id);
+      queryClient.setQueryData<Set<string>>(['templates-upvoted'], (prev = new Set()) => {
+        const next = new Set(prev);
+        if (isUpvoted) next.delete(tpl.id); else next.add(tpl.id);
+        return next;
+      });
+      queryClient.setQueryData<Template[]>(['templates'], (prev = []) =>
+        prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: t.upvotes + (isUpvoted ? -1 : 1) } : t)));
+      return { isUpvoted };
+    },
+    onSuccess: (result, tpl) => {
+      queryClient.setQueryData<Set<string>>(['templates-upvoted'], (prev = new Set()) => {
+        const next = new Set(prev);
+        if (result.upvoted) next.add(tpl.id); else next.delete(tpl.id);
+        return next;
+      });
+      queryClient.setQueryData<Template[]>(['templates'], (prev = []) =>
+        prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: result.upvotes } : t)));
+    },
+    onError: (_err, tpl, context) => {
+      if (!context) return;
+      queryClient.setQueryData<Set<string>>(['templates-upvoted'], (prev = new Set()) => {
+        const next = new Set(prev);
+        if (context.isUpvoted) next.add(tpl.id); else next.delete(tpl.id);
+        return next;
+      });
+      queryClient.setQueryData<Template[]>(['templates'], (prev = []) =>
+        prev.map((t) => (t.id === tpl.id ? { ...t, upvotes: t.upvotes + (context.isUpvoted ? 1 : -1) } : t)));
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   // Split by source
   const internalAll = allTemplates.filter((t) => t.source === "internal")
@@ -299,7 +409,6 @@ export default function TemplatesPage() {
         </p>
       </div>
 
-      {/* Tab: Internal / Community */}
       <div className="flex items-center gap-1 border-b">
         {(["internal", "community"] as const).map((tab) => (
           <button
@@ -322,8 +431,12 @@ export default function TemplatesPage() {
         ))}
       </div>
 
+<<<<<<< HEAD
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+=======
+      <div className="flex gap-3 flex-wrap items-center">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <Input
           placeholder="Search templates…"
           value={search}
@@ -355,7 +468,6 @@ export default function TemplatesPage() {
         </div>
       </div>
 
-      {/* Grid */}
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -408,7 +520,7 @@ export default function TemplatesPage() {
                 isInternal={activeTab === "internal"}
                 onPreview={openPreview}
                 onUse={openUseDialog}
-                onToggleUpvote={toggleUpvote}
+                onToggleUpvote={toggleUpvote.mutate}
               />
             </section>
           )}
@@ -425,13 +537,14 @@ export default function TemplatesPage() {
                 isInternal={activeTab === "internal"}
                 onPreview={openPreview}
                 onUse={openUseDialog}
-                onToggleUpvote={toggleUpvote}
+                onToggleUpvote={toggleUpvote.mutate}
               />
             </section>
           )}
         </>
       )}
 
+<<<<<<< HEAD
       {/* ── Preview modal ─────────────────────────────────────────────────── */}
       <Dialog
         open={!!previewTemplate}
@@ -439,6 +552,9 @@ export default function TemplatesPage() {
           if (!o) setPreviewTemplate(null)
         }}
       >
+=======
+      <Dialog open={!!previewTemplate} onOpenChange={(o) => { if (!o) setPreviewTemplate(null); }}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <div className="flex items-start justify-between gap-3">
@@ -461,6 +577,7 @@ export default function TemplatesPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+<<<<<<< HEAD
             {/* Prerequisites */}
             {previewTemplate?.prerequisites &&
               previewTemplate.prerequisites.length > 0 && (
@@ -483,12 +600,25 @@ export default function TemplatesPage() {
                           — {p.description}
                         </span>
                       </div>
+=======
+            {previewTemplate?.prerequisites && previewTemplate.prerequisites.length > 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/10 p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  <HugeiconsIcon icon={Alert01Icon} className="size-3.5" />
+                  Setup required before use
+                </p>
+                {previewTemplate.prerequisites.map((p, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs">
+                    <span className="mt-0.5 shrink-0 text-sm">{PREREQ_ICONS[p.type] ?? '⚙️'}</span>
+                    <div>
+                      <span className="font-medium text-foreground">{p.label}</span>
+                      <span className="text-muted-foreground"> — {p.description}</span>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                     </div>
                   ))}
                 </div>
               )}
 
-            {/* Node list */}
             {previewLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -581,7 +711,6 @@ export default function TemplatesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Use template dialog ───────────────────────────────────────────── */}
       <Dialog open={useDialogOpen} onOpenChange={setUseDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -592,11 +721,22 @@ export default function TemplatesPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+<<<<<<< HEAD
             {/* Prerequisites checklist */}
             {selectedTemplate?.prerequisites &&
               selectedTemplate.prerequisites.length > 0 && (
                 <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/40 dark:bg-amber-900/10">
                   <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-amber-700 uppercase dark:text-amber-400">
+=======
+            {selectedTemplate?.prerequisites && selectedTemplate.prerequisites.length > 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/10 p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  <HugeiconsIcon icon={Alert01Icon} className="size-3.5 shrink-0" />
+                  Before you start — confirm these are set up
+                </p>
+                {selectedTemplate.prerequisites.map((p, i) => (
+                  <label key={i} className="flex items-start gap-2 cursor-pointer group">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                     <HugeiconsIcon
                       icon={Alert01Icon}
                       className="size-3.5 shrink-0"
@@ -624,7 +764,6 @@ export default function TemplatesPage() {
                 </div>
               )}
 
-            {/* Workflow name */}
             <div className="space-y-1.5">
               <Label htmlFor="wf-name">Workflow name</Label>
               <Input
@@ -636,7 +775,6 @@ export default function TemplatesPage() {
               />
             </div>
 
-            {/* Pod selector */}
             <div className="space-y-1.5">
               <Label>Pod</Label>
               {pods.length === 0 ? (
@@ -665,6 +803,7 @@ export default function TemplatesPage() {
               Cancel
             </Button>
             <Button
+<<<<<<< HEAD
               disabled={
                 !targetPodId ||
                 !workflowName.trim() ||
@@ -674,6 +813,12 @@ export default function TemplatesPage() {
               onClick={() => void handleUseTemplate()}
             >
               {cloning ? "Creating…" : "Create workflow"}
+=======
+              disabled={!targetPodId || !workflowName.trim() || useTemplate.isPending || pods.length === 0}
+              onClick={() => useTemplate.mutate()}
+            >
+              {useTemplate.isPending ? 'Creating…' : 'Create workflow'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -690,12 +835,21 @@ function TemplateGrid({
   onUse,
   onToggleUpvote,
 }: {
+<<<<<<< HEAD
   templates: Template[]
   upvotedIds: Set<string>
   isInternal: boolean
   onPreview: (t: Template) => void
   onUse: (t: Template) => void
   onToggleUpvote: (t: Template, e: React.MouseEvent) => void
+=======
+  templates: Template[];
+  upvotedIds: Set<string>;
+  isInternal: boolean;
+  onPreview: (t: Template) => void;
+  onUse: (t: Template) => void;
+  onToggleUpvote: (t: Template) => void;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -722,12 +876,21 @@ function TemplateCard({
   onUse,
   onToggleUpvote,
 }: {
+<<<<<<< HEAD
   template: Template
   isUpvoted: boolean
   isInternal: boolean
   onPreview: (t: Template) => void
   onUse: (t: Template) => void
   onToggleUpvote: (t: Template, e: React.MouseEvent) => void
+=======
+  template: Template;
+  isUpvoted: boolean;
+  isInternal: boolean;
+  onPreview: (t: Template) => void;
+  onUse: (t: Template) => void;
+  onToggleUpvote: (t: Template) => void;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }) {
   const colorClass =
     CATEGORY_COLORS[template.category] ?? "bg-gray-100 text-gray-700"
@@ -769,16 +932,21 @@ function TemplateCard({
         </p>
       )}
       <div className="mt-auto flex items-center justify-between gap-2">
-        {/* Footer: internal shows "Built-in", community shows creator + upvotes */}
         {isInternal ? (
           <span className="text-[11px] text-muted-foreground">Built-in</span>
         ) : (
+<<<<<<< HEAD
           <div className="flex min-w-0 items-center gap-2">
             {/* Creator info */}
             {template.creatorName ||
             template.creatorAvatarUrl ||
             template.creatorEmail ? (
               <div className="flex min-w-0 items-center gap-1">
+=======
+          <div className="flex items-center gap-2 min-w-0">
+            {(template.creatorName || template.creatorAvatarUrl || template.creatorEmail) ? (
+              <div className="flex items-center gap-1 min-w-0">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 {template.creatorAvatarUrl ? (
                   <img
                     src={template.creatorAvatarUrl}
@@ -805,13 +973,17 @@ function TemplateCard({
                   : "Community"}
               </span>
             )}
-            {/* Upvote button */}
             <button
+<<<<<<< HEAD
               onClick={(e) => {
                 e.stopPropagation()
                 onToggleUpvote(template, e)
               }}
               className={`flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors ${
+=======
+              onClick={(e) => { e.stopPropagation(); onToggleUpvote(template); }}
+              className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors shrink-0 ${
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 isUpvoted
                   ? "bg-primary/10 font-medium text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"

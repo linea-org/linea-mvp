@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useAuth, useUser } from "@clerk/nextjs"
@@ -9,6 +10,19 @@ import { createApiClient } from "@/lib/api"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { Button } from "@linea/ui/components/button"
 import { HugeiconsIcon } from "@hugeicons/react"
+=======
+import Link from 'next/link';
+import { useUser } from '@clerk/nextjs';
+import { useQuery } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { usePod } from '@/contexts/space-context';
+import { useApiClient } from '@/hooks/use-api-client';
+import { unwrapList } from '@/lib/api';
+import { formatRelativeTime, formatDurationShort } from '@/lib/format';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { Button } from '@linea/ui/components/button';
+import { HugeiconsIcon } from '@hugeicons/react';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   WorkflowSquare01Icon,
   FlowCircleIcon,
@@ -95,6 +109,7 @@ function StatusDot({ status }: { status: string }) {
   )
 }
 
+<<<<<<< HEAD
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60_000)
@@ -167,6 +182,38 @@ export default function HomePage() {
       setLoading(false)
     }
   }
+=======
+export default function HomePage() {
+  const getApi = useApiClient();
+  const { user } = useUser();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const { activePod, loading: podLoading } = usePod();
+  const wsId = activeWorkspace?.id ?? '';
+  const podId = activePod?.id ?? '';
+
+  const { data, isLoading: dataLoading } = useQuery({
+    queryKey: ['home-dashboard', wsId, podId],
+    enabled: !!wsId && !!podId,
+    queryFn: async () => {
+      const api = await getApi();
+      const [m, execList, wfList] = await Promise.all([
+        api.get<MetricsData>(`/workspaces/${wsId}/metrics?period=24h`),
+        api.get<Execution[] | { executions: Execution[] }>(`/workspaces/${wsId}/pods/${podId}/executions`),
+        api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${podId}/workflows`),
+      ]);
+      const executions = unwrapList(execList, 'executions').slice(0, 6);
+      const workflows = unwrapList(wfList, 'workflows');
+      const workflowNames: Record<string, string> = {};
+      for (const wf of workflows) workflowNames[wf.id] = wf.name;
+      return { metrics: m, executions, workflowNames };
+    },
+  });
+
+  const metrics = data?.metrics ?? null;
+  const executions = data?.executions ?? [];
+  const workflowNames = data?.workflowNames ?? {};
+  const loading = wsLoading || podLoading || dataLoading;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const firstName = user?.firstName ?? user?.username ?? "there"
   const today = new Date().toLocaleDateString("en-US", {
@@ -178,8 +225,12 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
+<<<<<<< HEAD
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
+=======
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div>
           <h1 className="text-xl font-semibold">Welcome back, {firstName}</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">{today}</p>
@@ -206,7 +257,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Stats */}
       {loading || wsLoading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -229,6 +279,7 @@ export default function HomePage() {
                   : "—",
               icon: AnalyticsUpIcon,
             },
+<<<<<<< HEAD
             {
               label: "Failed",
               value: metrics?.executions.byStatus.failed ?? 0,
@@ -239,6 +290,10 @@ export default function HomePage() {
               value: formatMs(metrics?.duration.avgMs),
               icon: Clock01Icon,
             },
+=======
+            { label: 'Failed', value: metrics?.executions.byStatus.failed ?? 0, icon: Cancel01Icon },
+            { label: 'Avg duration', value: formatDurationShort(metrics?.duration.avgMs), icon: Clock01Icon },
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           ].map(({ label, value, icon }) => (
             <div key={label} className="rounded-lg border bg-card px-4 py-3">
               <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
@@ -251,7 +306,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Recent runs */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold">Recent runs</p>
@@ -300,6 +354,7 @@ export default function HomePage() {
         ) : (
           <div className="divide-y divide-border/50 overflow-hidden rounded-xl border">
             {executions.map((ex) => {
+<<<<<<< HEAD
               const wfName =
                 (ex.workflowId && workflowNames[ex.workflowId]) ??
                 "Unknown workflow"
@@ -310,6 +365,12 @@ export default function HomePage() {
                         new Date(ex.startedAt).getTime()
                     )
                   : null
+=======
+              const wfName = (ex.workflowId && workflowNames[ex.workflowId]) ?? 'Unknown workflow';
+              const dur = ex.startedAt && ex.finishedAt
+                ? formatDurationShort(new Date(ex.finishedAt).getTime() - new Date(ex.startedAt).getTime())
+                : null;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
               return (
                 <Link
                   key={ex.id}
@@ -325,6 +386,7 @@ export default function HomePage() {
                   >
                     {ex.status}
                   </span>
+<<<<<<< HEAD
                   {dur && (
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {dur}
@@ -332,6 +394,11 @@ export default function HomePage() {
                   )}
                   <span className="w-16 shrink-0 text-right text-xs text-muted-foreground/60 tabular-nums">
                     {timeAgo(ex.createdAt)}
+=======
+                  {dur && <span className="text-xs text-muted-foreground tabular-nums">{dur}</span>}
+                  <span className="text-xs text-muted-foreground/60 tabular-nums w-16 text-right shrink-0">
+                    {formatRelativeTime(ex.createdAt)}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                   </span>
                 </Link>
               )
@@ -340,7 +407,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Top workflows */}
       {!loading && metrics && metrics.topWorkflows.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">

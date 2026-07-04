@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
 import { useState, useEffect } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -24,6 +25,23 @@ import { Button } from "@linea/ui/components/button"
 import { Switch } from "@linea/ui/components/switch"
 import { Label } from "@linea/ui/components/label"
 import { Separator } from "@linea/ui/components/separator"
+=======
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  Cancel01Icon, Copy01Icon, Add01Icon, Delete01Icon, Loading01Icon,
+  CheckmarkCircle01Icon, Alert01Icon, RefreshIcon, EyeIcon, ViewOffIcon,
+  CloudUploadIcon, LinkSquare02Icon, AiBrain01Icon, LockIcon, InternetIcon,
+} from '@hugeicons/core-free-icons';
+import { API_ORIGIN } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
+import { Button } from '@linea/ui/components/button';
+import { Switch } from '@linea/ui/components/switch';
+import { Label } from '@linea/ui/components/label';
+import { Separator } from '@linea/ui/components/separator';
+import { Spinner } from '@linea/ui/components/spinner';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
 import {
   Select,
   SelectContent,
@@ -32,7 +50,6 @@ import {
   SelectValue,
 } from "@linea/ui/components/select"
 
-/* ─── Shared types ────────────────────────────────────────────────── */
 interface Webhook {
   id: string
   workflowId: string
@@ -46,6 +63,7 @@ interface ApiConfig {
 }
 
 interface PanelProps {
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
   workspaceId: string
   podId: string
   workflowId: string
@@ -59,9 +77,22 @@ interface PanelProps {
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"
 const TRIGGER_BASE = `${API_BASE}/v1/webhooks`
+=======
+  workspaceId: string;
+  podId: string;
+  workflowId: string;
+  isDeployed: boolean;
+  deployedAt: string | null;
+  onDeploy: () => Promise<void>;
+  onUndeploy: () => Promise<void>;
+  onClose: () => void;
+}
 
-/* ─── Deployment section ──────────────────────────────────────────── */
+const TRIGGER_BASE = `${API_ORIGIN}/v1/webhooks`;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
+
 function DeploySection({
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
   isDeployed,
   deployedAt,
   onDeploy,
@@ -119,6 +150,48 @@ function DeploySection({
     } finally {
       setApiSaving(false)
     }
+=======
+  isDeployed, deployedAt, onDeploy, onUndeploy,
+  workspaceId, podId, workflowId,
+}: Pick<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'workspaceId' | 'podId' | 'workflowId'>) {
+  const getApi = useApiClient();
+  const [deploying, setDeploying] = useState(false);
+  const [undeploying, setUndeploying] = useState(false);
+  const queryClient = useQueryClient();
+  const apiConfigKey = ['workflow-api-config', workspaceId, podId, workflowId];
+
+  const { data: apiConfig } = useQuery<ApiConfig>({
+    queryKey: apiConfigKey,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
+    },
+  });
+
+  const updateApiConfigMutation = useMutation({
+    mutationFn: async (patch: Partial<ApiConfig>) => {
+      const current = queryClient.getQueryData<ApiConfig>(apiConfigKey)!;
+      const next = { ...current, ...patch };
+      const api = await getApi();
+      return api.patch<ApiConfig>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`,
+        { apiEnabled: next.apiEnabled, apiVisibility: next.apiVisibility },
+      );
+    },
+    onMutate: async (patch) => {
+      const previous = queryClient.getQueryData<ApiConfig>(apiConfigKey);
+      if (previous) queryClient.setQueryData(apiConfigKey, { ...previous, ...patch });
+      return { previous };
+    },
+    onError: (_err, _patch, context) => {
+      if (context?.previous) queryClient.setQueryData(apiConfigKey, context.previous);
+    },
+    onSuccess: (data) => queryClient.setQueryData(apiConfigKey, data),
+  });
+
+  function updateApiConfig(patch: Partial<ApiConfig>) {
+    updateApiConfigMutation.mutate(patch);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
   }
 
   async function handleDeploy() {
@@ -141,6 +214,7 @@ function DeploySection({
 
   return (
     <div className="space-y-3 p-4">
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
       {/* Status card */}
       <div
         className={`flex items-start gap-3 rounded-lg border p-3 ${
@@ -152,6 +226,14 @@ function DeploySection({
         <div
           className={`mt-0.5 size-2 shrink-0 rounded-full ${isDeployed ? "bg-green-500" : "bg-muted-foreground/40"}`}
         />
+=======
+      <div className={`flex items-start gap-3 rounded-lg border p-3 ${
+        isDeployed
+          ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
+          : 'border-border bg-muted/30'
+      }`}>
+        <div className={`mt-0.5 size-2 shrink-0 rounded-full ${isDeployed ? 'bg-green-500' : 'bg-muted-foreground/40'}`} />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
         <div className="min-w-0 flex-1">
           <p
             className={`text-xs font-semibold ${isDeployed ? "text-green-700 dark:text-green-300" : "text-muted-foreground"}`}
@@ -170,7 +252,6 @@ function DeploySection({
         </div>
       </div>
 
-      {/* Action buttons */}
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -208,9 +289,14 @@ function DeploySection({
         </p>
       )}
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
       {/* REST API visibility — surfaced prominently */}
       {apiConfig !== null && (
         <div className="space-y-2.5 rounded-lg border border-border bg-muted/20 p-3">
+=======
+      {apiConfig && (
+        <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <HugeiconsIcon
@@ -237,7 +323,7 @@ function DeploySection({
             <Switch
               checked={apiConfig.apiEnabled}
               onCheckedChange={(v) => void updateApiConfig({ apiEnabled: v })}
-              disabled={apiSaving}
+              disabled={updateApiConfigMutation.isPending}
             />
           </div>
 
@@ -279,6 +365,7 @@ function DeploySection({
   )
 }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
 /* ─── Webhook tab ─────────────────────────────────────────────────── */
 function WebhookTab({
   workspaceId,
@@ -293,9 +380,25 @@ function WebhookTab({
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
+=======
+function WebhookTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const getApi = useApiClient();
+  const [copied, setCopied] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const webhooksKey = ['pod-webhooks', workspaceId, podId];
+
+  const { data: webhooks = [], isLoading: loading } = useQuery<Webhook[]>({
+    queryKey: webhooksKey,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Webhook[]>(`/workspaces/${workspaceId}/pods/${podId}/webhooks`);
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
 
   const workflowWebhooks = webhooks.filter((w) => w.workflowId === workflowId)
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
   useEffect(() => {
     void fetchWebhooks()
   }, [])
@@ -340,6 +443,35 @@ function WebhookTab({
     } catch {
       /* ignore */
     }
+=======
+  const createWebhookMutation = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<Webhook>(`/workspaces/${workspaceId}/pods/${podId}/webhooks`, { workflowId });
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData<Webhook[]>(webhooksKey, (prev) => [...(prev ?? []), created]);
+    },
+  });
+
+  const deleteWebhookMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${workspaceId}/pods/${podId}/webhooks/${id}`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Webhook[]>(webhooksKey, (prev) => prev?.filter((w) => w.id !== id) ?? []);
+    },
+  });
+
+  function createWebhook() {
+    createWebhookMutation.mutate();
+  }
+
+  function deleteWebhook(id: string) {
+    deleteWebhookMutation.mutate(id);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
   }
 
   function copy(text: string, id: string) {
@@ -351,7 +483,7 @@ function WebhookTab({
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5" />
         Loading…
       </div>
     )
@@ -367,6 +499,7 @@ function WebhookTab({
               Create a webhook to trigger this workflow from external systems.
             </p>
           </div>
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
           <Button
             size="sm"
             className="w-full"
@@ -377,6 +510,10 @@ function WebhookTab({
               icon={creating ? Loading01Icon : Add01Icon}
               className={creating ? "animate-spin" : ""}
             />
+=======
+          <Button size="sm" className="w-full" onClick={createWebhook} disabled={createWebhookMutation.isPending}>
+            <HugeiconsIcon icon={createWebhookMutation.isPending ? Loading01Icon : Add01Icon} className={createWebhookMutation.isPending ? 'animate-spin' : ''} />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
             Create Webhook
           </Button>
         </>
@@ -393,12 +530,16 @@ function WebhookTab({
                   <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
                     ID: {wh.id.slice(0, 8)}…
                   </span>
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
                   <Button
                     size="icon-xs"
                     variant="ghost"
                     className="text-muted-foreground hover:text-red-500"
                     onClick={() => void deleteWebhook(wh.id)}
                   >
+=======
+                  <Button size="icon-xs" variant="ghost" className="text-muted-foreground hover:text-red-500" onClick={() => deleteWebhook(wh.id)}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
                     <HugeiconsIcon icon={Delete01Icon} />
                   </Button>
                 </div>
@@ -455,6 +596,7 @@ function WebhookTab({
   )
 }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
 /* ─── REST API tab ────────────────────────────────────────────────── */
 function RestApiTab({
   workspaceId,
@@ -529,6 +671,62 @@ function RestApiTab({
     } finally {
       setRotating(false)
     }
+=======
+function RestApiTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const getApi = useApiClient();
+  const [copied, setCopied] = useState<string | null>(null);
+  const [keyVisible, setKeyVisible] = useState(false);
+  const queryClient = useQueryClient();
+  const apiConfigKey = ['workflow-api-config', workspaceId, podId, workflowId];
+
+  const { data: config = { apiEnabled: false, apiVisibility: 'api_key' as const, apiKey: null }, isLoading: loading } = useQuery<ApiConfig>({
+    queryKey: apiConfigKey,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ApiConfig>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`);
+    },
+  });
+
+  const endpointUrl = `${API_ORIGIN}/v1/run/${workflowId}`;
+
+  const updateConfigMutation = useMutation({
+    mutationFn: async (patch: Partial<ApiConfig>) => {
+      const current = queryClient.getQueryData<ApiConfig>(apiConfigKey) ?? config;
+      const next = { ...current, ...patch };
+      const api = await getApi();
+      return api.patch<ApiConfig>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api`,
+        { apiEnabled: next.apiEnabled, apiVisibility: next.apiVisibility },
+      );
+    },
+    onMutate: async (patch) => {
+      const previous = queryClient.getQueryData<ApiConfig>(apiConfigKey) ?? config;
+      queryClient.setQueryData(apiConfigKey, { ...previous, ...patch });
+      return { previous };
+    },
+    onError: (_err, _patch, context) => {
+      if (context?.previous) queryClient.setQueryData(apiConfigKey, context.previous);
+    },
+    onSuccess: (data) => queryClient.setQueryData(apiConfigKey, data),
+  });
+
+  const rotateKeyMutation = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<{ apiKey: string }>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/api/rotate-key`, {});
+    },
+    onSuccess: (res) => {
+      queryClient.setQueryData<ApiConfig>(apiConfigKey, (prev) => prev ? { ...prev, apiKey: res.apiKey } : prev);
+    },
+  });
+
+  function updateConfig(patch: Partial<ApiConfig>) {
+    updateConfigMutation.mutate(patch);
+  }
+
+  function rotateKey() {
+    rotateKeyMutation.mutate();
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
   }
 
   function copyText(text: string, key: string) {
@@ -545,7 +743,7 @@ function RestApiTab({
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5" />
         Loading…
       </div>
     )
@@ -560,11 +758,15 @@ function RestApiTab({
             Expose this workflow as an HTTP endpoint
           </p>
         </div>
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
         <Switch
           checked={config.apiEnabled}
           onCheckedChange={(v) => void updateConfig({ apiEnabled: v })}
           disabled={saving}
         />
+=======
+        <Switch checked={config.apiEnabled} onCheckedChange={(v) => updateConfig({ apiEnabled: v })} disabled={updateConfigMutation.isPending} />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
       </div>
 
       {config.apiEnabled && (
@@ -584,7 +786,7 @@ function RestApiTab({
                     name="rest-visibility-dp"
                     value={val}
                     checked={config.apiVisibility === val}
-                    onChange={() => void updateConfig({ apiVisibility: val })}
+                    onChange={() => updateConfig({ apiVisibility: val })}
                     className="mt-0.5 shrink-0"
                   />
                   <div>
@@ -652,6 +854,7 @@ function RestApiTab({
                       <HugeiconsIcon icon={Copy01Icon} className="size-3.5" />
                     </button>
                   </div>
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
                   {copied === "key" && (
                     <p className="text-[10px] text-green-600">Copied!</p>
                   )}
@@ -666,6 +869,11 @@ function RestApiTab({
                       icon={rotating ? Loading01Icon : RefreshIcon}
                       className={`size-3.5 ${rotating ? "animate-spin" : ""}`}
                     />
+=======
+                  {copied === 'key' && <p className="text-[10px] text-green-600">Copied!</p>}
+                  <Button size="sm" variant="outline" onClick={rotateKey} disabled={rotateKeyMutation.isPending} className="w-full text-xs">
+                    <HugeiconsIcon icon={rotateKeyMutation.isPending ? Loading01Icon : RefreshIcon} className={`size-3.5 ${rotateKeyMutation.isPending ? 'animate-spin' : ''}`} />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
                     Rotate key
                   </Button>
                   <p className="text-[10px] text-muted-foreground">
@@ -673,6 +881,7 @@ function RestApiTab({
                   </p>
                 </div>
               ) : (
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
                 <Button
                   size="sm"
                   variant="outline"
@@ -684,6 +893,10 @@ function RestApiTab({
                     icon={rotating ? Loading01Icon : RefreshIcon}
                     className={`size-3.5 ${rotating ? "animate-spin" : ""}`}
                   />
+=======
+                <Button size="sm" variant="outline" onClick={rotateKey} disabled={rotateKeyMutation.isPending} className="w-full text-xs">
+                  <HugeiconsIcon icon={rotateKeyMutation.isPending ? Loading01Icon : RefreshIcon} className={`size-3.5 ${rotateKeyMutation.isPending ? 'animate-spin' : ''}`} />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
                   Generate API key
                 </Button>
               )}
@@ -732,6 +945,7 @@ function RestApiTab({
   )
 }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
 /* ─── Supervisor model options ────────────────────────────────────── */
 const SUPERVISOR_MODELS = [
   {
@@ -829,12 +1043,70 @@ function SettingsTab({
     } finally {
       setSaving(false)
     }
+=======
+interface ModelDefinition {
+  id: string;
+  name: string;
+  provider: string;
+  tier: 'fast' | 'balanced' | 'powerful' | 'reasoning';
+}
+
+function SettingsTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
+  const getApi = useApiClient();
+  const [supervisorModel, setSupervisorModel] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [initializedFor, setInitializedFor] = useState<string | null>(null);
+
+  const { data: wf, isLoading: loading } = useQuery<{ definition?: { settings?: { supervisorModel?: string } } }>({
+    queryKey: ['workflow-definition-settings', workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`);
+    },
+  });
+
+  const { data: supervisorModels = [] } = useQuery<ModelDefinition[]>({
+    queryKey: ['models'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ModelDefinition[]>('/models');
+    },
+  });
+
+  if (wf && initializedFor !== workflowId) {
+    setInitializedFor(workflowId);
+    setSupervisorModel(wf.definition?.settings?.supervisorModel ?? '');
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async (model: string) => {
+      const api = await getApi();
+      const current = await api.get<{ definition?: Record<string, unknown> }>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
+      );
+      const currentDef = current.definition ?? {};
+      const currentSettings = (currentDef.settings as Record<string, unknown>) ?? {};
+      await api.patch(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
+        { definition: { ...currentDef, settings: { ...currentSettings, supervisorModel: model || null } } },
+      );
+    },
+    onSuccess: () => {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    },
+  });
+
+  function save(model: string) {
+    setSupervisorModel(model);
+    saveMutation.mutate(model);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5" />
         Loading…
       </div>
     )
@@ -842,7 +1114,6 @@ function SettingsTab({
 
   return (
     <div className="space-y-5 p-4">
-      {/* Supervisor model */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <HugeiconsIcon
@@ -859,14 +1130,21 @@ function SettingsTab({
         </div>
         <div className="flex items-center gap-2">
           <Select
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
             value={supervisorModel || "__default__"}
             onValueChange={(v) => void save(v === "__default__" ? "" : v)}
             disabled={saving}
+=======
+            value={supervisorModel || '__default__'}
+            onValueChange={(v) => save(v === '__default__' ? '' : v)}
+            disabled={saveMutation.isPending}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
           >
             <SelectTrigger className="flex-1 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
               <SelectItem value="__default__">
                 Platform default (Haiku 4.5)
               </SelectItem>
@@ -889,6 +1167,16 @@ function SettingsTab({
               className="size-3.5 shrink-0 text-green-500"
             />
           )}
+=======
+              <SelectItem value="__default__">Platform default (Haiku 4.5)</SelectItem>
+              {supervisorModels.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.name} ({m.tier})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {saveMutation.isPending && <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin text-muted-foreground shrink-0" />}
+          {saved && <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-3.5 text-green-500 shrink-0" />}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
         </div>
       </div>
 
@@ -908,6 +1196,7 @@ function SettingsTab({
   )
 }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
 /* ─── Main panel ──────────────────────────────────────────────────── */
 type Tab = "webhook" | "rest" | "settings"
 
@@ -921,6 +1210,13 @@ export function DeployPanel({
   onDeploy,
   onUndeploy,
   onClose,
+=======
+type Tab = 'webhook' | 'rest' | 'settings';
+
+export function DeployPanel({
+  workspaceId, podId, workflowId,
+  isDeployed, deployedAt, onDeploy, onUndeploy, onClose,
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
 }: PanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>("webhook")
 
@@ -932,7 +1228,6 @@ export function DeployPanel({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
         <div>
           <p className="text-sm font-semibold">Deploy & Publish</p>
@@ -946,7 +1241,6 @@ export function DeployPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Deploy section */}
         <DeploySection
           isDeployed={isDeployed}
           deployedAt={deployedAt}
@@ -955,19 +1249,16 @@ export function DeployPanel({
           workspaceId={workspaceId}
           podId={podId}
           workflowId={workflowId}
-          token={token}
         />
 
         <Separator />
 
-        {/* Triggers section */}
         <div className="px-4 pt-3 pb-1">
           <p className="text-[9px] font-bold tracking-widest text-muted-foreground/60 uppercase">
             Triggers
           </p>
         </div>
 
-        {/* Tab bar */}
         <div className="flex border-b border-border">
           {tabs.map((tab) => (
             <button
@@ -984,6 +1275,7 @@ export function DeployPanel({
           ))}
         </div>
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/deploy-panel.tsx
         {activeTab === "webhook" ? (
           <WebhookTab
             workspaceId={workspaceId}
@@ -1005,6 +1297,14 @@ export function DeployPanel({
             workflowId={workflowId}
             token={token}
           />
+=======
+        {activeTab === 'webhook' ? (
+          <WebhookTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
+        ) : activeTab === 'rest' ? (
+          <RestApiTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
+        ) : (
+          <SettingsTab workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/deploy-panel.tsx
         )}
       </div>
     </div>

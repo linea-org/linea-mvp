@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useMemo, useState } from "react"
 import { useParams } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
@@ -10,6 +11,18 @@ import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
 import { Skeleton } from "@linea/ui/components/skeleton"
+=======
+import { useCallback, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { createApiClient, unwrapList, API_BASE } from '@/lib/api';
+import { Button } from '@linea/ui/components/button';
+import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
+import { Skeleton } from '@linea/ui/components/skeleton';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -55,8 +68,12 @@ import {
   Loading01Icon,
 } from "@hugeicons/core-free-icons"
 
+<<<<<<< HEAD
 const API_BASE = `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"}/v1`
 const PAGE_SIZE = 10
+=======
+const PAGE_SIZE = 10;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 interface Webhook {
   id: string
@@ -176,6 +193,7 @@ export default function WebhooksPage() {
     queryKey: workflowsKey,
     enabled: !!activeWorkspace && !wsLoading,
     queryFn: async () => {
+<<<<<<< HEAD
       const token = await getToken()
       if (!token) return []
       const api = createApiClient(token)
@@ -185,6 +203,15 @@ export default function WebhooksPage() {
       return (
         Array.isArray(res) ? res : ((res as any)?.workflows ?? [])
       ) as Workflow[]
+=======
+      const token = await getToken();
+      if (!token) return [];
+      const api = createApiClient(token);
+      const res = await api.get<Workflow[] | { workflows: Workflow[] }>(
+        `/workspaces/${activeWorkspace!.id}/pods/${podId}/workflows`,
+      );
+      return unwrapList(res, 'workflows');
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     },
   })
 
@@ -245,6 +272,7 @@ export default function WebhooksPage() {
     return `${API_BASE}/webhooks/${id}/trigger`
   }
 
+<<<<<<< HEAD
   function workflowName(id: string) {
     return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + "…"
   }
@@ -253,6 +281,16 @@ export default function WebhooksPage() {
     let list = Array.isArray(webhooks) ? webhooks : []
     if (workflowFilter !== "all") {
       list = list.filter((wh) => wh.workflowId === workflowFilter)
+=======
+  const workflowName = useCallback((id: string) => {
+    return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + '…';
+  }, [workflows]);
+
+  const filtered = useMemo(() => {
+    let list = webhooks;
+    if (workflowFilter !== 'all') {
+      list = list.filter((wh) => wh.workflowId === workflowFilter);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     }
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -291,7 +329,6 @@ export default function WebhooksPage() {
         </Button>
       </div>
 
-      {/* Search + filter bar */}
       <div className="flex items-center gap-2">
         <div className="relative max-w-xs flex-1">
           <HugeiconsIcon
@@ -427,7 +464,6 @@ export default function WebhooksPage() {
         </div>
       )}
 
-      {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
@@ -478,7 +514,6 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Secret reveal dialog — shown after create or rotate */}
       <Dialog open={!!revealSecret} onOpenChange={() => setRevealSecret(null)}>
         <DialogContent>
           <DialogHeader>
@@ -530,11 +565,15 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
 
+<<<<<<< HEAD
       {/* Delete confirm */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={() => setDeleteTarget(null)}
       >
+=======
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete webhook?</AlertDialogTitle>

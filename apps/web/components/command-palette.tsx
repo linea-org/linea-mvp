@@ -1,11 +1,20 @@
 "use client"
 
+<<<<<<< HEAD
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
 import { usePod } from "@/contexts/space-context"
 import { useWorkspace } from "@/contexts/workspace-context"
 import { createApiClient } from "@/lib/api"
+=======
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { usePod } from '@/contexts/space-context';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { useApiClient } from '@/hooks/use-api-client';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   CommandDialog,
   CommandInput,
@@ -44,15 +53,24 @@ interface RecentWorkflow {
 }
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+<<<<<<< HEAD
   const router = useRouter()
   const { getToken } = useAuth()
   const { activePod, pods, setActivePod } = usePod()
   const { activeWorkspace } = useWorkspace()
   const [search, setSearch] = useState("")
   const [recentWorkflows, setRecentWorkflows] = useState<RecentWorkflow[]>([])
+=======
+  const router = useRouter();
+  const getApi = useApiClient();
+  const { activePod, pods, setActivePod } = usePod();
+  const { activeWorkspace } = useWorkspace();
+  const [search, setSearch] = useState('');
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const podBase = activePod ? `/pods/${activePod.id}` : null
 
+<<<<<<< HEAD
   const loadRecent = useCallback(async () => {
     if (!activePod || !activeWorkspace) return
     try {
@@ -75,6 +93,23 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       setSearch("")
     }
   }, [open, loadRecent])
+=======
+  const { data: recentWorkflows = [] } = useQuery<RecentWorkflow[]>({
+    queryKey: ['recent-workflows', activeWorkspace?.id, activePod?.id],
+    enabled: open && !!activePod && !!activeWorkspace,
+    queryFn: async () => {
+      const api = await getApi();
+      const data = await api.get<{ workflows: RecentWorkflow[] }>(
+        `/workspaces/${activeWorkspace!.id}/pods/${activePod!.id}/workflows?limit=5`,
+      );
+      return data.workflows ?? [];
+    },
+  });
+
+  useEffect(() => {
+    if (!open) setSearch('');
+  }, [open]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function run(fn: () => void) {
     fn()
@@ -169,7 +204,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </div>
         </CommandEmpty>
 
-        {/* Navigate */}
         {filteredNav.length > 0 && (
           <CommandGroup heading="Navigate">
             {filteredNav.map(({ label, icon, href, shortcut }) => (
@@ -192,6 +226,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </CommandGroup>
         )}
 
+<<<<<<< HEAD
         {/* Create actions */}
         {podBase &&
           (!search || "new workflow create".includes(search.toLowerCase())) && (
@@ -211,8 +246,24 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               </CommandGroup>
             </>
           )}
+=======
+        {podBase && (!search || 'new workflow create'.includes(search.toLowerCase())) && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Create">
+              <CommandItem
+                value="New workflow"
+                onSelect={() => run(() => router.push(`${podBase}/workflows`))}
+              >
+                <HugeiconsIcon icon={Add01Icon} className="size-3.5" />
+                New workflow
+                <CommandShortcut>N W</CommandShortcut>
+              </CommandItem>
+            </CommandGroup>
+          </>
+        )}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
-        {/* Recent workflows */}
         {filteredWorkflows.length > 0 && (
           <>
             <CommandSeparator />
@@ -238,6 +289,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </>
         )}
 
+<<<<<<< HEAD
         {/* Switch pod */}
         {otherPods.length > 0 &&
           (!search ||
@@ -275,6 +327,29 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         {/* Help */}
         {(!search ||
           "keyboard shortcuts help".includes(search.toLowerCase())) && (
+=======
+        {otherPods.length > 0 && (!search || otherPods.some((p) => p.name.toLowerCase().includes(search.toLowerCase()))) && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Switch pod">
+              {otherPods
+                .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
+                .map((pod) => (
+                  <CommandItem
+                    key={pod.id}
+                    value={`pod ${pod.name}`}
+                    onSelect={() => run(() => { setActivePod(pod); router.push(`/pods/${pod.id}/workflows`); })}
+                  >
+                    <HugeiconsIcon icon={GridViewIcon} className="size-3.5" />
+                    {pod.name}
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+          </>
+        )}
+
+        {(!search || 'keyboard shortcuts help'.includes(search.toLowerCase())) && (
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           <>
             <CommandSeparator />
             <CommandGroup heading="Help">

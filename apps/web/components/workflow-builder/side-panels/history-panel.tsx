@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/history-panel.tsx
 import { useState, useEffect } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -11,6 +12,17 @@ import {
 import { createApiClient } from "@/lib/api"
 import { Button } from "@linea/ui/components/button"
 import { ScrollArea } from "@linea/ui/components/scroll-area"
+=======
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Cancel01Icon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons';
+import { useApiClient } from '@/hooks/use-api-client';
+import { Button } from '@linea/ui/components/button';
+import { ScrollArea } from '@linea/ui/components/scroll-area';
+import { Spinner } from '@linea/ui/components/spinner';
+import type { Log } from '../panels/bottom-panel/bottom-panel-shared';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/history-panel.tsx
 
 interface Execution {
   id: string
@@ -20,6 +32,7 @@ interface Execution {
   finishedAt: string | null
 }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/history-panel.tsx
 interface Log {
   id: string
   nodeId: string
@@ -36,6 +49,14 @@ interface Props {
   token: string
   nodes: { id: string; data: Record<string, unknown> }[]
   onClose: () => void
+=======
+interface Props {
+  workspaceId: string;
+  podId: string;
+  workflowId: string;
+  nodes: { id: string; data: Record<string, unknown> }[];
+  onClose: () => void;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/history-panel.tsx
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -56,6 +77,7 @@ const STATUS_DOT: Record<string, string> = {
   suspended: "bg-amber-400",
 }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/history-panel.tsx
 export function HistoryPanel({
   workspaceId,
   podId,
@@ -105,6 +127,35 @@ export function HistoryPanel({
       setLogsLoading(false)
     }
   }
+=======
+export function HistoryPanel({ workspaceId, podId, workflowId, nodes, onClose }: Props) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const getApi = useApiClient();
+
+  const { data: executions = [], isLoading: loading, refetch } = useQuery<Execution[]>({
+    queryKey: ['workflow-executions-history', workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi();
+      const data = await api.get<{ executions: Execution[] }>(
+        `/workspaces/${workspaceId}/pods/${podId}/executions?workflowId=${workflowId}&limit=20`,
+      );
+      return data.executions;
+    },
+  });
+
+  function fetchExecutions() {
+    void refetch();
+  }
+
+  const { data: logs = [], isLoading: logsLoading } = useQuery<Log[]>({
+    queryKey: ['workflow-execution-logs', workspaceId, podId, selectedId],
+    enabled: !!selectedId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Log[]>(`/workspaces/${workspaceId}/pods/${podId}/executions/${selectedId}/logs`);
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/history-panel.tsx
 
   function getNodeName(nodeId: string): string {
     const node = nodes.find((n) => n.id === nodeId)
@@ -124,7 +175,6 @@ export function HistoryPanel({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2.5">
         <div>
           <p className="text-sm font-semibold">Run History</p>
@@ -133,12 +183,16 @@ export function HistoryPanel({
           </p>
         </div>
         <div className="flex items-center gap-1">
+<<<<<<< HEAD:apps/web/components/workflow-builder/history-panel.tsx
           <Button
             size="icon-sm"
             variant="ghost"
             onClick={() => void fetchExecutions()}
             title="Refresh"
           >
+=======
+          <Button size="icon-sm" variant="ghost" onClick={fetchExecutions} title="Refresh">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/history-panel.tsx
             <HugeiconsIcon icon={ReloadIcon} className="size-3.5" />
           </Button>
           <Button size="icon-sm" variant="ghost" onClick={onClose}>
@@ -148,6 +202,7 @@ export function HistoryPanel({
       </div>
 
       <div className="flex flex-1 overflow-hidden">
+<<<<<<< HEAD:apps/web/components/workflow-builder/history-panel.tsx
         {/* Execution list */}
         <div className="w-44 shrink-0 overflow-y-auto border-r border-border">
           {loading ? (
@@ -156,6 +211,12 @@ export function HistoryPanel({
                 icon={Loading01Icon}
                 className="size-3 animate-spin"
               />
+=======
+        <div className="w-44 shrink-0 border-r border-border overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center gap-1.5 py-8 text-xs text-muted-foreground">
+              <Spinner className="size-3" />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/history-panel.tsx
             </div>
           ) : executions.length === 0 ? (
             <p className="p-3 text-center text-xs text-muted-foreground">
@@ -165,8 +226,13 @@ export function HistoryPanel({
             executions.map((ex) => (
               <button
                 key={ex.id}
+<<<<<<< HEAD:apps/web/components/workflow-builder/history-panel.tsx
                 onClick={() => void selectExecution(ex.id)}
                 className={`w-full border-b border-border/50 px-2.5 py-2 text-left transition-colors hover:bg-muted/30 ${selectedId === ex.id ? "bg-muted/50" : ""}`}
+=======
+                onClick={() => setSelectedId(ex.id)}
+                className={`w-full text-left px-2.5 py-2 border-b border-border/50 hover:bg-muted/30 transition-colors ${selectedId === ex.id ? 'bg-muted/50' : ''}`}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/history-panel.tsx
               >
                 <div className="flex items-center gap-1.5">
                   <span
@@ -189,7 +255,6 @@ export function HistoryPanel({
           )}
         </div>
 
-        {/* Log detail */}
         <ScrollArea className="flex-1">
           {!selectedId ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
@@ -203,10 +268,14 @@ export function HistoryPanel({
             </div>
           ) : logsLoading ? (
             <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
+<<<<<<< HEAD:apps/web/components/workflow-builder/history-panel.tsx
               <HugeiconsIcon
                 icon={Loading01Icon}
                 className="size-3.5 animate-spin"
               />
+=======
+              <Spinner className="size-3.5" />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/history-panel.tsx
             </div>
           ) : logs.length === 0 ? (
             <p className="p-4 text-center text-xs text-muted-foreground">

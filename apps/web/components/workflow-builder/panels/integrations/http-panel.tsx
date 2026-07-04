@@ -7,6 +7,7 @@ import { Textarea } from "@linea/ui/components/textarea"
 import { Label } from "@linea/ui/components/label"
 import { Switch } from "@linea/ui/components/switch"
 import {
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/http-panel.tsx
   Select,
   SelectContent,
   SelectItem,
@@ -14,6 +15,11 @@ import {
   SelectValue,
 } from "@linea/ui/components/select"
 import { VariableChips } from "../variable-picker"
+=======
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@linea/ui/components/select';
+import { VariableChips } from '../../variable-picker';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/integrations/http-panel.tsx
 
 interface HttpPanelProps {
   data: Record<string, unknown>
@@ -79,7 +85,6 @@ export function HttpPanel({
         fieldRef={urlRef}
       />
 
-      {/* Auth */}
       <div className="space-y-2">
         <div className="space-y-1.5">
           <Label>Authentication</Label>
@@ -152,7 +157,6 @@ export function HttpPanel({
         </div>
       )}
 
-      {/* Response processing */}
       <div className="space-y-3 border-t pt-3">
         <Label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Response

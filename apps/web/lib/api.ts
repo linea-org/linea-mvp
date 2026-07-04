@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 const API_BASE = `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"}/v1`
+=======
+export const API_ORIGIN = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+export const API_BASE = `${API_ORIGIN}/v1`;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 export class ApiError extends Error {
   constructor(
@@ -67,6 +72,18 @@ async function request<T>(
 
   const json = await res.json()
   return (json as { data: T }).data
+}
+
+/**
+ * Some list endpoints return a bare array, others wrap it in `{ [key]: [...] }`.
+ * Normalizes both known shapes to a plain array; throws on anything else so a
+ * genuinely broken response surfaces instead of silently becoming an empty list.
+ */
+export function unwrapList<T>(res: T[] | { [key: string]: unknown }, key: string): T[] {
+  if (Array.isArray(res)) return res;
+  const list = res[key];
+  if (Array.isArray(list)) return list as T[];
+  throw new Error(`Expected an array or { ${key}: [...] }, got: ${JSON.stringify(res)}`);
 }
 
 export function createApiClient(token: string) {

@@ -51,6 +51,7 @@ import {
   TooltipTrigger,
 } from "@linea/ui/components/tooltip"
 
+<<<<<<< HEAD
 /* ------------------------------------------------------------------ */
 /*  Theme map                                                           */
 /* ------------------------------------------------------------------ */
@@ -59,6 +60,10 @@ interface Theme {
   color: string
 }
 const defaultTheme: Theme = { icon: Robot01Icon, color: "#3b82f6" }
+=======
+interface Theme { icon: IconSvgElement; color: string }
+const defaultTheme: Theme = { icon: Robot01Icon, color: '#3b82f6' };
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 const themes: Record<string, Theme> = {
   start: { icon: ZapIcon, color: "#6366f1" },
   end: { icon: Square01Icon, color: "#14b8a6" },
@@ -90,9 +95,6 @@ const themes: Record<string, Theme> = {
   datetime: { icon: Calendar01Icon, color: "#0d9488" },
 }
 
-/* ------------------------------------------------------------------ */
-/*  Inline property extractor                                           */
-/* ------------------------------------------------------------------ */
 function fmt(v: unknown, max = 26): string {
   const s = String(v ?? "")
   return s.length > max ? s.slice(0, max) + "…" : s
@@ -289,9 +291,6 @@ function getNodeProperties(
     .slice(0, 3)
 }
 
-/* ------------------------------------------------------------------ */
-/*  Status dot                                                          */
-/* ------------------------------------------------------------------ */
 function StatusDot({ status }: { status?: string }) {
   if (!status) return null
   const cls =
@@ -305,9 +304,6 @@ function StatusDot({ status }: { status?: string }) {
   return <span className={cls} />
 }
 
-/* ------------------------------------------------------------------ */
-/*  Handle classes                                                      */
-/* ------------------------------------------------------------------ */
 const TARGET_CLS =
   "!size-3 !rounded-full !border-[2px] !border-muted-foreground/60 !bg-background " +
   "hover:!border-foreground hover:!scale-125 transition-transform duration-150"
@@ -321,6 +317,7 @@ const FALSE_CLS =
   "!size-3 !rounded-full !border-[2px] !border-background !bg-red-400 " +
   "hover:!bg-red-500 hover:!scale-125 transition-transform duration-150"
 
+<<<<<<< HEAD
 /* ------------------------------------------------------------------ */
 /*  Status ring map                                                     */
 /* ------------------------------------------------------------------ */
@@ -346,10 +343,15 @@ const STATUS_RING: Record<
     shadow: "0 0 0 2px rgba(245,158,11,0.55)",
   },
 }
+=======
+const STATUS_RING: Record<string, { border: string; shadow: string; animate?: string }> = {
+  running:   { border: 'rgb(59,130,246)',  shadow: '0 0 0 3px rgba(59,130,246,0.45)', animate: 'animate-pulse' },
+  completed: { border: 'rgb(34,197,94)',   shadow: '0 0 0 2px rgba(34,197,94,0.55)'  },
+  failed:    { border: 'rgb(239,68,68)',   shadow: '0 0 0 2px rgba(239,68,68,0.55)'  },
+  suspended: { border: 'rgb(245,158,11)',  shadow: '0 0 0 2px rgba(245,158,11,0.55)' },
+};
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
-/* ------------------------------------------------------------------ */
-/*  NodeShell                                                           */
-/* ------------------------------------------------------------------ */
 function NodeShell({
   nodeType,
   label,
@@ -394,7 +396,6 @@ function NodeShell({
       )}
       style={{ borderColor: borderColor ?? "hsl(var(--border))", boxShadow }}
     >
-      {/* Header */}
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
         <div
           className="flex size-7 shrink-0 items-center justify-center rounded-lg"
@@ -438,7 +439,6 @@ function NodeShell({
             </div>
           ) : null}
         </div>
-        {/* Port-orientation toggle */}
         <button
           title={
             portsVertical
@@ -463,7 +463,6 @@ function NodeShell({
         </button>
       </div>
 
-      {/* Inline property chips */}
       {properties.length > 0 && (
         <div className="flex flex-wrap gap-1 px-2.5 pb-2">
           {properties.map(({ key, value }) => (
@@ -483,7 +482,6 @@ function NodeShell({
         </div>
       )}
 
-      {/* Output preview strip */}
       {outputPreview && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -506,13 +504,6 @@ function NodeShell({
     </div>
   )
 }
-
-/* ------------------------------------------------------------------ */
-/*  CustomNode                                                          */
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
-/*  Connection-rule helpers                                             */
-/* ------------------------------------------------------------------ */
 
 /** Nodes whose target handle accepts more than 1 incoming connection */
 const MULTI_TARGET_NODES = new Set(["merge", "end"])
@@ -626,10 +617,8 @@ export const CustomNode = memo(function CustomNode({
       onTogglePorts={togglePorts}
       outputPreview={outputPreview}
     >
-      {/* Target handle */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
 
-      {/* Source handles */}
       {isBranching && branchTrue && branchFalse ? (
         <>
           {portsVertical ? (
@@ -739,6 +728,7 @@ export const CustomNode = memo(function CustomNode({
   )
 })
 
+<<<<<<< HEAD
 /* ------------------------------------------------------------------ */
 /*  StartNode                                                           */
 /* ------------------------------------------------------------------ */
@@ -755,6 +745,17 @@ export const StartNode = memo(function StartNode({
   const outputPreview = data._outputPreview as string | undefined
   const properties = getNodeProperties("start", data as Record<string, unknown>)
   const outPos = portsVertical ? Position.Bottom : Position.Right
+=======
+export const StartNode = memo(function StartNode({ id, data, selected }: NodeProps) {
+  const { setNodes } = useReactFlow();
+  const label         = (data.nodeName       as string)  ?? (data.label as string) ?? 'Start';
+  const posLocked     = (data.positionLocked  as boolean) ?? false;
+  const delLocked     = (data.deleteLocked    as boolean) ?? false;
+  const portsVertical = (data.portsVertical   as boolean) ?? false;
+  const outputPreview = data._outputPreview   as string | undefined;
+  const properties    = getNodeProperties('start', data as Record<string, unknown>);
+  const outPos        = portsVertical ? Position.Bottom : Position.Right;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function togglePorts() {
     setNodes((nds) =>
@@ -783,6 +784,7 @@ export const StartNode = memo(function StartNode({
   )
 })
 
+<<<<<<< HEAD
 /* ------------------------------------------------------------------ */
 /*  EndNode                                                             */
 /* ------------------------------------------------------------------ */
@@ -797,6 +799,15 @@ export const EndNode = memo(function EndNode({
   const delLocked = (data.deleteLocked as boolean) ?? false
   const portsVertical = (data.portsVertical as boolean) ?? false
   const inPos = portsVertical ? Position.Top : Position.Left
+=======
+export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) {
+  const { setNodes } = useReactFlow();
+  const label         = (data.nodeName       as string)  ?? (data.label as string) ?? 'End';
+  const posLocked     = (data.positionLocked  as boolean) ?? false;
+  const delLocked     = (data.deleteLocked    as boolean) ?? false;
+  const portsVertical = (data.portsVertical   as boolean) ?? false;
+  const inPos         = portsVertical ? Position.Top : Position.Left;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function togglePorts() {
     setNodes((nds) =>
@@ -808,6 +819,7 @@ export const EndNode = memo(function EndNode({
     )
   }
 
+  // End accepts any number of incoming connections — multiple branches can converge here
   return (
     <NodeShell
       nodeType="end"
@@ -819,12 +831,12 @@ export const EndNode = memo(function EndNode({
       portsVertical={portsVertical}
       onTogglePorts={togglePorts}
     >
-      {/* End accepts any number of incoming connections — multiple branches can converge here */}
       <Handle type="target" position={inPos} className={TARGET_CLS} />
     </NodeShell>
   )
 })
 
+<<<<<<< HEAD
 /* ------------------------------------------------------------------ */
 /*  FrameNode                                                           */
 /* ------------------------------------------------------------------ */
@@ -838,6 +850,9 @@ const FRAME_COLORS = [
   "#ec4899",
   "#64748b",
 ]
+=======
+const FRAME_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 export const FrameNode = memo(function FrameNode({
   id,
@@ -953,7 +968,6 @@ export const FrameNode = memo(function FrameNode({
         onResize={handleResize}
       />
 
-      {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-2">
         <button
           onClick={toggleCollapse}
@@ -991,7 +1005,6 @@ export const FrameNode = memo(function FrameNode({
           </span>
         )}
 
-        {/* Color picker — only when selected */}
         {selected && !editingLabel && (
           <div className="nodrag flex items-center gap-0.5">
             {FRAME_COLORS.map((c) => (
@@ -1021,9 +1034,6 @@ export const FrameNode = memo(function FrameNode({
   )
 })
 
-/* ------------------------------------------------------------------ */
-/*  NoteNode                                                            */
-/* ------------------------------------------------------------------ */
 export const NoteNode = memo(function NoteNode({ data, selected }: NodeProps) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState((data.noteText as string) ?? "")

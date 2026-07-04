@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
@@ -11,8 +12,21 @@ import { createApiClient, friendlyApiError } from "@/lib/api"
 import { Badge } from "@linea/ui/components/badge"
 import { Button } from "@linea/ui/components/button"
 import { Skeleton } from "@linea/ui/components/skeleton"
+=======
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
+import { useQuery } from '@tanstack/react-query';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Tick01Icon, Loading01Icon } from '@hugeicons/core-free-icons';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { createApiClient, friendlyApiError } from '@/lib/api';
+import { Badge } from '@linea/ui/components/badge';
+import { Button } from '@linea/ui/components/button';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { PageSpinner } from '@linea/ui/components/page-spinner';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
-/* ─── Types ─────────────────────────────────────────────────────────── */
 interface PlanInfo {
   key: string
   label: string
@@ -28,7 +42,6 @@ interface PlansResponse {
   currentPlan: string
 }
 
-/* ─── Static catalogue (used as fallback if API is down) ────────────── */
 const FALLBACK_PLANS: PlanInfo[] = [
   {
     key: "pro",
@@ -75,6 +88,7 @@ const PLAN_LIMITS: Record<
   },
 }
 
+<<<<<<< HEAD
 /* ─── Component ─────────────────────────────────────────────────────── */
 export default function BillingPage() {
   const { getToken } = useAuth()
@@ -82,6 +96,14 @@ export default function BillingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const wsId = activeWorkspace?.id ?? ""
+=======
+function BillingPageInner() {
+  const { getToken } = useAuth();
+  const { activeWorkspace } = useWorkspace();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const wsId = activeWorkspace?.id ?? '';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const [paying, setPaying] = useState<string | null>(null)
   const [payError, setPayError] = useState<string | null>(null)
@@ -144,7 +166,6 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Success banner */}
       {successPlan && (
         <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
           <HugeiconsIcon
@@ -162,15 +183,18 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Error */}
       {payError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {payError}
         </div>
       )}
 
+<<<<<<< HEAD
       {/* Current plan */}
       <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+=======
+      <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[10px] font-medium tracking-widest text-muted-foreground uppercase">
@@ -204,8 +228,12 @@ export default function BillingPage() {
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Upgrade plans */}
       {currentPlan !== "enterprise" && (
+=======
+      {currentPlan !== 'enterprise' && (
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="space-y-3">
           <p className="text-sm font-semibold">Upgrade your plan</p>
 
@@ -296,8 +324,12 @@ export default function BillingPage() {
         </div>
       )}
 
+<<<<<<< HEAD
       {/* Enterprise CTA */}
       <div className="space-y-3 rounded-xl border border-dashed border-border p-6 text-center">
+=======
+      <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-3">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <p className="text-sm font-semibold">Need Enterprise?</p>
         <p className="mx-auto max-w-sm text-xs text-muted-foreground">
           Unlimited executions, SSO, audit logs, dedicated support, and custom
@@ -308,7 +340,6 @@ export default function BillingPage() {
         </Button>
       </div>
 
-      {/* Powered by Polar */}
       <p className="text-center text-[10px] text-muted-foreground/50">
         Payments powered by{" "}
         <a
@@ -322,4 +353,12 @@ export default function BillingPage() {
       </p>
     </div>
   )
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<PageSpinner />}>
+      <BillingPageInner />
+    </Suspense>
+  );
 }

@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useMemo, useState } from "react"
 import { useParams } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
@@ -12,6 +13,21 @@ import { Switch } from "@linea/ui/components/switch"
 import { Badge } from "@linea/ui/components/badge"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { Separator } from "@linea/ui/components/separator"
+=======
+import { useCallback, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useApiClient } from '@/hooks/use-api-client';
+import { unwrapList } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { Button } from '@linea/ui/components/button';
+import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
+import { Switch } from '@linea/ui/components/switch';
+import { Badge } from '@linea/ui/components/badge';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { Separator } from '@linea/ui/components/separator';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -107,6 +123,7 @@ function formatRelative(iso: string | null): string {
 }
 
 export default function SchedulesPage() {
+<<<<<<< HEAD
   const { podId } = useParams<{ podId: string }>()
   const { getToken } = useAuth()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
@@ -158,6 +175,41 @@ export default function SchedulesPage() {
     }
     void load()
   }, [activeWorkspace, wsLoading, podId])
+=======
+  const { podId } = useParams<{ podId: string }>();
+  const getApi = useApiClient();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Schedule | null>(null);
+  const [form, setForm] = useState<FormState>(BLANK);
+  const [inputPairs, setInputPairs] = useState<InputPair[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<Schedule | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
+  const [page, setPage] = useState(1);
+
+  const { data: schedules = [], isLoading: loading } = useQuery<Schedule[]>({
+    queryKey: ['schedules', wsId, podId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const sched = await api.get<Schedule[]>(`/workspaces/${wsId}/pods/${podId}/schedules`);
+      return Array.isArray(sched) ? sched : [];
+    },
+  });
+
+  const { data: workflows = [] } = useQuery<Workflow[]>({
+    queryKey: ['workflows', wsId, podId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const result = await api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${podId}/workflows`);
+      return unwrapList(result, 'workflows');
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function openCreate() {
     setEditTarget(null)
@@ -178,6 +230,7 @@ export default function SchedulesPage() {
     setDialogOpen(true)
   }
 
+<<<<<<< HEAD
   async function handleSave() {
     if (!activeWorkspace || !form.cronExpr.trim()) return
     setSaving(true)
@@ -186,12 +239,19 @@ export default function SchedulesPage() {
       if (!token) return
       const api = createApiClient(token)
       const base = `/workspaces/${activeWorkspace.id}/pods/${podId}/schedules`
+=======
+  const saveSchedule = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      const base = `/workspaces/${wsId}/pods/${podId}/schedules`;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       const input = Object.fromEntries(
         inputPairs
           .filter((p) => p.key.trim())
           .map((p) => [p.key.trim(), p.value])
       )
       if (editTarget) {
+<<<<<<< HEAD
         const updated = await api.patch<Schedule>(`${base}/${editTarget.id}`, {
           cronExpr: form.cronExpr.trim(),
           input,
@@ -254,6 +314,51 @@ export default function SchedulesPage() {
   function workflowName(id: string) {
     return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + "…"
   }
+=======
+        return api.patch<Schedule>(`${base}/${editTarget.id}`, { cronExpr: form.cronExpr.trim(), input });
+      }
+      if (!form.workflowId) throw new Error('No workflow selected');
+      return api.post<Schedule>(base, {
+        workflowId: form.workflowId,
+        cronExpr: form.cronExpr.trim(),
+        input,
+        enabled: true,
+      });
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<Schedule[]>(['schedules', wsId, podId], (prev = []) =>
+        editTarget ? prev.map((s) => (s.id === result.id ? result : s)) : [result, ...prev]);
+      setDialogOpen(false);
+    },
+  });
+
+  const toggleSchedule = useMutation({
+    mutationFn: async (schedule: Schedule) => {
+      const api = await getApi();
+      return api.patch<Schedule>(`/workspaces/${wsId}/pods/${podId}/schedules/${schedule.id}`, { enabled: !schedule.enabled });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Schedule[]>(['schedules', wsId, podId], (prev = []) =>
+        prev.map((s) => (s.id === updated.id ? updated : s)));
+    },
+  });
+
+  const deleteSchedule = useMutation({
+    mutationFn: async (schedule: Schedule) => {
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/pods/${podId}/schedules/${schedule.id}`);
+      return schedule.id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Schedule[]>(['schedules', wsId, podId], (prev = []) => prev.filter((s) => s.id !== id));
+      setDeleteConfirm(null);
+    },
+  });
+
+  const workflowName = useCallback((id: string) => {
+    return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + '…';
+  }, [workflows]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const filtered = useMemo(() => {
     let list = schedules
@@ -266,9 +371,14 @@ export default function SchedulesPage() {
         workflowName(s.workflowId).toLowerCase().includes(q)
       )
     }
+<<<<<<< HEAD
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, workflows, statusFilter, search])
+=======
+    return list;
+  }, [schedules, workflows, statusFilter, search, workflowName]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -288,7 +398,6 @@ export default function SchedulesPage() {
         </Button>
       </div>
 
-      {/* Search + filter bar */}
       {!loading && !wsLoading && schedules.length > 0 && (
         <div className="flex items-center gap-2">
           <div className="relative max-w-xs flex-1">
@@ -362,8 +471,8 @@ export default function SchedulesPage() {
             >
               <Switch
                 checked={s.enabled}
-                disabled={toggling === s.id}
-                onCheckedChange={() => void handleToggle(s)}
+                disabled={toggleSchedule.isPending && toggleSchedule.variables?.id === s.id}
+                onCheckedChange={() => toggleSchedule.mutate(s)}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -416,7 +525,6 @@ export default function SchedulesPage() {
               </div>
             </div>
           ))}
-          {/* Pagination */}
           {filtered.length > PAGE_SIZE && (
             <div className="flex items-center justify-between border-t border-border px-1 pt-3">
               <span className="text-xs text-muted-foreground">
@@ -585,6 +693,7 @@ export default function SchedulesPage() {
               Cancel
             </Button>
             <Button
+<<<<<<< HEAD
               onClick={() => void handleSave()}
               disabled={
                 (!editTarget && !form.workflowId) ||
@@ -593,15 +702,25 @@ export default function SchedulesPage() {
               }
             >
               {saving ? "Saving…" : editTarget ? "Update" : "Add schedule"}
+=======
+              onClick={() => saveSchedule.mutate()}
+              disabled={(!editTarget && !form.workflowId) || !form.cronExpr.trim() || saveSchedule.isPending}
+            >
+              {saveSchedule.isPending ? 'Saving…' : editTarget ? 'Update' : 'Add schedule'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+<<<<<<< HEAD
       {/* Delete confirm */}
       <Dialog
         open={!!deleteConfirm}
         onOpenChange={(o) => !o && setDeleteConfirm(null)}
       >
+=======
+      <Dialog open={!!deleteConfirm} onOpenChange={(o) => !o && setDeleteConfirm(null)}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete schedule?</DialogTitle>
@@ -618,10 +737,14 @@ export default function SchedulesPage() {
             </Button>
             <Button
               variant="destructive"
-              disabled={deleting === deleteConfirm?.id}
-              onClick={() => deleteConfirm && void handleDelete(deleteConfirm)}
+              disabled={deleteSchedule.isPending && deleteSchedule.variables?.id === deleteConfirm?.id}
+              onClick={() => deleteConfirm && deleteSchedule.mutate(deleteConfirm)}
             >
+<<<<<<< HEAD
               {deleting ? "Deleting…" : "Delete"}
+=======
+              {deleteSchedule.isPending ? 'Deleting…' : 'Delete'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             </Button>
           </DialogFooter>
         </DialogContent>

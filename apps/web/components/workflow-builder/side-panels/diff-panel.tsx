@@ -1,10 +1,16 @@
 "use client"
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/diff-panel.tsx
 import { useState, useEffect, useMemo } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
+=======
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Spinner } from '@linea/ui/components/spinner';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/diff-panel.tsx
 import {
   Cancel01Icon,
-  Loading01Icon,
   CheckmarkCircle01Icon,
   Add01Icon,
   Delete01Icon,
@@ -16,11 +22,19 @@ import {
   useReactFlow,
   type Node,
   type Edge,
+<<<<<<< HEAD:apps/web/components/workflow-builder/diff-panel.tsx
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import { Dialog, DialogContent, DialogTitle } from "@linea/ui/components/dialog"
 import { createApiClient } from "@/lib/api"
 import { nodeTypes } from "./nodes/node-types"
+=======
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { Dialog, DialogContent, DialogTitle } from '@linea/ui/components/dialog';
+import { useApiClient } from '@/hooks/use-api-client';
+import { nodeTypes } from '../nodes/node-types';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/diff-panel.tsx
 
 type DiffStatus = "added" | "removed" | "changed" | "unchanged"
 
@@ -162,7 +176,6 @@ function computeDiff(
   }
 }
 
-/* ---- Fit-on-load inner canvas -------------------------------- */
 function DiffCanvas({ nodes, edges }: { nodes: Node[]; edges: Edge[] }) {
   const { fitView } = useReactFlow()
   useEffect(() => {
@@ -188,8 +201,8 @@ function DiffCanvas({ nodes, edges }: { nodes: Node[]; edges: Edge[] }) {
   )
 }
 
-/* ---- Main component ------------------------------------------ */
 interface DiffPanelProps {
+<<<<<<< HEAD:apps/web/components/workflow-builder/diff-panel.tsx
   workspaceId: string
   podId: string
   workflowId: string
@@ -241,6 +254,43 @@ export function DiffPanel({
       setLoading(false)
     }
   }
+=======
+  workspaceId: string;
+  podId: string;
+  workflowId: string;
+  currentNodes: Node[];
+  currentEdges: Edge[];
+  targetVersion: number;
+  onClose: () => void;
+}
+
+export function DiffPanel({
+  workspaceId, podId, workflowId,
+  currentNodes, currentEdges,
+  targetVersion, onClose,
+}: DiffPanelProps) {
+  const getApi = useApiClient();
+  const { data: versionDef, isLoading: loading, error: fetchError } = useQuery({
+    queryKey: ['workflow-version-diff', workspaceId, podId, workflowId, targetVersion],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<{ definition: { nodes: RawNode[]; edges: RawEdge[] } }>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/versions/${targetVersion}`,
+      );
+    },
+  });
+
+  const error = fetchError ? 'Failed to load version data.' : null;
+
+  const diff: DiffResult | null = useMemo(() => {
+    if (!versionDef) return null;
+    return computeDiff(
+      currentNodes, currentEdges,
+      versionDef.definition?.nodes ?? [],
+      versionDef.definition?.edges ?? [],
+    );
+  }, [versionDef, currentNodes, currentEdges]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/diff-panel.tsx
 
   const rfNodes: Node[] = useMemo(() => {
     if (!diff) return []
@@ -265,6 +315,7 @@ export function DiffPanel({
     diff.removedEdges === 0
 
   return (
+<<<<<<< HEAD:apps/web/components/workflow-builder/diff-panel.tsx
     <Dialog
       open
       onOpenChange={(o) => {
@@ -274,6 +325,11 @@ export function DiffPanel({
       <DialogContent className="flex h-[90vh] max-w-[96vw] gap-0 overflow-hidden p-0 sm:max-w-[96vw]">
         {/* Left sidebar */}
         <div className="flex w-56 shrink-0 flex-col border-r border-border bg-background">
+=======
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-[96vw] sm:max-w-[96vw] h-[90vh] p-0 flex overflow-hidden gap-0">
+        <div className="w-56 shrink-0 border-r border-border flex flex-col bg-background">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/diff-panel.tsx
           <div className="shrink-0 border-b border-border px-3 py-2.5">
             <DialogTitle className="text-sm leading-tight font-semibold">
               Compare versions
@@ -283,8 +339,12 @@ export function DiffPanel({
             </p>
           </div>
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/diff-panel.tsx
           <div className="flex-1 space-y-4 overflow-auto p-3">
             {/* Legend */}
+=======
+          <div className="flex-1 overflow-auto p-3 space-y-4">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/diff-panel.tsx
             <div className="space-y-1.5">
               <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
                 Legend
@@ -305,7 +365,6 @@ export function DiffPanel({
               ))}
             </div>
 
-            {/* Summary counts */}
             {diff && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
@@ -381,7 +440,6 @@ export function DiffPanel({
               </div>
             )}
 
-            {/* Changed node list */}
             {diff && !isClean && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
@@ -429,10 +487,13 @@ export function DiffPanel({
           </div>
         </div>
 
-        {/* Canvas area */}
         <div className="relative flex-1">
+<<<<<<< HEAD:apps/web/components/workflow-builder/diff-panel.tsx
           {/* Header bar */}
           <div className="absolute top-0 right-0 left-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-3 py-1.5 backdrop-blur-sm">
+=======
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-3 py-1.5 backdrop-blur-sm">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/diff-panel.tsx
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span className="size-2 rounded-full bg-foreground/50" />
@@ -452,14 +513,17 @@ export function DiffPanel({
             </button>
           </div>
 
-          {/* Canvas */}
           <div className="absolute inset-0 pt-9">
             {loading && (
               <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
+<<<<<<< HEAD:apps/web/components/workflow-builder/diff-panel.tsx
                 <HugeiconsIcon
                   icon={Loading01Icon}
                   className="size-4 animate-spin"
                 />
+=======
+                <Spinner className="size-4" />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/diff-panel.tsx
                 Loading v{targetVersion}...
               </div>
             )}

@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useRef, useState } from "react"
 import { useParams } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
@@ -236,6 +237,38 @@ export default function KnowledgeBaseDetailPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<Entry[] | null>(null)
   const [searching, setSearching] = useState(false)
+=======
+import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { useApiClient } from '@/hooks/use-api-client';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { Badge } from '@linea/ui/components/badge';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ArrowLeft01Icon } from '@hugeicons/core-free-icons';
+import { KbIngestPanel } from './kb-ingest-panel';
+import { KbEntriesList } from './kb-entries-list';
+import type { KnowledgeBase, Entry } from './kb-types';
+
+type IngestTab = 'text' | 'file' | 'website';
+type WebsitePhase = 'input' | 'discovering' | 'select' | 'ingesting';
+
+export default function KnowledgeBaseDetailPage() {
+  const { kbId } = useParams<{ kbId: string }>();
+  const getApi = useApiClient();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const router = useRouter();
+  const wsId = activeWorkspace?.id ?? '';
+  const kbKey = ['knowledge-base', wsId, kbId];
+
+  // Lifted so the entries list's "Re-crawl" action can jump the ingest panel to the website tab
+  const [ingestTab, setIngestTab] = useState<IngestTab>('text');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [websitePhase, setWebsitePhase] = useState<WebsitePhase>('input');
+  const [discoveredUrls, setDiscoveredUrls] = useState<string[]>([]);
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function handleRecrawl(url: string) {
     setIngestTab("website")
@@ -245,6 +278,7 @@ export default function KnowledgeBaseDetailPage() {
     setSelectedUrls(new Set())
   }
 
+<<<<<<< HEAD
   // Poll status for any entries that are still pending/embedding
   useEffect(() => {
     const inflight = entries.filter(
@@ -575,6 +609,31 @@ export default function KnowledgeBaseDetailPage() {
       setSearching(false)
     }
   }
+=======
+  const { data: kb = null, isLoading: kbLoading } = useQuery<KnowledgeBase>({
+    queryKey: kbKey,
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<KnowledgeBase>(`/workspaces/${wsId}/knowledge-bases/${kbId}`);
+    },
+  });
+
+  const { data: entries = [], isLoading: entriesLoading } = useQuery<Entry[]>({
+    queryKey: ['knowledge-base-entries', wsId, kbId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Entry[]>(`/workspaces/${wsId}/knowledge-bases/${kbId}/entries`);
+    },
+    refetchInterval: (query) => {
+      const list = query.state.data ?? [];
+      return list.some((e) => e.status === 'pending' || e.status === 'embedding') ? 3000 : false;
+    },
+  });
+
+  const loading = kbLoading || entriesLoading;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   if (loading || wsLoading) {
     return (
@@ -591,6 +650,7 @@ export default function KnowledgeBaseDetailPage() {
       <p className="text-sm text-muted-foreground">Knowledge base not found.</p>
     )
 
+<<<<<<< HEAD
   const displayEntries = searchResults ?? entries
 
   const TABS: Array<{
@@ -623,6 +683,11 @@ export default function KnowledgeBaseDetailPage() {
     // -m-6 breaks out of the layout's p-6 wrapper so the two-column UI fills edge-to-edge
     <div className="-m-6 flex flex-col" style={{ height: "calc(100% + 3rem)" }}>
       {/* Header */}
+=======
+  return (
+    // -m-6 breaks out of the layout's p-6 wrapper so the two-column UI fills edge-to-edge
+    <div className="-m-6 flex flex-col" style={{ height: 'calc(100% + 3rem)' }}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       <div className="shrink-0 border-b border-border px-6 py-4">
         <div className="mb-0.5 flex items-center gap-3">
           <button
@@ -643,6 +708,7 @@ export default function KnowledgeBaseDetailPage() {
         )}
       </div>
 
+<<<<<<< HEAD
       {/* Body — two-column */}
       <div className="flex min-h-0 flex-1">
         {/* Left: Ingest panel */}
@@ -1156,6 +1222,29 @@ export default function KnowledgeBaseDetailPage() {
             )}
           </div>
         </div>
+=======
+      <div className="flex flex-1 min-h-0">
+        <KbIngestPanel
+          wsId={wsId}
+          kbId={kbId}
+          ingestTab={ingestTab}
+          setIngestTab={setIngestTab}
+          websiteUrl={websiteUrl}
+          setWebsiteUrl={setWebsiteUrl}
+          websitePhase={websitePhase}
+          setWebsitePhase={setWebsitePhase}
+          discoveredUrls={discoveredUrls}
+          setDiscoveredUrls={setDiscoveredUrls}
+          selectedUrls={selectedUrls}
+          setSelectedUrls={setSelectedUrls}
+        />
+        <KbEntriesList
+          entries={entries}
+          wsId={wsId}
+          kbId={kbId}
+          onRecrawl={handleRecrawl}
+        />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       </div>
     </div>
   )

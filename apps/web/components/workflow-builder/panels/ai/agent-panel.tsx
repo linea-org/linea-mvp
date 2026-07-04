@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/agent-panel.tsx
 import { useRef, useState, useEffect, useCallback } from "react"
 import type { Node } from "@xyflow/react"
 import { Switch } from "@linea/ui/components/switch"
@@ -10,6 +11,18 @@ import { Input } from "@linea/ui/components/input"
 import { VariableChips } from "../variable-picker"
 import { ModelPicker } from "../model-picker"
 import { cn } from "@linea/ui/lib/utils"
+=======
+import { useRef, useState, useCallback } from 'react';
+import type { Node } from '@xyflow/react';
+import { Switch } from '@linea/ui/components/switch';
+import { Textarea } from '@linea/ui/components/textarea';
+import { Label } from '@linea/ui/components/label';
+import { Separator } from '@linea/ui/components/separator';
+import { Input } from '@linea/ui/components/input';
+import { VariableChips } from '../../variable-picker';
+import { ModelPicker } from '../../model-picker';
+import { cn } from '@linea/ui/lib/utils';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/ai/agent-panel.tsx
 
 interface AgentPanelProps {
   data: Record<string, unknown>
@@ -81,7 +94,6 @@ const APPROVAL_TAG_LABELS: Record<string, string> = {
   always: "always approved",
 }
 
-/* ─── Slash command menu ─────────────────────────────────────────── */
 interface SlashCmd {
   label: string
   insert: string
@@ -137,7 +149,6 @@ function buildSlashCommands(nodes: Node[], currentNodeId?: string): SlashCmd[] {
   return [...base, ...nodeRefs]
 }
 
-/* ─── Rich instructions textarea ────────────────────────────────── */
 interface RichTextareaProps {
   value: string
   onChange: (v: string) => void
@@ -170,6 +181,7 @@ function RichTextarea({
       )
     : allCmds
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/agent-panel.tsx
   function closeMenu() {
     setSlashOpen(false)
     setSlashQuery("")
@@ -211,6 +223,45 @@ function RichTextarea({
     },
     [slashOpen, filtered, slashIdx]
   )
+=======
+  const closeMenu = useCallback(() => {
+    setSlashOpen(false);
+    setSlashQuery('');
+    setSlashIdx(0);
+  }, []);
+
+  const insertCommand = useCallback((cmd: SlashCmd) => {
+    const el = ref.current;
+    if (!el) return;
+    const before = value.slice(0, slashPos - 1); // remove the '/'
+    const after = value.slice(el.selectionStart ?? slashPos);
+    const next = before + cmd.insert + after;
+    onChange(next);
+    closeMenu();
+    requestAnimationFrame(() => {
+      const pos = before.length + cmd.insert.length;
+      el.selectionStart = el.selectionEnd = pos;
+      el.focus();
+    });
+  }, [value, slashPos, onChange, closeMenu]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!slashOpen) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSlashIdx((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSlashIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      if (filtered[slashIdx]) insertCommand(filtered[slashIdx]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMenu();
+    }
+  }, [slashOpen, filtered, slashIdx, insertCommand, closeMenu]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/ai/agent-panel.tsx
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value
@@ -227,9 +278,16 @@ function RichTextarea({
       setSlashIdx(0)
     } else if (slashOpen) {
       // Update query: everything typed since the '/'
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/agent-panel.tsx
       const afterSlash = next.slice(slashPos, caret)
       if (/\s/.test(afterSlash) || caret < slashPos) {
         closeMenu()
+=======
+      const afterSlash = next.slice(slashPos, caret);
+      const nextFiltered = allCmds.filter((c) => c.label.toLowerCase().includes(afterSlash.toLowerCase()) || c.desc.toLowerCase().includes(afterSlash.toLowerCase()));
+      if (/\s/.test(afterSlash) || caret < slashPos || nextFiltered.length === 0) {
+        closeMenu();
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/ai/agent-panel.tsx
       } else {
         setSlashQuery(afterSlash)
         setSlashIdx(0)
@@ -251,11 +309,14 @@ function RichTextarea({
     reader.readAsText(file)
   }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/agent-panel.tsx
   useEffect(() => {
     if (slashOpen && filtered.length === 0) closeMenu()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered.length, slashOpen])
 
+=======
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/ai/agent-panel.tsx
   return (
     <div className="relative">
       <Textarea
@@ -319,6 +380,7 @@ function RichTextarea({
   )
 }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/agent-panel.tsx
 /* ─── Main panel ─────────────────────────────────────────────────── */
 export function AgentPanel({
   data,
@@ -330,6 +392,13 @@ export function AgentPanel({
   const instructions = (data.instructions as string) ?? ""
   const systemPrompt = (data.systemPrompt as string) ?? ""
   const enabledTools = (data.tools as string[]) ?? []
+=======
+export function AgentPanel({ data, onUpdate, nodes = [], nodeId }: AgentPanelProps) {
+  const instrRef = useRef<HTMLTextAreaElement>(null);
+  const instructions = (data.instructions as string) ?? '';
+  const systemPrompt = (data.systemPrompt as string) ?? '';
+  const enabledTools = (data.tools as string[]) ?? [];
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/ai/agent-panel.tsx
 
   function toggleTool(name: string, enabled: boolean) {
     const next = enabled
@@ -468,7 +537,6 @@ export function AgentPanel({
 
       <Separator />
 
-      {/* ── Tools ───────────────────────────────────────────────────── */}
       <div className="space-y-2">
         <div>
           <Label>Tools</Label>

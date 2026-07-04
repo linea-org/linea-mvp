@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/mcp-panel.tsx
 import { useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
 import { useWorkspace } from "@/contexts/workspace-context"
@@ -14,6 +15,15 @@ import {
   SelectValue,
 } from "@linea/ui/components/select"
 import { Label } from "@linea/ui/components/label"
+=======
+import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { Input } from '@linea/ui/components/input';
+import { Textarea } from '@linea/ui/components/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
+import { Label } from '@linea/ui/components/label';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/integrations/mcp-panel.tsx
 
 interface McpPanelProps {
   data: Record<string, unknown>
@@ -34,6 +44,7 @@ const OUTPUT_OPTIONS = [
 ]
 
 export function McpPanel({ data, onUpdate }: McpPanelProps) {
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/mcp-panel.tsx
   const { getToken } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const [servers, setServers] = useState<McpServer[]>([])
@@ -55,6 +66,20 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
     }
     void load()
   }, [activeWorkspace, getToken])
+=======
+  const getApi = useApiClient();
+  const { activeWorkspace } = useWorkspace();
+
+  const { data: servers = [] } = useQuery<McpServer[]>({
+    queryKey: ['mcp-servers', activeWorkspace?.id],
+    enabled: !!activeWorkspace,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<McpServer[]>(`/workspaces/${activeWorkspace!.id}/mcp-servers`);
+    },
+  });
+
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/integrations/mcp-panel.tsx
 
   const selectedServerId = (data.mcpServerId as string) ?? ""
 

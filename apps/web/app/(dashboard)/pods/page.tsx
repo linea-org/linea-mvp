@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
@@ -10,6 +11,18 @@ import { Button } from "@linea/ui/components/button"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
+=======
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { usePod } from '@/contexts/space-context';
+import { Button } from '@linea/ui/components/button';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -77,11 +90,14 @@ function PodCard({
       className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-card transition-all duration-150 hover:border-border/80 hover:shadow-sm"
       onClick={onOpen}
     >
-      {/* Colored top strip */}
       <div className="h-1 w-full shrink-0" style={{ backgroundColor: color }} />
 
+<<<<<<< HEAD
       <div className="flex flex-1 flex-col gap-3 p-4">
         {/* Header row */}
+=======
+      <div className="flex flex-col gap-3 p-4 flex-1">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-3">
             <span
@@ -131,7 +147,6 @@ function PodCard({
           </DropdownMenu>
         </div>
 
-        {/* Description */}
         {pod.description ? (
           <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
             {pod.description}
@@ -142,8 +157,12 @@ function PodCard({
           </p>
         )}
 
+<<<<<<< HEAD
         {/* Footer */}
         <div className="mt-auto flex items-center justify-between pt-1">
+=======
+        <div className="flex items-center justify-between mt-auto pt-1">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           <p className="text-[11px] text-muted-foreground">
             Created{" "}
             {new Date(pod.createdAt).toLocaleDateString(undefined, {
@@ -162,6 +181,7 @@ function PodCard({
 }
 
 export default function PodsPage() {
+<<<<<<< HEAD
   const { getToken } = useAuth()
   const {
     workspaces,
@@ -296,6 +316,95 @@ export default function PodsPage() {
       setCreatingPod(false)
     }
   }
+=======
+  const getApi = useApiClient();
+  const { workspaces, activeWorkspace, addWorkspace, loading: wsLoading } = useWorkspace();
+  const { setActivePod, reload: reloadPodCtx } = usePod();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
+
+  const [podDialogOpen, setPodDialogOpen] = useState(false);
+  const [podName, setPodName] = useState('');
+  const [podDesc, setPodDesc] = useState('');
+
+  const [wsDialogOpen, setWsDialogOpen] = useState(false);
+  const [wsName, setWsName] = useState('');
+
+  const [editPod, setEditPod] = useState<Pod | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [deletePod, setDeletePod] = useState<Pod | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  const { data: pods = [], isLoading: loading } = useQuery<Pod[]>({
+    queryKey: ['pods', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Pod[]>(`/workspaces/${wsId}/pods`);
+    },
+  });
+
+  const createWorkspace = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<{ id: string; name: string; slug: string; plan: string }>('/workspaces', { name: wsName.trim() });
+    },
+    onSuccess: (ws) => {
+      addWorkspace(ws);
+      setWsDialogOpen(false);
+      setWsName('');
+    },
+  });
+
+  const editPodMutation = useMutation({
+    mutationFn: async () => {
+      if (!editPod) throw new Error('No pod selected');
+      const api = await getApi();
+      return api.patch<Pod>(`/workspaces/${wsId}/pods/${editPod.id}`, {
+        name: editName.trim(),
+        description: editDesc.trim() || null,
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Pod[]>(['pods', wsId], (prev = []) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setEditPod(null);
+    },
+  });
+
+  const deletePodMutation = useMutation({
+    mutationFn: async () => {
+      if (!deletePod) throw new Error('No pod selected');
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/pods/${deletePod.id}`);
+      return deletePod.id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Pod[]>(['pods', wsId], (prev = []) => prev.filter((p) => p.id !== id));
+      setDeletePod(null);
+    },
+  });
+
+  const createPod = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<Pod>(`/workspaces/${wsId}/pods`, {
+        name: podName.trim(),
+        description: podDesc.trim() || undefined,
+      });
+    },
+    onSuccess: (pod) => {
+      queryClient.setQueryData<Pod[]>(['pods', wsId], (prev = []) => [...prev, pod]);
+      reloadPodCtx();
+      setPodDialogOpen(false);
+      setPodName('');
+      setPodDesc('');
+      setActivePod(pod);
+      router.push(`/pods/${pod.id}/workflows`);
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   if (wsLoading || loading) {
     return (
@@ -345,13 +454,18 @@ export default function PodsPage() {
                 placeholder="My company"
                 value={wsName}
                 onChange={(e) => setWsName(e.target.value)}
+<<<<<<< HEAD
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleCreateWorkspace()
                 }}
+=======
+                onKeyDown={(e) => { if (e.key === 'Enter') createWorkspace.mutate(); }}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 autoFocus
               />
             </div>
             <DialogFooter>
+<<<<<<< HEAD
               <Button variant="outline" onClick={() => setWsDialogOpen(false)}>
                 Cancel
               </Button>
@@ -360,6 +474,11 @@ export default function PodsPage() {
                 disabled={!wsName.trim() || creatingWs}
               >
                 {creatingWs ? "Creating…" : "Create"}
+=======
+              <Button variant="outline" onClick={() => setWsDialogOpen(false)}>Cancel</Button>
+              <Button onClick={() => createWorkspace.mutate()} disabled={!wsName.trim() || createWorkspace.isPending}>
+                {createWorkspace.isPending ? 'Creating…' : 'Create'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -434,6 +553,7 @@ export default function PodsPage() {
         </div>
       )}
 
+<<<<<<< HEAD
       {/* Edit dialog */}
       <Dialog
         open={!!editPod}
@@ -441,6 +561,9 @@ export default function PodsPage() {
           if (!o) setEditPod(null)
         }}
       >
+=======
+      <Dialog open={!!editPod} onOpenChange={(o) => { if (!o) setEditPod(null); }}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit pod</DialogTitle>
@@ -464,6 +587,7 @@ export default function PodsPage() {
             </div>
           </div>
           <DialogFooter>
+<<<<<<< HEAD
             <Button variant="outline" onClick={() => setEditPod(null)}>
               Cancel
             </Button>
@@ -472,11 +596,17 @@ export default function PodsPage() {
               disabled={!editName.trim() || savingEdit}
             >
               {savingEdit ? "Saving…" : "Save"}
+=======
+            <Button variant="outline" onClick={() => setEditPod(null)}>Cancel</Button>
+            <Button onClick={() => editPodMutation.mutate()} disabled={!editName.trim() || editPodMutation.isPending}>
+              {editPodMutation.isPending ? 'Saving…' : 'Save'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+<<<<<<< HEAD
       {/* Delete confirm — Vercel-style name confirmation */}
       <Dialog
         open={!!deletePod}
@@ -484,6 +614,9 @@ export default function PodsPage() {
           if (!deleting && !o) setDeletePod(null)
         }}
       >
+=======
+      <Dialog open={!!deletePod} onOpenChange={(o) => { if (!deletePodMutation.isPending && !o) setDeletePod(null); }}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-destructive">Delete pod</DialogTitle>
@@ -509,11 +642,15 @@ export default function PodsPage() {
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 onKeyDown={(e) => {
+<<<<<<< HEAD
                   if (
                     e.key === "Enter" &&
                     deleteConfirmText === deletePod?.name
                   )
                     void handleDeletePod()
+=======
+                  if (e.key === 'Enter' && deleteConfirmText === deletePod?.name) deletePodMutation.mutate();
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 }}
                 autoFocus
                 className="font-mono"
@@ -521,25 +658,32 @@ export default function PodsPage() {
             </div>
           </div>
           <DialogFooter>
+<<<<<<< HEAD
             <Button
               variant="outline"
               onClick={() => setDeletePod(null)}
               disabled={deleting}
             >
+=======
+            <Button variant="outline" onClick={() => setDeletePod(null)} disabled={deletePodMutation.isPending}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => void handleDeletePod()}
-              disabled={deleteConfirmText !== deletePod?.name || deleting}
+              onClick={() => deletePodMutation.mutate()}
+              disabled={deleteConfirmText !== deletePod?.name || deletePodMutation.isPending}
             >
+<<<<<<< HEAD
               {deleting ? "Deleting…" : "Delete pod"}
+=======
+              {deletePodMutation.isPending ? 'Deleting…' : 'Delete pod'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Create dialog */}
       <Dialog open={podDialogOpen} onOpenChange={setPodDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -553,9 +697,13 @@ export default function PodsPage() {
                 placeholder="My pod"
                 value={podName}
                 onChange={(e) => setPodName(e.target.value)}
+<<<<<<< HEAD
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleCreatePod()
                 }}
+=======
+                onKeyDown={(e) => { if (e.key === 'Enter') createPod.mutate(); }}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 autoFocus
               />
             </div>
@@ -570,6 +718,7 @@ export default function PodsPage() {
             </div>
           </div>
           <DialogFooter>
+<<<<<<< HEAD
             <Button variant="outline" onClick={() => setPodDialogOpen(false)}>
               Cancel
             </Button>
@@ -578,6 +727,11 @@ export default function PodsPage() {
               disabled={!podName.trim() || creatingPod}
             >
               {creatingPod ? "Creating…" : "Create"}
+=======
+            <Button variant="outline" onClick={() => setPodDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => createPod.mutate()} disabled={!podName.trim() || createPod.isPending}>
+              {createPod.isPending ? 'Creating…' : 'Create'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             </Button>
           </DialogFooter>
         </DialogContent>

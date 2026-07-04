@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
 import { useWorkspace } from "@/contexts/workspace-context"
@@ -168,8 +169,75 @@ export default function ModelPreferencesPage() {
       setLoading(false)
     }
   }
+=======
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { Button } from '@linea/ui/components/button';
+import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
+import { Skeleton } from '@linea/ui/components/skeleton';
 
+interface WorkspaceSettings {
+  ragSimilarityThreshold?: number;
+  ragChunkSize?: number;
+  ragChunkOverlap?: number;
+  supervisorModel?: string;
+}
+
+interface ModelsFormValues {
+  ragThreshold: string;
+  ragChunkSize: string;
+  ragChunkOverlap: string;
+  supervisorModel: string;
+}
+
+interface ModelDefinition {
+  id: string;
+  name: string;
+  provider: string;
+  status?: 'production' | 'preview' | 'deprecated';
+}
+
+export default function ModelPreferencesPage() {
+  const getApi = useApiClient();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const wsId = activeWorkspace?.id ?? '';
+
+  const [saved, setSaved] = useState(false);
+
+  const { register, handleSubmit, reset } = useForm<ModelsFormValues>({
+    defaultValues: {
+      ragThreshold: '0.75',
+      ragChunkSize: '1000',
+      ragChunkOverlap: '200',
+      supervisorModel: 'claude-haiku-4-5',
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+
+  const { data: settings, isLoading: loading } = useQuery<WorkspaceSettings>({
+    queryKey: ['workspace-settings', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<WorkspaceSettings>(`/workspaces/${wsId}/settings`);
+    },
+  });
+
+  const { data: ALL_MODELS = [], isLoading: modelsLoading } = useQuery<ModelDefinition[]>({
+    queryKey: ['models'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ModelDefinition[]>('/models');
+    },
+  });
+
+  const [syncedWsId, setSyncedWsId] = useState<string | null>(null);
   useEffect(() => {
+<<<<<<< HEAD
     if (wsLoading) return
     if (!activeWorkspace) {
       setLoading(false)
@@ -227,8 +295,35 @@ export default function ModelPreferencesPage() {
       setSaving(false)
     }
   }
+=======
+    if (!settings || wsId === syncedWsId) return;
+    setSyncedWsId(wsId);
+    reset({
+      ragThreshold: String(settings.ragSimilarityThreshold ?? 0.75),
+      ragChunkSize: String(settings.ragChunkSize ?? 1000),
+      ragChunkOverlap: String(settings.ragChunkOverlap ?? 200),
+      supervisorModel: settings.supervisorModel ?? 'claude-haiku-4-5',
+    });
+  }, [settings, wsId, syncedWsId, reset]);
 
-  if (wsLoading || loading) {
+  const saveSettings = useMutation({
+    mutationFn: async (values: ModelsFormValues) => {
+      const api = await getApi();
+      await api.patch(`/workspaces/${wsId}/settings`, {
+        ragSimilarityThreshold: parseFloat(values.ragThreshold) || 0.75,
+        ragChunkSize: parseInt(values.ragChunkSize, 10) || 1000,
+        ragChunkOverlap: parseInt(values.ragChunkOverlap, 10) || 200,
+        supervisorModel: values.supervisorModel || 'claude-haiku-4-5',
+      });
+    },
+    onSuccess: () => {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+
+  if (wsLoading || loading || modelsLoading) {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
@@ -238,12 +333,16 @@ export default function ModelPreferencesPage() {
     )
   }
 
+<<<<<<< HEAD
   const availableToAdd = ALL_MODELS.filter((m) => !chain.includes(m.id))
 
+=======
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   return (
-    <div className="space-y-8">
+    <form onSubmit={handleSubmit((values) => saveSettings.mutate(values))} className="space-y-8">
       <div>
         <h2 className="text-sm font-medium">Model Preferences</h2>
+<<<<<<< HEAD
         <p className="mt-0.5 text-xs text-muted-foreground">
           Configure fallback models and RAG retrieval settings for this
           workspace.
@@ -374,6 +473,13 @@ export default function ModelPreferencesPage() {
       </div>
 
       {/* ── Supervisor model ── */}
+=======
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Configure the execution supervisor model and RAG retrieval settings for this workspace.
+        </p>
+      </div>
+
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       <div className="space-y-3" data-tour="supervisor-model">
         <div>
           <p className="text-sm font-medium">Execution Supervisor Model</p>
@@ -385,10 +491,10 @@ export default function ModelPreferencesPage() {
         </div>
         <select
           className="w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm"
-          value={supervisorModel}
-          onChange={(e) => setSupervisorModel(e.target.value)}
+          {...register('supervisorModel')}
         >
           {ALL_MODELS.map((m) => (
+<<<<<<< HEAD
             <option key={m.id} value={m.id}>
               {m.label} ({m.provider})
             </option>
@@ -398,10 +504,17 @@ export default function ModelPreferencesPage() {
           Default: <span className="font-mono">claude-haiku-4-5</span>. The
           model must have an API key configured in{" "}
           <span className="font-medium">Model Keys</span>.
+=======
+            <option key={m.id} value={m.id}>{m.name} ({m.provider})</option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Default: <span className="font-mono">claude-haiku-4-5</span>. The model must have an API key configured in{' '}
+          <span className="font-medium">Connections</span>.
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         </p>
       </div>
 
-      {/* ── RAG settings ── */}
       <div className="space-y-3">
         <div>
           <p className="text-sm font-medium">RAG Retrieval Settings</p>
@@ -419,9 +532,8 @@ export default function ModelPreferencesPage() {
               step="0.05"
               min="0"
               max="1"
-              value={ragThreshold}
-              onChange={(e) => setRagThreshold(e.target.value)}
               className="font-mono text-sm"
+              {...register('ragThreshold')}
             />
             <p className="text-[10px] text-muted-foreground">
               0.0–1.0. Higher = stricter (0.75 default)
@@ -434,9 +546,8 @@ export default function ModelPreferencesPage() {
               type="number"
               step="100"
               min="100"
-              value={ragChunkSize}
-              onChange={(e) => setRagChunkSize(e.target.value)}
               className="font-mono text-sm"
+              {...register('ragChunkSize')}
             />
             <p className="text-[10px] text-muted-foreground">
               Characters per chunk (1000 default)
@@ -449,9 +560,8 @@ export default function ModelPreferencesPage() {
               type="number"
               step="50"
               min="0"
-              value={ragChunkOverlap}
-              onChange={(e) => setRagChunkOverlap(e.target.value)}
               className="font-mono text-sm"
+              {...register('ragChunkOverlap')}
             />
             <p className="text-[10px] text-muted-foreground">
               Overlap between chunks (200 default)
@@ -461,10 +571,19 @@ export default function ModelPreferencesPage() {
       </div>
 
       <div className="flex justify-end">
+<<<<<<< HEAD
         <Button onClick={() => void handleSave()} disabled={saving}>
           {saving ? "Saving…" : saved ? "Saved!" : "Save Settings"}
         </Button>
       </div>
     </div>
   )
+=======
+        <Button type="submit" disabled={saveSettings.isPending}>
+          {saveSettings.isPending ? 'Saving…' : saved ? 'Saved!' : 'Save Settings'}
+        </Button>
+      </div>
+    </form>
+  );
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }

@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
@@ -11,6 +12,20 @@ import { Badge } from "@linea/ui/components/badge"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
+=======
+import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useApiClient } from '@/hooks/use-api-client';
+import { unwrapList } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { Button } from '@linea/ui/components/button';
+import { Badge } from '@linea/ui/components/badge';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -109,6 +124,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 export default function WorkflowsPage() {
+<<<<<<< HEAD
   const { podId } = useParams<{ podId: string }>()
   const { getToken } = useAuth()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
@@ -204,6 +220,84 @@ export default function WorkflowsPage() {
     setNewDesc("")
     setTemplateSearch("")
     void loadTemplates()
+=======
+  const { podId } = useParams<{ podId: string }>();
+  const getApi = useApiClient();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
+
+  const [view, setView] = useState<ViewMode>('active');
+
+  // Create dialog state
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createStep, setCreateStep] = useState<CreateStep>('choice');
+  const [createMode, setCreateMode] = useState<'blank' | 'template'>('blank');
+  const [newName, setNewName] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+
+  // Template picker state
+  const [pickedTemplate, setPickedTemplate] = useState<TemplateOption | null>(null);
+  const [templateSearch, setTemplateSearch] = useState('');
+
+  // Publish to gallery state
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishTarget, setPublishTarget] = useState<Workflow | null>(null);
+  const [publishName, setPublishName] = useState('');
+  const [publishDesc, setPublishDesc] = useState('');
+  const [publishCategory, setPublishCategory] = useState('');
+  const [publishFeatured, setPublishFeatured] = useState(false);
+
+  // Permanent delete confirm state
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<Workflow | null>(null);
+
+  const workflowsKey = ['pod-workflows', wsId, podId, view];
+
+  const { data: workflows = [], isLoading: loading } = useQuery<Workflow[]>({
+    queryKey: workflowsKey,
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const params = new URLSearchParams();
+      if (view === 'trash') params.set('trashed', 'true');
+      if (view === 'favorites') params.set('favorited', 'true');
+      if (view === 'pod-templates') params.set('isTemplate', 'true');
+      const data = await api.get<Workflow[] | { workflows: Workflow[]; meta?: unknown }>(
+        `/workspaces/${wsId}/pods/${podId}/workflows?${params}`,
+      );
+      return unwrapList(data, 'workflows');
+    },
+  });
+
+  const { data: favoriteIds = new Set<string>() } = useQuery<Set<string>>({
+    queryKey: ['pod-workflow-favorites', wsId, podId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const favIds = await api.get<string[]>(`/workspaces/${wsId}/pods/${podId}/workflows/me/favorites`).catch(() => [] as string[]);
+      return new Set(favIds);
+    },
+  });
+
+  const { data: templateList = [], isLoading: loadingTemplates } = useQuery<TemplateOption[]>({
+    queryKey: ['templates'],
+    enabled: createOpen,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<TemplateOption[]>('/templates');
+    },
+  });
+
+  function openCreateDialog() {
+    setCreateOpen(true);
+    setCreateStep('choice');
+    setCreateMode('blank');
+    setPickedTemplate(null);
+    setNewName('');
+    setNewDesc('');
+    setTemplateSearch('');
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   }
 
   function resetCreateDialog() {
@@ -215,6 +309,7 @@ export default function WorkflowsPage() {
     setTemplateSearch("")
   }
 
+<<<<<<< HEAD
   async function toggleFavorite(wfId: string) {
     if (!activeWorkspace) return
     const token = await getToken()
@@ -321,6 +416,98 @@ export default function WorkflowsPage() {
       setHardDeleting(false)
     }
   }
+=======
+  const toggleFavorite = useMutation({
+    mutationFn: async (wfId: string) => {
+      const api = await getApi();
+      const isFav = favoriteIds.has(wfId);
+      if (isFav) {
+        await api.delete(`/workspaces/${wsId}/pods/${podId}/workflows/${wfId}/favorite`);
+      } else {
+        await api.post(`/workspaces/${wsId}/pods/${podId}/workflows/${wfId}/favorite`, {});
+      }
+      return { wfId, isFav };
+    },
+    onMutate: (wfId) => {
+      const isFav = favoriteIds.has(wfId);
+      queryClient.setQueryData<Set<string>>(['pod-workflow-favorites', wsId, podId], (prev = new Set()) => {
+        const next = new Set(prev);
+        if (isFav) next.delete(wfId); else next.add(wfId);
+        return next;
+      });
+      return { isFav };
+    },
+    onSuccess: ({ wfId, isFav }) => {
+      if (view === 'favorites' && isFav) {
+        queryClient.setQueryData<Workflow[]>(workflowsKey, (prev = []) => prev.filter((w) => w.id !== wfId));
+      }
+    },
+    onError: (_err, wfId, context) => {
+      if (!context) return;
+      queryClient.setQueryData<Set<string>>(['pod-workflow-favorites', wsId, podId], (prev = new Set()) => {
+        const next = new Set(prev);
+        if (context.isFav) next.add(wfId); else next.delete(wfId);
+        return next;
+      });
+    },
+  });
+
+  const toggleTemplate = useMutation({
+    mutationFn: async (wf: Workflow) => {
+      const api = await getApi();
+      return api.patch<Workflow>(`/workspaces/${wsId}/pods/${podId}/workflows/${wf.id}/template`, { isTemplate: !wf.isTemplate });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Workflow[]>(workflowsKey, (prev = []) =>
+        prev.map((w) => (w.id === updated.id ? updated : w)).filter((w) => view !== 'pod-templates' || w.isTemplate));
+    },
+  });
+
+  const duplicateWorkflow = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
+      return api.post<Workflow>(`/workspaces/${wsId}/pods/${podId}/workflows/${id}/duplicate`, {});
+    },
+    onSuccess: (copy) => {
+      queryClient.setQueryData<Workflow[]>(workflowsKey, (prev = []) => [copy, ...prev]);
+    },
+  });
+
+  const trashWorkflow = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
+      await api.patch(`/workspaces/${wsId}/pods/${podId}/workflows/${id}/trash`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Workflow[]>(workflowsKey, (prev = []) => prev.filter((w) => w.id !== id));
+    },
+  });
+
+  const restoreWorkflow = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
+      await api.patch(`/workspaces/${wsId}/pods/${podId}/workflows/${id}/restore`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Workflow[]>(workflowsKey, (prev = []) => prev.filter((w) => w.id !== id));
+    },
+  });
+
+  const hardDeleteWorkflow = useMutation({
+    mutationFn: async () => {
+      if (!hardDeleteTarget) throw new Error('No target selected');
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/pods/${podId}/workflows/${hardDeleteTarget.id}/permanent`);
+      return hardDeleteTarget.id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Workflow[]>(workflowsKey, (prev = []) => prev.filter((w) => w.id !== id));
+      setHardDeleteTarget(null);
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function openPublishDialog(wf: Workflow) {
     setPublishTarget(wf)
@@ -331,6 +518,7 @@ export default function WorkflowsPage() {
     setPublishOpen(true)
   }
 
+<<<<<<< HEAD
   async function handlePublish() {
     if (!activeWorkspace || !publishTarget || !publishCategory) return
     setPublishing(true)
@@ -392,6 +580,53 @@ export default function WorkflowsPage() {
       setCreating(false)
     }
   }
+=======
+  const publishWorkflow = useMutation({
+    mutationFn: async () => {
+      if (!publishTarget || !publishCategory) throw new Error('Missing publish details');
+      const api = await getApi();
+      await api.post(`/workspaces/${wsId}/pods/${podId}/workflows/${publishTarget.id}/publish`, {
+        name: publishName || undefined,
+        description: publishDesc || undefined,
+        category: publishCategory,
+        featured: publishFeatured,
+      });
+    },
+    onSuccess: () => setPublishOpen(false),
+  });
+
+  const createWorkflow = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<Workflow>(`/workspaces/${wsId}/pods/${podId}/workflows`, {
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+      });
+    },
+    onSuccess: (wf) => {
+      localStorage.setItem('linea_gs_workflow', 'true');
+      setCreateOpen(false);
+      resetCreateDialog();
+      router.push(`/pods/${podId}/workflows/${wf.id}`);
+    },
+  });
+
+  const createFromTemplate = useMutation({
+    mutationFn: async () => {
+      if (!pickedTemplate) throw new Error('No template selected');
+      const api = await getApi();
+      return api.post<Workflow>(`/workspaces/${wsId}/pods/${podId}/workflows/from-template/${pickedTemplate.id}`, {
+        name: newName.trim(),
+      });
+    },
+    onSuccess: (wf) => {
+      localStorage.setItem('linea_gs_workflow', 'true');
+      setCreateOpen(false);
+      resetCreateDialog();
+      router.push(`/pods/${podId}/workflows/${wf.id}`);
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const viewTabs: { key: ViewMode; label: string }[] = [
     { key: "active", label: "All" },
@@ -557,6 +792,7 @@ export default function WorkflowsPage() {
                       <DropdownMenuContent align="end">
                         {view !== "trash" && (
                           <>
+<<<<<<< HEAD
                             <DropdownMenuItem
                               onClick={() => void toggleFavorite(wf.id)}
                             >
@@ -586,6 +822,18 @@ export default function WorkflowsPage() {
                                 icon={Copy01Icon}
                                 className="mr-2 size-4"
                               />
+=======
+                            <DropdownMenuItem onClick={() => toggleFavorite.mutate(wf.id)}>
+                              <HugeiconsIcon icon={FavouriteIcon} className="mr-2 size-4" />
+                              {favoriteIds.has(wf.id) ? 'Remove from favorites' : 'Add to favorites'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleTemplate.mutate(wf)}>
+                              <HugeiconsIcon icon={GridViewIcon} className="mr-2 size-4" />
+                              {wf.isTemplate ? 'Remove pod template' : 'Mark as pod template'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => duplicateWorkflow.mutate(wf.id)}>
+                              <HugeiconsIcon icon={Copy01Icon} className="mr-2 size-4" />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                               Duplicate
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -600,7 +848,7 @@ export default function WorkflowsPage() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
-                              onClick={() => void trashWorkflow(wf.id)}
+                              onClick={() => trashWorkflow.mutate(wf.id)}
                             >
                               <HugeiconsIcon
                                 icon={Delete01Icon}
@@ -612,6 +860,7 @@ export default function WorkflowsPage() {
                         )}
                         {view === "trash" && (
                           <>
+<<<<<<< HEAD
                             <DropdownMenuItem
                               onClick={() => void restoreWorkflow(wf.id)}
                             >
@@ -619,6 +868,10 @@ export default function WorkflowsPage() {
                                 icon={Undo02Icon}
                                 className="mr-2 size-4"
                               />
+=======
+                            <DropdownMenuItem onClick={() => restoreWorkflow.mutate(wf.id)}>
+                              <HugeiconsIcon icon={Undo02Icon} className="mr-2 size-4" />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                               Restore
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -644,7 +897,6 @@ export default function WorkflowsPage() {
         </Table>
       )}
 
-      {/* ── Create workflow dialog (2-step) ───────────────────────────────────── */}
       <Dialog
         open={createOpen}
         onOpenChange={(o) => {
@@ -665,7 +917,6 @@ export default function WorkflowsPage() {
                 </DialogDescription>
               </DialogHeader>
 
-              {/* Blank option */}
               <button
                 className="group flex w-full items-center gap-3 rounded-lg border-2 border-dashed p-4 text-left transition-colors hover:border-primary hover:bg-muted/40"
                 onClick={() => {
@@ -689,8 +940,12 @@ export default function WorkflowsPage() {
                 </div>
               </button>
 
+<<<<<<< HEAD
               {/* Divider */}
               <div className="my-1 flex items-center gap-3">
+=======
+              <div className="flex items-center gap-3 my-1">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 <div className="h-px flex-1 bg-border" />
                 <span className="text-xs text-muted-foreground">
                   or start from a template
@@ -698,7 +953,6 @@ export default function WorkflowsPage() {
                 <div className="h-px flex-1 bg-border" />
               </div>
 
-              {/* Template search */}
               <div className="relative">
                 <HugeiconsIcon
                   icon={Search01Icon}
@@ -712,7 +966,6 @@ export default function WorkflowsPage() {
                 />
               </div>
 
-              {/* Template mini-grid */}
               {loadingTemplates ? (
                 <div className="grid grid-cols-2 gap-2">
                   {Array.from({ length: 6 }).map((_, i) => (
@@ -798,10 +1051,15 @@ export default function WorkflowsPage() {
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                     onKeyDown={(e) => {
+<<<<<<< HEAD
                       if (e.key === "Enter") {
                         void (createMode === "template"
                           ? handleCreateFromTemplate()
                           : handleCreate())
+=======
+                      if (e.key === 'Enter') {
+                        (createMode === 'template' ? createFromTemplate : createWorkflow).mutate();
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                       }
                     }}
                     autoFocus
@@ -827,6 +1085,7 @@ export default function WorkflowsPage() {
                   Cancel
                 </Button>
                 <Button
+<<<<<<< HEAD
                   onClick={() =>
                     void (createMode === "template"
                       ? handleCreateFromTemplate()
@@ -835,6 +1094,12 @@ export default function WorkflowsPage() {
                   disabled={!newName.trim() || creating}
                 >
                   {creating ? "Creating…" : "Create & open builder"}
+=======
+                  onClick={() => (createMode === 'template' ? createFromTemplate : createWorkflow).mutate()}
+                  disabled={!newName.trim() || createWorkflow.isPending || createFromTemplate.isPending}
+                >
+                  {createWorkflow.isPending || createFromTemplate.isPending ? 'Creating…' : 'Create & open builder'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 </Button>
               </DialogFooter>
             </>
@@ -842,7 +1107,6 @@ export default function WorkflowsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Publish to gallery dialog */}
       <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
         <DialogContent>
           <DialogHeader>
@@ -902,15 +1166,20 @@ export default function WorkflowsPage() {
               Cancel
             </Button>
             <Button
-              disabled={!publishName.trim() || !publishCategory || publishing}
-              onClick={() => void handlePublish()}
+              disabled={!publishName.trim() || !publishCategory || publishWorkflow.isPending}
+              onClick={() => publishWorkflow.mutate()}
             >
+<<<<<<< HEAD
               {publishing ? "Publishing…" : "Publish"}
+=======
+              {publishWorkflow.isPending ? 'Publishing…' : 'Publish'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+<<<<<<< HEAD
       {/* Permanent delete confirm */}
       <Dialog
         open={!!hardDeleteTarget}
@@ -918,6 +1187,9 @@ export default function WorkflowsPage() {
           if (!o) setHardDeleteTarget(null)
         }}
       >
+=======
+      <Dialog open={!!hardDeleteTarget} onOpenChange={(o) => { if (!o) setHardDeleteTarget(null); }}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete permanently?</DialogTitle>
@@ -932,10 +1204,14 @@ export default function WorkflowsPage() {
             </Button>
             <Button
               variant="destructive"
-              disabled={hardDeleting}
-              onClick={() => void hardDeleteWorkflow()}
+              disabled={hardDeleteWorkflow.isPending}
+              onClick={() => hardDeleteWorkflow.mutate()}
             >
+<<<<<<< HEAD
               {hardDeleting ? "Deleting…" : "Delete permanently"}
+=======
+              {hardDeleteWorkflow.isPending ? 'Deleting…' : 'Delete permanently'}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             </Button>
           </DialogFooter>
         </DialogContent>

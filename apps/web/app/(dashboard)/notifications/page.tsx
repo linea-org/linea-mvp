@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@clerk/nextjs"
@@ -7,6 +8,15 @@ import { createApiClient } from "@/lib/api"
 import { Button } from "@linea/ui/components/button"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { HugeiconsIcon } from "@hugeicons/react"
+=======
+import { useState } from 'react';
+import Link from 'next/link';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@linea/ui/components/button';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { HugeiconsIcon } from '@hugeicons/react';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   CheckmarkCircle01Icon,
   Cancel01Icon,
@@ -178,6 +188,7 @@ function ActionButtons({
 }
 
 export default function NotificationsPage() {
+<<<<<<< HEAD
   const { getToken } = useAuth()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
@@ -239,6 +250,53 @@ export default function NotificationsPage() {
       /* ignore */
     }
   }
+=======
+  const getApi = useApiClient();
+  const queryClient = useQueryClient();
+  const [readFilter, setReadFilter] = useState<'all' | 'unread'>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+
+  const { data: notifications = [], isLoading: loading } = useQuery<Notification[]>({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Notification[]>('/notifications');
+    },
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      await api.patch('/notifications/read-all');
+    },
+    onSuccess: () => {
+      queryClient.setQueryData<Notification[]>(['notifications'], (prev = []) => prev.map((n) => ({ ...n, read: true })));
+    },
+  });
+
+  const markRead = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
+      await api.patch(`/notifications/${id}/read`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Notification[]>(['notifications'], (prev = []) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    },
+  });
+
+  const dismiss = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
+      await api.delete(`/notifications/${id}`);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Notification[]>(['notifications'], (prev = []) => prev.filter((n) => n.id !== id));
+    },
+  });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
@@ -248,7 +306,6 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Notifications</h1>
@@ -259,20 +316,28 @@ export default function NotificationsPage() {
           )}
         </div>
         {unreadCount > 0 && (
+<<<<<<< HEAD
           <Button
             size="sm"
             variant="outline"
             onClick={() => void markAllRead()}
           >
+=======
+          <Button size="sm" variant="outline" onClick={() => markAllRead.mutate()}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-3.5" />
             Mark all read
           </Button>
         )}
       </div>
 
+<<<<<<< HEAD
       {/* Filters */}
       <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Read filter */}
+=======
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-3">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="flex gap-4">
           {(["all", "unread"] as const).map((t) => (
             <button
@@ -286,7 +351,6 @@ export default function NotificationsPage() {
             </button>
           ))}
         </div>
-        {/* Type filter */}
         <div className="flex items-center gap-1">
           {TYPE_FILTERS.map((f) => (
             <button
@@ -357,8 +421,8 @@ export default function NotificationsPage() {
                   )}
                   <ActionButtons
                     n={n}
-                    onMarkRead={() => void markRead(n.id)}
-                    onDismiss={() => void dismiss(n.id)}
+                    onMarkRead={() => markRead.mutate(n.id)}
+                    onDismiss={() => dismiss.mutate(n.id)}
                   />
                 </div>
               </div>

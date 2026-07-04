@@ -1,3 +1,4 @@
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/node-panel.tsx
 "use client"
 
 import { useState, useEffect, useRef } from "react"
@@ -224,6 +225,14 @@ function ConnectionsTab({
 }
 
 /* ─── Node reference docs ────────────────────────────────────────── */
+=======
+import { HugeiconsIcon } from '@hugeicons/react';
+import { NoteAddIcon } from '@hugeicons/core-free-icons';
+import type { Node } from '@xyflow/react';
+import { ScrollArea } from '@linea/ui/components/scroll-area';
+import { cn } from '@linea/ui/lib/utils';
+
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/node-panel/node-docs.tsx
 interface NodeDoc {
   summary: string
   fields?: Array<{ name: string; desc: string }>
@@ -911,10 +920,16 @@ const NODE_DOCS: Record<string, NodeDoc> = {
   },
 }
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/node-panel.tsx
 /* ─── Document tab ───────────────────────────────────────────────── */
 function DocumentTab({ node, className }: { node: Node; className?: string }) {
   const nodeType = (node.data.nodeType as string) ?? node.type ?? ""
   const doc = NODE_DOCS[nodeType]
+=======
+export function DocumentTab({ node, className }: { node: Node; className?: string }) {
+  const nodeType = (node.data.nodeType as string) ?? node.type ?? '';
+  const doc = NODE_DOCS[nodeType];
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/node-panel/node-docs.tsx
 
   if (!doc) {
     return (
@@ -936,9 +951,14 @@ function DocumentTab({ node, className }: { node: Node; className?: string }) {
   }
 
   return (
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/node-panel.tsx
     <ScrollArea className={cn("h-full", className)}>
       <div className="space-y-4 px-3 py-3">
         {/* Summary */}
+=======
+    <ScrollArea className={cn('h-full', className)}>
+      <div className="py-3 px-3 space-y-4">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/node-panel/node-docs.tsx
         <div>
           <p className="mb-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
             Overview
@@ -948,7 +968,6 @@ function DocumentTab({ node, className }: { node: Node; className?: string }) {
           </p>
         </div>
 
-        {/* Configuration fields */}
         {doc.fields && doc.fields.length > 0 && (
           <div>
             <p className="mb-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
@@ -972,7 +991,6 @@ function DocumentTab({ node, className }: { node: Node; className?: string }) {
           </div>
         )}
 
-        {/* Inputs */}
         {doc.inputs && doc.inputs.length > 0 && (
           <div>
             <p className="mb-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
@@ -1000,7 +1018,6 @@ function DocumentTab({ node, className }: { node: Node; className?: string }) {
           </div>
         )}
 
-        {/* Outputs */}
         {doc.outputs && doc.outputs.length > 0 && (
           <div>
             <p className="mb-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
@@ -1028,7 +1045,6 @@ function DocumentTab({ node, className }: { node: Node; className?: string }) {
           </div>
         )}
 
-        {/* Tips */}
         {doc.tips && doc.tips.length > 0 && (
           <div>
             <p className="mb-1.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
@@ -1052,6 +1068,7 @@ function DocumentTab({ node, className }: { node: Node; className?: string }) {
     </ScrollArea>
   )
 }
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/node-panel.tsx
 
 /* ─── Main NodePanel ─────────────────────────────────────────────── */
 export function NodePanel({
@@ -1536,3 +1553,5 @@ export function NodePanel({
     </div>
   )
 }
+=======
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/node-panel/node-docs.tsx

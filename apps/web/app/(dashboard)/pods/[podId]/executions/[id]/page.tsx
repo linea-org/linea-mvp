@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
@@ -11,6 +12,20 @@ import { Skeleton } from "@linea/ui/components/skeleton"
 import { JsonOrPre } from "@/components/ui/json-or-pre"
 import { Separator } from "@linea/ui/components/separator"
 import { Textarea } from "@linea/ui/components/textarea"
+=======
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useWorkspace } from '@/contexts/workspace-context';
+import { useApiClient } from '@/hooks/use-api-client';
+import { formatDurationLong as formatDuration } from '@/lib/format';
+import { Badge } from '@linea/ui/components/badge';
+import { Button } from '@linea/ui/components/button';
+import { Skeleton } from '@linea/ui/components/skeleton';
+import { JsonOrPre } from '@/components/ui/json-or-pre';
+import { Separator } from '@linea/ui/components/separator';
+import { Textarea } from '@linea/ui/components/textarea';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -124,6 +139,7 @@ const STATUS_VARIANT: Record<
 
 const LIVE_STATUSES = new Set(["queued", "running", "suspended"])
 
+<<<<<<< HEAD
 function formatDuration(ms: number | undefined | null) {
   if (ms == null) return null
   if (ms < 1000) return `${ms}ms`
@@ -131,6 +147,8 @@ function formatDuration(ms: number | undefined | null) {
   return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`
 }
 
+=======
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 function NodeStatusIcon({ status }: { status: string }) {
   if (status === "completed") {
     return (
@@ -285,8 +303,12 @@ function GanttTimeline({
 
   return (
     <div className="space-y-1">
+<<<<<<< HEAD
       {/* Time axis */}
       <div className="relative ml-36 h-5">
+=======
+      <div className="relative h-5 ml-36">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         {marks.map((m) => (
           <span
             key={m.pct}
@@ -298,7 +320,6 @@ function GanttTimeline({
         ))}
       </div>
 
-      {/* Rows */}
       <div className="space-y-1.5">
         {rows.map(({ nodeId, name, status, startMs, endMs, durMs }) => {
           const barLeft =
@@ -332,7 +353,6 @@ function GanttTimeline({
         })}
       </div>
 
-      {/* Legend */}
       <div className="flex flex-wrap gap-3 pt-2 text-[10px] text-muted-foreground">
         {Object.entries({
           completed: "bg-green-500",
@@ -657,8 +677,12 @@ function ExecutionCanvas({
         className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
+<<<<<<< HEAD
       <div className="fixed inset-4 z-[201] flex flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
         {/* Header */}
+=======
+      <div className="fixed inset-4 z-[201] flex flex-col rounded-xl border bg-background shadow-2xl overflow-hidden">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <span className="text-sm font-semibold">Canvas view</span>
           <div className="flex items-center gap-6">
@@ -694,8 +718,12 @@ function ExecutionCanvas({
             </button>
           </div>
         </div>
+<<<<<<< HEAD
         {/* Canvas */}
         <div className="relative flex-1">
+=======
+        <div className="flex-1 relative">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           <ReactFlow
             nodes={rfNodes}
             edges={rfEdges}
@@ -808,6 +836,7 @@ function LogSettingsDialog({
 }
 
 export default function ExecutionDetailPage() {
+<<<<<<< HEAD
   const { podId, id } = useParams<{ podId: string; id: string }>()
   const { getToken } = useAuth()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
@@ -912,12 +941,92 @@ export default function ExecutionDetailPage() {
         fromNodeId ? { fromNodeId } : {}
       )
       router.push(`/pods/${podId}/executions/${newExec.id}`)
+=======
+  const { podId, id } = useParams<{ podId: string; id: string }>();
+  const getApi = useApiClient();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
+
+  const [approvalComment, setApprovalComment] = useState('');
+  const [humanAnswer, setHumanAnswer] = useState('');
+  const [replaying, setReplaying] = useState(false);
+  const [logSettingsOpen, setLogSettingsOpen] = useState(false);
+  const [canvasOpen, setCanvasOpen] = useState(false);
+  const [timelineView, setTimelineView] = useState<'list' | 'gantt'>('list');
+  const pollStartRef = useRef<number | null>(null);
+
+  const executionKey = ['execution', wsId, podId, id];
+
+  const { data: execData, isLoading: loading } = useQuery<{ execution: Execution; logs: ExecutionLog[] } | null>({
+    queryKey: executionKey,
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const base = `/workspaces/${wsId}/pods/${podId}/executions/${id}`;
+      const [execution, logs] = await Promise.all([
+        api.get<Execution>(base),
+        api.get<ExecutionLog[]>(`${base}/logs`),
+      ]);
+      return { execution, logs };
+    },
+    refetchInterval: (query) => {
+      const ex = query.state.data?.execution;
+      if (!ex || !LIVE_STATUSES.has(ex.status)) { pollStartRef.current = null; return false; }
+      if (pollStartRef.current == null) pollStartRef.current = Date.now();
+      if (Date.now() - pollStartRef.current >= 30 * 60 * 1000) return false;
+      return 3000;
+    },
+  });
+
+  const execution = execData?.execution ?? null;
+  const logs = execData?.logs ?? [];
+  const stuckBanner = !!execution && LIVE_STATUSES.has(execution.status) &&
+    pollStartRef.current != null && Date.now() - pollStartRef.current >= 30 * 60 * 1000;
+
+  const { data: workflow = null } = useQuery<WorkflowInfo | null>({
+    queryKey: ['pod-workflow', wsId, podId, execution?.workflowId],
+    enabled: !!wsId && !!execution?.workflowId,
+    queryFn: async () => {
+      const api = await getApi();
+      try {
+        return await api.get<WorkflowInfo>(`/workspaces/${wsId}/pods/${podId}/workflows/${execution!.workflowId}`);
+      } catch {
+        return null; // workflow may have been deleted — non-fatal
+      }
+    },
+  });
+
+  function manualRefresh() {
+    void queryClient.invalidateQueries({ queryKey: executionKey });
+  }
+
+  async function replay(fromNodeId?: string) {
+    setReplaying(true);
+    try {
+      const api = await getApi();
+      const newExec = await api.post<{ id: string }>(
+        `/workspaces/${wsId}/pods/${podId}/executions/${id}/replay`,
+        fromNodeId ? { fromNodeId } : {},
+      );
+      router.push(`/pods/${podId}/executions/${newExec.id}`);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     } finally {
       setReplaying(false)
     }
   }
 
+  const respondMutation = useMutation({
+    mutationFn: async (body: { approved?: boolean; comment?: string; answer?: string }) => {
+      const api = await getApi();
+      await api.patch(`/workspaces/${wsId}/pods/${podId}/executions/${id}/respond`, body);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: executionKey }),
+  });
+
   async function respond(approved: boolean) {
+<<<<<<< HEAD
     if (!activeWorkspace) return
     setApproving(true)
     try {
@@ -966,12 +1075,35 @@ export default function ExecutionDetailPage() {
       { logLevel, logRetentionDays }
     )
     setWorkflow(updated)
+=======
+    await respondMutation.mutateAsync({ approved, comment: approvalComment.trim() || undefined });
+    setApprovalComment('');
+  }
+
+  async function respondWithAnswer() {
+    if (!humanAnswer.trim()) return;
+    await respondMutation.mutateAsync({ answer: humanAnswer.trim() });
+    setHumanAnswer('');
+  }
+
+  const approving = respondMutation.isPending;
+
+  async function saveLogSettings(logLevel: string, logRetentionDays: number | null) {
+    if (!execution?.workflowId) return;
+    const api = await getApi();
+    const updated = await api.patch<WorkflowInfo>(
+      `/workspaces/${wsId}/pods/${podId}/workflows/${execution.workflowId}/log-settings`,
+      { logLevel, logRetentionDays },
+    );
+    queryClient.setQueryData(['pod-workflow', wsId, podId, execution.workflowId], updated);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   }
 
   const nodeMap = new Map<string, WorkflowNode>(
     (workflow?.definition?.nodes ?? []).map((n) => [n.id, n])
   )
 
+<<<<<<< HEAD
   const pendingInterrupt = (execution?.variables as any)?.__pendingInterrupt as
     | PendingInterrupt
     | undefined
@@ -980,6 +1112,11 @@ export default function ExecutionDetailPage() {
     pendingInterrupt?.question ??
     pendingInterrupt?.message ??
     pendingInterrupt?.prompt
+=======
+  const pendingInterrupt = execution?.variables?.['__pendingInterrupt'] as PendingInterrupt | undefined;
+  const interruptType = pendingInterrupt?.type ?? 'approval';
+  const interruptPrompt = pendingInterrupt?.question ?? pendingInterrupt?.message ?? pendingInterrupt?.prompt;
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   if (loading || wsLoading) {
     return (
@@ -1015,12 +1152,18 @@ export default function ExecutionDetailPage() {
           </Button>
         </div>
       )}
+<<<<<<< HEAD
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="font-mono text-sm text-muted-foreground">
           {execution.id}
         </h1>
         <Badge variant={STATUS_VARIANT[execution.status] ?? "secondary"}>
+=======
+      <div className="flex items-center gap-3 flex-wrap">
+        <h1 className="font-mono text-sm text-muted-foreground">{execution.id}</h1>
+        <Badge variant={STATUS_VARIANT[execution.status] ?? 'secondary'}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           {execution.status}
         </Badge>
         {wallTime && (
@@ -1071,7 +1214,6 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Meta row */}
       <div className="grid grid-cols-3 gap-4 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">Trigger</p>
@@ -1097,8 +1239,12 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Suspension panel */}
       {execution.status === "suspended" && (
+=======
+      {execution.status === 'suspended' && (
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <>
           <Separator />
           <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950/20">
@@ -1167,7 +1313,6 @@ export default function ExecutionDetailPage() {
 
       <Separator />
 
-      {/* Node timeline + Gantt */}
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
@@ -1211,7 +1356,6 @@ export default function ExecutionDetailPage() {
 
       <Separator />
 
-      {/* Input / Output */}
       <div className="grid grid-cols-2 gap-6">
         <div>
           <p className="mb-2 text-sm font-medium">Input</p>
@@ -1227,7 +1371,6 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Canvas view */}
       {workflow && (
         <ExecutionCanvas
           workflow={workflow}
@@ -1237,7 +1380,6 @@ export default function ExecutionDetailPage() {
         />
       )}
 
-      {/* Log settings dialog */}
       {workflow && logSettingsOpen && (
         <LogSettingsDialog
           open={logSettingsOpen}

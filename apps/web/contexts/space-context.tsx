@@ -1,9 +1,17 @@
 "use client"
 
+<<<<<<< HEAD
 import { createContext, useContext, useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
 import { createApiClient } from "@/lib/api"
 import { useWorkspace } from "@/contexts/workspace-context"
+=======
+import { createContext, useContext, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/nextjs';
+import { createApiClient } from '@/lib/api';
+import { useWorkspace } from '@/contexts/workspace-context';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 interface Pod {
   id: string
@@ -29,6 +37,7 @@ const PodContext = createContext<PodContextValue>({
 })
 
 export function PodProvider({ children }: { children: React.ReactNode }) {
+<<<<<<< HEAD
   const { getToken } = useAuth()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
   const [pods, setPods] = useState<Pod[]>([])
@@ -69,6 +78,33 @@ export function PodProvider({ children }: { children: React.ReactNode }) {
 
     void load()
   }, [activeWorkspace, wsLoading, getToken, tick])
+=======
+  const { getToken } = useAuth();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const [activePod, setActivePodState] = useState<Pod | null>(null);
+  const [syncedFor, setSyncedFor] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const podsKey = ['pods', activeWorkspace?.id];
+
+  const { data: pods = [], isLoading: podsLoading } = useQuery<Pod[]>({
+    queryKey: podsKey,
+    enabled: !!activeWorkspace,
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+      const api = createApiClient(token);
+      return api.get<Pod[]>(`/workspaces/${activeWorkspace!.id}/pods`);
+    },
+  });
+
+  const loading = wsLoading ? true : !activeWorkspace ? false : podsLoading;
+
+  if (activeWorkspace && !podsLoading && syncedFor !== activeWorkspace.id) {
+    setSyncedFor(activeWorkspace.id);
+    const storedId = localStorage.getItem(`activePodId_${activeWorkspace.id}`);
+    setActivePodState(pods.find((p) => p.id === storedId) ?? pods[0] ?? null);
+  }
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function setActivePod(pod: Pod) {
     setActivePodState(pod)
@@ -78,7 +114,11 @@ export function PodProvider({ children }: { children: React.ReactNode }) {
   }
 
   function reload() {
+<<<<<<< HEAD
     setTick((t) => t + 1)
+=======
+    void queryClient.invalidateQueries({ queryKey: podsKey });
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   }
 
   return (

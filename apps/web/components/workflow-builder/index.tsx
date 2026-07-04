@@ -9,12 +9,12 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
-  useReactFlow,
   type Node,
   type Edge,
   type Connection,
   type ReactFlowInstance,
   type EdgeMouseHandler,
+<<<<<<< HEAD
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import { useAuth } from "@clerk/nextjs"
@@ -617,6 +617,93 @@ function BuilderInner({
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [testCases, setTestCases] = useState<EvalTestCase[]>([])
+=======
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { useAuth } from '@clerk/nextjs';
+import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from '@/hooks/use-api-client';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  ArrowLeft01Icon, ArrowRight01Icon, Tick01Icon, Cancel01Icon, Alert02Icon,
+  Copy01Icon, LockKeyIcon, SquareLock01Icon, Delete01Icon,
+  PlayIcon, BorderAll01Icon, ArrowDown01Icon, ArrowUp01Icon,
+  Search01Icon,
+} from '@hugeicons/core-free-icons';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@linea/ui/components/dialog';
+import { TooltipProvider } from '@linea/ui/components/tooltip';
+import { createApiClient, friendlyApiError } from '@/lib/api';
+import { useUndoHistory } from './use-undo-history';
+import { toast } from '@linea/ui/components/sonner';
+import { Button } from '@linea/ui/components/button';
+import { Spinner } from '@linea/ui/components/spinner';
+import { nodeTypes } from './nodes/node-types';
+import { Toolbar } from './toolbar';
+import { LibraryPanel } from './panels/library-panel';
+import { NodePanel } from './panels/node-panel/node-panel';
+import { GenerateDialog, type GenerateEvent } from './generate-dialog';
+import { BottomPanel } from './panels/bottom-panel/bottom-panel';
+import { DeployPanel } from './side-panels/deploy-panel';
+import { HistoryPanel } from './side-panels/history-panel';
+import { VersionsPanel } from './side-panels/versions-panel';
+import { DiffPanel } from './side-panels/diff-panel';
+import { SharePanel } from './side-panels/share-panel';
+import { CommentsPanel } from './side-panels/comments-panel';
+import { EvalsPanel } from './evals/evals-panel';
+import { ChatPreviewPanel } from './chat-preview/chat-preview-panel';
+import { useRouter } from 'next/navigation';
+import type { WFNode, WFEdge, Workflow, WorkflowBuilderProps, EvalTestCase, SSEEvent, NodeResult } from './workflow-builder.types';
+import { NODE_COLORS, QUICK_NODE_TYPES, getValidationState } from './workflow-validation';
+import { computeAutoLayout } from './workflow-auto-layout';
+import { CanvasControls } from './canvas-controls';
+import { useWorkflowSSE } from './use-workflow-sse';
+
+// Must render inside ReactFlowProvider — useReactFlow() is used by children.
+function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) {
+  const { getToken, userId } = useAuth();
+  const router = useRouter();
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [workflowName, setWorkflowName] = useState('Untitled Workflow');
+  const getApi = useApiClient();
+  const seededWorkflowRef = useRef(false);
+  const [libraryOpen, setLibraryOpen] = useState(true);
+  const [runStatus, setRunStatus] = useState<{ id: string; status: string } | null>(null);
+  const [interrupt, setInterrupt] = useState<SSEEvent['interrupt'] | null>(null);
+  const [executionOutput, setExecutionOutput] = useState<unknown>(undefined);
+  const [askHumanAnswer, setAskHumanAnswer] = useState('');
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [authToken, setAuthToken] = useState<string>('');
+  const [nodeResults, setNodeResults] = useState<Record<string, NodeResult>>({});
+  const [streamingTokens, setStreamingTokens] = useState<Record<string, string>>({});
+  const [deployPanelOpen, setDeployPanelOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [evalsOpen, setEvalsOpen] = useState(false);
+  const [chatPreviewOpen, setChatPreviewOpen] = useState(false);
+  const [deployedAt, setDeployedAt] = useState<string | null>(null);
+  const [diffVersion, setDiffVersion] = useState<number | null>(null);
+  const [autoSave, setAutoSave] = useState(false);
+  const [confirm, setConfirm] = useState<{ title: string; description: string; action: string; onConfirm: () => void } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: Node } | null>(null);
+  const [editingEdge, setEditingEdge] = useState<{ id: string; x: number; y: number; label: string } | null>(null);
+  const [testNodeDialog, setTestNodeDialog] = useState<{ node: Node } | null>(null);
+  const [testNodeInput, setTestNodeInput] = useState('{}');
+  const [testNodeRunning, setTestNodeRunning] = useState(false);
+  const [cursorMode, setCursorMode] = useState<'select' | 'grab'>('grab');
+  const [minimapVisible, setMinimapVisible] = useState(true);
+  const [isInteractive, setIsInteractive] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [testCases, setTestCases] = useState<EvalTestCase[]>([]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   const [quickConnect, setQuickConnect] = useState<{
     screenX: number
     screenY: number
@@ -624,10 +711,15 @@ function BuilderInner({
     sourceHandle: string | null
   } | null>(null)
 
+<<<<<<< HEAD
   // Undo/redo history
   const historyStackRef = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([])
   const historyIdxRef = useRef(-1)
   const [isDeployed, setIsDeployed] = useState(false)
+=======
+  const { canUndo, canRedo, pushHistory, undo: handleUndo, redo: handleRedo } = useUndoHistory(setNodes, setEdges);
+  const [isDeployed, setIsDeployed] = useState(false);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const validationState = useMemo(
     () => getValidationState(nodes, edges),
@@ -664,6 +756,7 @@ function BuilderInner({
     edgesRef.current = edges
   }, [edges])
 
+<<<<<<< HEAD
   const sseAbortRef = useRef<AbortController | null>(null)
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null)
@@ -675,6 +768,25 @@ function BuilderInner({
     handleId: string | null
   } | null>(null)
   const connectionMadeRef = useRef(false)
+=======
+  const { startSSE, sseAbortRef } = useWorkflowSSE({
+    workspaceId,
+    podId,
+    setNodes,
+    setNodeResults,
+    setStreamingTokens,
+    setInterrupt,
+    setRunStatus,
+    setExecutionOutput,
+  });
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+  const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
+  const nodesRef = useRef<Node[]>([]);
+  const edgesRef = useRef<Edge[]>([]);
+  const connectingFromRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
+  const connectionMadeRef = useRef(false);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   // Stable refs so keyboard handler never captures stale closures
   const handleSaveRef = useRef<(opts?: { silent?: boolean }) => Promise<void>>(
@@ -822,12 +934,16 @@ function BuilderInner({
   }, [getToken])
 
   // Clean up SSE on unmount
+<<<<<<< HEAD
   useEffect(
     () => () => {
       sseAbortRef.current?.abort()
     },
     []
   )
+=======
+  useEffect(() => () => { sseAbortRef.current?.abort(); }, [sseAbortRef]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   // Auto-save interval (30s when enabled)
   useEffect(() => {
@@ -851,6 +967,7 @@ function BuilderInner({
       ? e.metaKey
       : e.ctrlKey
 
+<<<<<<< HEAD
     // ── Modifier shortcuts (always active) ─────────────────────────────────
     if (mod && e.key === "s") {
       e.preventDefault()
@@ -894,8 +1011,18 @@ function BuilderInner({
       return
     }
     if (mod && e.key === "k" && !e.shiftKey) return // handled globally
+=======
+    if (mod && e.key === 's') { e.preventDefault(); void handleSaveRef.current(); return; }
+    if (mod && e.key === 'Enter') { e.preventDefault(); void handleRunRef.current(); return; }
+    if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); return; }
+    if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); handleRedo(); return; }
+    if (mod && e.key === 'g') { e.preventDefault(); void openGenerate(); return; }
+    if (mod && e.key === 'l') { e.preventDefault(); handleAutoLayout(); return; }
+    if (mod && e.key === "'") { e.preventDefault(); void openComments(); return; }
+    if (mod && e.key === 'f') { e.preventDefault(); setSearchOpen((v) => !v); setSearchQuery(''); return; }
+    if (mod && e.key === 'k' && !e.shiftKey) return; // handled globally
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
-    // ── Non-input single-key shortcuts ──────────────────────────────────────
     if (!inInput) {
       if (e.key === "Escape") {
         if (searchOpen) {
@@ -954,6 +1081,7 @@ function BuilderInner({
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
+<<<<<<< HEAD
   function pushHistory(ns: Node[], es: Edge[]) {
     historyStackRef.current = historyStackRef.current.slice(
       0,
@@ -988,6 +1116,8 @@ function BuilderInner({
     setCanRedo(historyIdxRef.current < historyStackRef.current.length - 1)
   }
 
+=======
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   function handleAutoLayout() {
     const positioned = computeAutoLayout(nodesRef.current, edgesRef.current)
     setNodes(positioned)
@@ -1018,8 +1148,17 @@ function BuilderInner({
     )
   }
 
-  /* ---- Fetch workflow ------------------------------------------ */
+  const { data: wf, isLoading: loading, error: workflowQueryError } = useQuery({
+    queryKey: ['workflow-full-definition', workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Workflow>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`);
+    },
+  });
+  const error = workflowQueryError ? friendlyApiError(workflowQueryError) : null;
+
   useEffect(() => {
+<<<<<<< HEAD
     async function fetchWorkflow() {
       try {
         const token = await getToken()
@@ -1099,6 +1238,52 @@ function BuilderInner({
     }
     void fetchWorkflow()
   }, [workflowId, podId, workspaceId, getToken, setNodes, setEdges])
+=======
+    if (!wf || seededWorkflowRef.current) return;
+    seededWorkflowRef.current = true;
+    setWorkflowName(wf.name);
+    if (wf.deployedAt) {
+      setIsDeployed(true);
+      setDeployedAt(wf.deployedAt);
+    }
+    const savedAutoSave = localStorage.getItem(`linea:autosave:${workflowId}`);
+    if (savedAutoSave === 'true') setAutoSave(true);
+    const rawNodes = (wf.definition?.nodes ?? []).map((n) => ({
+      id: n.id, type: n.type, position: n.position,
+      data: { ...n.data, nodeType: n.type },
+      ...(n.style ? { style: n.style } : {}),
+      ...(n.parentId ? { parentId: n.parentId, extent: 'parent' as const } : {}),
+      ...(n.type === 'note' ? { connectable: false } : {}),
+      ...(n.type === 'frame' ? { connectable: false, selectable: true, zIndex: n.zIndex ?? -1 } : {}),
+    }));
+    // Frames must come before their children so ReactFlow renders them behind
+    const loadedNodes: Node[] = [
+      ...rawNodes.filter((n) => n.type === 'frame'),
+      ...rawNodes.filter((n) => n.type !== 'frame'),
+    ];
+    // Ensure every workflow has a Start node
+    if (loadedNodes.length === 0) {
+      loadedNodes.push({
+        id: 'start-1', type: 'start',
+        position: { x: 200, y: 200 },
+        data: { nodeType: 'start' },
+      });
+    }
+    setNodes(loadedNodes);
+    const loadedEdges = (wf.definition?.edges ?? []).map((e) => ({
+      id: e.id, source: e.source, target: e.target,
+      sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, label: e.label,
+    }));
+    setEdges(loadedEdges);
+    // Load saved test cases
+    const savedCases = (wf.definition as any)?.settings?.testCases as EvalTestCase[] | undefined;
+    if (Array.isArray(savedCases)) setTestCases(savedCases);
+    // Seed undo history with the loaded state
+    pushHistory(loadedNodes, loadedEdges);
+    // Fit view after nodes render — use ref so the async closure always sees the current instance
+    setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }), 100);
+  }, [wf, workflowId, setNodes, setEdges, pushHistory]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -1109,9 +1294,14 @@ function BuilderInner({
         return newEdges
       })
     },
+<<<<<<< HEAD
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [setEdges]
   )
+=======
+    [setEdges, pushHistory],
+  );
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   // Connection-rule enforcement: limit outgoing/incoming edges per handle
   const isValidConnection = useCallback((connection: Edge | Connection) => {
@@ -1236,6 +1426,7 @@ function BuilderInner({
         : {}),
     }
     setNodes((nds) => {
+<<<<<<< HEAD
       const next = [...nds, newNode]
       pushHistory(next, [...edgesRef.current, newEdge])
       return next
@@ -1243,6 +1434,14 @@ function BuilderInner({
     setEdges((eds) => [...eds, newEdge])
     setQuickConnect(null)
   }
+=======
+      // Frames go at the start of the array so they render behind all other nodes
+      const next = isFrame ? [newNode, ...nds] : [...nds, newNode];
+      pushHistory(next, edgesRef.current);
+      return next;
+    });
+  }, [rfInstance, setNodes, pushHistory]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node)
@@ -1403,6 +1602,7 @@ function BuilderInner({
     input.click()
   }
 
+<<<<<<< HEAD
   const handleNodeDelete = useCallback(
     (nodeId: string) => {
       setNodes((nds) => {
@@ -1435,8 +1635,33 @@ function BuilderInner({
     },
     [setNodes, setEdges]
   ) // eslint-disable-line react-hooks/exhaustive-deps
+=======
+  const handleNodeDelete = useCallback((nodeId: string) => {
+    setNodes((nds) => {
+      const target = nds.find((n) => n.id === nodeId);
+      if (target?.data?.deleteLocked) return nds;
+      let updated = nds;
+      if (target?.type === 'frame') {
+        updated = nds.map((n) => {
+          if (n.parentId !== nodeId) return n;
+          return {
+            ...n,
+            parentId: undefined,
+            extent: undefined,
+            position: { x: n.position.x + target.position.x, y: n.position.y + target.position.y },
+          };
+        });
+      }
+      const next = updated.filter((n) => n.id !== nodeId);
+      const nextEdges = edgesRef.current.filter((e) => e.source !== nodeId && e.target !== nodeId);
+      setEdges(nextEdges);
+      pushHistory(next, nextEdges);
+      return next;
+    });
+    setSelectedNode(null);
+  }, [setNodes, setEdges, pushHistory]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
-  /* ── Context menu actions ─────────────────────────────────────── */
   function duplicateNode(node: Node) {
     const newNode: Node = {
       ...node,
@@ -1485,7 +1710,6 @@ function BuilderInner({
     setContextMenu({ x: e.clientX, y: e.clientY, node })
   }, [])
 
-  /* ── Edge label editing ───────────────────────────────────────── */
   const onEdgeDoubleClick: EdgeMouseHandler = useCallback((e, edge) => {
     setEditingEdge({
       id: edge.id,
@@ -1529,7 +1753,6 @@ function BuilderInner({
     setEditingEdge(null)
   }
 
-  /* ── Multi-select operations ──────────────────────────────────── */
   function duplicateSelected() {
     const selected = nodes.filter((n) => n.selected)
     const newNodes = selected.map((n) => ({
@@ -1664,7 +1887,6 @@ function BuilderInner({
     setContextMenu(null)
   }
 
-  /* ── Test single node ─────────────────────────────────────────── */
   async function runTestNode() {
     if (!testNodeDialog) return
     setTestNodeRunning(true)
@@ -1798,6 +2020,7 @@ function BuilderInner({
     }
   }
 
+<<<<<<< HEAD
   /* ---- SSE handler -------------------------------------------- */
   function truncatePreview(v: unknown, max = 72): string {
     const s = typeof v === "string" ? v : (JSON.stringify(v) ?? "")
@@ -1992,6 +2215,8 @@ function BuilderInner({
     }
   }
 
+=======
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   function validateWorkflow(): string | null {
     if (nodes.length === 0) return "Add at least one node to run the workflow"
     if (!nodes.some((n) => n.type === "start"))
@@ -2094,7 +2319,6 @@ function BuilderInner({
     }
   }
 
-  /* ---- Loading / Error states -------------------------------- */
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-muted/30">
@@ -2142,7 +2366,6 @@ function BuilderInner({
         canUndo={canUndo}
         canRedo={canRedo}
         autoSave={autoSave}
-        token={authToken}
         workspaceId={workspaceId}
         podId={podId}
         workflowId={workflowId}
@@ -2166,8 +2389,12 @@ function BuilderInner({
         onImport={handleImport}
       />
 
+<<<<<<< HEAD
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Library panel */}
+=======
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${libraryOpen ? "border-r border-border" : ""}`}
           style={{ width: libraryOpen ? 240 : 0 }}
@@ -2175,7 +2402,6 @@ function BuilderInner({
           {libraryOpen && <LibraryPanel />}
         </div>
 
-        {/* Library toggle */}
         <button
           onClick={() => setLibraryOpen((v) => !v)}
           title={libraryOpen ? "Collapse library" : "Expand library"}
@@ -2188,6 +2414,7 @@ function BuilderInner({
           />
         </button>
 
+<<<<<<< HEAD
         {/* Center column: canvas + bottom panel */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Canvas */}
@@ -2436,6 +2663,22 @@ function BuilderInner({
                   className="fixed z-[199]"
                   style={{ left: editingEdge.x - 64, top: editingEdge.y - 16 }}
                 >
+=======
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+
+        <div
+          ref={reactFlowWrapper}
+          className="relative flex-1 min-h-0"
+          onDragOver={isGenerating ? undefined : onDragOver}
+          onDrop={isGenerating ? undefined : onDrop}
+        >
+          {searchOpen && (
+            <>
+              <div className="absolute inset-0 z-[90]" onClick={() => { setSearchOpen(false); setSearchQuery(''); }} />
+              <div className="absolute top-3 left-1/2 z-[91] -translate-x-1/2 w-80 rounded-xl border border-border bg-background shadow-xl overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border">
+                  <HugeiconsIcon icon={Search01Icon} className="size-3.5 text-muted-foreground shrink-0" />
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                   <input
                     autoFocus
                     value={editingEdge.label}
@@ -2456,6 +2699,7 @@ function BuilderInner({
               </>
             )}
 
+<<<<<<< HEAD
             {/* Quick-connect node picker */}
             {quickConnect && (
               <>
@@ -2469,6 +2713,196 @@ function BuilderInner({
                     left: quickConnect.screenX + 12,
                     top: quickConnect.screenY - 48,
                   }}
+=======
+          {isGenerating && (
+            <div className="absolute inset-0 z-10 flex items-end justify-center pb-6 pointer-events-none">
+              <div className="flex items-center gap-2 rounded-full border bg-background/90 px-4 py-2 shadow-lg text-sm font-medium text-violet-600 backdrop-blur-sm">
+                <span className="size-2 rounded-full bg-violet-500 animate-pulse" />
+                AI is building your workflow…
+              </div>
+            </div>
+          )}
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={isGenerating ? undefined : onNodesChange}
+            onEdgesChange={isGenerating ? undefined : onEdgesChange}
+            onConnect={isGenerating ? undefined : onConnect}
+            isValidConnection={isValidConnection}
+            onConnectStart={isGenerating ? undefined : onConnectStart}
+            onConnectEnd={isGenerating ? undefined : onConnectEnd}
+            onNodeClick={isGenerating ? undefined : onNodeClick}
+            onPaneClick={isGenerating ? undefined : onPaneClick}
+            onNodeContextMenu={isGenerating ? undefined : onNodeContextMenu}
+            onEdgeDoubleClick={isGenerating ? undefined : onEdgeDoubleClick}
+            onInit={(inst) => { rfInstanceRef.current = inst; setRfInstance(inst); }}
+            nodeTypes={nodeTypes}
+            nodesDraggable={!isGenerating && isInteractive}
+            nodesConnectable={!isGenerating && isInteractive}
+            elementsSelectable={!isGenerating && isInteractive}
+            panOnDrag={!isGenerating && cursorMode === 'grab'}
+            selectionOnDrag={!isGenerating && cursorMode === 'select'}
+            fitView
+            fitViewOptions={{ padding: 0.4, maxZoom: 0.85 }}
+            minZoom={0.1}
+            maxZoom={2}
+            deleteKeyCode={isGenerating ? null : ['Delete', 'Backspace']}
+            proOptions={{ hideAttribution: true }}
+            className={isGenerating ? 'pointer-events-none' : ''}
+          >
+            <CanvasControls
+              cursorMode={cursorMode}
+              setCursorMode={setCursorMode}
+              isInteractive={isInteractive}
+              onInteractiveToggle={() => setIsInteractive((v) => !v)}
+            />
+
+            <Panel position="bottom-right" className="!m-0 !p-0">
+              <div className="flex flex-col items-end">
+                <button
+                  onClick={() => setMinimapVisible((v) => !v)}
+                  title={minimapVisible ? 'Collapse minimap' : 'Expand minimap'}
+                  className="mr-2.5 flex size-5 items-center justify-center rounded-t-md border border-b-0 border-border bg-background/90 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <HugeiconsIcon
+                    icon={minimapVisible ? ArrowDown01Icon : ArrowUp01Icon}
+                    className="size-2.5"
+                  />
+                </button>
+                {minimapVisible && (
+                  <MiniMap
+                    nodeColor={(n) => NODE_COLORS[(n.data?.nodeType as string) ?? n.type ?? ''] ?? '#6b7280'}
+                    maskColor="rgba(128,128,128,0.12)"
+                    style={{ background: 'hsl(var(--background))', border: 'none' }}
+                    className="!relative !bottom-auto !right-auto !m-0 rounded-b-lg rounded-tl-lg border border-border"
+                  />
+                )}
+              </div>
+            </Panel>
+          </ReactFlow>
+
+          {(() => {
+            const sel = nodes.filter((n) => n.selected);
+            if (sel.length < 2) return null;
+            return (
+              <div className="absolute top-3 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1 rounded-lg border bg-background/95 backdrop-blur-sm px-3 py-1.5 shadow-md">
+                <span className="text-xs font-medium text-muted-foreground pr-2 border-r border-border mr-1">
+                  {sel.length} selected
+                </span>
+                <button
+                  onClick={duplicateSelected}
+                  title="Duplicate selected"
+                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-foreground hover:bg-muted transition-colors"
+                >
+                  <HugeiconsIcon icon={Copy01Icon} className="size-3.5" />
+                  Duplicate
+                </button>
+                <button
+                  onClick={groupSelectedNodes}
+                  title="Group into frame"
+                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-foreground hover:bg-muted transition-colors"
+                >
+                  <HugeiconsIcon icon={BorderAll01Icon} className="size-3.5" />
+                  Group
+                </button>
+                <button
+                  onClick={deleteSelected}
+                  title="Delete selected"
+                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <HugeiconsIcon icon={Delete01Icon} className="size-3.5" />
+                  Delete
+                </button>
+              </div>
+            );
+          })()}
+
+          {editingEdge && (
+            <>
+              <div className="fixed inset-0 z-[198]" onClick={commitEdgeLabel} />
+              <div
+                className="fixed z-[199]"
+                style={{ left: editingEdge.x - 64, top: editingEdge.y - 16 }}
+              >
+                <input
+                  autoFocus
+                  value={editingEdge.label}
+                  onChange={(e) => setEditingEdge((prev) => prev ? { ...prev, label: e.target.value } : null)}
+                  onBlur={commitEdgeLabel}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitEdgeLabel();
+                    if (e.key === 'Escape') setEditingEdge(null);
+                  }}
+                  placeholder="Edge label…"
+                  className="w-36 rounded-lg border-2 border-primary bg-background px-3 py-1.5 text-xs font-medium shadow-xl outline-none text-center text-foreground placeholder:text-muted-foreground/50"
+                />
+              </div>
+            </>
+          )}
+
+          {quickConnect && (
+            <>
+              <div className="fixed inset-0 z-[98]" onClick={() => setQuickConnect(null)} />
+              <div
+                className="fixed z-[99] w-48 overflow-hidden rounded-xl border border-border bg-background shadow-xl"
+                style={{ left: quickConnect.screenX + 12, top: quickConnect.screenY - 48 }}
+              >
+                <p className="border-b border-border px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Add node
+                </p>
+                <div className="grid grid-cols-2 gap-0.5 p-1.5">
+                  {QUICK_NODE_TYPES.map(({ type, label }) => (
+                    <button
+                      key={type}
+                      onClick={() => handleQuickConnectPick(type)}
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted"
+                    >
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: NODE_COLORS[type] ?? '#6366f1' }}
+                      />
+                      <span className="text-xs">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {contextMenu && (
+            <>
+              <div className="fixed inset-0 z-[99]" onClick={() => setContextMenu(null)} />
+              <div
+                className="fixed z-[100] min-w-44 overflow-hidden rounded-lg border border-border bg-background shadow-lg py-1"
+                style={{ left: contextMenu.x, top: contextMenu.y }}
+              >
+                {(() => {
+                  const isFrame = contextMenu.node.type === 'frame';
+                  const isCanvas = contextMenu.node.type === 'note' || isFrame;
+                  const isTerminal = contextMenu.node.type === 'start' || contextMenu.node.type === 'end';
+                  type MenuItem = { icon: typeof PlayIcon; label: string; onClick: () => void };
+                  const items: MenuItem[] = [];
+                  if (!isCanvas && !isTerminal) items.push({ icon: PlayIcon, label: 'Test node', onClick: () => { setTestNodeInput('{}'); setTestNodeDialog({ node: contextMenu.node }); setContextMenu(null); } });
+                  items.push({ icon: Copy01Icon, label: 'Duplicate', onClick: () => duplicateNode(contextMenu.node) });
+                  if (isFrame) items.push({ icon: BorderAll01Icon, label: 'Ungroup', onClick: () => ungroupFrame(contextMenu.node.id) });
+                  if (!isFrame) items.push({ icon: LockKeyIcon, label: contextMenu.node.data?.positionLocked ? 'Unlock position' : 'Lock position', onClick: () => toggleNodePositionLock(contextMenu.node) });
+                  if (!isFrame) items.push({ icon: SquareLock01Icon, label: contextMenu.node.data?.deleteLocked ? 'Allow deletion' : 'Lock from deletion', onClick: () => toggleNodeDeletionLock(contextMenu.node) });
+                  return items.map(({ icon, label, onClick }) => (
+                    <button
+                      key={label}
+                      onClick={onClick}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                    >
+                      <HugeiconsIcon icon={icon} className="size-3.5 text-muted-foreground shrink-0" />
+                      {label}
+                    </button>
+                  ));
+                })()}
+                <div className="h-px bg-border my-1 mx-1" />
+                <button
+                  onClick={() => { handleNodeDelete(contextMenu.node.id); setContextMenu(null); }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 >
                   <p className="border-b border-border px-3 py-1.5 text-[9px] font-bold tracking-widest text-muted-foreground uppercase">
                     Add node
@@ -2494,6 +2928,7 @@ function BuilderInner({
               </>
             )}
 
+<<<<<<< HEAD
             {/* Context menu */}
             {contextMenu && (
               <>
@@ -2603,8 +3038,22 @@ function BuilderInner({
           />
         </div>
         {/* end center column */}
+=======
+        <BottomPanel
+          nodes={nodes}
+          nodeResults={nodeResults}
+          streamingTokens={streamingTokens}
+          validationState={validationState}
+          runStatus={runStatus}
+          workspaceId={workspaceId}
+          podId={podId}
+          workflowId={workflowId}
+          onRetryNode={handleRetryNode}
+          executionOutput={executionOutput}
+        />
+        </div>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
-        {/* Node config panel (right side) */}
         <div
           className={`shrink-0 overflow-hidden transition-all duration-200${selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen ? "border-l border-border" : ""}`}
           style={{
@@ -2621,6 +3070,7 @@ function BuilderInner({
                 : 0,
           }}
         >
+<<<<<<< HEAD
           {selectedNode &&
             !generateOpen &&
             !deployPanelOpen &&
@@ -2644,9 +3094,26 @@ function BuilderInner({
                 onRetry={() => handleRetryNode(selectedNode.id)}
               />
             )}
+=======
+          {selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen && (
+            <NodePanel
+              key={selectedNode.id}
+              node={selectedNode}
+              nodes={nodes}
+              edges={edges}
+              onClose={() => setSelectedNode(null)}
+              onUpdate={handleNodeUpdate}
+              onDelete={handleNodeDelete}
+              nodeResult={nodeResults[selectedNode.id]}
+              workspaceId={workspaceId}
+              podId={podId}
+              executionId={runStatus?.id}
+              onRetry={() => handleRetryNode(selectedNode.id)}
+            />
+          )}
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         </div>
 
-        {/* Generate panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${generateOpen ? "border-l border-border" : ""}`}
           style={{ width: generateOpen ? 400 : 0 }}
@@ -2656,7 +3123,6 @@ function BuilderInner({
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               nodes={nodes}
               edges={edges}
               onEvent={handleGenerateEvent}
@@ -2668,17 +3134,15 @@ function BuilderInner({
           )}
         </div>
 
-        {/* Deploy panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${deployPanelOpen ? "border-l border-border" : ""}`}
           style={{ width: deployPanelOpen ? 360 : 0 }}
         >
-          {deployPanelOpen && authToken && (
+          {deployPanelOpen && (
             <DeployPanel
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               isDeployed={isDeployed}
               deployedAt={deployedAt}
               onDeploy={handleDeploy}
@@ -2688,7 +3152,6 @@ function BuilderInner({
           )}
         </div>
 
-        {/* History panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${historyOpen ? "border-l border-border" : ""}`}
           style={{ width: historyOpen ? 400 : 0 }}
@@ -2698,14 +3161,12 @@ function BuilderInner({
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               nodes={nodes}
               onClose={() => setHistoryOpen(false)}
             />
           )}
         </div>
 
-        {/* Versions panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${versionsOpen ? "border-l border-border" : ""}`}
           style={{ width: versionsOpen ? 280 : 0 }}
@@ -2715,7 +3176,6 @@ function BuilderInner({
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               onRestore={handleVersionRestore}
               onDiff={(v) => setDiffVersion(v)}
               onClose={() => setVersionsOpen(false)}
@@ -2723,7 +3183,6 @@ function BuilderInner({
           )}
         </div>
 
-        {/* Share panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${shareOpen ? "border-l border-border" : ""}`}
           style={{ width: shareOpen ? 300 : 0 }}
@@ -2733,13 +3192,11 @@ function BuilderInner({
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               onClose={() => setShareOpen(false)}
             />
           )}
         </div>
 
-        {/* Comments panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${commentsOpen ? "border-l border-border" : ""}`}
           style={{ width: commentsOpen ? 320 : 0 }}
@@ -2749,7 +3206,6 @@ function BuilderInner({
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               nodes={nodes}
               selectedNodeId={selectedNode?.id}
               currentUserId={userId ?? undefined}
@@ -2758,17 +3214,15 @@ function BuilderInner({
           )}
         </div>
 
-        {/* Evals panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${evalsOpen ? "border-l border-border" : ""}`}
           style={{ width: evalsOpen ? 380 : 0 }}
         >
-          {evalsOpen && authToken && (
+          {evalsOpen && (
             <EvalsPanel
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               testCases={testCases}
               onTestCasesChange={setTestCases}
               onClose={() => setEvalsOpen(false)}
@@ -2785,7 +3239,6 @@ function BuilderInner({
           )}
         </div>
 
-        {/* Chat Preview panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${chatPreviewOpen ? "border-l border-border" : ""}`}
           style={{ width: chatPreviewOpen ? 400 : 0 }}
@@ -2811,13 +3264,15 @@ function BuilderInner({
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Diff viewer */}
+=======
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       {diffVersion !== null && (
         <DiffPanel
           workspaceId={workspaceId}
           podId={podId}
           workflowId={workflowId}
-          token={authToken}
           currentNodes={nodes}
           currentEdges={edges}
           targetVersion={diffVersion}
@@ -2825,7 +3280,6 @@ function BuilderInner({
         />
       )}
 
-      {/* Suspension banner — approval or ask_human (hidden when chat panel is open; chat handles it inline) */}
       {isSuspended && !chatPreviewOpen && (
         <div className="shrink-0 border-t border-amber-300 bg-amber-50 px-5 py-3 dark:border-amber-800 dark:bg-amber-950/30">
           <div className="flex items-center justify-between gap-4">
@@ -2895,6 +3349,7 @@ function BuilderInner({
         </div>
       )}
 
+<<<<<<< HEAD
       {/* Test node dialog */}
       <Dialog
         open={!!testNodeDialog}
@@ -2902,6 +3357,9 @@ function BuilderInner({
           if (!o) setTestNodeDialog(null)
         }}
       >
+=======
+      <Dialog open={!!testNodeDialog} onOpenChange={(o) => { if (!o) setTestNodeDialog(null); }}>
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <div className="flex items-center gap-2">
@@ -2999,9 +3457,6 @@ function BuilderInner({
   )
 }
 
-/* ------------------------------------------------------------------ */
-/*  Exported component                                                  */
-/* ------------------------------------------------------------------ */
 export function WorkflowBuilder(props: WorkflowBuilderProps) {
   return (
     <TooltipProvider delayDuration={400}>

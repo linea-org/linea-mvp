@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useEffect, useState } from "react"
 import {
   Avatar,
@@ -7,6 +8,11 @@ import {
   AvatarImage,
 } from "@linea/ui/components/avatar"
 import { createApiClient } from "@/lib/api"
+=======
+import { useEffect, useState } from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@linea/ui/components/avatar';
+import { useApiClient } from '@/hooks/use-api-client';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 interface Presence {
   userId: string
@@ -16,6 +22,7 @@ interface Presence {
 }
 
 interface Props {
+<<<<<<< HEAD
   token: string
   workspaceId: string
   podId: string
@@ -38,15 +45,41 @@ export function PresenceAvatars({
       try {
         const data = await api.post<Presence[]>(path, {})
         setOthers(data ?? [])
+=======
+  workspaceId: string;
+  podId: string;
+  workflowId: string;
+}
+
+export function PresenceAvatars({ workspaceId, podId, workflowId }: Props) {
+  const [others, setOthers] = useState<Presence[]>([]);
+  const getApi = useApiClient();
+
+  useEffect(() => {
+    const path = `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/presence`;
+
+    async function ping() {
+      try {
+        const api = await getApi();
+        const data = await api.post<Presence[]>(path, {});
+        setOthers(data ?? []);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       } catch {
         // presence endpoint not yet available — stay silent
       }
     }
 
+<<<<<<< HEAD
     void ping()
     const interval = setInterval(() => void ping(), 20_000)
     return () => clearInterval(interval)
   }, [token, workspaceId, podId, workflowId])
+=======
+    void ping();
+    const interval = setInterval(() => void ping(), 20_000);
+    return () => clearInterval(interval);
+  }, [getApi, workspaceId, podId, workflowId]);
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   if (others.length === 0) return null
 

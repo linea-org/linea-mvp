@@ -1,6 +1,11 @@
+<<<<<<< HEAD
 import { NextRequest, NextResponse } from "next/server"
 
 const API_BASE = `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"}/v1`
+=======
+import { NextRequest, NextResponse } from 'next/server';
+import { API_BASE } from '@/lib/api';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

@@ -1,11 +1,20 @@
 "use client"
 
+<<<<<<< HEAD:apps/web/components/workflow-builder/panels/variables-panel.tsx
 import { useRef } from "react"
 import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
 import type { Node } from "@xyflow/react"
 import { VariableChips } from "../variable-picker"
+=======
+import { useRef } from 'react';
+import { Button } from '@linea/ui/components/button';
+import { Input } from '@linea/ui/components/input';
+import { Label } from '@linea/ui/components/label';
+import type { Node } from '@xyflow/react';
+import { VariableChips } from '../../variable-picker';
+>>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/data/variables-panel.tsx
 
 interface VariableEntry {
   key: string
