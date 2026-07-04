@@ -1,0 +1,13 @@
+{
+  "extends": "@linea/typescript-config/base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
