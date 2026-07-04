@@ -5,7 +5,7 @@ import {
   ProviderConnection,
   providerConnections,
 } from "../schema"
-import { AIProviderType, IntegrationType } from "@linea/shared"
+import type { AIProviderType, IntegrationType } from "@linea/shared"
 
 interface ConnectionRepositoryInter {
   findById(id: string): Promise<ProviderConnection | null>
