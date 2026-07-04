@@ -1,26 +1,27 @@
-import { NodeExecutor, NodeRequest, WorkflowNodeType } from "../node"
-import { TransformNodeConfig, TransformResult } from "./transform.types"
+import { NodeContext, NodeExecutor, NodeResult, VariableMap } from "../node"
+import { TransformNodeConfig } from "./transform.types"
 
 export class TransformNode implements NodeExecutor<"transform"> {
   readonly type = "transform"
 
   async execute(
-    request: NodeRequest<TransformNodeConfig>
-  ): Promise<TransformResult> {
-    const values: Record<string, string> = {}
+    context: NodeContext<TransformNodeConfig>
+  ): Promise<NodeResult> {
+    const variables: VariableMap = {}
 
-    for (const [key, template] of Object.entries(request.config.values)) {
-      values[key] = this.render(template, request.config.variables)
+    for (const [key, value] of Object.entries(context.config.variables)) {
+      if (typeof value === "string") {
+        variables[key] = context.template.render(value, {
+          ...context.state.variables,
+          ...variables,
+        })
+      } else {
+        variables[key] = value
+      }
     }
 
-    return { values }
-  }
-
-  private render(template: string, variables: Record<string, unknown>): string {
-    return template.replace(/\{\{(.*?)\}\}/g, (_, key) => {
-      const value = variables[key.trim()]
-
-      return value == null ? "" : String(value)
-    })
+    return {
+      variables,
+    }
   }
 }

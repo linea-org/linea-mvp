@@ -3,11 +3,17 @@ import { NodeRegistry } from "./registry"
 import { AgentNode } from "./nodes/agent/agent.node"
 import { TransformNode } from "./nodes/transform/transform.node"
 import { HttpNode } from "./nodes/http/http.node"
-import { WorkflowNodeType } from "./nodes/node"
-import { NodeMap } from "./nodes"
+import type { WorkflowDefinition } from "./types"
+import { RuntimeState } from "./graph/state"
+import { LangGraphCompiler } from "./graph/compiler"
+import { LangGraphRunner } from "./graph/runner"
+import { TemplateEngine } from "./template/engine"
 
 export class Runtime {
   private readonly registry: NodeRegistry
+  private readonly compiler: LangGraphCompiler
+  private readonly runner: LangGraphRunner
+  private readonly template: TemplateEngine
 
   constructor(ai: AIClient) {
     this.registry = new NodeRegistry([
@@ -15,16 +21,15 @@ export class Runtime {
       new TransformNode(),
       new HttpNode(),
     ])
+
+    this.template = new TemplateEngine()
+
+    this.compiler = new LangGraphCompiler(this.registry, this.template)
+    this.runner = new LangGraphRunner()
   }
 
-  get registryInstance() {
-    return this.registry
-  }
-
-  async execute<T extends WorkflowNodeType>(
-    type: T,
-    request: NodeMap[T]["request"]
-  ): Promise<NodeMap[T]["result"]> {
-    return this.registry.get(type).execute(request)
+  async execute(workflow: WorkflowDefinition, state: RuntimeState) {
+    const compiled = this.compiler.compile(workflow)
+    return this.runner.run(compiled, state)
   }
 }

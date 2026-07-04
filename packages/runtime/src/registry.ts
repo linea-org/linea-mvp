@@ -1,4 +1,5 @@
-import { NodeExecutor, WorkflowNodeType } from "./nodes/node"
+import { NodeExecutor } from "./nodes/node"
+import type { WorkflowNodeType } from "./types"
 
 export class NodeRegistry {
   private readonly executors = new Map<

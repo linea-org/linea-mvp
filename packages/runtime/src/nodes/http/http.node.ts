@@ -1,10 +1,10 @@
-import { NodeExecutor, NodeRequest, WorkflowNodeType } from "../node"
-import { HttpNodeConfig, HttpResult } from "./http.types"
+import { NodeContext, NodeExecutor, NodeResult } from "../node"
+import { HttpNodeConfig } from "./http.types"
 
 export class HttpNode implements NodeExecutor<"http"> {
   readonly type = "http"
 
-  async execute(request: NodeRequest<HttpNodeConfig>): Promise<HttpResult> {
+  async execute(request: NodeContext<HttpNodeConfig>): Promise<NodeResult> {
     const response = await fetch(request.config.url, {
       method: request.config.method,
       headers: request.config.headers,
@@ -15,9 +15,11 @@ export class HttpNode implements NodeExecutor<"http"> {
     })
 
     return {
-      status: response.status,
-      headers: Object.fromEntries(response.headers.entries()),
-      body: await response.json(),
+      variables: {
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: await response.json(),
+      },
     }
   }
 }

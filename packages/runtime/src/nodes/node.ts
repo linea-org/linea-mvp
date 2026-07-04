@@ -1,16 +1,20 @@
-export type WorkflowNodeType = "agent" | "transform" | "http"
+import { RuntimeState } from "../graph/state"
+import { TemplateEngine } from "../template/engine"
+import { WorkflowNodeMap, WorkflowNodeType } from "../types"
 
-export interface NodeRequest<TConfig> {
-  workspaceId: string
-  threadId: string
+export type VariableMap = Record<string, unknown>
 
-  config: TConfig
+export interface NodeResult {
+  variables: VariableMap
 }
 
-import { NodeMap } from "./index"
+export interface NodeContext<TConfig> {
+  state: RuntimeState
+  config: TConfig
+  template: TemplateEngine
+}
 
 export interface NodeExecutor<T extends WorkflowNodeType> {
   readonly type: T
-
-  execute(request: NodeMap[T]["request"]): Promise<NodeMap[T]["result"]>
+  execute(context: NodeContext<WorkflowNodeMap[T]>): Promise<NodeResult>
 }

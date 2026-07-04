@@ -1,6 +1,5 @@
 import { AIClient } from "@linea/ai"
-import { CompletionResult } from "@linea/types"
-import { NodeExecutor, NodeRequest } from "../node"
+import { NodeContext, NodeExecutor, NodeResult } from "../node"
 import { AgentNodeConfig } from "./agent.types"
 
 export class AgentNode implements NodeExecutor<"agent"> {
@@ -8,20 +7,37 @@ export class AgentNode implements NodeExecutor<"agent"> {
 
   readonly type = "agent"
 
-  async execute(
-    request: NodeRequest<AgentNodeConfig>
-  ): Promise<CompletionResult> {
+  async execute(context: NodeContext<AgentNodeConfig>): Promise<NodeResult> {
     const client = await this.ai.getClient(
-      request.config.provider,
-      request.workspaceId
+      context.config.provider,
+      context.state.workflowId
     )
 
-    return client.chat(request.config.model, {
-      system: request.config.systemPrompt,
-      messages: request.config.messages,
-      tools: request.config.tools,
-      temperature: request.config.temperature,
-      maxTokens: request.config.maxTokens,
+    const system = context.template.render(
+      context.config.systemPrompt ?? "",
+      context.state.variables
+    )
+
+    const messages = context.config.messages.map((m) => ({
+      ...m,
+      content: context.template.render(m.content, context.state.variables),
+    }))
+
+    const completion = await client.chat(context.config.model, {
+      system: system,
+      messages: messages,
+      tools: context.config.tools,
+      temperature: context.config.temperature,
+      maxTokens: context.config.maxTokens,
     })
+
+    return {
+      variables: {
+        text: completion.text,
+        usage: completion.usage,
+        finishReason: completion.stopReason,
+        toolCalls: completion.toolCalls,
+      },
+    }
   }
 }

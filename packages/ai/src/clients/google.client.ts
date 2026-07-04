@@ -11,8 +11,8 @@ import type { CompletionResult, NormalizedToolCall } from "@linea/types"
 export class GoogleClient implements ModelClient {
   displayModels: ModelDefinition[] = [
     {
-      id: "gemini-2.5-pro-preview-05-06",
-      name: "Gemini 2.5 Pro",
+      id: "gemini-3.5-flash",
+      name: "Gemini 3.5 Pro",
       provider: "google",
       description:
         "Most capable Gemini. Unmatched 1M token context for massive documents.",
@@ -148,7 +148,15 @@ export class GoogleClient implements ModelClient {
 
     const chat = genModel.startChat({
       history,
-      ...(systemMsg ? { systemInstruction: systemMsg } : {}),
+      ...(systemMsg
+        ? {
+            systemInstruction: {
+              role: "system",
+              parts: [{ text: systemMsg }],
+            },
+          }
+        : {}),
+
       generationConfig: {
         maxOutputTokens: maxTokens ?? 4096,
         temperature: temperature ?? 0.7,

@@ -1,8 +1,5 @@
-export interface TransformNodeConfig {
-  values: Record<string, string>
-  variables: Record<string, unknown>
-}
+import { VariableMap } from "../node"
 
-export interface TransformResult {
-  values: Record<string, string>
+export interface TransformNodeConfig {
+  variables: VariableMap
 }

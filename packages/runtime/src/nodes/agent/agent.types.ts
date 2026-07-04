@@ -6,7 +6,6 @@ export interface AgentNodeConfig {
   model: string
 
   systemPrompt?: string
-  userPrompt: string
 
   temperature?: number
   maxTokens?: number
