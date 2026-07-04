@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
+import { ApiError } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -101,48 +102,27 @@ function timeLabel(iso: string): string {
 }
 
 export default function AuditPage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [unavailable, setUnavailable] = useState(false);
+  const wsId = activeWorkspace?.id ?? '';
   const [period, setPeriod] = useState<Period>('7d');
   const [resourceType, setResourceType] = useState('all');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (wsLoading || !activeWorkspace) return;
-    setLoading(true);
-    setUnavailable(false);
+  const { data: logs = [], isLoading: loading, error } = useQuery<AuditLog[]>({
+    queryKey: ['audit-logs', wsId, period, resourceType],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const params = new URLSearchParams();
+      if (period !== 'all') params.set('period', period);
+      if (resourceType !== 'all') params.set('resourceType', resourceType);
+      return api.get<AuditLog[]>(`/workspaces/${wsId}/audit-logs?${params.toString()}`);
+    },
+  });
 
-    async function load() {
-      const token = await getToken();
-      if (!token || !activeWorkspace) return;
-      try {
-        const api = createApiClient(token);
-        const params = new URLSearchParams();
-        if (period !== 'all') params.set('period', period);
-        if (resourceType !== 'all') params.set('resourceType', resourceType);
-        const data = await api.get<AuditLog[]>(
-          `/workspaces/${activeWorkspace.id}/audit-logs?${params.toString()}`,
-        );
-        setLogs(data ?? []);
-      } catch (err: unknown) {
-        const status = (err as { status?: number })?.status;
-        if (status === 404 || status === 501) {
-          setUnavailable(true);
-          setLogs([]);
-        } else {
-          setLogs([]);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void load();
-  }, [activeWorkspace, wsLoading, period, resourceType, getToken]);
+  const unavailable = error instanceof ApiError && (error.status === 404 || error.status === 501);
 
   const filtered = logs.filter((l) => {
     if (!search.trim()) return true;
@@ -158,15 +138,12 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-xl font-semibold">Audit Log</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Track who changed what across your workspace</p>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Search */}
         <div className="relative flex-1 min-w-[180px] max-w-xs">
           <HugeiconsIcon
             icon={Search01Icon}
@@ -181,7 +158,6 @@ export default function AuditPage() {
           />
         </div>
 
-        {/* Resource type */}
         <Select value={resourceType} onValueChange={setResourceType}>
           <SelectTrigger className="w-40 h-9 text-xs">
             <SelectValue />
@@ -193,7 +169,6 @@ export default function AuditPage() {
           </SelectContent>
         </Select>
 
-        {/* Period */}
         <div className="flex gap-0.5 rounded-lg border p-0.5">
           {PERIODS.map(({ label, value }) => (
             <button
@@ -222,7 +197,6 @@ export default function AuditPage() {
         )}
       </div>
 
-      {/* Content */}
       {loading || wsLoading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
@@ -266,12 +240,10 @@ export default function AuditPage() {
                     onClick={() => hasMetadata && setExpanded(isExpanded ? null : log.id)}
                     disabled={!hasMetadata}
                   >
-                    {/* Action icon */}
                     <span className={`shrink-0 ${color}`}>
                       <HugeiconsIcon icon={ActionIcon} className="size-4" />
                     </span>
 
-                    {/* Action + resource */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-sm font-medium">{formatAction(log.action)}</span>
@@ -295,7 +267,6 @@ export default function AuditPage() {
                       </div>
                     </div>
 
-                    {/* Time + expand */}
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {timeLabel(log.createdAt)}

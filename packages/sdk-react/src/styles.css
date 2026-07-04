@@ -40,7 +40,7 @@
   --linea-shadow-lg: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
-/* ── WorkflowRunner ────────────────────────────────────────────────────── */
+/* WorkflowRunner */
 
 .linea-runner {
   font-family: var(--linea-font);
@@ -204,7 +204,7 @@
   flex-shrink: 0;
 }
 
-/* ── WorkflowRunner — node progress & suspension ───────────────────────── */
+/* WorkflowRunner — node progress & suspension */
 
 .linea-runner__nodes {
   list-style: none;
@@ -311,7 +311,7 @@
   gap: 8px;
 }
 
-/* ── LineaChat ─────────────────────────────────────────────────────────── */
+/* LineaChat */
 
 .linea-chat {
   font-family: var(--linea-font);
@@ -677,7 +677,7 @@
 
 .linea-chat__tool-code--err { color: var(--linea-text-error); }
 
-/* ── Keyframes ─────────────────────────────────────────────────────────── */
+/* Keyframes */
 
 @keyframes linea-spin {
   to { transform: rotate(360deg); }
@@ -703,7 +703,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Dark mode ─────────────────────────────────────────────────────────── */
+/* Dark mode */
 
 @media (prefers-color-scheme: dark) {
   :root {

@@ -1,6 +1,7 @@
 import {
   Injectable,
   Inject,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -15,6 +16,8 @@ import { CronExpressionParser } from 'cron-parser';
 
 @Injectable()
 export class SchedulesService {
+  private readonly logger = new Logger(SchedulesService.name);
+
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly executionsService: ExecutionsService,
@@ -160,24 +163,29 @@ export class SchedulesService {
       .innerJoin(pods, eq(pods.id, schedules.podId))
       .where(and(eq(schedules.enabled, true), lte(schedules.nextRunAt, now)));
 
-    for (const schedule of due) {
-      try {
-        await this.executionsService.createFromTrigger(
-          schedule.podId,
-          schedule.workspaceId,
-          schedule.workflowId,
-          'schedule',
-          schedule.input,
-        );
-      } catch {
-        // Don't let one failing schedule block the rest
-      }
+    await Promise.allSettled(
+      due.map(async (schedule) => {
+        try {
+          await this.executionsService.createFromTrigger(
+            schedule.podId,
+            schedule.workspaceId,
+            schedule.workflowId,
+            'schedule',
+            schedule.input,
+          );
+        } catch (error) {
+          // Don't let one failing schedule block the rest
+          this.logger.error(
+            `Schedule ${schedule.id} failed to fire: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
 
-      const nextRunAt = this.nextRunDate(schedule.cronExpr);
-      await this.db
-        .update(schedules)
-        .set({ lastRunAt: now, nextRunAt })
-        .where(eq(schedules.id, schedule.id));
-    }
+        const nextRunAt = this.nextRunDate(schedule.cronExpr);
+        await this.db
+          .update(schedules)
+          .set({ lastRunAt: now, nextRunAt })
+          .where(eq(schedules.id, schedule.id));
+      }),
+    );
   }
 }

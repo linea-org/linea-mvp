@@ -21,7 +21,8 @@
 
 ## Business Logic
 
-- `SchedulerService` runs on a polling interval and triggers due schedules by enqueuing executions
+- `SchedulesService.fireDueSchedules()` runs on a polling interval, fetches all enabled schedules with `nextRunAt <= now`, and fires them concurrently via `Promise.allSettled` — one failing schedule no longer blocks or delays the rest of the tick
+- Each schedule failure is logged (`Logger.error`) instead of silently swallowed
 - `nextRunAt` is computed from `cronExpr` after each trigger
 - Only `deployed` workflows can be scheduled
 
@@ -32,7 +33,7 @@
 
 ## Changelog
 
-_No recent changes._
+- `fireDueSchedules` now processes due schedules concurrently (`Promise.allSettled`) instead of sequentially, and logs per-schedule failures instead of swallowing them silently
 
 ## Missing / Gaps
 

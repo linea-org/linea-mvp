@@ -25,9 +25,7 @@ interface GeneratedEdge {
   label?: string;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 // Planner system prompt — broad context about every available node type
-// ────────────────────────────────────────────────────────────────────────────
 const PLANNER_SYSTEM = `\
 You are the Planner sub-agent for Linea, an AI workflow automation platform.
 Your job is to read a user's natural-language description and produce a MINIMAL, focused workflow plan.
@@ -68,9 +66,7 @@ Return ONLY valid JSON — no prose, no markdown fences:
   ]
 }`;
 
-// ────────────────────────────────────────────────────────────────────────────
 // Builder system prompt — turns the plan into a full workflow definition
-// ────────────────────────────────────────────────────────────────────────────
 const BUILDER_SYSTEM = `\
 You are the Builder sub-agent for Linea. You receive a structured workflow plan and produce the
 complete workflow definition JSON that the ReactFlow canvas can render.
@@ -177,7 +173,6 @@ export class GenerateWorkflowService {
 
     const client = new Anthropic({ apiKey });
 
-    // ── Phase 1: Planner sub-agent ────────────────────────────────────────
     yield {
       type: 'progress',
       message: 'Planner is designing the workflow structure…',
@@ -229,7 +224,6 @@ export class GenerateWorkflowService {
       message: `Plan ready: ${plan.steps?.length ?? 0} nodes — building the workflow…`,
     };
 
-    // ── Phase 2: Builder sub-agent ────────────────────────────────────────
     let definition: { nodes: GeneratedNode[]; edges: GeneratedEdge[] };
 
     try {
@@ -272,7 +266,6 @@ export class GenerateWorkflowService {
       node.data.nodeType = nodeType;
     }
 
-    // ── Stream nodes one by one ────────────────────────────────────────────
     yield {
       type: 'progress',
       message: `Adding ${definition.nodes.length} nodes to canvas…`,
@@ -283,7 +276,6 @@ export class GenerateWorkflowService {
       await sleep(220);
     }
 
-    // ── Stream edges one by one ────────────────────────────────────────────
     for (const edge of definition.edges) {
       yield { type: 'edge_added', edge };
       await sleep(120);

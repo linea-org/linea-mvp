@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, unwrapList, API_BASE } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -55,7 +55,6 @@ import {
   Loading01Icon,
 } from '@hugeicons/core-free-icons';
 
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
 const PAGE_SIZE = 10;
 
 interface Webhook {
@@ -164,10 +163,10 @@ export default function WebhooksPage() {
       const token = await getToken();
       if (!token) return [];
       const api = createApiClient(token);
-      const res = await api.get<Workflow[]>(
+      const res = await api.get<Workflow[] | { workflows: Workflow[] }>(
         `/workspaces/${activeWorkspace!.id}/pods/${podId}/workflows`,
       );
-      return (Array.isArray(res) ? res : ((res as any)?.workflows ?? [])) as Workflow[];
+      return unwrapList(res, 'workflows');
     },
   });
 
@@ -222,12 +221,12 @@ export default function WebhooksPage() {
     return `${API_BASE}/webhooks/${id}/trigger`;
   }
 
-  function workflowName(id: string) {
+  const workflowName = useCallback((id: string) => {
     return workflows.find((w) => w.id === id)?.name ?? id.slice(0, 8) + '…';
-  }
+  }, [workflows]);
 
   const filtered = useMemo(() => {
-    let list = Array.isArray(webhooks) ? webhooks : [];
+    let list = webhooks;
     if (workflowFilter !== 'all') {
       list = list.filter((wh) => wh.workflowId === workflowFilter);
     }
@@ -262,7 +261,6 @@ export default function WebhooksPage() {
         </Button>
       </div>
 
-      {/* Search + filter bar */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-xs">
           <HugeiconsIcon
@@ -379,7 +377,6 @@ export default function WebhooksPage() {
         </div>
       )}
 
-      {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
@@ -421,7 +418,6 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Secret reveal dialog — shown after create or rotate */}
       <Dialog open={!!revealSecret} onOpenChange={() => setRevealSecret(null)}>
         <DialogContent>
           <DialogHeader>
@@ -468,7 +464,6 @@ export default function WebhooksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

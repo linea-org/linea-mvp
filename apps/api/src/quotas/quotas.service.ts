@@ -3,10 +3,16 @@ import { eq, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { resourceQuotas } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
+import { NotificationsService } from '../notifications/notifications.service';
+
+const QUOTA_ALERT_THRESHOLDS = [0.8, 1];
 
 @Injectable()
 export class QuotasService {
-  constructor(@Inject(DB_TOKEN) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DB_TOKEN) private readonly db: DrizzleDB,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async getOrCreate(workspaceId: string) {
     const [row] = await this.db
@@ -61,15 +67,62 @@ export class QuotasService {
     }
   }
 
-  async incrementUsed(workspaceId: string, tokensConsumed = 0): Promise<void> {
-    await this.db
+  async incrementUsed(
+    workspaceId: string,
+    tokensConsumed = 0,
+    userId?: string,
+  ): Promise<void> {
+    const before = await this.getOrCreate(workspaceId);
+
+    const [after] = await this.db
       .update(resourceQuotas)
       .set({
         executionsUsed: sql`executions_used + 1`,
         tokensUsedMonth: sql`tokens_used_month + ${tokensConsumed}`,
         updatedAt: new Date(),
       })
-      .where(eq(resourceQuotas.workspaceId, workspaceId));
+      .where(eq(resourceQuotas.workspaceId, workspaceId))
+      .returning();
+
+    if (userId && after)
+      this.notifyIfThresholdCrossed(userId, workspaceId, before, after);
+  }
+
+  private notifyIfThresholdCrossed(
+    userId: string,
+    workspaceId: string,
+    before: typeof resourceQuotas.$inferSelect,
+    after: typeof resourceQuotas.$inferSelect,
+  ): void {
+    for (const [label, usedBefore, usedAfter, limit] of [
+      [
+        'executions',
+        before.executionsUsed,
+        after.executionsUsed,
+        after.executionsPerMonth,
+      ],
+      [
+        'tokens',
+        before.tokensUsedMonth,
+        after.tokensUsedMonth,
+        after.tokensPerMonth,
+      ],
+    ] as const) {
+      for (const threshold of QUOTA_ALERT_THRESHOLDS) {
+        const boundary = threshold * limit;
+        if (usedBefore < boundary && usedAfter >= boundary) {
+          void this.notifications.create(
+            userId,
+            'quota_threshold',
+            threshold >= 1
+              ? `${label} quota reached`
+              : `${label} quota nearing limit`,
+            `Workspace has used ${usedAfter.toLocaleString()}/${limit.toLocaleString()} ${label} this month (${Math.round(threshold * 100)}%).`,
+            workspaceId,
+          );
+        }
+      }
+    }
   }
 
   async getQuota(workspaceId: string) {

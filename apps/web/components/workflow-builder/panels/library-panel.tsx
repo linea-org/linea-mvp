@@ -92,7 +92,6 @@ const categories: { label: string; nodes: NodeDef[] }[] = [
   },
 ];
 
-/* ─── Single draggable row ───────────────────────────────────────── */
 function NodeRow({ node }: { node: NodeDef }) {
   return (
     <div
@@ -115,7 +114,6 @@ function NodeRow({ node }: { node: NodeDef }) {
   );
 }
 
-/* ─── Collapsible category ───────────────────────────────────────── */
 function Category({ label, nodes, defaultOpen = true }: { label: string; nodes: NodeDef[]; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -143,7 +141,6 @@ function Category({ label, nodes, defaultOpen = true }: { label: string; nodes: 
   );
 }
 
-/* ─── Main panel ─────────────────────────────────────────────────── */
 export function LibraryPanel() {
   const [query, setQuery] = useState('');
 
@@ -157,9 +154,9 @@ export function LibraryPanel() {
     );
   }, [query, allNodes]);
 
+  // The scrollable list below is a plain div (not flex/grid) so its height propagates correctly.
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Search */}
       <div className="shrink-0 border-b border-border px-2.5 py-2">
         <div className="relative">
           <HugeiconsIcon
@@ -176,7 +173,6 @@ export function LibraryPanel() {
         </div>
       </div>
 
-      {/* Scrollable list — plain div so height propagates correctly */}
       <div className="flex-1 overflow-y-auto py-1.5">
         {filtered ? (
           filtered.length === 0 ? (

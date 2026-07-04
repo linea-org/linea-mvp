@@ -12,8 +12,6 @@ function req(name: string, args: Record<string, any> = {}): ToolCallRequest {
   return { id: 'tc1', name, arguments: args };
 }
 
-// ─── read_variable ────────────────────────────────────────────────────────────
-
 describe('read_variable', () => {
   it('returns the value from state.variables', async () => {
     const state: WorkflowState = {
@@ -36,8 +34,6 @@ describe('read_variable', () => {
     expect(result.output).toBeNull();
   });
 });
-
-// ─── write_variable ───────────────────────────────────────────────────────────
 
 describe('write_variable', () => {
   it('returns a __writeVariable marker', async () => {
@@ -67,8 +63,6 @@ describe('write_variable', () => {
   });
 });
 
-// ─── run_javascript ───────────────────────────────────────────────────────────
-
 describe('run_javascript', () => {
   it('is disabled and returns an error', async () => {
     const result = await executeTool(
@@ -79,8 +73,6 @@ describe('run_javascript', () => {
     expect(result.output).toBeNull();
   });
 });
-
-// ─── memory_store / memory_search ─────────────────────────────────────────────
 
 describe('memory_store', () => {
   it('returns a __memoryWrite marker', async () => {
@@ -150,8 +142,6 @@ describe('memory_search', () => {
   });
 });
 
-// ─── ask_human ────────────────────────────────────────────────────────────────
-
 describe('ask_human', () => {
   it('returns question and choices passthrough', async () => {
     const result = await executeTool(
@@ -164,8 +154,6 @@ describe('ask_human', () => {
     });
   });
 });
-
-// ─── http_request ─────────────────────────────────────────────────────────────
 
 describe('http_request', () => {
   const originalFetch = global.fetch;
@@ -225,8 +213,6 @@ describe('http_request', () => {
     expect((result.output as any).data).toBe('not json');
   });
 });
-
-// ─── unknown tool ─────────────────────────────────────────────────────────────
 
 describe('unknown tool', () => {
   it('surfaces an error result', async () => {

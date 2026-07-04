@@ -1,4 +1,4 @@
-import { ToolDefinition } from '../tools/definitions';
+import { ToolDefinition } from '../../../executions/engine/tools/definitions';
 import {
   ChatMessage,
   CompletionResult,

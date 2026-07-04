@@ -51,8 +51,6 @@ export class AgentChatController {
     }
   }
 
-  // ─── Sessions ─────────────────────────────────────────────────────────────
-
   @Get('sessions')
   @ApiOperation({ summary: 'List chat sessions for this workspace' })
   listSessions(@Param('workspaceId') workspaceId: string) {

@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Popover, PopoverContent, PopoverTrigger } from '@linea/ui/components/popover';
 import { cn } from '@linea/ui/lib/utils';
-
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+import { API_BASE } from '@/lib/api';
 
 interface ModelDef {
   id: string;
@@ -60,24 +60,20 @@ export function ModelPicker({
   className,
   placeholder = 'Select a model…',
 }: ModelPickerProps) {
-  const [models, setModels] = useState<ModelDef[]>([]);
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetch(`${API_BASE}/models`)
-      .then((r) => r.json())
-      .then((data: unknown) => {
-        const raw = (data as { data?: unknown }).data ?? data;
-        const list = Array.isArray(raw) ? (raw as ModelDef[]) : [];
-        setModels(list);
-      })
-      .catch(() => setModels([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: models = [], isLoading: loading } = useQuery<ModelDef[]>({
+    queryKey: ['models-list'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/models`);
+      const data: unknown = await res.json();
+      const raw = (data as { data?: unknown }).data ?? data;
+      return Array.isArray(raw) ? (raw as ModelDef[]) : [];
+    },
+  });
 
   useEffect(() => {
     if (open) {
@@ -162,7 +158,6 @@ export function ModelPicker({
         align="start"
         sideOffset={4}
       >
-        {/* Search */}
         <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
           <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth={1.5}>
             <circle cx="7" cy="7" r="4.5" />
@@ -184,7 +179,6 @@ export function ModelPicker({
           )}
         </div>
 
-        {/* Provider filter chips */}
         {availableProviders.length > 1 && (
           <div className="flex flex-wrap gap-1 border-b border-border px-2.5 py-2">
             <button
@@ -217,7 +211,6 @@ export function ModelPicker({
           </div>
         )}
 
-        {/* Model list */}
         <div className="max-h-[280px] overflow-y-auto py-1">
           {loading ? (
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">Loading models…</div>
@@ -241,7 +234,6 @@ export function ModelPicker({
                         isSelected ? 'bg-accent' : 'hover:bg-accent/50',
                       )}
                     >
-                      {/* checkmark column */}
                       <div className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center">
                         {isSelected && (
                           <svg viewBox="0 0 10 10" className="size-3" fill="none" stroke="currentColor" strokeWidth={2}>

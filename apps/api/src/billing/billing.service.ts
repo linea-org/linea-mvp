@@ -11,8 +11,7 @@ import type { DrizzleDB } from '@linea/db';
 import { workspaces } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 
-/* ─── Plan catalogue ────────────────────────────────────────────────── */
-export const PLANS: Record<
+const PLANS: Record<
   string,
   {
     name: string;
@@ -50,7 +49,6 @@ export const PLANS: Record<
   },
 };
 
-/* ─── Polar webhook payload types ────────────────────────────────────── */
 interface PolarSubscriptionPayload {
   type: string;
   data: {
@@ -84,8 +82,6 @@ export class BillingService {
     };
   }
 
-  /* ── Helpers ────────────────────────────────────────────────────── */
-
   private async polarPost<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`https://api.polar.sh${path}`, {
       method: 'POST',
@@ -101,8 +97,6 @@ export class BillingService {
     }
     return res.json() as Promise<T>;
   }
-
-  /* ── Public methods ─────────────────────────────────────────────── */
 
   async getPlans(workspaceId: string) {
     const plans = Object.entries(PLANS).map(([key, p]) => ({

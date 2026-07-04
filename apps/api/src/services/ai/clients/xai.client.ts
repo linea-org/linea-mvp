@@ -8,7 +8,7 @@ import {
 } from 'openai/resources/chat';
 
 export class XAIClient implements ModelClient {
-  displayModels: ModelDefinition[] = [
+  static readonly displayModels: ModelDefinition[] = [
     {
       id: 'grok-3',
       name: 'Grok 3',
@@ -63,12 +63,15 @@ export class XAIClient implements ModelClient {
       costPer1mTokens: { input: 2, output: 10 },
     },
   ];
-  models: string[] = this.displayModels.map((m) => m.id);
-  embeddingModels: string[] = [
+  static readonly embeddingModels: string[] = [
     'text-embedding-3-small',
     'text-embedding-3-large',
     'text-embedding-ada-002',
   ];
+
+  displayModels: ModelDefinition[] = XAIClient.displayModels;
+  models: string[] = XAIClient.displayModels.map((m) => m.id);
+  embeddingModels: string[] = XAIClient.embeddingModels;
 
   private _client: OpenAI;
   constructor(apiKey: string) {

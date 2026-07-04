@@ -32,7 +32,8 @@ export class NotificationsService {
           ),
         ),
       )
-      .orderBy(desc(notifications.createdAt));
+      .orderBy(desc(notifications.createdAt))
+      .limit(500);
   }
 
   async countUnread(userId: string, workspaceId: string): Promise<number> {

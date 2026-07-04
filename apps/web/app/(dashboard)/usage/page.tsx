@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@clerk/nextjs';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { friendlyApiError } from '@/lib/api';
+import { formatTokenCount } from '@/lib/format';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -51,12 +53,6 @@ function calcCost(input: number, output: number): number {
   return (input / 1_000_000) * INPUT_COST_PER_M + (output / 1_000_000) * OUTPUT_COST_PER_M;
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
-}
-
 function formatCost(usd: number): string {
   if (usd < 0.001) return '<$0.001';
   if (usd < 1) return `$${usd.toFixed(4)}`;
@@ -79,7 +75,7 @@ function TokenBar({ label, value, max, color }: { label: string; value: number; 
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
-        <span className="tabular-nums font-medium">{formatTokens(value)}</span>
+        <span className="tabular-nums font-medium">{formatTokenCount(value, { millionDecimals: 2 })}</span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
@@ -89,46 +85,27 @@ function TokenBar({ label, value, max, color }: { label: string; value: number; 
 }
 
 export default function UsagePage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const wsId = activeWorkspace?.id ?? '';
   const [period, setPeriod] = useState<Period>('7d');
-  const [data, setData] = useState<MetricsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
 
-  useEffect(() => {
-    if (wsLoading || !activeWorkspace) return;
-    setLoading(true);
-    setLoadError(null);
+  const { data, isLoading: loading, error, refetch } = useQuery<MetricsData>({
+    queryKey: ['metrics', wsId, period],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<MetricsData>(`/workspaces/${wsId}/metrics?period=${period}`);
+    },
+  });
 
-    async function load() {
-      const token = await getToken();
-      if (!token || !activeWorkspace) return;
-      try {
-        const api = createApiClient(token);
-        const result = await api.get<MetricsData>(
-          `/workspaces/${activeWorkspace.id}/metrics?period=${period}`,
-        );
-        setData(result);
-      } catch (err) {
-        setData(null);
-        setLoadError(friendlyApiError(err));
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void load();
-  }, [activeWorkspace, wsLoading, period, getToken, retryCount]);
-
+  const loadError = error ? friendlyApiError(error) : null;
   const tokens = data?.tokens;
   const totalCost = tokens ? calcCost(tokens.totalInputTokens, tokens.totalOutputTokens) : null;
   const hasTokenData = tokens && tokens.totalTokens > 0;
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold">Usage &amp; Cost</h1>
@@ -166,7 +143,7 @@ export default function UsagePage() {
           <p className="text-sm font-medium">Failed to load usage data</p>
           <p className="mt-1.5 text-xs text-muted-foreground max-w-xs">{loadError}</p>
           <button
-            onClick={() => setRetryCount(c => c + 1)}
+            onClick={() => void refetch()}
             className="mt-5 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
           >
             Retry
@@ -174,12 +151,11 @@ export default function UsagePage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Summary cards — always shown */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <BigStat
               label="Total tokens"
-              value={hasTokenData ? formatTokens(tokens!.totalTokens) : '—'}
-              sub={hasTokenData ? `${formatTokens(tokens!.totalInputTokens)} in + ${formatTokens(tokens!.totalOutputTokens)} out` : 'No AI agent executions yet'}
+              value={hasTokenData ? formatTokenCount(tokens!.totalTokens, { millionDecimals: 2 }) : '—'}
+              sub={hasTokenData ? `${formatTokenCount(tokens!.totalInputTokens, { millionDecimals: 2 })} in + ${formatTokenCount(tokens!.totalOutputTokens, { millionDecimals: 2 })} out` : 'No AI agent executions yet'}
             />
             <BigStat
               label="Estimated cost"
@@ -193,7 +169,6 @@ export default function UsagePage() {
             />
           </div>
 
-          {/* Token breakdown — only when token data exists */}
           {hasTokenData && tokens ? (
             <>
               <div className="rounded-xl border bg-card p-5 space-y-4">
@@ -202,13 +177,13 @@ export default function UsagePage() {
                 <TokenBar label="Output tokens" value={tokens.totalOutputTokens} max={tokens.totalTokens} color="bg-violet-500" />
                 <div className="border-t pt-3 mt-2 space-y-1.5 text-xs text-muted-foreground">
                   <div className="flex justify-between">
-                    <span>Input cost ({formatTokens(tokens.totalInputTokens)} × $3/1M)</span>
+                    <span>Input cost ({formatTokenCount(tokens.totalInputTokens, { millionDecimals: 2 })} × $3/1M)</span>
                     <span className="font-medium text-foreground">
                       {formatCost((tokens.totalInputTokens / 1_000_000) * INPUT_COST_PER_M)}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Output cost ({formatTokens(tokens.totalOutputTokens)} × $15/1M)</span>
+                    <span>Output cost ({formatTokenCount(tokens.totalOutputTokens, { millionDecimals: 2 })} × $15/1M)</span>
                     <span className="font-medium text-foreground">
                       {formatCost((tokens.totalOutputTokens / 1_000_000) * OUTPUT_COST_PER_M)}
                     </span>
@@ -237,7 +212,6 @@ export default function UsagePage() {
             </div>
           )}
 
-          {/* Per-workflow usage */}
           {(data?.topWorkflows?.length ?? 0) > 0 && (
             <div className="space-y-3">
               <p className="text-sm font-semibold">By workflow</p>
@@ -261,7 +235,7 @@ export default function UsagePage() {
                             {wf.total}
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                            {wfTokens ? formatTokens(wfTokens.total) : '—'}
+                            {wfTokens ? formatTokenCount(wfTokens.total, { millionDecimals: 2 }) : '—'}
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums">
                             {wfTokens
@@ -280,7 +254,6 @@ export default function UsagePage() {
             </div>
           )}
 
-          {/* Link to full metrics */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <HugeiconsIcon icon={FlowCircleIcon} className="size-3.5" />
             <span>For execution counts, duration, and success rates, see</span>

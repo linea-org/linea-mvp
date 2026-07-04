@@ -9,7 +9,6 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
-  useReactFlow,
   type Node,
   type Edge,
   type Connection,
@@ -18,373 +17,44 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useAuth } from '@clerk/nextjs';
+import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from '@/hooks/use-api-client';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   ArrowLeft01Icon, ArrowRight01Icon, Tick01Icon, Cancel01Icon, Alert02Icon,
   Copy01Icon, LockKeyIcon, SquareLock01Icon, Delete01Icon,
   PlayIcon, BorderAll01Icon, ArrowDown01Icon, ArrowUp01Icon,
-  Cursor01Icon, HandGrabIcon,
-  Add01Icon, MinusSignIcon, FitToScreenIcon, Mouse01Icon,
   Search01Icon,
 } from '@hugeicons/core-free-icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@linea/ui/components/dialog';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@linea/ui/components/tooltip';
-import { Kbd } from '@linea/ui/components/kbd';
+import { TooltipProvider } from '@linea/ui/components/tooltip';
 import { createApiClient, friendlyApiError } from '@/lib/api';
+import { useUndoHistory } from './use-undo-history';
 import { toast } from '@linea/ui/components/sonner';
 import { Button } from '@linea/ui/components/button';
 import { Spinner } from '@linea/ui/components/spinner';
 import { nodeTypes } from './nodes/node-types';
-import { Toolbar, type ValidationState } from './toolbar';
+import { Toolbar } from './toolbar';
 import { LibraryPanel } from './panels/library-panel';
-import { NodePanel } from './panels/node-panel';
+import { NodePanel } from './panels/node-panel/node-panel';
 import { GenerateDialog, type GenerateEvent } from './generate-dialog';
-import { BottomPanel } from './panels/bottom-panel';
-import { DeployPanel } from './deploy-panel';
-import { HistoryPanel } from './history-panel';
-import { VersionsPanel } from './versions-panel';
-import { DiffPanel } from './diff-panel';
-import { SharePanel } from './share-panel';
-import { CommentsPanel } from './comments-panel';
-import { EvalsPanel } from './evals-panel';
-import { ChatPreviewPanel } from './chat-preview-panel';
+import { BottomPanel } from './panels/bottom-panel/bottom-panel';
+import { DeployPanel } from './side-panels/deploy-panel';
+import { HistoryPanel } from './side-panels/history-panel';
+import { VersionsPanel } from './side-panels/versions-panel';
+import { DiffPanel } from './side-panels/diff-panel';
+import { SharePanel } from './side-panels/share-panel';
+import { CommentsPanel } from './side-panels/comments-panel';
+import { EvalsPanel } from './evals/evals-panel';
+import { ChatPreviewPanel } from './chat-preview/chat-preview-panel';
 import { useRouter } from 'next/navigation';
+import type { WFNode, WFEdge, Workflow, WorkflowBuilderProps, EvalTestCase, SSEEvent, NodeResult } from './workflow-builder.types';
+import { NODE_COLORS, QUICK_NODE_TYPES, getValidationState } from './workflow-validation';
+import { computeAutoLayout } from './workflow-auto-layout';
+import { CanvasControls } from './canvas-controls';
+import { useWorkflowSSE } from './use-workflow-sse';
 
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                               */
-/* ------------------------------------------------------------------ */
-interface WFNode {
-  id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown>;
-  style?: Record<string, unknown>;
-  parentId?: string;
-  extent?: string;
-  zIndex?: number;
-}
-interface WFEdge {
-  id: string; source: string; target: string;
-  sourceHandle?: string; targetHandle?: string; label?: string;
-}
-interface Workflow {
-  id: string; name: string; description?: string;
-  definition: { nodes: WFNode[]; edges: WFEdge[] }; podId: string;
-}
-interface WorkflowBuilderProps {
-  workflowId: string; podId: string; workspaceId: string;
-}
-
-type EvalOperator = 'equals' | 'contains' | 'exists' | 'not_exists' | 'gt' | 'lt' | 'llm_judge' | 'tool_called' | 'tool_not_called' | 'semantic_match';
-interface EvalTestCase {
-  id: string;
-  name: string;
-  input: string;
-  assertions: { source?: string; path: string; operator: EvalOperator; expected: string; rubric?: string; reference?: string; threshold?: string }[];
-  trials?: number;
-  scriptedResponses?: { type: 'answer' | 'approve' | 'deny'; value: string }[];
-}
-
-interface SSEEvent {
-  type: string;
-  nodeId?: string;
-  status?: string;
-  output?: unknown;
-  error?: string;
-  durationMs?: number;
-  delta?: string;
-  interrupt?: { type?: string; nodeId?: string; message?: string; prompt?: string; question?: string };
-}
-
-export interface NodeResult {
-  status: string;
-  output?: unknown;
-  error?: string;
-  durationMs?: number;
-  startedAt?: number;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Node color map for MiniMap                                          */
-/* ------------------------------------------------------------------ */
-const NODE_COLORS: Record<string, string> = {
-  start: '#6366f1', end: '#14b8a6', agent: '#3b82f6',
-  http: '#8b5cf6', transform: '#7c3aed', 'if-else': '#f59e0b',
-  router: '#ea580c', approval: '#f97316', 'approval-gate': '#f97316', mcp: '#eab308', memory: '#a855f7',
-  extract: '#0ea5e9', retriever: '#10b981', guardrails: '#ef4444', code: '#64748b',
-  loop: '#0891b2', parallel: '#6366f1', wait: '#64748b', variables: '#059669',
-  evaluator: '#d97706', subworkflow: '#7c3aed',
-  slack: '#4a154b', github: '#1f2328', notion: '#37352f', gmail: '#ea4335',
-  filter: '#06b6d4', merge: '#8b5cf6', datetime: '#0d9488',
-};
-
-/* ------------------------------------------------------------------ */
-/*  Quick-connect node picker                                           */
-/* ------------------------------------------------------------------ */
-const QUICK_NODE_TYPES: { type: string; label: string }[] = [
-  { type: 'agent',     label: 'Agent'     },
-  { type: 'http',      label: 'HTTP'      },
-  { type: 'transform', label: 'Transform' },
-  { type: 'if-else',   label: 'If / Else' },
-  { type: 'router',    label: 'Router'    },
-  { type: 'code',      label: 'Code'      },
-  { type: 'loop',      label: 'Loop'      },
-  { type: 'variables', label: 'Variables' },
-];
-
-/* ------------------------------------------------------------------ */
-/*  Validation                                                          */
-/* ------------------------------------------------------------------ */
-function getValidationState(nodes: Node[], edges: Edge[]): ValidationState {
-  const issues: string[] = [];
-  let level: ValidationState['level'] = 'success';
-
-  const hasStart = nodes.some((n) => n.type === 'start');
-  const actionNodes = nodes.filter((n) => n.type !== 'start' && n.type !== 'end');
-
-  // Hard errors — block run
-  if (!hasStart) {
-    issues.push('Missing Start node');
-    level = 'error';
-  }
-  if (nodes.length > 0 && actionNodes.length === 0) {
-    issues.push('Add at least one action node (Agent, HTTP, etc.)');
-    level = 'error';
-  }
-
-  if (level !== 'error') {
-    // Start has no outgoing edge
-    const startNode = nodes.find((n) => n.type === 'start');
-    if (startNode && actionNodes.length > 0 && !edges.some((e) => e.source === startNode.id)) {
-      issues.push('Start node is not connected to anything');
-      level = 'warning';
-    }
-
-    // Floating action nodes
-    const connectedIds = new Set([...edges.map((e) => e.source), ...edges.map((e) => e.target)]);
-    const floating = actionNodes.filter((n) => !connectedIds.has(n.id));
-    if (floating.length > 0) {
-      const label = floating.length === 1
-        ? `"${(floating[0]!.data?.nodeName as string) ?? floating[0]!.type}" is not connected`
-        : `${floating.length} nodes are not connected`;
-      issues.push(label);
-      if (level === 'success') level = 'warning';
-    }
-
-    // if-else nodes need both true/false outputs wired
-    const ifElseNodes = nodes.filter((n) => n.type === 'if-else');
-    for (const bn of ifElseNodes) {
-      const hasTrue  = edges.some((e) => e.source === bn.id && e.sourceHandle === 'true');
-      const hasFalse = edges.some((e) => e.source === bn.id && e.sourceHandle === 'false');
-      if (!hasTrue || !hasFalse) {
-        const name = (bn.data?.nodeName as string) ?? bn.type;
-        const missing = !hasTrue && !hasFalse ? 'True & False branches' : !hasTrue ? 'True branch' : 'False branch';
-        issues.push(`"${name}" missing ${missing}`);
-        if (level === 'success') level = 'warning';
-      }
-    }
-
-    // router nodes need at least one route wired
-    const routerNodes = nodes.filter((n) => n.type === 'router');
-    for (const rn of routerNodes) {
-      const hasAnyRoute = edges.some((e) => e.source === rn.id);
-      if (!hasAnyRoute) {
-        const name = (rn.data?.nodeName as string) ?? 'Router';
-        issues.push(`"${name}" has no routes connected`);
-        if (level === 'success') level = 'warning';
-      }
-    }
-  }
-
-  return { level, issues };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Auto-layout (BFS, left-to-right, height-aware)                     */
-/* ------------------------------------------------------------------ */
-const NODE_W_DEFAULT = 220;
-const NODE_H_DEFAULT = 80;
-const H_GAP = 80;  // horizontal gap between columns
-const V_GAP = 24;  // vertical gap between nodes in the same column
-
-function computeAutoLayout(nodes: Node[], edges: Edge[]): Node[] {
-  if (nodes.length === 0) return nodes;
-
-  // Frame children have parent-relative positions — exclude them and frame nodes
-  // from the BFS entirely; they'll be repositioned after their parent moves.
-  const frameIds = new Set(nodes.filter((n) => n.type === 'frame').map((n) => n.id));
-  const childIds = new Set(nodes.filter((n) => n.parentId).map((n) => n.id));
-  const layoutNodes = nodes.filter((n) => !frameIds.has(n.id) && !childIds.has(n.id));
-
-  if (layoutNodes.length === 0) return nodes;
-
-  // Build adjacency list for layout nodes only
-  const layoutIdSet = new Set(layoutNodes.map((n) => n.id));
-  const adj: Record<string, string[]> = {};
-  for (const n of layoutNodes) adj[n.id] = [];
-  for (const e of edges) {
-    if (layoutIdSet.has(e.source) && layoutIdSet.has(e.target))
-      adj[e.source]?.push(e.target);
-  }
-
-  // BFS from start node to assign column (level)
-  const startNode = layoutNodes.find((n) => n.type === 'start') ?? layoutNodes[0]!;
-  const levels: Record<string, number> = { [startNode.id]: 0 };
-  const queue = [startNode.id];
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    for (const next of adj[cur] ?? []) {
-      if (levels[next] === undefined) { levels[next] = levels[cur]! + 1; queue.push(next); }
-    }
-  }
-  // Append unreachable nodes after the last reachable level
-  let maxL = Math.max(0, ...Object.values(levels));
-  for (const n of layoutNodes) { if (levels[n.id] === undefined) levels[n.id] = ++maxL; }
-
-  // Group nodes by column
-  const byLevel: Record<number, Node[]> = {};
-  for (const n of layoutNodes) { (byLevel[levels[n.id]!] ??= []).push(n); }
-
-  const nodeH = (n: Node) => (n.measured?.height as number | undefined) ?? NODE_H_DEFAULT;
-  const nodeW = (n: Node) => (n.measured?.width as number | undefined) ?? NODE_W_DEFAULT;
-
-  // Compute column x positions
-  const sortedLevels = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
-  const colX: Record<number, number> = {};
-  let curX = 80;
-  for (const lv of sortedLevels) {
-    colX[lv] = curX;
-    const colWidth = Math.max(...byLevel[lv]!.map(nodeW));
-    curX += colWidth + H_GAP;
-  }
-
-  // Stack nodes vertically per column, centered around y=300
-  const positioned = new Map<string, { x: number; y: number }>();
-  for (const lv of sortedLevels) {
-    const col = byLevel[lv]!;
-    const totalH = col.reduce((sum, n) => sum + nodeH(n), 0) + V_GAP * (col.length - 1);
-    let y = 300 - totalH / 2;
-    for (const n of col) {
-      positioned.set(n.id, { x: colX[lv]!, y });
-      y += nodeH(n) + V_GAP;
-    }
-  }
-
-  // Recompute frame positions to wrap their children (children keep parent-relative positions)
-  const FRAME_PAD = 40;
-  const framePositions = new Map<string, { x: number; y: number; w: number; h: number }>();
-  for (const frameId of frameIds) {
-    const children = nodes.filter((n) => n.parentId === frameId);
-    if (children.length === 0) continue;
-    const absPositions = children.map((c) => {
-      // Children positions are relative to the frame's current absolute position
-      const frame = nodes.find((n) => n.id === frameId)!;
-      return {
-        x: frame.position.x + c.position.x,
-        y: frame.position.y + c.position.y,
-        w: (c.measured?.width as number | undefined) ?? NODE_W_DEFAULT,
-        h: (c.measured?.height as number | undefined) ?? NODE_H_DEFAULT,
-      };
-    });
-    const minX = Math.min(...absPositions.map((p) => p.x)) - FRAME_PAD;
-    const minY = Math.min(...absPositions.map((p) => p.y)) - FRAME_PAD;
-    const maxX = Math.max(...absPositions.map((p) => p.x + p.w)) + FRAME_PAD;
-    const maxY = Math.max(...absPositions.map((p) => p.y + p.h)) + FRAME_PAD;
-    framePositions.set(frameId, { x: minX, y: minY, w: maxX - minX, h: maxY - minY });
-  }
-
-  return nodes.map((n) => {
-    if (frameIds.has(n.id)) {
-      const fp = framePositions.get(n.id);
-      if (!fp) return n;
-      return {
-        ...n,
-        position: { x: fp.x, y: fp.y },
-        style: { ...(n.style ?? {}), width: fp.w, height: fp.h },
-        data: { ...n.data, expandedHeight: fp.h },
-      };
-    }
-    // Frame children: keep their parent-relative positions unchanged
-    if (childIds.has(n.id)) return n;
-    return { ...n, position: positioned.get(n.id) ?? n.position };
-  });
-}
-
-/* ------------------------------------------------------------------ */
-/*  Canvas toolbar (inside ReactFlow, so useReactFlow() works)         */
-/* ------------------------------------------------------------------ */
-function CanvasControls({
-  cursorMode,
-  setCursorMode,
-  isInteractive,
-  onInteractiveToggle,
-}: {
-  cursorMode: 'select' | 'grab';
-  setCursorMode: (m: 'select' | 'grab') => void;
-  isInteractive: boolean;
-  onInteractiveToggle: () => void;
-}) {
-  const { zoomIn, zoomOut, fitView } = useReactFlow();
-
-  type CtrlBtn = { icon: typeof Add01Icon; label: string; shortcut?: string; action: () => void; active?: boolean };
-  const sections: Array<CtrlBtn[] | null> = [
-    [
-      { icon: HandGrabIcon,  label: 'Pan mode',    shortcut: 'G', action: () => setCursorMode('grab'),   active: cursorMode === 'grab'   },
-      { icon: Cursor01Icon,  label: 'Select mode', shortcut: 'V', action: () => setCursorMode('select'), active: cursorMode === 'select' },
-    ],
-    null,
-    [
-      { icon: Add01Icon,       label: 'Zoom in',  action: () => zoomIn({ duration: 200 })  },
-      { icon: MinusSignIcon,   label: 'Zoom out', action: () => zoomOut({ duration: 200 }) },
-      { icon: FitToScreenIcon, label: 'Fit view', shortcut: 'F', action: () => fitView({ padding: 0.25, duration: 300 }) },
-    ],
-    null,
-    [
-      {
-        icon: isInteractive ? Mouse01Icon : LockKeyIcon,
-        label: isInteractive ? 'Lock canvas' : 'Unlock canvas',
-        action: onInteractiveToggle,
-        active: !isInteractive,
-      },
-    ],
-  ];
-
-  return (
-    <Panel position="bottom-left" className="!m-2">
-      <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-md backdrop-blur-sm">
-        {sections.map((section, si) =>
-            section === null ? (
-              <div key={si} className="mx-1.5 h-px bg-border" />
-            ) : (
-              section.map((btn, bi) => (
-                <Tooltip key={`${si}-${bi}`}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={btn.action}
-                      className={`flex size-8 items-center justify-center transition-colors ${
-                        btn.active
-                          ? 'bg-muted text-foreground'
-                          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                      }`}
-                    >
-                      <HugeiconsIcon icon={btn.icon} className="size-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8} className="flex items-center gap-2">
-                    {btn.label}
-                    {btn.shortcut && <Kbd>{btn.shortcut}</Kbd>}
-                  </TooltipContent>
-                </Tooltip>
-              ))
-            ),
-          )}
-        </div>
-    </Panel>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Inner builder (must be inside ReactFlowProvider)                   */
-/* ------------------------------------------------------------------ */
+// Must render inside ReactFlowProvider — useReactFlow() is used by children.
 function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) {
   const { getToken, userId } = useAuth();
   const router = useRouter();
@@ -395,8 +65,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [isSaving, setIsSaving] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [workflowName, setWorkflowName] = useState('Untitled Workflow');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const getApi = useApiClient();
+  const seededWorkflowRef = useRef(false);
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [runStatus, setRunStatus] = useState<{ id: string; status: string } | null>(null);
   const [interrupt, setInterrupt] = useState<SSEEvent['interrupt'] | null>(null);
@@ -417,8 +87,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   const [deployedAt, setDeployedAt] = useState<string | null>(null);
   const [diffVersion, setDiffVersion] = useState<number | null>(null);
   const [autoSave, setAutoSave] = useState(false);
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; description: string; action: string; onConfirm: () => void } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: Node } | null>(null);
   const [editingEdge, setEditingEdge] = useState<{ id: string; x: number; y: number; label: string } | null>(null);
@@ -436,9 +104,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     sourceNodeId: string; sourceHandle: string | null;
   } | null>(null);
 
-  // Undo/redo history
-  const historyStackRef = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([]);
-  const historyIdxRef = useRef(-1);
+  const { canUndo, canRedo, pushHistory, undo: handleUndo, redo: handleRedo } = useUndoHistory(setNodes, setEdges);
   const [isDeployed, setIsDeployed] = useState(false);
 
   const validationState = useMemo(() => getValidationState(nodes, edges), [nodes, edges]);
@@ -458,7 +124,16 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
 
-  const sseAbortRef = useRef<AbortController | null>(null);
+  const { startSSE, sseAbortRef } = useWorkflowSSE({
+    workspaceId,
+    podId,
+    setNodes,
+    setNodeResults,
+    setStreamingTokens,
+    setInterrupt,
+    setRunStatus,
+    setExecutionOutput,
+  });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -606,7 +281,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   }, [getToken]);
 
   // Clean up SSE on unmount
-  useEffect(() => () => { sseAbortRef.current?.abort(); }, []);
+  useEffect(() => () => { sseAbortRef.current?.abort(); }, [sseAbortRef]);
 
   // Auto-save interval (30s when enabled)
   useEffect(() => {
@@ -622,7 +297,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
     const mod = navigator.platform.toUpperCase().includes('MAC') ? e.metaKey : e.ctrlKey;
 
-    // ── Modifier shortcuts (always active) ─────────────────────────────────
     if (mod && e.key === 's') { e.preventDefault(); void handleSaveRef.current(); return; }
     if (mod && e.key === 'Enter') { e.preventDefault(); void handleRunRef.current(); return; }
     if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); return; }
@@ -633,7 +307,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     if (mod && e.key === 'f') { e.preventDefault(); setSearchOpen((v) => !v); setSearchQuery(''); return; }
     if (mod && e.key === 'k' && !e.shiftKey) return; // handled globally
 
-    // ── Non-input single-key shortcuts ──────────────────────────────────────
     if (!inInput) {
       if (e.key === 'Escape') {
         if (searchOpen) { setSearchOpen(false); setSearchQuery(''); return; }
@@ -669,34 +342,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  function pushHistory(ns: Node[], es: Edge[]) {
-    historyStackRef.current = historyStackRef.current.slice(0, historyIdxRef.current + 1);
-    historyStackRef.current.push({ nodes: ns.map((n) => ({ ...n })), edges: es.map((e) => ({ ...e })) });
-    historyIdxRef.current = historyStackRef.current.length - 1;
-    setCanUndo(historyIdxRef.current > 0);
-    setCanRedo(false);
-  }
-
-  function handleUndo() {
-    if (historyIdxRef.current <= 0) return;
-    historyIdxRef.current--;
-    const snap = historyStackRef.current[historyIdxRef.current]!;
-    setNodes(snap.nodes);
-    setEdges(snap.edges);
-    setCanUndo(historyIdxRef.current > 0);
-    setCanRedo(true);
-  }
-
-  function handleRedo() {
-    if (historyIdxRef.current >= historyStackRef.current.length - 1) return;
-    historyIdxRef.current++;
-    const snap = historyStackRef.current[historyIdxRef.current]!;
-    setNodes(snap.nodes);
-    setEdges(snap.edges);
-    setCanUndo(true);
-    setCanRedo(historyIdxRef.current < historyStackRef.current.length - 1);
-  }
-
   function handleAutoLayout() {
     const positioned = computeAutoLayout(nodesRef.current, edgesRef.current);
     setNodes(positioned);
@@ -720,68 +365,60 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     }));
   }
 
-  /* ---- Fetch workflow ------------------------------------------ */
+  const { data: wf, isLoading: loading, error: workflowQueryError } = useQuery({
+    queryKey: ['workflow-full-definition', workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Workflow>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`);
+    },
+  });
+  const error = workflowQueryError ? friendlyApiError(workflowQueryError) : null;
+
   useEffect(() => {
-    async function fetchWorkflow() {
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const api = createApiClient(token);
-        const wf = await api.get<Workflow>(
-          `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
-        );
-        setWorkflowName(wf.name);
-        if ((wf as any).deployedAt) {
-          setIsDeployed(true);
-          setDeployedAt((wf as any).deployedAt as string);
-        }
-        const savedAutoSave = localStorage.getItem(`linea:autosave:${workflowId}`);
-        if (savedAutoSave === 'true') setAutoSave(true);
-        const rawNodes = (wf.definition?.nodes ?? []).map((n) => ({
-          id: n.id, type: n.type, position: n.position,
-          data: { ...n.data, nodeType: n.type },
-          ...(n.style ? { style: n.style } : {}),
-          ...(n.parentId ? { parentId: n.parentId, extent: 'parent' as const } : {}),
-          ...(n.type === 'note' ? { connectable: false } : {}),
-          ...(n.type === 'frame' ? { connectable: false, selectable: true, zIndex: n.zIndex ?? -1 } : {}),
-        }));
-        // Frames must come before their children so ReactFlow renders them behind
-        const loadedNodes: Node[] = [
-          ...rawNodes.filter((n) => n.type === 'frame'),
-          ...rawNodes.filter((n) => n.type !== 'frame'),
-        ];
-        // Ensure every workflow has a Start node
-        if (loadedNodes.length === 0) {
-          loadedNodes.push({
-            id: 'start-1', type: 'start',
-            position: { x: 200, y: 200 },
-            data: { nodeType: 'start' },
-          });
-        }
-        setNodes(loadedNodes);
-        const loadedEdges = (wf.definition?.edges ?? []).map((e) => ({
-          id: e.id, source: e.source, target: e.target,
-          sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, label: e.label,
-        }));
-        setEdges(loadedEdges);
-        // Load saved test cases
-        const savedCases = (wf.definition as any)?.settings?.testCases as EvalTestCase[] | undefined;
-        if (Array.isArray(savedCases)) setTestCases(savedCases);
-        // Seed undo history with the loaded state
-        historyStackRef.current = [{ nodes: loadedNodes, edges: loadedEdges }];
-        historyIdxRef.current = 0;
-        setCanUndo(false);
-        setCanRedo(false);
-        // Fit view after nodes render — use ref so the async closure always sees the current instance
-        setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }), 100);
-      } catch (err) {
-        setError(friendlyApiError(err));
-      } finally {
-        setLoading(false);
-      }
+    if (!wf || seededWorkflowRef.current) return;
+    seededWorkflowRef.current = true;
+    setWorkflowName(wf.name);
+    if (wf.deployedAt) {
+      setIsDeployed(true);
+      setDeployedAt(wf.deployedAt);
     }
-    void fetchWorkflow();
-  }, [workflowId, podId, workspaceId, getToken, setNodes, setEdges]);
+    const savedAutoSave = localStorage.getItem(`linea:autosave:${workflowId}`);
+    if (savedAutoSave === 'true') setAutoSave(true);
+    const rawNodes = (wf.definition?.nodes ?? []).map((n) => ({
+      id: n.id, type: n.type, position: n.position,
+      data: { ...n.data, nodeType: n.type },
+      ...(n.style ? { style: n.style } : {}),
+      ...(n.parentId ? { parentId: n.parentId, extent: 'parent' as const } : {}),
+      ...(n.type === 'note' ? { connectable: false } : {}),
+      ...(n.type === 'frame' ? { connectable: false, selectable: true, zIndex: n.zIndex ?? -1 } : {}),
+    }));
+    // Frames must come before their children so ReactFlow renders them behind
+    const loadedNodes: Node[] = [
+      ...rawNodes.filter((n) => n.type === 'frame'),
+      ...rawNodes.filter((n) => n.type !== 'frame'),
+    ];
+    // Ensure every workflow has a Start node
+    if (loadedNodes.length === 0) {
+      loadedNodes.push({
+        id: 'start-1', type: 'start',
+        position: { x: 200, y: 200 },
+        data: { nodeType: 'start' },
+      });
+    }
+    setNodes(loadedNodes);
+    const loadedEdges = (wf.definition?.edges ?? []).map((e) => ({
+      id: e.id, source: e.source, target: e.target,
+      sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, label: e.label,
+    }));
+    setEdges(loadedEdges);
+    // Load saved test cases
+    const savedCases = (wf.definition as any)?.settings?.testCases as EvalTestCase[] | undefined;
+    if (Array.isArray(savedCases)) setTestCases(savedCases);
+    // Seed undo history with the loaded state
+    pushHistory(loadedNodes, loadedEdges);
+    // Fit view after nodes render — use ref so the async closure always sees the current instance
+    setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }), 100);
+  }, [wf, workflowId, setNodes, setEdges, pushHistory]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -792,8 +429,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         return newEdges;
       });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setEdges],
+    [setEdges, pushHistory],
   );
 
   // Connection-rule enforcement: limit outgoing/incoming edges per handle
@@ -929,7 +565,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       pushHistory(next, edgesRef.current);
       return next;
     });
-  }, [rfInstance, setNodes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rfInstance, setNodes, pushHistory]);
 
   const handleNodeUpdate = useCallback((nodeId: string, data: Record<string, unknown>) => {
     setNodes((nds) => nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, ...data } } : n));
@@ -1010,9 +646,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       return next;
     });
     setSelectedNode(null);
-  }, [setNodes, setEdges]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [setNodes, setEdges, pushHistory]);
 
-  /* ── Context menu actions ─────────────────────────────────────── */
   function duplicateNode(node: Node) {
     const newNode: Node = {
       ...node,
@@ -1051,7 +686,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setContextMenu({ x: e.clientX, y: e.clientY, node });
   }, []);
 
-  /* ── Edge label editing ───────────────────────────────────────── */
   const onEdgeDoubleClick: EdgeMouseHandler = useCallback((e, edge) => {
     setEditingEdge({ id: edge.id, x: e.clientX, y: e.clientY, label: String(edge.label ?? '') });
   }, []);
@@ -1070,7 +704,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setEditingEdge(null);
   }
 
-  /* ── Multi-select operations ──────────────────────────────────── */
   function duplicateSelected() {
     const selected = nodes.filter((n) => n.selected);
     const newNodes = selected.map((n) => ({
@@ -1182,7 +815,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setContextMenu(null);
   }
 
-  /* ── Test single node ─────────────────────────────────────────── */
   async function runTestNode() {
     if (!testNodeDialog) return;
     setTestNodeRunning(true);
@@ -1277,170 +909,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     }
   }
 
-  /* ---- SSE handler -------------------------------------------- */
-  function truncatePreview(v: unknown, max = 72): string {
-    const s = typeof v === 'string' ? v : JSON.stringify(v) ?? '';
-    return s.length > max ? s.slice(0, max) + '…' : s;
-  }
-
-  function handleSSEEvent(evt: SSEEvent, executionId: string) {
-    switch (evt.type) {
-      case 'node_update':
-        if (evt.nodeId) {
-          setNodes((nds) =>
-            nds.map((n) =>
-              n.id === evt.nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      status: evt.status,
-                      ...(evt.status === 'completed' && evt.output !== undefined
-                        ? { _outputPreview: truncatePreview(evt.output) }
-                        : {}),
-                    },
-                  }
-                : n,
-            ),
-          );
-          setNodeResults((prev) => ({
-            ...prev,
-            [evt.nodeId!]: {
-              ...prev[evt.nodeId!],
-              status: evt.status ?? 'unknown',
-              output: evt.output,
-              error: evt.error,
-              durationMs: evt.durationMs,
-              ...(evt.status === 'running' && !prev[evt.nodeId!]?.startedAt
-                ? { startedAt: Date.now() }
-                : {}),
-            },
-          }));
-        }
-        break;
-      case 'execution_suspended':
-        setInterrupt(evt.interrupt ?? null);
-        setRunStatus({ id: executionId, status: 'suspended' });
-        break;
-      case 'agent_token':
-        if (evt.nodeId && evt.delta) {
-          setStreamingTokens((prev) => ({
-            ...prev,
-            [evt.nodeId!]: (prev[evt.nodeId!] ?? '') + evt.delta!,
-          }));
-        }
-        break;
-      case 'execution_complete':
-        setStreamingTokens({});
-        setRunStatus({ id: executionId, status: 'completed' });
-        setInterrupt(null);
-        if (evt.output !== undefined) setExecutionOutput(evt.output);
-        toast.success('Execution completed', { id: `exec-${executionId}` });
-        break;
-      case 'execution_failed':
-        setStreamingTokens({});
-        setRunStatus({ id: executionId, status: 'failed' });
-        setInterrupt(null);
-        toast.error(evt.error ? `Execution failed: ${evt.error}` : 'Execution failed', { id: `exec-${executionId}` });
-        break;
-      case 'execution_status':
-        if ((evt as any).status) {
-          setRunStatus({ id: executionId, status: (evt as any).status as string });
-        }
-        break;
-      default:
-        break;
-    }
-  }
-
-  async function startSSE(token: string, executionId: string) {
-    sseAbortRef.current?.abort();
-    const ac = new AbortController();
-    sseAbortRef.current = ac;
-
-    let receivedTerminal = false;
-    let lastEventId: string | null = null;
-
-    for (let attempt = 0; attempt <= 5; attempt++) {
-      if (ac.signal.aborted) return;
-
-      try {
-        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        if (lastEventId) headers['Last-Event-ID'] = lastEventId;
-
-        const resp = await fetch(
-          `${API_BASE}/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/events`,
-          { headers, signal: ac.signal },
-        );
-        if (!resp.ok || !resp.body) return;
-
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() ?? '';
-          for (const line of lines) {
-            if (line.startsWith('id: ')) { lastEventId = line.slice(4).trim(); continue; }
-            if (!line.startsWith('data: ')) continue;
-            try {
-              let parsed = JSON.parse(line.slice(6)) as any;
-              // NestJS SSE serializes the full MessageEvent ({data,id}) not just .data
-              if (parsed && typeof parsed === 'object' && !parsed.type && parsed.data && typeof parsed.data === 'object') {
-                parsed = parsed.data;
-              }
-              const evt = parsed as SSEEvent;
-              if (evt.type === 'execution_complete' || evt.type === 'execution_failed') {
-                receivedTerminal = true;
-              }
-              handleSSEEvent(evt, executionId);
-            } catch { /* ignore malformed */ }
-          }
-        }
-
-        // Stream ended cleanly — if we missed the terminal event, poll for final status
-        if (!receivedTerminal && !ac.signal.aborted) {
-          await pollExecutionFinalStatus(token, executionId);
-        }
-        return;
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') return;
-        // Network drop — reconnect with exponential backoff
-        if (attempt < 5 && !ac.signal.aborted) {
-          await new Promise<void>((resolve) => {
-            const delay = Math.min(1_000 * 2 ** attempt, 30_000);
-            const t = setTimeout(resolve, delay);
-            ac.signal.addEventListener('abort', () => { clearTimeout(t); resolve(); });
-          });
-        }
-      }
-    }
-  }
-
-  async function pollExecutionFinalStatus(token: string, executionId: string) {
-    try {
-      const api = createApiClient(token);
-      const ex = await api.get<{ status: string; output?: { result?: unknown } | null; error?: string | null }>(
-        `/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}`,
-      );
-      if (ex.status === 'completed') {
-        setRunStatus({ id: executionId, status: 'completed' });
-        const rawOutput = ex.output?.result;
-        if (rawOutput !== undefined) setExecutionOutput(rawOutput);
-        toast.success('Execution completed', { id: `exec-${executionId}` });
-      } else if (ex.status === 'failed') {
-        setRunStatus({ id: executionId, status: 'failed' });
-        toast.error(ex.error ? `Execution failed: ${ex.error}` : 'Execution failed', { id: `exec-${executionId}` });
-      }
-    } catch {
-      // best-effort — toast already shown if SSE delivered the event
-    }
-  }
-
   function validateWorkflow(): string | null {
     if (nodes.length === 0) return 'Add at least one node to run the workflow';
     if (!nodes.some((n) => n.type === 'start')) return 'A Start node is required to run the workflow';
@@ -1521,7 +989,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     }
   }
 
-  /* ---- Loading / Error states -------------------------------- */
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-muted/30">
@@ -1566,7 +1033,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         canUndo={canUndo}
         canRedo={canRedo}
         autoSave={autoSave}
-        token={authToken}
         workspaceId={workspaceId}
         podId={podId}
         workflowId={workflowId}
@@ -1591,7 +1057,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Library panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${libraryOpen ? ' border-r border-border' : ''}`}
           style={{ width: libraryOpen ? 240 : 0 }}
@@ -1599,7 +1064,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           {libraryOpen && <LibraryPanel />}
         </div>
 
-        {/* Library toggle */}
         <button
           onClick={() => setLibraryOpen((v) => !v)}
           title={libraryOpen ? 'Collapse library' : 'Expand library'}
@@ -1612,17 +1076,14 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           />
         </button>
 
-        {/* Center column: canvas + bottom panel */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
 
-        {/* Canvas */}
         <div
           ref={reactFlowWrapper}
           className="relative flex-1 min-h-0"
           onDragOver={isGenerating ? undefined : onDragOver}
           onDrop={isGenerating ? undefined : onDrop}
         >
-          {/* Canvas node search (Ctrl+F) */}
           {searchOpen && (
             <>
               <div className="absolute inset-0 z-[90]" onClick={() => { setSearchOpen(false); setSearchQuery(''); }} />
@@ -1682,7 +1143,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </>
           )}
 
-          {/* Read-only overlay during AI generation */}
           {isGenerating && (
             <div className="absolute inset-0 z-10 flex items-end justify-center pb-6 pointer-events-none">
               <div className="flex items-center gap-2 rounded-full border bg-background/90 px-4 py-2 shadow-lg text-sm font-medium text-violet-600 backdrop-blur-sm">
@@ -1726,7 +1186,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               onInteractiveToggle={() => setIsInteractive((v) => !v)}
             />
 
-            {/* Minimap with chevron toggle */}
             <Panel position="bottom-right" className="!m-0 !p-0">
               <div className="flex flex-col items-end">
                 <button
@@ -1751,7 +1210,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </Panel>
           </ReactFlow>
 
-          {/* Multi-select toolbar */}
           {(() => {
             const sel = nodes.filter((n) => n.selected);
             if (sel.length < 2) return null;
@@ -1788,7 +1246,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             );
           })()}
 
-          {/* Edge label editor */}
           {editingEdge && (
             <>
               <div className="fixed inset-0 z-[198]" onClick={commitEdgeLabel} />
@@ -1812,7 +1269,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </>
           )}
 
-          {/* Quick-connect node picker */}
           {quickConnect && (
             <>
               <div className="fixed inset-0 z-[98]" onClick={() => setQuickConnect(null)} />
@@ -1842,7 +1298,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             </>
           )}
 
-          {/* Context menu */}
           {contextMenu && (
             <>
               <div className="fixed inset-0 z-[99]" onClick={() => setContextMenu(null)} />
@@ -1885,7 +1340,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Bottom panel — centered under canvas only */}
         <BottomPanel
           nodes={nodes}
           nodeResults={nodeResults}
@@ -1895,19 +1349,18 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           workspaceId={workspaceId}
           podId={podId}
           workflowId={workflowId}
-          token={authToken}
           onRetryNode={handleRetryNode}
           executionOutput={executionOutput}
         />
-        </div>{/* end center column */}
+        </div>
 
-        {/* Node config panel (right side) */}
         <div
           className={`shrink-0 overflow-hidden transition-all duration-200${selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen ? ' border-l border-border' : ''}`}
           style={{ width: selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen ? 340 : 0 }}
         >
           {selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen && (
             <NodePanel
+              key={selectedNode.id}
               node={selectedNode}
               nodes={nodes}
               edges={edges}
@@ -1915,7 +1368,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               onUpdate={handleNodeUpdate}
               onDelete={handleNodeDelete}
               nodeResult={nodeResults[selectedNode.id]}
-              token={authToken}
               workspaceId={workspaceId}
               podId={podId}
               executionId={runStatus?.id}
@@ -1924,7 +1376,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Generate panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${generateOpen ? ' border-l border-border' : ''}`}
           style={{ width: generateOpen ? 400 : 0 }}
@@ -1934,7 +1385,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               nodes={nodes}
               edges={edges}
               onEvent={handleGenerateEvent}
@@ -1943,17 +1393,15 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Deploy panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${deployPanelOpen ? ' border-l border-border' : ''}`}
           style={{ width: deployPanelOpen ? 360 : 0 }}
         >
-          {deployPanelOpen && authToken && (
+          {deployPanelOpen && (
             <DeployPanel
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               isDeployed={isDeployed}
               deployedAt={deployedAt}
               onDeploy={handleDeploy}
@@ -1963,7 +1411,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* History panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${historyOpen ? ' border-l border-border' : ''}`}
           style={{ width: historyOpen ? 400 : 0 }}
@@ -1973,14 +1420,12 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               nodes={nodes}
               onClose={() => setHistoryOpen(false)}
             />
           )}
         </div>
 
-        {/* Versions panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${versionsOpen ? ' border-l border-border' : ''}`}
           style={{ width: versionsOpen ? 280 : 0 }}
@@ -1990,7 +1435,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               onRestore={handleVersionRestore}
               onDiff={(v) => setDiffVersion(v)}
               onClose={() => setVersionsOpen(false)}
@@ -1998,7 +1442,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Share panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${shareOpen ? ' border-l border-border' : ''}`}
           style={{ width: shareOpen ? 300 : 0 }}
@@ -2008,13 +1451,11 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               onClose={() => setShareOpen(false)}
             />
           )}
         </div>
 
-        {/* Comments panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${commentsOpen ? ' border-l border-border' : ''}`}
           style={{ width: commentsOpen ? 320 : 0 }}
@@ -2024,7 +1465,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               nodes={nodes}
               selectedNodeId={selectedNode?.id}
               currentUserId={userId ?? undefined}
@@ -2033,17 +1473,15 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Evals panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${evalsOpen ? ' border-l border-border' : ''}`}
           style={{ width: evalsOpen ? 380 : 0 }}
         >
-          {evalsOpen && authToken && (
+          {evalsOpen && (
             <EvalsPanel
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
-              token={authToken}
               testCases={testCases}
               onTestCasesChange={setTestCases}
               onClose={() => setEvalsOpen(false)}
@@ -2057,7 +1495,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           )}
         </div>
 
-        {/* Chat Preview panel */}
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${chatPreviewOpen ? ' border-l border-border' : ''}`}
           style={{ width: chatPreviewOpen ? 400 : 0 }}
@@ -2081,14 +1518,11 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         </div>
       </div>
 
-
-      {/* Diff viewer */}
       {diffVersion !== null && (
         <DiffPanel
           workspaceId={workspaceId}
           podId={podId}
           workflowId={workflowId}
-          token={authToken}
           currentNodes={nodes}
           currentEdges={edges}
           targetVersion={diffVersion}
@@ -2096,7 +1530,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         />
       )}
 
-      {/* Suspension banner — approval or ask_human (hidden when chat panel is open; chat handles it inline) */}
       {isSuspended && !chatPreviewOpen && (
         <div className="shrink-0 border-t border-amber-300 bg-amber-50 px-5 py-3 dark:border-amber-800 dark:bg-amber-950/30">
           <div className="flex items-center justify-between gap-4">
@@ -2157,7 +1590,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         </div>
       )}
 
-      {/* Test node dialog */}
       <Dialog open={!!testNodeDialog} onOpenChange={(o) => { if (!o) setTestNodeDialog(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -2222,9 +1654,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Exported component                                                  */
-/* ------------------------------------------------------------------ */
 export function WorkflowBuilder(props: WorkflowBuilderProps) {
   return (
     <TooltipProvider delayDuration={400}>

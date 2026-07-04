@@ -16,7 +16,6 @@ import { PodGuard } from '../common/guards/pod.guard';
 import { RoleGuard } from '../common/guards/role.guard';
 import { RequireRole } from '../common/decorators/require-role.decorator';
 
-/* ─── Public (unauthenticated) endpoints ─────────────────────────── */
 @ApiTags('Public Run')
 @Controller('run')
 export class PublicRunController {
@@ -76,7 +75,6 @@ export class PublicRunController {
   }
 }
 
-/* ─── Authenticated management endpoints ─────────────────────────── */
 @ApiTags('Workflow API Config')
 @UseGuards(WorkspaceGuard, PodGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/pods/:podId/workflows/:workflowId/api')

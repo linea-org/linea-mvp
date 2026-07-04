@@ -28,5 +28,3 @@ export const configSchema = z.object({
   DEFAULT_AGENT_MODEL: z.string().default('claude-sonnet-4-6'),
   SUPERVISOR_MODEL: z.string().default('claude-haiku-4-5'),
 });
-
-export type AppConfig = z.infer<typeof configSchema>;

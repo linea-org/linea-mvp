@@ -78,9 +78,6 @@ importers:
       '@linea/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@linea/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       '@nest-lab/throttler-storage-redis':
         specifier: ^1.2.0
         version: 1.2.0(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)(@nestjs/throttler@6.5.0(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)(reflect-metadata@0.2.2))(ioredis@5.10.1)(reflect-metadata@0.2.2)
@@ -96,9 +93,6 @@ importers:
       '@nestjs/core':
         specifier: ^11.0.1
         version: 11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.19)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/event-emitter':
-        specifier: ^3.0.0
-        version: 3.0.1(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)
       '@nestjs/mapped-types':
         specifier: ^2.1.0
         version: 2.1.1(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)
@@ -156,9 +150,6 @@ importers:
       pino-http:
         specifier: ^10.0.0
         version: 10.5.0
-      razorpay:
-        specifier: ^2.9.6
-        version: 2.9.6
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -344,6 +335,9 @@ importers:
       react-dom:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
+      react-hook-form:
+        specifier: ^7.80.0
+        version: 7.80.0(react@19.2.4)
       react-json-view-lite:
         specifier: ^2.5.0
         version: 2.5.0(react@19.2.4)
@@ -571,9 +565,6 @@ importers:
       vaul:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
     devDependencies:
       '@linea/eslint-config':
         specifier: workspace:*
@@ -2135,12 +2126,6 @@ packages:
         optional: true
       '@nestjs/websockets':
         optional: true
-
-  '@nestjs/event-emitter@3.0.1':
-    resolution: {integrity: sha512-0Ln/x+7xkU6AJFOcQI9tIhUMXVF7D5itiaQGOyJbXtlAfAIt8gzDdJm+Im7cFzKoWkiW5nCXCPh6GSvdQd/3Dw==}
-    peerDependencies:
-      '@nestjs/common': ^10.0.0 || ^11.0.0
-      '@nestjs/core': ^10.0.0 || ^11.0.0
 
   '@nestjs/mapped-types@2.1.1':
     resolution: {integrity: sha512-SCCoMEJ6jdeI5h/N+KCVF1+pmg/hmEkNA5nHTS8Gvww7T/LCl4o1gFLinw2iQ60w7slFkszHcGLKGdazVI4F8A==}
@@ -4590,9 +4575,6 @@ packages:
     resolution: {integrity: sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ==}
     engines: {node: '>= 0.4'}
 
-  axios@1.16.1:
-    resolution: {integrity: sha512-caYkukvroVPO8KrzuJEb50Hm07KwfBZPEC3VeFHTsqWHvKTsy54hjJz9BS/cdaypROE2rH6xvm9mHX4fgWkr3A==}
-
   babel-jest@30.3.0:
     resolution: {integrity: sha512-gRpauEU2KRrCox5Z296aeVHR4jQ98BCnu0IO332D/xpHNOsIH/bgSRk9k6GbKIbBw8vFeN6ctuu6tV8WOyVfYQ==}
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
@@ -5768,9 +5750,6 @@ packages:
     resolution: {integrity: sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ==}
     engines: {node: '>=6'}
 
-  eventemitter2@6.4.9:
-    resolution: {integrity: sha512-JEPTiaOt9f04oa6NOkc4aH+nVp5I3wEjpHbIPqfgCdD5v5bUzy7xQqwcVO2aDQgOWhI28da57HksMrzK9HlRxg==}
-
   eventemitter3@4.0.7:
     resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
 
@@ -5934,15 +5913,6 @@ packages:
 
   flatted@3.4.2:
     resolution: {integrity: sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==}
-
-  follow-redirects@1.16.0:
-    resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
-    engines: {node: '>=4.0'}
-    peerDependencies:
-      debug: '*'
-    peerDependenciesMeta:
-      debug:
-        optional: true
 
   for-each@0.3.5:
     resolution: {integrity: sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==}
@@ -8012,10 +7982,6 @@ packages:
   proxy-from-env@1.1.0:
     resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
 
-  proxy-from-env@2.1.0:
-    resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
-    engines: {node: '>=10'}
-
   pump@3.0.4:
     resolution: {integrity: sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==}
 
@@ -8060,9 +8026,6 @@ packages:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
     engines: {node: '>= 0.10'}
 
-  razorpay@2.9.6:
-    resolution: {integrity: sha512-zsHAQzd6e1Cc6BNoCNZQaf65ElL6O6yw0wulxmoG5VQDr363fZC90Mp1V5EktVzG45yPyNomNXWlf4cQ3622gQ==}
-
   rc@1.2.8:
     resolution: {integrity: sha512-y3bGgqKj3QBdxLbLkomlohkvsA8gdAiUQlSBJnBhfn+BPxg4bc62d8TcBW15wavDfgexCgccckhcZvywyQYPOw==}
     hasBin: true
@@ -8082,6 +8045,12 @@ packages:
     resolution: {integrity: sha512-AXJdLo8kgMbimY95O2aKQqsz2iWi9jMgKJhRBAxECE4IFxfcazB2LmzloIoibJI3C12IlY20+KFaLv+71bUJeQ==}
     peerDependencies:
       react: ^19.2.4
+
+  react-hook-form@7.80.0:
+    resolution: {integrity: sha512-4P+fk6oXsxY+6xSj7Euhc2sumQD8zQqCuVHoJwoyp9EchP+IUW9OESB7uHFJOKsIBQ4MQqYE84INJFqUCYNoOg==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      react: ^16.8.0 || ^17 || ^18 || ^19
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
@@ -11290,12 +11259,6 @@ snapshots:
     optionalDependencies:
       '@nestjs/platform-express': 11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)
 
-  '@nestjs/event-emitter@3.0.1(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)':
-    dependencies:
-      '@nestjs/common': 11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/core': 11.1.19(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.19)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      eventemitter2: 6.4.9
-
   '@nestjs/mapped-types@2.1.1(@nestjs/common@11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)':
     dependencies:
       '@nestjs/common': 11.1.19(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -13871,16 +13834,6 @@ snapshots:
     dependencies:
       possible-typed-array-names: 1.1.0
 
-  axios@1.16.1:
-    dependencies:
-      follow-redirects: 1.16.0
-      form-data: 4.0.5
-      https-proxy-agent: 5.0.1
-      proxy-from-env: 2.1.0
-    transitivePeerDependencies:
-      - debug
-      - supports-color
-
   babel-jest@30.3.0(@babel/core@7.29.0):
     dependencies:
       '@babel/core': 7.29.0
@@ -15139,8 +15092,6 @@ snapshots:
 
   event-target-shim@5.0.1: {}
 
-  eventemitter2@6.4.9: {}
-
   eventemitter3@4.0.7: {}
 
   eventemitter3@5.0.4: {}
@@ -15374,8 +15325,6 @@ snapshots:
       keyv: 4.5.4
 
   flatted@3.4.2: {}
-
-  follow-redirects@1.16.0: {}
 
   for-each@0.3.5:
     dependencies:
@@ -17930,8 +17879,6 @@ snapshots:
 
   proxy-from-env@1.1.0: {}
 
-  proxy-from-env@2.1.0: {}
-
   pump@3.0.4:
     dependencies:
       end-of-stream: 1.4.5
@@ -18025,13 +17972,6 @@ snapshots:
       iconv-lite: 0.7.2
       unpipe: 1.0.0
 
-  razorpay@2.9.6:
-    dependencies:
-      axios: 1.16.1
-    transitivePeerDependencies:
-      - debug
-      - supports-color
-
   rc@1.2.8:
     dependencies:
       deep-extend: 0.6.0
@@ -18057,6 +17997,10 @@ snapshots:
     dependencies:
       react: 19.2.4
       scheduler: 0.27.0
+
+  react-hook-form@7.80.0(react@19.2.4):
+    dependencies:
+      react: 19.2.4
 
   react-is@16.13.1: {}
 

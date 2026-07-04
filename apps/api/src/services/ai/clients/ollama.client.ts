@@ -8,7 +8,7 @@ import {
 } from 'openai/resources/chat';
 
 export class OllamaClient implements ModelClient {
-  displayModels: ModelDefinition[] = [
+  static readonly displayModels: ModelDefinition[] = [
     {
       id: 'llama3.2',
       name: 'Llama 3.2',
@@ -63,8 +63,14 @@ export class OllamaClient implements ModelClient {
       costPer1mTokens: { input: 0, output: 0 },
     },
   ];
-  models: string[] = this.displayModels.map((m) => m.id);
-  embeddingModels: string[] = ['nomic-embed-text', 'mxbai-embed-large'];
+  static readonly embeddingModels: string[] = [
+    'nomic-embed-text',
+    'mxbai-embed-large',
+  ];
+
+  displayModels: ModelDefinition[] = OllamaClient.displayModels;
+  models: string[] = OllamaClient.displayModels.map((m) => m.id);
+  embeddingModels: string[] = OllamaClient.embeddingModels;
 
   private _client: OpenAI;
   constructor(apiKey: string, baseURL: string) {

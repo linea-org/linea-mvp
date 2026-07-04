@@ -9,7 +9,7 @@ import {
   ArrowDown01Icon, ArrowUp01Icon, Clock01Icon,
 } from '@hugeicons/core-free-icons';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient, friendlyApiError } from '@/lib/api';
+import { createApiClient, friendlyApiError, unwrapList } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Badge } from '@linea/ui/components/badge';
 import { Skeleton } from '@linea/ui/components/skeleton';
@@ -73,8 +73,8 @@ export default function EvalsPage() {
       const token = await getToken();
       if (!token) return [];
       const api = createApiClient(token);
-      const res = await api.get<Workflow[]>(`/workspaces/${wsId}/pods/${selectedPodId}/workflows?limit=100`);
-      return Array.isArray(res) ? res : ((res as any)?.workflows ?? []) as Workflow[];
+      const res = await api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${selectedPodId}/workflows?limit=100`);
+      return unwrapList(res, 'workflows');
     },
   });
 
@@ -126,7 +126,6 @@ export default function EvalsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Evals</h1>
         <div className="flex items-center gap-2 flex-wrap">
@@ -192,7 +191,6 @@ export default function EvalsPage() {
         </div>
       )}
 
-      {/* Empty state */}
       {!selectedPodId && (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <p className="text-sm font-medium text-muted-foreground">Select a pod and workflow to get started</p>
@@ -207,7 +205,6 @@ export default function EvalsPage() {
         </div>
       )}
 
-      {/* Eval cases */}
       {selectedWfId && testCases.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -333,7 +330,6 @@ export default function EvalsPage() {
         </div>
       )}
 
-      {/* Run history */}
       {selectedWfId && (runHistory?.length ?? 0) > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">

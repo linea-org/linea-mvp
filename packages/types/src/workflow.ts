@@ -1,7 +1,5 @@
 import type { ID, Timestamp } from './common.js';
 
-// ─── Node Types ──────────────────────────────────────────────────────────────
-
 export type NodeType =
   | 'start'
   | 'end'
@@ -51,8 +49,6 @@ export interface WorkflowDefinition {
   edges: WorkflowEdge[];
   settings?: WorkflowSettings;
 }
-
-// ─── Workflow ─────────────────────────────────────────────────────────────────
 
 export interface Workflow {
   id: ID;

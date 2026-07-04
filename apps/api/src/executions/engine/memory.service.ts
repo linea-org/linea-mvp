@@ -3,21 +3,10 @@ import { and, eq, or, sql } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
-import {
-  memories,
-  apiKeys,
-  mcpServers,
-  secrets,
-  oauthConnections,
-} from '@linea/db';
+import { memories, mcpServers, secrets, oauthConnections } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
-
-const PROVIDER_TO_SECRET: Record<string, string> = {
-  anthropic: 'ANTHROPIC_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  groq: 'GROQ_API_KEY',
-  google: 'GOOGLE_API_KEY',
-};
+import { AIService } from '../../services/ai/ai.service';
+import { AI_EMBEDDING_MODELS } from '../../services/ai/model-catalog';
 
 @Injectable()
 export class MemoryService {
@@ -41,8 +30,6 @@ export class MemoryService {
       Buffer.from(keySource, 'utf8').copy(this.encryptionKey);
     }
   }
-
-  // ─── Memory load / save ───────────────────────────────────────────────────
 
   async loadForExecution(
     workspaceId: string,
@@ -301,39 +288,6 @@ export class MemoryService {
     }
   }
 
-  // ─── Per-workspace API key resolution ────────────────────────────────────
-
-  async loadApiKey(
-    workspaceId: string,
-    provider: string,
-  ): Promise<string | undefined> {
-    try {
-      const [row] = await this.db
-        .select({ keyEncrypted: apiKeys.keyEncrypted })
-        .from(apiKeys)
-        .where(
-          and(
-            eq(apiKeys.workspaceId, workspaceId),
-            eq(apiKeys.provider, provider),
-          ),
-        )
-        .limit(1);
-
-      if (row) return this.decrypt(row.keyEncrypted);
-      // Fall back to secrets table (BYOK stored via settings page)
-      const secretName = PROVIDER_TO_SECRET[provider];
-      if (secretName) return this.loadSecret(workspaceId, secretName);
-      return undefined;
-    } catch (err) {
-      this.logger.warn(
-        `Failed to load API key for provider ${provider} in workspace ${workspaceId}: ${err}`,
-      );
-      return undefined;
-    }
-  }
-
-  // ─── Secret resolution ────────────────────────────────────────────────────
-
   async loadSecret(
     workspaceId: string,
     name: string,
@@ -356,7 +310,6 @@ export class MemoryService {
     }
   }
 
-  // ─── OAuth token resolution ───────────────────────────────────────────────
   // Tries the OAuth connections table first; falls back to the plain secrets table.
   async resolveIntegrationToken(
     workspaceId: string,
@@ -392,8 +345,6 @@ export class MemoryService {
     return this.loadSecret(workspaceId, secretName);
   }
 
-  // ─── MCP server resolution ────────────────────────────────────────────────
-
   async loadMcpServer(
     workspaceId: string,
     mcpServerId: string,
@@ -426,16 +377,15 @@ export class MemoryService {
     }
   }
 
-  // ─── Long-term memory (vector-backed, cross-execution) ───────────────────
-
   /**
-   * Generate a 1536-d embedding using the given model and API key.
-   * Returns null when the model/key is unavailable — callers fall back to text search.
+   * Generate a 1536-d embedding using the given model via the workspace's configured AI provider.
+   * Returns null when the model/provider is unavailable — callers fall back to text search.
    * Non-OpenAI models (Google/Ollama) output wrong dimensions for our schema and also return null.
    */
   async generateEmbedding(
+    aiService: AIService,
+    workspaceId: string,
     text: string,
-    apiKey: string | undefined,
     modelId = 'text-embedding-3-small',
   ): Promise<number[] | null> {
     // Google and Ollama models output 768/1024d which doesn't match the 1536d pgvector column
@@ -449,33 +399,11 @@ export class MemoryService {
       );
       return null;
     }
-    if (!apiKey) return null;
     try {
-      const supportsReduction =
-        modelId === 'text-embedding-3-small' ||
-        modelId === 'text-embedding-3-large';
-      const body: Record<string, unknown> = { model: modelId, input: text };
-      if (supportsReduction) body['dimensions'] = 1536;
-
-      const resp = await fetch('https://api.openai.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-      const json = (await resp.json()) as {
-        data?: [{ embedding: number[] }];
-        error?: { message: string };
-      };
-      if (!resp.ok || !json.data?.[0]) {
-        this.logger.warn(
-          `Embedding API error: ${json.error?.message ?? resp.status}`,
-        );
-        return null;
-      }
-      return json.data[0].embedding;
+      const provider =
+        AI_EMBEDDING_MODELS.find((m) => m.id === modelId)?.provider ?? 'openai';
+      const client = await aiService.initialize(workspaceId, provider);
+      return await client.embedding(modelId, text);
     } catch (err) {
       this.logger.warn(`generateEmbedding failed: ${err}`);
       return null;
@@ -488,13 +416,14 @@ export class MemoryService {
     threadId: string,
     key: string,
     value: string,
-    openaiKey: string | undefined,
+    aiService: AIService,
   ): Promise<void> {
     try {
       const content = `${key}: ${value}`;
       const embedding = await this.generateEmbedding(
+        aiService,
+        workspaceId,
         content,
-        openaiKey,
         'text-embedding-3-small',
       );
 
@@ -530,12 +459,13 @@ export class MemoryService {
     workflowId: string | undefined,
     query: string,
     topK: number,
-    openaiKey: string | undefined,
+    aiService: AIService,
   ): Promise<Array<{ key: string; value: unknown; score: number }>> {
     try {
       const queryEmbedding = await this.generateEmbedding(
+        aiService,
+        workspaceId,
         query,
-        openaiKey,
         'text-embedding-3-small',
       );
 
@@ -620,8 +550,6 @@ export class MemoryService {
       return [];
     }
   }
-
-  // ─── Encryption helpers (AES-256-GCM) ────────────────────────────────────
 
   encrypt(plaintext: string): string {
     const iv = randomBytes(12);

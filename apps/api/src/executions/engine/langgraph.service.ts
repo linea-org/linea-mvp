@@ -16,12 +16,12 @@ import { workflows } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 import { NodeExecutorService } from './node-executor.service';
 import type { WorkflowState } from './variable-substitution';
-import {
-  executeLoopNode,
-  checkLoopTimeout,
-  MAX_LOOP_TIMEOUT_MS,
-} from './executors/loop.executor';
+import { executeLoopNode, checkLoopTimeout } from './executors/loop.executor';
 import type { LoopNodeData, LoopOutput } from './executors/loop.executor';
+import type { AgentResult } from './executors/agent.executor';
+import { drainWithTimeout } from './drain-with-timeout';
+
+const SUBWORKFLOW_TIMEOUT_MS = 15 * 60 * 1_000; // matches the top-level execution wall-clock cap
 
 export interface WorkflowNode {
   id: string;
@@ -30,7 +30,7 @@ export interface WorkflowNode {
   position: { x: number; y: number };
 }
 
-export interface WorkflowEdge {
+interface WorkflowEdge {
   id: string;
   source: string;
   target: string;
@@ -54,7 +54,7 @@ export type NodeUpdateCallback = (
 
 export type AgentTokenCallback = (nodeId: string, delta: string) => void;
 
-export const WorkflowStateAnnotation = Annotation.Root({
+const WorkflowStateAnnotation = Annotation.Root({
   variables: Annotation<Record<string, any>>({
     reducer: (l, r) => ({ ...l, ...r }),
     default: () => ({ input: '', lastOutput: '' }),
@@ -96,8 +96,6 @@ export const WorkflowStateAnnotation = Annotation.Root({
     default: () => ({ input_tokens: 0, output_tokens: 0, total_tokens: 0 }),
   }),
 });
-
-export { MAX_LOOP_TIMEOUT_MS };
 
 @Injectable()
 export class LangGraphService {
@@ -306,14 +304,14 @@ export class LangGraphService {
                 : undefined,
             });
             const durationMs = Date.now() - loopStart;
-            let usageUpdate = {
+            const agentResult = isAgentOutput
+              ? (result as AgentResult)
+              : undefined;
+            const usageUpdate = agentResult?.__usage ?? {
               input_tokens: 0,
               output_tokens: 0,
               total_tokens: 0,
             };
-            if (isAgentOutput && result?.__usage) {
-              usageUpdate = result.__usage as typeof usageUpdate;
-            }
             const output = result as LoopOutput;
             if (
               !output ||
@@ -326,14 +324,8 @@ export class LangGraphService {
             }
             onNodeUpdate(node.id, 'completed', output, undefined, durationMs);
             const nodeKey = node.data?.nodeName || node.data?.name || node.id;
-            const chatUpdates =
-              isAgentOutput && result?.__chatHistoryUpdates
-                ? result.__chatHistoryUpdates
-                : [];
-            const memoryUpdates =
-              isAgentOutput && result?.__memoryUpdates
-                ? result.__memoryUpdates
-                : {};
+            const chatUpdates = agentResult?.__chatHistoryUpdates ?? [];
+            const memoryUpdates = agentResult?.__memoryUpdates ?? {};
             return {
               variables: {
                 ...state.variables,
@@ -581,67 +573,83 @@ export class LangGraphService {
     // LangGraphService ↔ NodeExecutorService.
     if (nodeType === 'subworkflow') {
       return async (state: typeof WorkflowStateAnnotation.State) => {
-        const workflowId = node.data?.workflowId as string | undefined;
-        if (!workflowId)
-          throw new Error('Subworkflow node is missing workflowId');
-
-        const [wf] = await this.db
-          .select()
-          .from(workflows)
-          .where(eq(workflows.id, workflowId))
-          .limit(1);
-        if (!wf) throw new Error(`Subworkflow ${workflowId} not found`);
-
-        const subDef = wf.definition as unknown as WorkflowDefinition;
-        const subThreadId = `sub:${workflowId}:${randomBytes(8).toString('hex')}`;
-
-        onNodeUpdate(node.id, 'running');
         const subStart = Date.now();
+        try {
+          const workflowId = node.data?.workflowId as string | undefined;
+          if (!workflowId)
+            throw new Error('Subworkflow node is missing workflowId');
 
-        let subOutput: unknown = null;
-        const gen = this.stream(
-          subDef,
-          state.variables as Record<string, unknown>,
-          () => {},
-          subThreadId,
-          workspaceId,
-          new MemorySaver(),
-        );
-        for await (const s of gen) {
-          subOutput = (s as any)?.variables?.lastOutput ?? null;
-        }
+          const [wf] = await this.db
+            .select()
+            .from(workflows)
+            .where(eq(workflows.id, workflowId))
+            .limit(1);
+          if (!wf) throw new Error(`Subworkflow ${workflowId} not found`);
 
-        const subDurationMs = Date.now() - subStart;
-        const nodeKey =
-          (node.data?.nodeName as string) ||
-          (node.data?.name as string) ||
-          node.id;
-        onNodeUpdate(node.id, 'completed', subOutput, undefined, subDurationMs);
+          const subDef = wf.definition as unknown as WorkflowDefinition;
+          const subThreadId = `sub:${workflowId}:${randomBytes(8).toString('hex')}`;
 
-        return {
-          variables: {
-            lastOutput: subOutput,
-            [nodeKey]: subOutput,
-            [node.id]: subOutput,
-          },
-          chatHistory: [],
-          memory: {},
-          currentNodeId: node.id,
-          nodeResults: {
-            [node.id]: {
-              nodeId: node.id,
-              status: 'completed',
-              output: subOutput,
-              completedAt: new Date().toISOString(),
+          onNodeUpdate(node.id, 'running');
+
+          const gen = this.stream(
+            subDef,
+            state.variables as Record<string, unknown>,
+            () => {},
+            subThreadId,
+            workspaceId,
+            new MemorySaver(),
+          );
+          const finalSubState = await drainWithTimeout(
+            gen,
+            SUBWORKFLOW_TIMEOUT_MS,
+          );
+          const subOutput: unknown =
+            (finalSubState as any)?.variables?.lastOutput ?? null;
+
+          const subDurationMs = Date.now() - subStart;
+          const nodeKey =
+            (node.data?.nodeName as string) ||
+            (node.data?.name as string) ||
+            node.id;
+          onNodeUpdate(
+            node.id,
+            'completed',
+            subOutput,
+            undefined,
+            subDurationMs,
+          );
+
+          return {
+            variables: {
+              lastOutput: subOutput,
+              [nodeKey]: subOutput,
+              [node.id]: subOutput,
             },
-          },
-          pendingAuth: null,
-          cumulativeUsage: {
-            input_tokens: 0,
-            output_tokens: 0,
-            total_tokens: 0,
-          },
-        };
+            chatHistory: [],
+            memory: {},
+            currentNodeId: node.id,
+            nodeResults: {
+              [node.id]: {
+                nodeId: node.id,
+                status: 'completed',
+                output: subOutput,
+                completedAt: new Date().toISOString(),
+              },
+            },
+            pendingAuth: null,
+            cumulativeUsage: {
+              input_tokens: 0,
+              output_tokens: 0,
+              total_tokens: 0,
+            },
+          };
+        } catch (error) {
+          if (isGraphInterrupt(error)) throw error;
+          const durationMs = Date.now() - subStart;
+          const msg = error instanceof Error ? error.message : String(error);
+          onNodeUpdate(node.id, 'failed', undefined, msg, durationMs);
+          throw error;
+        }
       };
     }
 

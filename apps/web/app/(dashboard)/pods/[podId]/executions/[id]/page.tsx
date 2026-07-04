@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
+import { formatDurationLong as formatDuration } from '@/lib/format';
 import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
@@ -128,13 +129,6 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
 
 const LIVE_STATUSES = new Set(['queued', 'running', 'suspended']);
 
-function formatDuration(ms: number | undefined | null) {
-  if (ms == null) return null;
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
-}
-
 function NodeStatusIcon({ status }: { status: string }) {
   if (status === 'completed') {
     return (
@@ -247,7 +241,6 @@ function GanttTimeline({
 
   return (
     <div className="space-y-1">
-      {/* Time axis */}
       <div className="relative h-5 ml-36">
         {marks.map((m) => (
           <span
@@ -260,7 +253,6 @@ function GanttTimeline({
         ))}
       </div>
 
-      {/* Rows */}
       <div className="space-y-1.5">
         {rows.map(({ nodeId, name, status, startMs, endMs, durMs }) => {
           const barLeft = startMs != null ? ((startMs - effectiveStart) / totalMs) * 100 : 0;
@@ -287,7 +279,6 @@ function GanttTimeline({
         })}
       </div>
 
-      {/* Legend */}
       <div className="flex flex-wrap gap-3 pt-2 text-[10px] text-muted-foreground">
         {Object.entries({ completed: 'bg-green-500', failed: 'bg-red-500', running: 'bg-blue-500', suspended: 'bg-amber-400', skipped: 'bg-muted-foreground/30' }).map(([s, c]) => (
           <span key={s} className="flex items-center gap-1 capitalize">
@@ -557,7 +548,6 @@ function ExecutionCanvas({
         onClick={onClose}
       />
       <div className="fixed inset-4 z-[201] flex flex-col rounded-xl border bg-background shadow-2xl overflow-hidden">
-        {/* Header */}
         <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <span className="text-sm font-semibold">Canvas view</span>
           <div className="flex items-center gap-6">
@@ -579,7 +569,6 @@ function ExecutionCanvas({
             </button>
           </div>
         </div>
-        {/* Canvas */}
         <div className="flex-1 relative">
           <ReactFlow
             nodes={rfNodes}
@@ -685,106 +674,71 @@ function LogSettingsDialog({
 
 export default function ExecutionDetailPage() {
   const { podId, id } = useParams<{ podId: string; id: string }>();
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
 
-  const [execution, setExecution] = useState<Execution | null>(null);
-  const [logs, setLogs] = useState<ExecutionLog[]>([]);
-  const [workflow, setWorkflow] = useState<WorkflowInfo | null>(null);
-  const [loading, setLoading] = useState(true);
   const [approvalComment, setApprovalComment] = useState('');
   const [humanAnswer, setHumanAnswer] = useState('');
-  const [approving, setApproving] = useState(false);
   const [replaying, setReplaying] = useState(false);
   const [logSettingsOpen, setLogSettingsOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [timelineView, setTimelineView] = useState<'list' | 'gantt'>('list');
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number | null>(null);
-  const [stuckBanner, setStuckBanner] = useState(false);
 
-  async function loadData() {
-    if (!activeWorkspace) return null;
-    try {
-      const token = await getToken();
-      if (!token) return null;
-      const api = createApiClient(token);
-      const base = `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}`;
-      const [ex, logRows] = await Promise.all([
+  const executionKey = ['execution', wsId, podId, id];
+
+  const { data: execData, isLoading: loading } = useQuery<{ execution: Execution; logs: ExecutionLog[] } | null>({
+    queryKey: executionKey,
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      const base = `/workspaces/${wsId}/pods/${podId}/executions/${id}`;
+      const [execution, logs] = await Promise.all([
         api.get<Execution>(base),
         api.get<ExecutionLog[]>(`${base}/logs`),
       ]);
-      setExecution(ex);
-      setLogs(logRows);
-      return ex;
-    } catch {
-      return null;
-    }
-  }
+      return { execution, logs };
+    },
+    refetchInterval: (query) => {
+      const ex = query.state.data?.execution;
+      if (!ex || !LIVE_STATUSES.has(ex.status)) { pollStartRef.current = null; return false; }
+      if (pollStartRef.current == null) pollStartRef.current = Date.now();
+      if (Date.now() - pollStartRef.current >= 30 * 60 * 1000) return false;
+      return 3000;
+    },
+  });
 
-  async function loadWorkflow(workflowId: string) {
-    if (!activeWorkspace) return;
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const wf = await api.get<WorkflowInfo>(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${workflowId}`,
-      );
-      setWorkflow(wf);
-    } catch {
-      // workflow may have been deleted — non-fatal
-    }
-  }
+  const execution = execData?.execution ?? null;
+  const logs = execData?.logs ?? [];
+  const stuckBanner = !!execution && LIVE_STATUSES.has(execution.status) &&
+    pollStartRef.current != null && Date.now() - pollStartRef.current >= 30 * 60 * 1000;
 
-  useEffect(() => {
-    if (wsLoading || !activeWorkspace) return;
-
-    setStuckBanner(false);
-    void loadData().then((ex) => {
-      setLoading(false);
-      if (ex?.workflowId) void loadWorkflow(ex.workflowId);
-      if (ex && LIVE_STATUSES.has(ex.status)) {
-        pollStartRef.current = Date.now();
-        pollRef.current = setInterval(async () => {
-          if (Date.now() - pollStartRef.current! >= 30 * 60 * 1000) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-            setStuckBanner(true);
-            return;
-          }
-          const updated = await loadData();
-          if (updated && !LIVE_STATUSES.has(updated.status)) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-          }
-        }, 3000);
+  const { data: workflow = null } = useQuery<WorkflowInfo | null>({
+    queryKey: ['pod-workflow', wsId, podId, execution?.workflowId],
+    enabled: !!wsId && !!execution?.workflowId,
+    queryFn: async () => {
+      const api = await getApi();
+      try {
+        return await api.get<WorkflowInfo>(`/workspaces/${wsId}/pods/${podId}/workflows/${execution!.workflowId}`);
+      } catch {
+        return null; // workflow may have been deleted — non-fatal
       }
-    });
+    },
+  });
 
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspace, wsLoading, podId, id]);
-
-  async function manualRefresh() {
-    const updated = await loadData();
-    if (updated && !LIVE_STATUSES.has(updated.status)) {
-      setStuckBanner(false);
-    }
+  function manualRefresh() {
+    void queryClient.invalidateQueries({ queryKey: executionKey });
   }
 
   async function replay(fromNodeId?: string) {
-    if (!activeWorkspace) return;
     setReplaying(true);
     try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+      const api = await getApi();
       const newExec = await api.post<{ id: string }>(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}/replay`,
+        `/workspaces/${wsId}/pods/${podId}/executions/${id}/replay`,
         fromNodeId ? { fromNodeId } : {},
       );
       router.push(`/pods/${podId}/executions/${newExec.id}`);
@@ -793,59 +747,42 @@ export default function ExecutionDetailPage() {
     }
   }
 
+  const respondMutation = useMutation({
+    mutationFn: async (body: { approved?: boolean; comment?: string; answer?: string }) => {
+      const api = await getApi();
+      await api.patch(`/workspaces/${wsId}/pods/${podId}/executions/${id}/respond`, body);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: executionKey }),
+  });
+
   async function respond(approved: boolean) {
-    if (!activeWorkspace) return;
-    setApproving(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.patch(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}/respond`,
-        { approved, comment: approvalComment.trim() || undefined },
-      );
-      setApprovalComment('');
-      void loadData();
-    } finally {
-      setApproving(false);
-    }
+    await respondMutation.mutateAsync({ approved, comment: approvalComment.trim() || undefined });
+    setApprovalComment('');
   }
 
   async function respondWithAnswer() {
-    if (!activeWorkspace || !humanAnswer.trim()) return;
-    setApproving(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      await api.patch(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${id}/respond`,
-        { answer: humanAnswer.trim() },
-      );
-      setHumanAnswer('');
-      void loadData();
-    } finally {
-      setApproving(false);
-    }
+    if (!humanAnswer.trim()) return;
+    await respondMutation.mutateAsync({ answer: humanAnswer.trim() });
+    setHumanAnswer('');
   }
 
+  const approving = respondMutation.isPending;
+
   async function saveLogSettings(logLevel: string, logRetentionDays: number | null) {
-    if (!activeWorkspace || !execution?.workflowId) return;
-    const token = await getToken();
-    if (!token) return;
-    const api = createApiClient(token);
+    if (!execution?.workflowId) return;
+    const api = await getApi();
     const updated = await api.patch<WorkflowInfo>(
-      `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows/${execution.workflowId}/log-settings`,
+      `/workspaces/${wsId}/pods/${podId}/workflows/${execution.workflowId}/log-settings`,
       { logLevel, logRetentionDays },
     );
-    setWorkflow(updated);
+    queryClient.setQueryData(['pod-workflow', wsId, podId, execution.workflowId], updated);
   }
 
   const nodeMap = new Map<string, WorkflowNode>(
     (workflow?.definition?.nodes ?? []).map((n) => [n.id, n]),
   );
 
-  const pendingInterrupt = (execution?.variables as any)?.__pendingInterrupt as PendingInterrupt | undefined;
+  const pendingInterrupt = execution?.variables?.['__pendingInterrupt'] as PendingInterrupt | undefined;
   const interruptType = pendingInterrupt?.type ?? 'approval';
   const interruptPrompt = pendingInterrupt?.question ?? pendingInterrupt?.message ?? pendingInterrupt?.prompt;
 
@@ -882,7 +819,6 @@ export default function ExecutionDetailPage() {
           </Button>
         </div>
       )}
-      {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="font-mono text-sm text-muted-foreground">{execution.id}</h1>
         <Badge variant={STATUS_VARIANT[execution.status] ?? 'secondary'}>
@@ -936,7 +872,6 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Meta row */}
       <div className="grid grid-cols-3 gap-4 text-sm">
         <div>
           <p className="text-muted-foreground text-xs">Trigger</p>
@@ -962,7 +897,6 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Suspension panel */}
       {execution.status === 'suspended' && (
         <>
           <Separator />
@@ -1030,7 +964,6 @@ export default function ExecutionDetailPage() {
 
       <Separator />
 
-      {/* Node timeline + Gantt */}
       <div>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-3">
@@ -1074,7 +1007,6 @@ export default function ExecutionDetailPage() {
 
       <Separator />
 
-      {/* Input / Output */}
       <div className="grid grid-cols-2 gap-6">
         <div>
           <p className="mb-2 text-sm font-medium">Input</p>
@@ -1090,7 +1022,6 @@ export default function ExecutionDetailPage() {
         </div>
       </div>
 
-      {/* Canvas view */}
       {workflow && (
         <ExecutionCanvas
           workflow={workflow}
@@ -1100,7 +1031,6 @@ export default function ExecutionDetailPage() {
         />
       )}
 
-      {/* Log settings dialog */}
       {workflow && logSettingsOpen && (
         <LogSettingsDialog
           open={logSettingsOpen}

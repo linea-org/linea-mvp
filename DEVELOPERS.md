@@ -14,7 +14,7 @@ linea/
 │   ├── db/           # Drizzle ORM schema, migrations, client
 │   └── ui/           # Shared React component library
 ├── docker-compose.yml
-├── .env.example      # Root env template (copy to .env)
+├── .env.example      # Root env template — db tooling only (copy to .env)
 └── DEVELOPERS.md     # This file
 ```
 
@@ -47,6 +47,13 @@ pnpm install
 
 ```bash
 cp .env.example .env
+# Only needs DATABASE_URL — consumed by packages/db's drizzle-kit tooling
+# (migrations, db:push, db:studio), not by the running apps.
+```
+
+Copy the API env — this is what the running server actually reads:
+```bash
+cp apps/api/.env.example apps/api/.env
 # Fill in keys — see Environment variables reference below.
 # Minimum required: DATABASE_URL, REDIS_URL, CLERK_SECRET_KEY,
 # CLERK_PUBLISHABLE_KEY, CLERK_WEBHOOK_SECRET, ENCRYPTION_KEY,
@@ -396,9 +403,11 @@ Stable.
 
 ## Environment variables reference
 
-The root `.env.example` is the canonical list. Copy it to `.env` in the repo root; `packages/db/drizzle.config.ts` and `apps/api` both load from there.
+`apps/api/.env.example` is the canonical list for the running API server (NestJS loads `apps/api/.env` relative to its own working directory). The root `.env.example` is separate and only needs `DATABASE_URL` — it's read by `packages/db/drizzle.config.ts` for migration tooling.
 
-### Required
+### API (`apps/api/.env`)
+
+#### Required
 
 | Variable | Description |
 |----------|-------------|
@@ -410,7 +419,7 @@ The root `.env.example` is the canonical list. Copy it to `.env` in the repo roo
 | `ENCRYPTION_KEY` | 64 hex chars (32 bytes) for AES-256-GCM secret encryption. Generate: `openssl rand -hex 32` |
 | At least one of: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `GOOGLE_API_KEY` | LLM provider key — required for any agent node to run |
 
-### Optional
+#### Optional
 
 | Variable | Default | Description |
 |----------|---------|-------------|

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useQuery } from '@tanstack/react-query';
@@ -11,8 +11,8 @@ import { createApiClient, friendlyApiError } from '@/lib/api';
 import { Badge } from '@linea/ui/components/badge';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
+import { PageSpinner } from '@linea/ui/components/page-spinner';
 
-/* ─── Types ─────────────────────────────────────────────────────────── */
 interface PlanInfo {
   key: string;
   label: string;
@@ -28,7 +28,6 @@ interface PlansResponse {
   currentPlan: string;
 }
 
-/* ─── Static catalogue (used as fallback if API is down) ────────────── */
 const FALLBACK_PLANS: PlanInfo[] = [
   {
     key: 'pro', label: 'Pro', priceUsd: 29,
@@ -51,8 +50,7 @@ const PLAN_LIMITS: Record<string, { executions: string; workflows: string; membe
   enterprise: { executions: 'Unlimited',       workflows: 'Unlimited', members: 'Unlimited' },
 };
 
-/* ─── Component ─────────────────────────────────────────────────────── */
-export default function BillingPage() {
+function BillingPageInner() {
   const { getToken } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const router = useRouter();
@@ -110,7 +108,6 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Success banner */}
       {successPlan && (
         <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
           <HugeiconsIcon icon={Tick01Icon} className="size-4 shrink-0 text-green-500" />
@@ -123,14 +120,12 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Error */}
       {payError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {payError}
         </div>
       )}
 
-      {/* Current plan */}
       <div className="rounded-lg border border-border bg-card p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -158,7 +153,6 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* Upgrade plans */}
       {currentPlan !== 'enterprise' && (
         <div className="space-y-3">
           <p className="text-sm font-semibold">Upgrade your plan</p>
@@ -239,7 +233,6 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Enterprise CTA */}
       <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-3">
         <p className="text-sm font-semibold">Need Enterprise?</p>
         <p className="text-xs text-muted-foreground max-w-sm mx-auto">
@@ -250,7 +243,6 @@ export default function BillingPage() {
         </Button>
       </div>
 
-      {/* Powered by Polar */}
       <p className="text-center text-[10px] text-muted-foreground/50">
         Payments powered by{' '}
         <a href="https://polar.sh" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-muted-foreground">
@@ -258,5 +250,13 @@ export default function BillingPage() {
         </a>
       </p>
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<PageSpinner />}>
+      <BillingPageInner />
+    </Suspense>
   );
 }

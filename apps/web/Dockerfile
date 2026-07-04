@@ -1,4 +1,4 @@
-# ── Stage 1: builder ─────────────────────────────────────────────────────────
+# Stage 1: builder
 FROM node:20-bookworm-slim AS builder
 
 RUN apt-get update \
@@ -18,7 +18,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV SKIP_ENV_VALIDATION=true
 RUN pnpm --filter=web build
 
-# ── Stage 2: runner ───────────────────────────────────────────────────────────
+# Stage 2: runner
 FROM node:20-bookworm-slim AS runner
 
 RUN apt-get update \

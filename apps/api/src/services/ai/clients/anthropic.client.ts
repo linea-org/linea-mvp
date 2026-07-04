@@ -10,7 +10,7 @@ export class AnthropicClient implements ModelClient {
     this._client = new Anthropic({ apiKey });
   }
 
-  displayModels: ModelDefinition[] = [
+  static readonly displayModels: ModelDefinition[] = [
     {
       id: 'claude-opus-4-7',
       name: 'Claude Opus 4.7',
@@ -77,9 +77,11 @@ export class AnthropicClient implements ModelClient {
     },
   ];
 
-  models: string[] = this.displayModels.map((m) => m.id);
+  static readonly embeddingModels: string[] = [];
 
-  embeddingModels: string[] = [];
+  displayModels: ModelDefinition[] = AnthropicClient.displayModels;
+  models: string[] = AnthropicClient.displayModels.map((m) => m.id);
+  embeddingModels: string[] = AnthropicClient.embeddingModels;
 
   async chat(
     model: string,

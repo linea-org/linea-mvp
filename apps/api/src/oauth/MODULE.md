@@ -27,7 +27,7 @@
 
 ## Changelog
 
-_No recent changes._
+- Fixed `buildRedirectUri`'s `API_URL` fallback (was `localhost:3000`, now `localhost:3001` matching every other `API_URL` default) — previously, if `API_URL` were ever unset, the authorize step and the token-exchange callback would compute different `redirect_uri` values, which most providers reject
 
 ## Missing / Gaps
 

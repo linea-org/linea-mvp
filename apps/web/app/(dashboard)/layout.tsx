@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useClerk, useUser, useAuth } from '@clerk/nextjs';
@@ -11,7 +11,9 @@ import { WelcomeModal } from '@/components/onboarding/welcome-modal';
 import { GettingStarted } from '@/components/onboarding/getting-started';
 import { CommandPalette } from '@/components/command-palette';
 import { KeyboardShortcutsDialog } from '@/components/keyboard-shortcuts-dialog';
-import { createApiClient } from '@/lib/api';
+import { createApiClient, friendlyApiError, API_BASE } from '@/lib/api';
+import { consumeSseStream } from '@/lib/sse';
+import { toast } from '@linea/ui/components/sonner';
 import {
   SidebarProvider,
   Sidebar,
@@ -66,9 +68,7 @@ import {
   UserMultiple02Icon,
   Key01Icon,
   SquareLock01Icon,
-  AiBrain01Icon,
   GlobalIcon,
-  ComputerCloudIcon,
   Invoice03Icon,
   Home01Icon,
   CheckmarkCircle01Icon,
@@ -309,10 +309,8 @@ const SETTINGS_NAV_SECTIONS = [
   {
     label: 'AI & Integrations',
     items: [
-      { href: '/settings/model-keys',  label: 'Model Keys',        icon: AiBrain01Icon    },
       { href: '/settings/models',      label: 'Model Preferences', icon: AiMagicIcon      },
       { href: '/settings/connections', label: 'Connections',       icon: GlobalIcon        },
-      { href: '/settings/mcp-servers', label: 'MCP Servers',       icon: ComputerCloudIcon },
     ],
   },
 ];
@@ -496,7 +494,6 @@ function DashboardSidebar() {
 
       <GettingStarted />
       <SidebarFooter className="px-3 py-3 space-y-1">
-        {/* Theme toggle */}
         <div className="flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
           {([
             { key: 'light',  icon: Sun01Icon,     title: 'Light' },
@@ -648,8 +645,6 @@ function timeAgoShort(iso: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
-const NOTIF_API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
-
 function NotificationBell() {
   const { getToken } = useAuth();
   const { activeWorkspace } = useWorkspace();
@@ -662,7 +657,7 @@ function NotificationBell() {
   const workspaceId = activeWorkspace?.id;
   const unread = notifications.filter((n) => !n.read).length;
 
-  async function loadNotifs() {
+  const loadNotifs = useCallback(async () => {
     if (!workspaceId) return;
     setLoadingNotifs(true);
     try {
@@ -671,14 +666,14 @@ function NotificationBell() {
       const api = createApiClient(token);
       const data = await api.get<Notification[]>(`/workspaces/${workspaceId}/notifications`);
       setNotifications(data ?? []);
-    } catch {
-      // silently fail
+    } catch (err) {
+      toast.error(friendlyApiError(err));
     } finally {
       setLoadingNotifs(false);
     }
-  }
+  }, [workspaceId, getToken]);
 
-  async function startSSE() {
+  const startSSE = useCallback(async () => {
     if (!workspaceId) return;
     sseAbortRef.current?.abort();
     const ac = new AbortController();
@@ -687,23 +682,12 @@ function NotificationBell() {
       const token = await getToken();
       if (!token) return;
       const resp = await fetch(
-        `${NOTIF_API_BASE}/workspaces/${workspaceId}/notifications/stream`,
+        `${API_BASE}/workspaces/${workspaceId}/notifications/stream`,
         { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal },
       );
       if (!resp.ok || !resp.body) return;
       const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) void loadNotifs();
-        }
-      }
+      await consumeSseStream(reader, () => void loadNotifs());
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
     }
@@ -711,18 +695,14 @@ function NotificationBell() {
     if (!sseAbortRef.current?.signal.aborted) {
       setTimeout(() => void startSSE(), 2_000);
     }
-  }
+  }, [workspaceId, getToken, loadNotifs]);
 
   useEffect(() => {
     if (!workspaceId) return;
     void loadNotifs();
     void startSSE();
     return () => { sseAbortRef.current?.abort(); };
-  }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (open) void loadNotifs();
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspaceId, loadNotifs, startSSE]);
 
   async function markRead(id: string) {
     if (!workspaceId) return;
@@ -732,7 +712,9 @@ function NotificationBell() {
       const api = createApiClient(token);
       await api.patch(`/workspaces/${workspaceId}/notifications/${id}/read`);
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   async function markAllRead() {
@@ -743,7 +725,9 @@ function NotificationBell() {
       const api = createApiClient(token);
       await api.patch(`/workspaces/${workspaceId}/notifications/read-all`);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   async function dismiss(id: string) {
@@ -754,7 +738,9 @@ function NotificationBell() {
       const api = createApiClient(token);
       await api.delete(`/workspaces/${workspaceId}/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   }
 
   const filtered = notifications.filter((n) => matchesFilter(n, typeFilter));
@@ -764,7 +750,7 @@ function NotificationBell() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); void loadNotifs(); }}
         className="relative p-1.5 rounded-md hover:bg-muted transition-colors"
         title="Notifications"
       >
@@ -807,7 +793,6 @@ function NotificationBell() {
             </div>
           </SheetHeader>
 
-          {/* Type filter pills */}
           <div className="flex items-center gap-1 overflow-x-auto px-4 py-2 border-b border-border/50 shrink-0">
             {NOTIF_FILTERS.map((f) => (
               <button
@@ -957,7 +942,6 @@ function NotificationBell() {
             )}
           </ScrollArea>
 
-          {/* Footer */}
           <div className="border-t px-4 py-3 shrink-0">
             <Link
               href="/notifications"

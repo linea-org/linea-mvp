@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@clerk/nextjs';
-import { createApiClient } from '@/lib/api';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@linea/ui/components/button';
 import { Skeleton } from '@linea/ui/components/skeleton';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -133,57 +133,51 @@ function ActionButtons({ n, onMarkRead, onDismiss }: {
 }
 
 export default function NotificationsPage() {
-  const { getToken } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const getApi = useApiClient();
+  const queryClient = useQueryClient();
   const [readFilter, setReadFilter] = useState<'all' | 'unread'>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
-  async function load() {
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const data = await api.get<Notification[]>('/notifications');
-      setNotifications(data ?? []);
-    } catch {
-      // endpoint may not be available yet
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: notifications = [], isLoading: loading } = useQuery<Notification[]>({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<Notification[]>('/notifications');
+    },
+  });
 
-  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function markAllRead() {
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
       await api.patch('/notifications/read-all');
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    } catch { /* ignore */ }
-  }
+    },
+    onSuccess: () => {
+      queryClient.setQueryData<Notification[]>(['notifications'], (prev = []) => prev.map((n) => ({ ...n, read: true })));
+    },
+  });
 
-  async function markRead(id: string) {
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+  const markRead = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
       await api.patch(`/notifications/${id}/read`);
-      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
-    } catch { /* ignore */ }
-  }
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Notification[]>(['notifications'], (prev = []) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    },
+  });
 
-  async function dismiss(id: string) {
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
+  const dismiss = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi();
       await api.delete(`/notifications/${id}`);
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-    } catch { /* ignore */ }
-  }
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Notification[]>(['notifications'], (prev = []) => prev.filter((n) => n.id !== id));
+    },
+  });
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -193,7 +187,6 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Notifications</h1>
@@ -202,16 +195,14 @@ export default function NotificationsPage() {
           )}
         </div>
         {unreadCount > 0 && (
-          <Button size="sm" variant="outline" onClick={() => void markAllRead()}>
+          <Button size="sm" variant="outline" onClick={() => markAllRead.mutate()}>
             <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-3.5" />
             Mark all read
           </Button>
         )}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-3">
-        {/* Read filter */}
         <div className="flex gap-4">
           {(['all', 'unread'] as const).map((t) => (
             <button
@@ -223,7 +214,6 @@ export default function NotificationsPage() {
             </button>
           ))}
         </div>
-        {/* Type filter */}
         <div className="flex items-center gap-1">
           {TYPE_FILTERS.map((f) => (
             <button
@@ -275,8 +265,8 @@ export default function NotificationsPage() {
                   )}
                   <ActionButtons
                     n={n}
-                    onMarkRead={() => void markRead(n.id)}
-                    onDismiss={() => void dismiss(n.id)}
+                    onMarkRead={() => markRead.mutate(n.id)}
+                    onDismiss={() => dismiss.mutate(n.id)}
                   />
                 </div>
               </div>

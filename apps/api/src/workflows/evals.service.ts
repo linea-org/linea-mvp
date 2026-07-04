@@ -7,7 +7,7 @@ import { DB_TOKEN } from '../database/database.module';
 import { ExecutionsService } from '../executions/executions.service';
 import { ConfigService } from '@nestjs/config';
 
-export type AssertionSource =
+type AssertionSource =
   | 'output'
   | `node:${string}`
   | 'duration_ms'
@@ -17,7 +17,7 @@ export type AssertionSource =
   | `tool_calls:${string}`
   | 'tool_calls';
 
-export type Operator =
+type Operator =
   | 'equals'
   | 'contains'
   | 'exists'
@@ -64,7 +64,7 @@ export interface AssertionResult {
   reasoning?: string;
 }
 
-export interface TrialResult {
+interface TrialResult {
   executionId: string;
   status: string;
   passed: boolean;
@@ -93,14 +93,9 @@ export interface EvalRunSummary {
   results: TestCaseResult[];
 }
 
-/* ------------------------------------------------------------------ */
-/*  Terminal row type (Drizzle infers this from the executions table)   */
-/* ------------------------------------------------------------------ */
+// Drizzle infers this from the executions table
 type TerminalRow = Awaited<ReturnType<EvalsService['pollUntilDone']>>;
 
-/* ------------------------------------------------------------------ */
-/*  Path extraction                                                     */
-/* ------------------------------------------------------------------ */
 function getByPath(obj: unknown, path: string): unknown {
   if (!path || path === '.') return obj;
   return path.split('.').reduce<unknown>((cur, key) => {
@@ -109,9 +104,6 @@ function getByPath(obj: unknown, path: string): unknown {
   }, obj);
 }
 
-/* ------------------------------------------------------------------ */
-/*  Source extraction                                                   */
-/* ------------------------------------------------------------------ */
 function extractSource(
   terminal: TerminalRow,
   source: string | undefined,
@@ -169,9 +161,6 @@ function extractSource(
   return undefined;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Deterministic evaluator                                             */
-/* ------------------------------------------------------------------ */
 function evaluateDeterministic(
   assertion: Assertion,
   extracted: unknown,
@@ -226,9 +215,6 @@ function evaluateDeterministic(
   };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Tool call evaluator                                                 */
-/* ------------------------------------------------------------------ */
 function evaluateToolCalls(
   assertion: Assertion,
   extracted: unknown,
@@ -253,9 +239,6 @@ function evaluateToolCalls(
   };
 }
 
-/* ------------------------------------------------------------------ */
-/*  LLM-as-judge evaluator                                             */
-/* ------------------------------------------------------------------ */
 async function evaluateWithLlmJudge(
   assertion: Assertion,
   extracted: unknown,
@@ -317,9 +300,6 @@ A score >= ${threshold} means PASS.`;
   }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Semantic match evaluator                                            */
-/* ------------------------------------------------------------------ */
 async function evaluateSemanticMatch(
   assertion: Assertion,
   extracted: unknown,
@@ -386,9 +366,6 @@ A score >= ${threshold} means PASS.`;
   }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Service                                                             */
-/* ------------------------------------------------------------------ */
 @Injectable()
 export class EvalsService {
   private readonly anthropic: Anthropic;

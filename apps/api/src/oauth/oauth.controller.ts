@@ -103,7 +103,7 @@ export class OAuthCallbackController {
 
   private buildRedirectUri(provider: string): string {
     const apiUrl =
-      this.config.get<string>('API_URL') ?? 'http://localhost:3000';
+      this.config.get<string>('API_URL') ?? 'http://localhost:3001';
     return `${apiUrl}/oauth/${provider}/callback`;
   }
 }

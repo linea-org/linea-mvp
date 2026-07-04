@@ -26,6 +26,7 @@ import { PodsModule } from '../pods/pods.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { QuotasModule } from '../quotas/quotas.module';
 import { MailModule } from '../mail/mail.module';
+import { AIModule } from '../agent-chat/ai.module';
 import { EXECUTION_QUEUE } from './queue/execution.queue';
 
 @Module({
@@ -35,6 +36,7 @@ import { EXECUTION_QUEUE } from './queue/execution.queue';
     NotificationsModule,
     QuotasModule,
     MailModule,
+    AIModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => {

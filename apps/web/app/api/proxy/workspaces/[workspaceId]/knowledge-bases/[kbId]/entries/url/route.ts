@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const API_BASE = `${process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'}/v1`;
+import { API_BASE } from '@/lib/api';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

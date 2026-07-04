@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useApiClient } from '@/hooks/use-api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient } from '@/lib/api';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
@@ -43,56 +43,40 @@ function kbColor(id: string) {
 }
 
 export default function KnowledgePage() {
-  const { getToken } = useAuth();
+  const getApi = useApiClient();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const router = useRouter();
-  const [bases, setBases] = useState<KnowledgeBase[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const wsId = activeWorkspace?.id ?? '';
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [creating, setCreating] = useState(false);
 
-  async function load() {
-    if (!activeWorkspace) return;
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const data = await api.get<KnowledgeBase[]>(`/workspaces/${activeWorkspace.id}/knowledge-bases`);
-      setBases(data);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: bases = [], isLoading: loading } = useQuery<KnowledgeBase[]>({
+    queryKey: ['knowledge-bases', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<KnowledgeBase[]>(`/workspaces/${wsId}/knowledge-bases`);
+    },
+  });
 
-  useEffect(() => {
-    if (wsLoading) return;
-    if (!activeWorkspace) { setLoading(false); return; }
-    void load();
-  }, [activeWorkspace, wsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function handleCreate() {
-    if (!activeWorkspace || !name.trim()) return;
-    setCreating(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const api = createApiClient(token);
-      const kb = await api.post<KnowledgeBase>(`/workspaces/${activeWorkspace.id}/knowledge-bases`, {
+  const createKb = useMutation({
+    mutationFn: async () => {
+      const api = await getApi();
+      return api.post<KnowledgeBase>(`/workspaces/${wsId}/knowledge-bases`, {
         name: name.trim(),
         description: description.trim() || undefined,
       });
-      setBases((prev) => [{ ...kb, entryCount: 0 }, ...prev]);
+    },
+    onSuccess: (kb) => {
+      queryClient.setQueryData<KnowledgeBase[]>(['knowledge-bases', wsId], (prev = []) => [{ ...kb, entryCount: 0 }, ...prev]);
       setDialogOpen(false);
       setName('');
       setDescription('');
       router.push(`/knowledge/${kb.id}`);
-    } finally {
-      setCreating(false);
-    }
-  }
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -183,7 +167,7 @@ export default function KnowledgePage() {
                 placeholder="e.g. Product docs"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') createKb.mutate(); }}
                 autoFocus
               />
             </div>
@@ -198,8 +182,8 @@ export default function KnowledgePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void handleCreate()} disabled={!name.trim() || creating}>
-              {creating ? 'Creating…' : 'Create'}
+            <Button onClick={() => createKb.mutate()} disabled={!name.trim() || createKb.isPending}>
+              {createKb.isPending ? 'Creating…' : 'Create'}
             </Button>
           </DialogFooter>
         </DialogContent>

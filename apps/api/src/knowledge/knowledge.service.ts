@@ -30,8 +30,6 @@ export class KnowledgeService {
     private readonly ai: AIService,
   ) {}
 
-  // ─── Knowledge Bases ────────────────────────────────────────────────────────
-
   async createBase(workspaceId: string, dto: CreateKnowledgeBaseDto) {
     const [kb] = await this.db
       .insert(knowledgeBases)
@@ -115,8 +113,6 @@ export class KnowledgeService {
         ),
       );
   }
-
-  // ─── Entries ────────────────────────────────────────────────────────────────
 
   private async assertBaseOwnership(workspaceId: string, kbId: string) {
     const [kb] = await this.db
@@ -307,8 +303,6 @@ export class KnowledgeService {
 
     return inserted[0];
   }
-
-  // ─── Retrieval helpers ──────────────────────────────────────────────────────
 
   /**
    * Run pgvector cosine-distance search.

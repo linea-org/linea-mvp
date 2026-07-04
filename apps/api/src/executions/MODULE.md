@@ -45,12 +45,18 @@ Also exposes a node test endpoint:
 
 - `WorkspacesModule` — workspace guard
 - `PodsModule` — pod guard
-- `NotificationsModule` — pushes notifications on completion/failure
+- `NotificationsModule` — pushes a notification only on failure, only for unattended triggers (`schedule`/`webhook`/`sdk`, never `manual`), deduped to a consecutive-failure streak (fires at 3 failures in a row, then every +10) — no longer notifies on every successful completion
 - `QuotasModule` — enforces per-workspace execution quotas
 - `BullMQ execution queue` — async job processing
 - `Redis` — execution event pub/sub + LangGraph checkpoint storage
 
 ## Changelog
+
+### 2026-07-02 — Notification gating, subworkflow timeout, DB indexes
+
+- **Execution notifications**: removed `execution_complete` notifications entirely (already visible in execution history); `execution_failed` now only fires for `schedule`/`webhook`/`sdk` triggers (never `manual`, since the user is already watching a manual run live), gated by a consecutive-failure streak (`ExecutionProcessor.getConsecutiveFailureCount` + `shouldNotifyFailureStreak`) to avoid spamming on a repeatedly-broken cron
+- **Subworkflow timeout**: `LangGraphService`'s subworkflow node handler now drains the nested execution generator through the shared `drainWithTimeout` helper (`executions/engine/drain-with-timeout.ts`), giving it the same 15-minute wall-clock cap as top-level executions — previously unprotected — plus the same `onNodeUpdate(..., 'failed', ...)` error-reporting convention as other node handlers
+- **DB indexes**: added indexes on `executions(workspace_id, created_at)`, `executions(workflow_id)`, `executions(pod_id)`, and `execution_logs(execution_id)` matching the actual query patterns in `ExecutionsService`/`ExecutionProcessor`
 
 ### 2026-06-13 — Supervisor overhaul + reasoning model output cleanup (LIN-16)
 

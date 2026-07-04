@@ -159,7 +159,6 @@ export function LineaChat({
 
   return (
     <div className={`linea-chat${className ? ` ${className}` : ''}`}>
-      {/* Header */}
       <div className="linea-chat__header">
         <div className="linea-chat__header-icon" aria-hidden>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -173,8 +172,6 @@ export function LineaChat({
           aria-label={streaming ? 'Agent is thinking' : 'Ready'}
         />
       </div>
-
-      {/* Messages */}
       <div className="linea-chat__messages" style={{ maxHeight }}>
         {!hasMessages ? (
           <div className="linea-chat__empty">
@@ -189,8 +186,6 @@ export function LineaChat({
       {error && (
         <div className="linea-chat__error" role="alert">{error}</div>
       )}
-
-      {/* Input */}
       <div className="linea-chat__footer">
         <textarea
           ref={textareaRef}

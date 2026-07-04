@@ -39,7 +39,6 @@ interface ToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   autoSave: boolean;
-  token?: string;
   workspaceId?: string;
   podId?: string;
   workflowId?: string;
@@ -63,9 +62,6 @@ interface ToolbarProps {
   onAutoSaveToggle: () => void;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Tooltip button helper                                               */
-/* ------------------------------------------------------------------ */
 function TBtn({
   icon, label, shortcut, description, onClick, disabled, variant = 'outline', active, className, size = 'icon-sm',
 }: {
@@ -84,7 +80,7 @@ function TBtn({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          size={size as any}
+          size={size}
           variant={active ? 'secondary' : variant}
           onClick={onClick}
           disabled={disabled}
@@ -104,9 +100,6 @@ function TBtn({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Keyboard shortcuts panel                                            */
-/* ------------------------------------------------------------------ */
 const SHORTCUT_GROUPS = [
   {
     label: 'Canvas',
@@ -144,15 +137,12 @@ const SHORTCUT_GROUPS = [
 function ShortcutsPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
-      {/* Blurred backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Panel */}
       <div className="relative z-10 w-[520px] max-h-[80vh] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2.5">
             <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
@@ -171,7 +161,6 @@ function ShortcutsPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* Body -- two-column grid */}
         <div className="overflow-y-auto p-5">
           <div className="grid grid-cols-2 gap-x-8 gap-y-6">
             {SHORTCUT_GROUPS.map((group) => (
@@ -205,9 +194,6 @@ function ShortcutsPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Validation badge                                                    */
-/* ------------------------------------------------------------------ */
 function ValidationBadge({ state }: { state: ValidationState }) {
   const [open, setOpen] = useState(false);
   const { level, issues } = state;
@@ -253,14 +239,11 @@ const STATUS_COLOR: Record<string, string> = {
   suspended: 'text-amber-500',
 };
 
-/* ------------------------------------------------------------------ */
-/*  Toolbar                                                             */
-/* ------------------------------------------------------------------ */
 export function Toolbar({
   workflowName, isSaving, isRunning, isGenerating, runStatus, validationState,
   deployPanelOpen, historyOpen, versionsOpen, shareOpen, commentsOpen, evalsOpen,
   isDeployed, canUndo, canRedo, autoSave,
-  token, workspaceId, podId, workflowId,
+  workspaceId, podId, workflowId,
   onSave, onRun, onStop, onDeployPanel, onBack, onNameChange, onGenerate,
   onHistory, onVersions, onShare, onComments, onEvals,
   onExport, onImport, onUndo, onRedo, onAutoLayout, onAutoSaveToggle,
@@ -270,7 +253,6 @@ export function Toolbar({
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setLocalName(workflowName); }, [workflowName]);
   useEffect(() => { if (editingName) inputRef.current?.focus(); }, [editingName]);
 
   // "?" shortcut
@@ -321,7 +303,7 @@ export function Toolbar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={() => setEditingName(true)}
+                  onClick={() => { setLocalName(workflowName); setEditingName(true); }}
                   className="max-w-64 truncate text-sm font-semibold text-foreground hover:text-muted-foreground cursor-text"
                 >
                   {workflowName}
@@ -355,8 +337,8 @@ export function Toolbar({
             </>
           )}
 
-          {token && workspaceId && podId && workflowId && (
-            <PresenceAvatars token={token} workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
+          {workspaceId && podId && workflowId && (
+            <PresenceAvatars workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
           )}
 
           <TBtn icon={UndoIcon} label="Undo" shortcut="Ctrl+Z" onClick={onUndo} disabled={!canUndo} />

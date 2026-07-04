@@ -11,7 +11,7 @@ import type { DrizzleDB, Pod } from '@linea/db';
 import { pods } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
 
-export type PodRequest = Request & {
+type PodRequest = Request & {
   pod: Pod;
 };
 

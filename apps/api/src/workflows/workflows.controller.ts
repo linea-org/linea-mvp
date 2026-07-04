@@ -418,8 +418,6 @@ export class WorkflowsController {
   }
 }
 
-// ─── Public templates route (no workspace scope) ──────────────────────────────
-
 @ApiTags('Templates')
 @ApiBearerAuth()
 @Controller('templates')

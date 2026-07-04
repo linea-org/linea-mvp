@@ -1,6 +1,6 @@
 import type { WorkflowState } from '../variable-substitution';
 
-export interface VariableEntry {
+interface VariableEntry {
   key: string;
   value: string; // supports {{}} substitution — already resolved by the time executor runs
 }

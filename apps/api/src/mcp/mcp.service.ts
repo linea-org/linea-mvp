@@ -38,8 +38,6 @@ export class McpService {
     }
   }
 
-  // ─── Encryption helpers (AES-256-GCM) ────────────────────────────────────
-
   private encrypt(plaintext: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
@@ -61,16 +59,12 @@ export class McpService {
     return decipher.update(encrypted).toString('utf8') + decipher.final('utf8');
   }
 
-  // ─── Safe response helper ─────────────────────────────────────────────────
-
   private toSafeResponse(
     row: typeof mcpServers.$inferSelect,
   ): McpServerSafeResponse {
     const { accessTokenEncrypted, ...rest } = row;
     return { ...rest, hasToken: accessTokenEncrypted !== null };
   }
-
-  // ─── CRUD ─────────────────────────────────────────────────────────────────
 
   async create(
     workspaceId: string,
