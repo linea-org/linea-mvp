@@ -43,7 +43,6 @@ export interface ValidationState {
 }
 
 interface ToolbarProps {
-<<<<<<< HEAD
   workflowName: string
   isSaving: boolean
   isRunning: boolean
@@ -60,7 +59,6 @@ interface ToolbarProps {
   canUndo: boolean
   canRedo: boolean
   autoSave: boolean
-  token?: string
   workspaceId?: string
   podId?: string
   workflowId?: string
@@ -82,45 +80,6 @@ interface ToolbarProps {
   onRedo: () => void
   onAutoLayout: () => void
   onAutoSaveToggle: () => void
-=======
-  workflowName: string;
-  isSaving: boolean;
-  isRunning: boolean;
-  isGenerating: boolean;
-  runStatus: { id: string; status: string } | null;
-  validationState: ValidationState;
-  deployPanelOpen: boolean;
-  historyOpen: boolean;
-  versionsOpen: boolean;
-  shareOpen: boolean;
-  commentsOpen: boolean;
-  evalsOpen: boolean;
-  isDeployed: boolean;
-  canUndo: boolean;
-  canRedo: boolean;
-  autoSave: boolean;
-  workspaceId?: string;
-  podId?: string;
-  workflowId?: string;
-  onSave: () => void;
-  onRun: () => void;
-  onStop?: () => void;
-  onDeployPanel: () => void;
-  onBack: () => void;
-  onNameChange: (name: string) => void;
-  onGenerate: () => void;
-  onHistory: () => void;
-  onVersions: () => void;
-  onShare: () => void;
-  onComments: () => void;
-  onEvals: () => void;
-  onExport: () => void;
-  onImport: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  onAutoLayout: () => void;
-  onAutoSaveToggle: () => void;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }
 
 function TBtn({
@@ -150,13 +109,8 @@ function TBtn({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-<<<<<<< HEAD
-          size={size as any}
-          variant={active ? "secondary" : variant}
-=======
           size={size}
-          variant={active ? 'secondary' : variant}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+          variant={active ? "secondary" : variant}
           onClick={onClick}
           disabled={disabled}
           className={className}
@@ -225,13 +179,7 @@ function ShortcutsPanel({ onClose }: { onClose: () => void }) {
         onClick={onClose}
       />
 
-<<<<<<< HEAD
-      {/* Panel */}
       <div className="relative z-10 flex max-h-[80vh] w-[520px] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
-        {/* Header */}
-=======
-      <div className="relative z-10 w-[520px] max-h-[80vh] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl flex flex-col">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2.5">
             <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
@@ -382,7 +330,6 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 export function Toolbar({
-<<<<<<< HEAD
   workflowName,
   isSaving,
   isRunning,
@@ -399,7 +346,6 @@ export function Toolbar({
   canUndo,
   canRedo,
   autoSave,
-  token,
   workspaceId,
   podId,
   workflowId,
@@ -421,31 +367,15 @@ export function Toolbar({
   onRedo,
   onAutoLayout,
   onAutoSaveToggle,
-=======
-  workflowName, isSaving, isRunning, isGenerating, runStatus, validationState,
-  deployPanelOpen, historyOpen, versionsOpen, shareOpen, commentsOpen, evalsOpen,
-  isDeployed, canUndo, canRedo, autoSave,
-  workspaceId, podId, workflowId,
-  onSave, onRun, onStop, onDeployPanel, onBack, onNameChange, onGenerate,
-  onHistory, onVersions, onShare, onComments, onEvals,
-  onExport, onImport, onUndo, onRedo, onAutoLayout, onAutoSaveToggle,
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }: ToolbarProps) {
   const [editingName, setEditingName] = useState(false)
   const [localName, setLocalName] = useState(workflowName)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-<<<<<<< HEAD
-  useEffect(() => {
-    setLocalName(workflowName)
-  }, [workflowName])
   useEffect(() => {
     if (editingName) inputRef.current?.focus()
   }, [editingName])
-=======
-  useEffect(() => { if (editingName) inputRef.current?.focus(); }, [editingName]);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   // "?" shortcut
   useEffect(() => {
@@ -504,13 +434,11 @@ export function Toolbar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-<<<<<<< HEAD
-                  onClick={() => setEditingName(true)}
+                  onClick={() => {
+                    setLocalName(workflowName)
+                    setEditingName(true)
+                  }}
                   className="max-w-64 cursor-text truncate text-sm font-semibold text-foreground hover:text-muted-foreground"
-=======
-                  onClick={() => { setLocalName(workflowName); setEditingName(true); }}
-                  className="max-w-64 truncate text-sm font-semibold text-foreground hover:text-muted-foreground cursor-text"
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 >
                   {workflowName}
                 </button>
@@ -559,18 +487,12 @@ export function Toolbar({
             </>
           )}
 
-<<<<<<< HEAD
-          {token && workspaceId && podId && workflowId && (
+          {workspaceId && podId && workflowId && (
             <PresenceAvatars
-              token={token}
               workspaceId={workspaceId}
               podId={podId}
               workflowId={workflowId}
             />
-=======
-          {workspaceId && podId && workflowId && (
-            <PresenceAvatars workspaceId={workspaceId} podId={podId} workflowId={workflowId} />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           )}
 
           <TBtn

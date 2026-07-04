@@ -110,8 +110,10 @@ export class ExecutionsController {
   ): Promise<Observable<MessageEvent>> {
     const execution = await this.service.findOne(podId, id);
 
-    const toMsg = (entry: BusEntry): MessageEvent =>
-      ({ data: entry.event, id: entry.streamId }) as MessageEvent;
+    const toMsg = (entry: BusEntry): MessageEvent => ({
+      data: entry.event,
+      id: entry.streamId,
+    });
 
     // Terminal states: emit final event immediately (fast-path for reconnects too)
     if (execution.status === 'completed') {

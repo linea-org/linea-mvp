@@ -1,7 +1,7 @@
 "use client"
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/share-panel.tsx
-import { useState, useEffect } from "react"
+import { useForm, Controller } from "react-hook-form"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Cancel01Icon,
@@ -9,24 +9,12 @@ import {
   UserAdd01Icon,
   Delete01Icon,
 } from "@hugeicons/core-free-icons"
-import { createApiClient, friendlyApiError } from "@/lib/api"
+import { friendlyApiError } from "@/lib/api"
+import { useApiClient } from "@/hooks/use-api-client"
 import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { ScrollArea } from "@linea/ui/components/scroll-area"
-=======
-import { useForm, Controller } from 'react-hook-form';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  Cancel01Icon, Loading01Icon, UserAdd01Icon, Delete01Icon,
-} from '@hugeicons/core-free-icons';
-import { friendlyApiError } from '@/lib/api';
-import { useApiClient } from '@/hooks/use-api-client';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { ScrollArea } from '@linea/ui/components/scroll-area';
-import { Spinner } from '@linea/ui/components/spinner';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/share-panel.tsx
+import { Spinner } from "@linea/ui/components/spinner"
 import {
   Select,
   SelectContent,
@@ -36,18 +24,10 @@ import {
 } from "@linea/ui/components/select"
 
 interface Props {
-<<<<<<< HEAD:apps/web/components/workflow-builder/share-panel.tsx
   workspaceId: string
   podId: string
   workflowId: string
-  token: string
   onClose: () => void
-=======
-  workspaceId: string;
-  podId: string;
-  workflowId: string;
-  onClose: () => void;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/share-panel.tsx
 }
 
 interface Member {
@@ -64,8 +44,8 @@ interface Invite {
 }
 
 interface InviteFormValues {
-  email: string;
-  role: 'admin' | 'editor' | 'viewer';
+  email: string
+  role: "admin" | "editor" | "viewer"
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -100,131 +80,79 @@ function Avatar({ name, email }: { name: string | null; email: string }) {
   )
 }
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/share-panel.tsx
-export function SharePanel({
-  workspaceId,
-  podId,
-  workflowId,
-  token,
-  onClose,
-}: Props) {
-  const [members, setMembers] = useState<Member[]>([])
-  const [invites, setInvites] = useState<Invite[]>([])
-  const [loading, setLoading] = useState(true)
+export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
+  const queryClient = useQueryClient()
+  const getApi = useApiClient()
+  const shareKey = ["workspace-share", workspaceId]
 
-  const [email, setEmail] = useState("")
-  const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor")
-  const [sending, setSending] = useState(false)
-  const [sendError, setSendError] = useState("")
+  const { control, handleSubmit, watch, reset } = useForm<InviteFormValues>({
+    defaultValues: { email: "", role: "editor" },
+  })
+  const email = watch("email")
 
-  useEffect(() => {
-    void load()
-  }, [])
-
-  async function load() {
-    setLoading(true)
-    try {
-      const api = createApiClient(token)
+  const { data, isLoading: loading } = useQuery({
+    queryKey: shareKey,
+    queryFn: async () => {
+      const api = await getApi()
       const [membersData, invitesData] = await Promise.all([
         api.get<Member[]>(`/workspaces/${workspaceId}/members`),
         api
           .get<Invite[]>(`/workspaces/${workspaceId}/invites`)
           .catch(() => [] as Invite[]),
       ])
-      setMembers(Array.isArray(membersData) ? membersData : [])
-      setInvites(Array.isArray(invitesData) ? invitesData : [])
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function sendInvite() {
-    if (!email.trim()) return
-    setSending(true)
-    setSendError("")
-    try {
-      const api = createApiClient(token)
-      const invite = await api.post<Invite>(
-        `/workspaces/${workspaceId}/invites`,
-        { email: email.trim(), role }
-      )
-      setInvites((prev) => [...prev, invite])
-      setEmail("")
-    } catch (err) {
-      setSendError(friendlyApiError(err))
-    } finally {
-      setSending(false)
-    }
-  }
-
-  async function revokeInvite(inviteId: string) {
-    try {
-      const api = createApiClient(token)
-      await api.delete(`/workspaces/${workspaceId}/invites/${inviteId}`)
-      setInvites((prev) => prev.filter((i) => i.id !== inviteId))
-    } catch {
-      // ignore
-    }
-  }
-=======
-export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
-  const queryClient = useQueryClient();
-  const getApi = useApiClient();
-  const shareKey = ['workspace-share', workspaceId];
-
-  const { control, handleSubmit, watch, reset } = useForm<InviteFormValues>({
-    defaultValues: { email: '', role: 'editor' },
-  });
-  const email = watch('email');
-
-  const { data, isLoading: loading } = useQuery({
-    queryKey: shareKey,
-    queryFn: async () => {
-      const api = await getApi();
-      const [membersData, invitesData] = await Promise.all([
-        api.get<Member[]>(`/workspaces/${workspaceId}/members`),
-        api.get<Invite[]>(`/workspaces/${workspaceId}/invites`).catch(() => [] as Invite[]),
-      ]);
       return {
         members: Array.isArray(membersData) ? membersData : [],
         invites: Array.isArray(invitesData) ? invitesData : [],
-      };
+      }
     },
-  });
-  const members = data?.members ?? [];
-  const invites = data?.invites ?? [];
+  })
+  const members = data?.members ?? []
+  const invites = data?.invites ?? []
 
   const sendInviteMutation = useMutation({
     mutationFn: async (values: InviteFormValues) => {
-      const api = await getApi();
-      return api.post<Invite>(`/workspaces/${workspaceId}/invites`, { email: values.email.trim(), role: values.role });
+      const api = await getApi()
+      return api.post<Invite>(`/workspaces/${workspaceId}/invites`, {
+        email: values.email.trim(),
+        role: values.role,
+      })
     },
     onSuccess: (invite) => {
-      queryClient.setQueryData(shareKey, (prev: { members: Member[]; invites: Invite[] } | undefined) =>
-        prev ? { ...prev, invites: [...prev.invites, invite] } : prev,
-      );
-      reset();
+      queryClient.setQueryData(
+        shareKey,
+        (prev: { members: Member[]; invites: Invite[] } | undefined) =>
+          prev ? { ...prev, invites: [...prev.invites, invite] } : prev
+      )
+      reset()
     },
     meta: { skipGlobalErrorToast: true },
-  });
-  const sendError = sendInviteMutation.error ? friendlyApiError(sendInviteMutation.error) : '';
-  const onSubmitInvite = handleSubmit((values) => sendInviteMutation.mutate(values));
+  })
+  const sendError = sendInviteMutation.error
+    ? friendlyApiError(sendInviteMutation.error)
+    : ""
+  const onSubmitInvite = handleSubmit((values) =>
+    sendInviteMutation.mutate(values)
+  )
 
   const revokeInviteMutation = useMutation({
     mutationFn: async (inviteId: string) => {
-      const api = await getApi();
-      await api.delete(`/workspaces/${workspaceId}/invites/${inviteId}`);
-      return inviteId;
+      const api = await getApi()
+      await api.delete(`/workspaces/${workspaceId}/invites/${inviteId}`)
+      return inviteId
     },
     onSuccess: (inviteId) => {
-      queryClient.setQueryData(shareKey, (prev: { members: Member[]; invites: Invite[] } | undefined) =>
-        prev ? { ...prev, invites: prev.invites.filter((i) => i.id !== inviteId) } : prev,
-      );
+      queryClient.setQueryData(
+        shareKey,
+        (prev: { members: Member[]; invites: Invite[] } | undefined) =>
+          prev
+            ? {
+                ...prev,
+                invites: prev.invites.filter((i) => i.id !== inviteId),
+              }
+            : prev
+      )
     },
-  });
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/share-panel.tsx
+  })
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -242,54 +170,23 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-5 p-4">
-<<<<<<< HEAD:apps/web/components/workflow-builder/share-panel.tsx
-          {/* Invite by email */}
-=======
-
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/share-panel.tsx
           <div className="space-y-2">
             <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
               Invite people
             </p>
             <div className="flex gap-2">
-<<<<<<< HEAD:apps/web/components/workflow-builder/share-panel.tsx
-              <Input
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value)
-                  setSendError("")
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void sendInvite()
-                }}
-                placeholder="Email address"
-                type="email"
-                className="h-8 flex-1 text-xs"
-              />
-              <Select
-                value={role}
-                onValueChange={(v) => setRole(v as typeof role)}
-              >
-                <SelectTrigger className="h-8 w-24 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="viewer">Viewer</SelectItem>
-                  <SelectItem value="editor">Editor</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-=======
               <Controller
                 control={control}
                 name="email"
                 render={({ field }) => (
                   <Input
                     {...field}
-                    onKeyDown={(e) => { if (e.key === 'Enter') void onSubmitInvite(); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void onSubmitInvite()
+                    }}
                     placeholder="Email address"
                     type="email"
-                    className="flex-1 text-xs h-8"
+                    className="h-8 flex-1 text-xs"
                   />
                 )}
               />
@@ -298,7 +195,7 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
                 name="role"
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-24 h-8 text-xs">
+                    <SelectTrigger className="h-8 w-24 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -309,7 +206,6 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
                   </Select>
                 )}
               />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/share-panel.tsx
             </div>
             {sendError && (
               <p className="text-[11px] text-destructive">{sendError}</p>
@@ -320,8 +216,7 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
               onClick={() => void onSubmitInvite()}
               disabled={sendInviteMutation.isPending || !email.trim()}
             >
-<<<<<<< HEAD:apps/web/components/workflow-builder/share-panel.tsx
-              {sending ? (
+              {sendInviteMutation.isPending ? (
                 <HugeiconsIcon
                   icon={Loading01Icon}
                   className="size-3.5 animate-spin"
@@ -329,11 +224,6 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
               ) : (
                 <HugeiconsIcon icon={UserAdd01Icon} className="size-3.5" />
               )}
-=======
-              {sendInviteMutation.isPending
-                ? <HugeiconsIcon icon={Loading01Icon} className="size-3.5 animate-spin" />
-                : <HugeiconsIcon icon={UserAdd01Icon} className="size-3.5" />}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/share-panel.tsx
               Send invite
             </Button>
           </div>
@@ -344,14 +234,7 @@ export function SharePanel({ workspaceId, podId, workflowId, onClose }: Props) {
             </p>
             {loading ? (
               <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
-<<<<<<< HEAD:apps/web/components/workflow-builder/share-panel.tsx
-                <HugeiconsIcon
-                  icon={Loading01Icon}
-                  className="size-3.5 animate-spin"
-                />
-=======
                 <Spinner className="size-3.5" />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/share-panel.tsx
                 Loading…
               </div>
             ) : members.length === 0 ? (

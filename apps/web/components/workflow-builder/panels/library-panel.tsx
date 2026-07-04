@@ -301,8 +301,6 @@ function NodeRow({ node }: { node: NodeDef }) {
   )
 }
 
-<<<<<<< HEAD
-/* ─── Collapsible category ───────────────────────────────────────── */
 function Category({
   label,
   nodes,
@@ -313,10 +311,6 @@ function Category({
   defaultOpen?: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen)
-=======
-function Category({ label, nodes, defaultOpen = true }: { label: string; nodes: NodeDef[]; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   return (
     <div>

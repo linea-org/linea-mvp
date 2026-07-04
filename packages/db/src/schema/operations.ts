@@ -7,7 +7,6 @@ import {
   boolean,
   pgEnum,
   unique,
-<<<<<<< HEAD
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import type { AnyPgColumn } from "drizzle-orm/pg-core"
@@ -16,17 +15,6 @@ import { workspaces } from "./workspaces"
 import { users } from "./users"
 import { workflows } from "./workflows"
 import { executions } from "./executions"
-=======
-  index,
-} from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { pods } from './pods';
-import { workspaces } from './workspaces';
-import { users } from './users';
-import { workflows } from './workflows';
-import { executions } from './executions';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 export const approvalStatusEnum = pgEnum("approval_status", [
   "pending",
@@ -34,7 +22,6 @@ export const approvalStatusEnum = pgEnum("approval_status", [
   "rejected",
 ])
 
-<<<<<<< HEAD
 export const workflowComments = pgTable("workflow_comments", {
   id: uuid("id").primaryKey().defaultRandom(),
   workflowId: uuid("workflow_id")
@@ -58,28 +45,6 @@ export const workflowComments = pgTable("workflow_comments", {
     .defaultNow()
     .notNull(),
 })
-=======
-export const workflowComments = pgTable(
-  'workflow_comments',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    workflowId: uuid('workflow_id')
-      .references(() => workflows.id, { onDelete: 'cascade' })
-      .notNull(),
-    nodeId: text('node_id'),
-    parentId: uuid('parent_id').references((): AnyPgColumn => workflowComments.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-    body: text('body').notNull(),
-    resolved: boolean('resolved').default(false).notNull(),
-    pinned: boolean('pinned').default(false).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [index('workflow_comments_workflow_id_idx').on(t.workflowId)],
-);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 export const commentReactions = pgTable(
   "comment_reactions",
@@ -116,7 +81,6 @@ export const workflowPresence = pgTable(
   (t) => [unique("workflow_presence_unique").on(t.workflowId, t.userId)]
 )
 
-<<<<<<< HEAD
 export const schedules = pgTable("schedules", {
   id: uuid("id").primaryKey().defaultRandom(),
   podId: uuid("pod_id")
@@ -193,84 +157,6 @@ export const auditLogs = pgTable("audit_logs", {
     .defaultNow()
     .notNull(),
 })
-=======
-export const schedules = pgTable(
-  'schedules',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    podId: uuid('pod_id')
-      .references(() => pods.id, { onDelete: 'cascade' })
-      .notNull(),
-    workflowId: uuid('workflow_id')
-      .references(() => workflows.id, { onDelete: 'cascade' })
-      .notNull(),
-    cronExpr: text('cron_expr').notNull(),
-    enabled: boolean('enabled').default(true).notNull(),
-    input: jsonb('input').$type<Record<string, unknown>>().default({}).notNull(),
-    lastRunAt: timestamp('last_run_at', { withTimezone: true }),
-    nextRunAt: timestamp('next_run_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [
-    index('schedules_enabled_next_run_at_idx').on(t.enabled, t.nextRunAt),
-    index('schedules_workflow_id_idx').on(t.workflowId),
-  ],
-);
-
-export const approvals = pgTable(
-  'approvals',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    executionId: uuid('execution_id')
-      .references(() => executions.id, { onDelete: 'cascade' })
-      .notNull(),
-    nodeId: text('node_id').notNull(),
-    status: approvalStatusEnum('status').default('pending').notNull(),
-    message: text('message'),
-    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
-    resolverId: uuid('resolver_id').references(() => users.id, { onDelete: 'set null' }),
-    requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
-    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
-  },
-  (t) => [index('approvals_execution_id_idx').on(t.executionId)],
-);
-
-export const notifications = pgTable(
-  'notifications',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-    workspaceId: uuid('workspace_id')
-      .references(() => workspaces.id, { onDelete: 'cascade' }),
-    type: text('type').notNull(),
-    title: text('title').notNull(),
-    body: text('body'),
-    resourceUrl: text('resource_url'),
-    read: boolean('read').default(false).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [index('notifications_user_id_workspace_id_idx').on(t.userId, t.workspaceId)],
-);
-
-export const auditLogs = pgTable(
-  'audit_logs',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    workspaceId: uuid('workspace_id')
-      .references(() => workspaces.id, { onDelete: 'cascade' })
-      .notNull(),
-    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
-    action: text('action').notNull(),
-    resourceType: text('resource_type'),
-    resourceId: uuid('resource_id'),
-    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [index('audit_logs_workspace_id_created_at_idx').on(t.workspaceId, t.createdAt)],
-);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 export const approvalsRelations = relations(approvals, ({ one }) => ({
   execution: one(executions, {

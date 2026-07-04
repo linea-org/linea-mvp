@@ -7,7 +7,7 @@ import {
 import { ExecutionsModule } from '../executions/executions.module';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { PodsModule } from '../pods/pods.module';
-import { AIModule } from '../agent-chat/ai.module';
+import { AIModule } from '../services/ai/ai.module';
 
 @Module({
   imports: [ExecutionsModule, WorkspacesModule, PodsModule, AIModule],

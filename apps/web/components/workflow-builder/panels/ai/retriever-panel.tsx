@@ -1,6 +1,5 @@
 "use client"
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/retriever-panel.tsx
 import { useRef } from "react"
 import type { Node } from "@xyflow/react"
 import { Input } from "@linea/ui/components/input"
@@ -12,17 +11,8 @@ import {
   SelectValue,
 } from "@linea/ui/components/select"
 import { Label } from "@linea/ui/components/label"
-import { VariableChips } from "../variable-picker"
-import { ModelPicker } from "../model-picker"
-=======
-import { useRef } from 'react';
-import type { Node } from '@xyflow/react';
-import { Input } from '@linea/ui/components/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
-import { Label } from '@linea/ui/components/label';
-import { VariableChips } from '../../variable-picker';
-import { ModelPicker } from '../../model-picker';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/ai/retriever-panel.tsx
+import { VariableChips } from "../../variable-picker"
+import { ModelPicker } from "../../model-picker"
 
 interface RetrieverPanelProps {
   data: Record<string, unknown>

@@ -460,7 +460,7 @@ export class EvalsService {
       workflowId,
       podId,
       workspaceId,
-      results: results as unknown as Record<string, unknown>[],
+      results: results,
       passCount,
       totalCount: results.length,
     });

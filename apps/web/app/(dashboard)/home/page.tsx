@@ -1,28 +1,16 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useAuth, useUser } from "@clerk/nextjs"
+import { useUser } from "@clerk/nextjs"
+import { useQuery } from "@tanstack/react-query"
 import { useWorkspace } from "@/contexts/workspace-context"
 import { usePod } from "@/contexts/space-context"
-import { createApiClient } from "@/lib/api"
+import { useApiClient } from "@/hooks/use-api-client"
+import { unwrapList } from "@/lib/api"
+import { formatRelativeTime, formatDurationShort } from "@/lib/format"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { Button } from "@linea/ui/components/button"
 import { HugeiconsIcon } from "@hugeicons/react"
-=======
-import Link from 'next/link';
-import { useUser } from '@clerk/nextjs';
-import { useQuery } from '@tanstack/react-query';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { usePod } from '@/contexts/space-context';
-import { useApiClient } from '@/hooks/use-api-client';
-import { unwrapList } from '@/lib/api';
-import { formatRelativeTime, formatDurationShort } from '@/lib/format';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { Button } from '@linea/ui/components/button';
-import { HugeiconsIcon } from '@hugeicons/react';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   WorkflowSquare01Icon,
   FlowCircleIcon,
@@ -109,111 +97,40 @@ function StatusDot({ status }: { status: string }) {
   )
 }
 
-<<<<<<< HEAD
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
-}
-
-function formatMs(ms: number | null | undefined): string {
-  if (ms == null || Number.isNaN(ms)) return "—"
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
-
 export default function HomePage() {
-  const { getToken } = useAuth()
+  const getApi = useApiClient()
   const { user } = useUser()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
   const { activePod, loading: podLoading } = usePod()
-
-  const [metrics, setMetrics] = useState<MetricsData | null>(null)
-  const [executions, setExecutions] = useState<Execution[]>([])
-  const [workflowNames, setWorkflowNames] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (wsLoading || podLoading) return
-    if (!activeWorkspace || !activePod) {
-      setLoading(false)
-      return
-    }
-    void loadData()
-  }, [activeWorkspace?.id, activePod?.id, wsLoading, podLoading]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function loadData() {
-    setLoading(true)
-    try {
-      const token = await getToken()
-      if (!token || !activeWorkspace || !activePod) return
-      const api = createApiClient(token)
-      const [m, execList, wfList] = await Promise.all([
-        api.get<MetricsData>(
-          `/workspaces/${activeWorkspace.id}/metrics?period=24h`
-        ),
-        api.get<Execution[]>(
-          `/workspaces/${activeWorkspace.id}/pods/${activePod.id}/executions`
-        ),
-        api.get<Workflow[]>(
-          `/workspaces/${activeWorkspace.id}/pods/${activePod.id}/workflows`
-        ),
-      ])
-      setMetrics(m)
-      setExecutions(
-        (Array.isArray(execList)
-          ? execList
-          : ((execList as any)?.executions ?? [])
-        ).slice(0, 6)
-      )
-      const map: Record<string, string> = {}
-      const wfs: Workflow[] = Array.isArray(wfList)
-        ? wfList
-        : ((wfList as any)?.workflows ?? [])
-      for (const wf of wfs) map[wf.id] = wf.name
-      setWorkflowNames(map)
-    } catch {
-      // degrade gracefully
-    } finally {
-      setLoading(false)
-    }
-  }
-=======
-export default function HomePage() {
-  const getApi = useApiClient();
-  const { user } = useUser();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const { activePod, loading: podLoading } = usePod();
-  const wsId = activeWorkspace?.id ?? '';
-  const podId = activePod?.id ?? '';
+  const wsId = activeWorkspace?.id ?? ""
+  const podId = activePod?.id ?? ""
 
   const { data, isLoading: dataLoading } = useQuery({
-    queryKey: ['home-dashboard', wsId, podId],
+    queryKey: ["home-dashboard", wsId, podId],
     enabled: !!wsId && !!podId,
     queryFn: async () => {
-      const api = await getApi();
+      const api = await getApi()
       const [m, execList, wfList] = await Promise.all([
         api.get<MetricsData>(`/workspaces/${wsId}/metrics?period=24h`),
-        api.get<Execution[] | { executions: Execution[] }>(`/workspaces/${wsId}/pods/${podId}/executions`),
-        api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${podId}/workflows`),
-      ]);
-      const executions = unwrapList(execList, 'executions').slice(0, 6);
-      const workflows = unwrapList(wfList, 'workflows');
-      const workflowNames: Record<string, string> = {};
-      for (const wf of workflows) workflowNames[wf.id] = wf.name;
-      return { metrics: m, executions, workflowNames };
+        api.get<Execution[] | { executions: Execution[] }>(
+          `/workspaces/${wsId}/pods/${podId}/executions`
+        ),
+        api.get<Workflow[] | { workflows: Workflow[] }>(
+          `/workspaces/${wsId}/pods/${podId}/workflows`
+        ),
+      ])
+      const executions = unwrapList(execList, "executions").slice(0, 6)
+      const workflows = unwrapList(wfList, "workflows")
+      const workflowNames: Record<string, string> = {}
+      for (const wf of workflows) workflowNames[wf.id] = wf.name
+      return { metrics: m, executions, workflowNames }
     },
-  });
+  })
 
-  const metrics = data?.metrics ?? null;
-  const executions = data?.executions ?? [];
-  const workflowNames = data?.workflowNames ?? {};
-  const loading = wsLoading || podLoading || dataLoading;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  const metrics = data?.metrics ?? null
+  const executions = data?.executions ?? []
+  const workflowNames = data?.workflowNames ?? {}
+  const loading = wsLoading || podLoading || dataLoading
 
   const firstName = user?.firstName ?? user?.username ?? "there"
   const today = new Date().toLocaleDateString("en-US", {
@@ -225,12 +142,7 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
-<<<<<<< HEAD
-      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-=======
-      <div className="flex items-start justify-between gap-4 flex-wrap">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div>
           <h1 className="text-xl font-semibold">Welcome back, {firstName}</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">{today}</p>
@@ -279,7 +191,6 @@ export default function HomePage() {
                   : "—",
               icon: AnalyticsUpIcon,
             },
-<<<<<<< HEAD
             {
               label: "Failed",
               value: metrics?.executions.byStatus.failed ?? 0,
@@ -287,13 +198,9 @@ export default function HomePage() {
             },
             {
               label: "Avg duration",
-              value: formatMs(metrics?.duration.avgMs),
+              value: formatDurationShort(metrics?.duration.avgMs),
               icon: Clock01Icon,
             },
-=======
-            { label: 'Failed', value: metrics?.executions.byStatus.failed ?? 0, icon: Cancel01Icon },
-            { label: 'Avg duration', value: formatDurationShort(metrics?.duration.avgMs), icon: Clock01Icon },
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           ].map(({ label, value, icon }) => (
             <div key={label} className="rounded-lg border bg-card px-4 py-3">
               <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
@@ -354,23 +261,16 @@ export default function HomePage() {
         ) : (
           <div className="divide-y divide-border/50 overflow-hidden rounded-xl border">
             {executions.map((ex) => {
-<<<<<<< HEAD
               const wfName =
                 (ex.workflowId && workflowNames[ex.workflowId]) ??
                 "Unknown workflow"
               const dur =
                 ex.startedAt && ex.finishedAt
-                  ? formatMs(
+                  ? formatDurationShort(
                       new Date(ex.finishedAt).getTime() -
                         new Date(ex.startedAt).getTime()
                     )
                   : null
-=======
-              const wfName = (ex.workflowId && workflowNames[ex.workflowId]) ?? 'Unknown workflow';
-              const dur = ex.startedAt && ex.finishedAt
-                ? formatDurationShort(new Date(ex.finishedAt).getTime() - new Date(ex.startedAt).getTime())
-                : null;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
               return (
                 <Link
                   key={ex.id}
@@ -386,19 +286,13 @@ export default function HomePage() {
                   >
                     {ex.status}
                   </span>
-<<<<<<< HEAD
                   {dur && (
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {dur}
                     </span>
                   )}
                   <span className="w-16 shrink-0 text-right text-xs text-muted-foreground/60 tabular-nums">
-                    {timeAgo(ex.createdAt)}
-=======
-                  {dur && <span className="text-xs text-muted-foreground tabular-nums">{dur}</span>}
-                  <span className="text-xs text-muted-foreground/60 tabular-nums w-16 text-right shrink-0">
                     {formatRelativeTime(ex.createdAt)}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                   </span>
                 </Link>
               )

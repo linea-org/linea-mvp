@@ -1,5 +1,10 @@
-import { NodeContext, NodeExecutor, NodeResult, VariableMap } from "../node"
-import { TransformNodeConfig } from "./transform.types"
+import type {
+  NodeContext,
+  NodeExecutor,
+  NodeResult,
+  VariableMap,
+} from "../node"
+import type { TransformNodeConfig } from "./transform.types"
 
 export class TransformNode implements NodeExecutor<"transform"> {
   readonly type = "transform"

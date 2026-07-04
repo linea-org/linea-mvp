@@ -1,26 +1,14 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@clerk/nextjs"
+import { useApiClient } from "@/hooks/use-api-client"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useWorkspace } from "@/contexts/workspace-context"
-import { createApiClient } from "@/lib/api"
 import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
 import { Skeleton } from "@linea/ui/components/skeleton"
-=======
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useApiClient } from '@/hooks/use-api-client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { Skeleton } from '@linea/ui/components/skeleton';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -61,101 +49,43 @@ function kbColor(id: string) {
 }
 
 export default function KnowledgePage() {
-<<<<<<< HEAD
-  const { getToken } = useAuth()
+  const getApi = useApiClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
   const router = useRouter()
-  const [bases, setBases] = useState<KnowledgeBase[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const wsId = activeWorkspace?.id ?? ""
   const [dialogOpen, setDialogOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [creating, setCreating] = useState(false)
 
-  async function load() {
-    if (!activeWorkspace) return
-    setLoading(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const data = await api.get<KnowledgeBase[]>(
-        `/workspaces/${activeWorkspace.id}/knowledge-bases`
+  const { data: bases = [], isLoading: loading } = useQuery<KnowledgeBase[]>({
+    queryKey: ["knowledge-bases", wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<KnowledgeBase[]>(`/workspaces/${wsId}/knowledge-bases`)
+    },
+  })
+
+  const createKb = useMutation({
+    mutationFn: async () => {
+      const api = await getApi()
+      return api.post<KnowledgeBase>(`/workspaces/${wsId}/knowledge-bases`, {
+        name: name.trim(),
+        description: description.trim() || undefined,
+      })
+    },
+    onSuccess: (kb) => {
+      queryClient.setQueryData<KnowledgeBase[]>(
+        ["knowledge-bases", wsId],
+        (prev = []) => [{ ...kb, entryCount: 0 }, ...prev]
       )
-      setBases(data)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (wsLoading) return
-    if (!activeWorkspace) {
-      setLoading(false)
-      return
-    }
-    void load()
-  }, [activeWorkspace, wsLoading]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function handleCreate() {
-    if (!activeWorkspace || !name.trim()) return
-    setCreating(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const kb = await api.post<KnowledgeBase>(
-        `/workspaces/${activeWorkspace.id}/knowledge-bases`,
-        {
-          name: name.trim(),
-          description: description.trim() || undefined,
-        }
-      )
-      setBases((prev) => [{ ...kb, entryCount: 0 }, ...prev])
       setDialogOpen(false)
       setName("")
       setDescription("")
       router.push(`/knowledge/${kb.id}`)
-    } finally {
-      setCreating(false)
-    }
-  }
-=======
-  const getApi = useApiClient();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const wsId = activeWorkspace?.id ?? '';
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-
-  const { data: bases = [], isLoading: loading } = useQuery<KnowledgeBase[]>({
-    queryKey: ['knowledge-bases', wsId],
-    enabled: !!wsId,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<KnowledgeBase[]>(`/workspaces/${wsId}/knowledge-bases`);
     },
-  });
-
-  const createKb = useMutation({
-    mutationFn: async () => {
-      const api = await getApi();
-      return api.post<KnowledgeBase>(`/workspaces/${wsId}/knowledge-bases`, {
-        name: name.trim(),
-        description: description.trim() || undefined,
-      });
-    },
-    onSuccess: (kb) => {
-      queryClient.setQueryData<KnowledgeBase[]>(['knowledge-bases', wsId], (prev = []) => [{ ...kb, entryCount: 0 }, ...prev]);
-      setDialogOpen(false);
-      setName('');
-      setDescription('');
-      router.push(`/knowledge/${kb.id}`);
-    },
-  });
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  })
 
   return (
     <div className="space-y-6">
@@ -279,13 +209,9 @@ export default function KnowledgePage() {
                 placeholder="e.g. Product docs"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-<<<<<<< HEAD
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleCreate()
+                  if (e.key === "Enter") createKb.mutate()
                 }}
-=======
-                onKeyDown={(e) => { if (e.key === 'Enter') createKb.mutate(); }}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 autoFocus
               />
             </div>
@@ -299,20 +225,14 @@ export default function KnowledgePage() {
             </div>
           </div>
           <DialogFooter>
-<<<<<<< HEAD
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() => void handleCreate()}
-              disabled={!name.trim() || creating}
+              onClick={() => createKb.mutate()}
+              disabled={!name.trim() || createKb.isPending}
             >
-              {creating ? "Creating…" : "Create"}
-=======
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => createKb.mutate()} disabled={!name.trim() || createKb.isPending}>
-              {createKb.isPending ? 'Creating…' : 'Create'}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+              {createKb.isPending ? "Creating…" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

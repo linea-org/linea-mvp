@@ -5,19 +5,13 @@ import type { Node } from "@xyflow/react"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
 import {
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/extract-panel.tsx
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@linea/ui/components/select"
-import { VariableChips } from "../variable-picker"
-=======
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@linea/ui/components/select';
-import { VariableChips } from '../../variable-picker';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/ai/extract-panel.tsx
+import { VariableChips } from "../../variable-picker"
 
 interface ExtractPanelProps {
   data: Record<string, unknown>

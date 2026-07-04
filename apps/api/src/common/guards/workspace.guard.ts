@@ -26,8 +26,7 @@ export class WorkspaceGuard implements CanActivate {
 
     // Works for both /workspaces/:id routes and /workspaces/:workspaceId/... nested routes
     const workspaceId = (req.params['workspaceId'] ?? req.params['id']) as
-      | string
-      | undefined;
+      string | undefined;
     if (!workspaceId) return true; // Not a workspace-scoped route
 
     const [row] = await this.db

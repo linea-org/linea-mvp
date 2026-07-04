@@ -1,24 +1,14 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
-import { useAuth } from "@clerk/nextjs"
+import { useApiClient } from "@/hooks/use-api-client"
+import { useQuery } from "@tanstack/react-query"
 import { useWorkspace } from "@/contexts/workspace-context"
-import { createApiClient, friendlyApiError } from "@/lib/api"
+import { friendlyApiError } from "@/lib/api"
+import { formatTokenCount } from "@/lib/format"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { HugeiconsIcon } from "@hugeicons/react"
-=======
-import { useState } from 'react';
-import Link from 'next/link';
-import { useApiClient } from '@/hooks/use-api-client';
-import { useQuery } from '@tanstack/react-query';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { friendlyApiError } from '@/lib/api';
-import { formatTokenCount } from '@/lib/format';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { HugeiconsIcon } from '@hugeicons/react';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Analytics02Icon,
   FlowCircleIcon,
@@ -71,15 +61,6 @@ function calcCost(input: number, output: number): number {
   )
 }
 
-<<<<<<< HEAD
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return n.toLocaleString()
-}
-
-=======
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 function formatCost(usd: number): string {
   if (usd < 0.001) return "<$0.001"
   if (usd < 1) return `$${usd.toFixed(4)}`
@@ -120,11 +101,9 @@ function TokenBar({
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
-<<<<<<< HEAD
-        <span className="font-medium tabular-nums">{formatTokens(value)}</span>
-=======
-        <span className="tabular-nums font-medium">{formatTokenCount(value, { millionDecimals: 2 })}</span>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+        <span className="font-medium tabular-nums">
+          {formatTokenCount(value, { millionDecimals: 2 })}
+        </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
@@ -137,40 +116,28 @@ function TokenBar({
 }
 
 export default function UsagePage() {
-<<<<<<< HEAD
-  const { getToken } = useAuth()
+  const getApi = useApiClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
+  const wsId = activeWorkspace?.id ?? ""
   const [period, setPeriod] = useState<Period>("7d")
-  const [data, setData] = useState<MetricsData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
 
-  useEffect(() => {
-    if (wsLoading || !activeWorkspace) return
-    setLoading(true)
-    setLoadError(null)
+  const {
+    data,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery<MetricsData>({
+    queryKey: ["metrics", wsId, period],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<MetricsData>(
+        `/workspaces/${wsId}/metrics?period=${period}`
+      )
+    },
+  })
 
-    async function load() {
-      const token = await getToken()
-      if (!token || !activeWorkspace) return
-      try {
-        const api = createApiClient(token)
-        const result = await api.get<MetricsData>(
-          `/workspaces/${activeWorkspace.id}/metrics?period=${period}`
-        )
-        setData(result)
-      } catch (err) {
-        setData(null)
-        setLoadError(friendlyApiError(err))
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void load()
-  }, [activeWorkspace, wsLoading, period, getToken, retryCount])
-
+  const loadError = error ? friendlyApiError(error) : null
   const tokens = data?.tokens
   const totalCost = tokens
     ? calcCost(tokens.totalInputTokens, tokens.totalOutputTokens)
@@ -179,32 +146,7 @@ export default function UsagePage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-=======
-  const getApi = useApiClient();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const wsId = activeWorkspace?.id ?? '';
-  const [period, setPeriod] = useState<Period>('7d');
-
-  const { data, isLoading: loading, error, refetch } = useQuery<MetricsData>({
-    queryKey: ['metrics', wsId, period],
-    enabled: !!wsId,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<MetricsData>(`/workspaces/${wsId}/metrics?period=${period}`);
-    },
-  });
-
-  const loadError = error ? friendlyApiError(error) : null;
-  const tokens = data?.tokens;
-  const totalCost = tokens ? calcCost(tokens.totalInputTokens, tokens.totalOutputTokens) : null;
-  const hasTokenData = tokens && tokens.totalTokens > 0;
-
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between flex-wrap gap-3">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div>
           <h1 className="text-xl font-semibold">Usage &amp; Cost</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
@@ -250,37 +192,29 @@ export default function UsagePage() {
             {loadError}
           </p>
           <button
-<<<<<<< HEAD
-            onClick={() => setRetryCount((c) => c + 1)}
-            className="mt-5 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-=======
             onClick={() => void refetch()}
-            className="mt-5 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+            className="mt-5 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
           >
             Retry
           </button>
         </div>
       ) : (
         <div className="space-y-6">
-<<<<<<< HEAD
-          {/* Summary cards — always shown */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <BigStat
               label="Total tokens"
-              value={hasTokenData ? formatTokens(tokens!.totalTokens) : "—"}
+              value={
+                hasTokenData
+                  ? formatTokenCount(tokens!.totalTokens, {
+                      millionDecimals: 2,
+                    })
+                  : "—"
+              }
               sub={
                 hasTokenData
-                  ? `${formatTokens(tokens!.totalInputTokens)} in + ${formatTokens(tokens!.totalOutputTokens)} out`
+                  ? `${formatTokenCount(tokens!.totalInputTokens, { millionDecimals: 2 })} in + ${formatTokenCount(tokens!.totalOutputTokens, { millionDecimals: 2 })} out`
                   : "No AI agent executions yet"
               }
-=======
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <BigStat
-              label="Total tokens"
-              value={hasTokenData ? formatTokenCount(tokens!.totalTokens, { millionDecimals: 2 }) : '—'}
-              sub={hasTokenData ? `${formatTokenCount(tokens!.totalInputTokens, { millionDecimals: 2 })} in + ${formatTokenCount(tokens!.totalOutputTokens, { millionDecimals: 2 })} out` : 'No AI agent executions yet'}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             />
             <BigStat
               label="Estimated cost"
@@ -316,14 +250,13 @@ export default function UsagePage() {
                 />
                 <div className="mt-2 space-y-1.5 border-t pt-3 text-xs text-muted-foreground">
                   <div className="flex justify-between">
-<<<<<<< HEAD
                     <span>
-                      Input cost ({formatTokens(tokens.totalInputTokens)} ×
-                      $3/1M)
+                      Input cost (
+                      {formatTokenCount(tokens.totalInputTokens, {
+                        millionDecimals: 2,
+                      })}{" "}
+                      × $3/1M)
                     </span>
-=======
-                    <span>Input cost ({formatTokenCount(tokens.totalInputTokens, { millionDecimals: 2 })} × $3/1M)</span>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                     <span className="font-medium text-foreground">
                       {formatCost(
                         (tokens.totalInputTokens / 1_000_000) * INPUT_COST_PER_M
@@ -331,14 +264,13 @@ export default function UsagePage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-<<<<<<< HEAD
                     <span>
-                      Output cost ({formatTokens(tokens.totalOutputTokens)} ×
-                      $15/1M)
+                      Output cost (
+                      {formatTokenCount(tokens.totalOutputTokens, {
+                        millionDecimals: 2,
+                      })}{" "}
+                      × $15/1M)
                     </span>
-=======
-                    <span>Output cost ({formatTokenCount(tokens.totalOutputTokens, { millionDecimals: 2 })} × $15/1M)</span>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                     <span className="font-medium text-foreground">
                       {formatCost(
                         (tokens.totalOutputTokens / 1_000_000) *
@@ -413,13 +345,12 @@ export default function UsagePage() {
                           <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">
                             {wf.total}
                           </td>
-<<<<<<< HEAD
                           <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">
-                            {wfTokens ? formatTokens(wfTokens.total) : "—"}
-=======
-                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                            {wfTokens ? formatTokenCount(wfTokens.total, { millionDecimals: 2 }) : '—'}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+                            {wfTokens
+                              ? formatTokenCount(wfTokens.total, {
+                                  millionDecimals: 2,
+                                })
+                              : "—"}
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums">
                             {wfTokens

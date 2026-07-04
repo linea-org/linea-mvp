@@ -10,18 +10,11 @@ import {
 import { relations } from "drizzle-orm"
 
 export interface WorkspaceSettings {
-<<<<<<< HEAD
   modelFallbackChain?: string[]
   ragSimilarityThreshold?: number
   ragChunkSize?: number
   ragChunkOverlap?: number
   supervisorModel?: string
-=======
-  ragSimilarityThreshold?: number;
-  ragChunkSize?: number;
-  ragChunkOverlap?: number;
-  supervisorModel?: string;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }
 
 export const workspacePlanEnum = pgEnum("workspace_plan", [

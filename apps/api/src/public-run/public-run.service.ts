@@ -153,7 +153,7 @@ export class PublicRunService {
       row.workspaceId,
       row.id,
       'manual',
-      enrichedInput as Record<string, unknown>,
+      enrichedInput,
     );
 
     return { executionId: execution.id, status: execution.status };
@@ -189,8 +189,7 @@ export class PublicRunService {
     };
     const startNode = def?.nodes?.find((n) => n.type === 'start');
     const extractionModel = startNode?.data?.extractionModel as
-      | string
-      | undefined;
+      string | undefined;
 
     // Try LLM extraction from any message-like field
     const messageText = findMessageField(input);

@@ -1,6 +1,5 @@
 "use client"
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import {
   Add01Icon,
@@ -9,6 +8,7 @@ import {
   ClockIcon,
   PlayIcon,
 } from "@hugeicons/core-free-icons"
+import { useQuery } from "@tanstack/react-query"
 import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
@@ -17,40 +17,20 @@ import {
   NativeSelectOption,
 } from "@linea/ui/components/native-select"
 import { cn } from "@linea/ui/lib/utils"
-=======
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { Add01Icon, Delete01Icon, WebhookIcon, ClockIcon, PlayIcon } from '@hugeicons/core-free-icons';
-import { useQuery } from '@tanstack/react-query';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
-import { cn } from '@linea/ui/lib/utils';
-import { useApiClient } from '@/hooks/use-api-client';
-import type { InputVar } from '../../evals/eval-input-form';
+import { useApiClient } from "@/hooks/use-api-client"
+import type { InputVar } from "../../evals/eval-input-form"
 
 interface ModelDefinition {
-  id: string;
-  name: string;
+  id: string
+  name: string
 }
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
 
 interface StartPanelProps {
   data: Record<string, unknown>
   onUpdate: (data: Record<string, unknown>) => void
 }
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
-interface InputVar {
-  name: string
-  type: "string" | "number" | "boolean" | "object"
-  required: boolean
-}
-
 type TriggerType = "manual" | "webhook" | "schedule"
-=======
-type TriggerType = 'manual' | 'webhook' | 'schedule';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
 
 const TRIGGERS: {
   value: TriggerType
@@ -78,20 +58,6 @@ const TRIGGERS: {
   },
 ]
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
-const EXTRACTION_MODELS = [
-  { value: "", label: "Auto (server picks cheapest available)" },
-  { value: "claude-haiku-4-5", label: "Claude Haiku 4.5 — fast, cheap" },
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini — fast, cheap" },
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash — fast, cheap" },
-  { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B (Groq) — cheapest" },
-  { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Groq)" },
-]
-
-=======
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
 const CRON_PRESETS = [
   { label: "Every 5 min", value: "*/5 * * * *" },
   { label: "Every 15 min", value: "*/15 * * * *" },
@@ -202,29 +168,20 @@ function describeCron(expr: string): string {
 }
 
 export function StartPanel({ data, onUpdate }: StartPanelProps) {
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
+  const getApi = useApiClient()
+  const { data: extractionModels = [] } = useQuery<ModelDefinition[]>({
+    queryKey: ["models"],
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<ModelDefinition[]>("/models")
+    },
+  })
   const triggerType: TriggerType = (data.triggerType as TriggerType) ?? "manual"
   const vars: InputVar[] = (data.inputVariables as InputVar[]) ?? []
   const testInput = (data.testInput as Record<string, string>) ?? {}
   const cronExpression: string = (data.cronExpression as string) ?? "0 9 * * *"
   const cronTimezone: string = (data.cronTimezone as string) ?? "UTC"
   const extractionModel: string = (data.extractionModel as string) ?? ""
-=======
-  const getApi = useApiClient();
-  const { data: extractionModels = [] } = useQuery<ModelDefinition[]>({
-    queryKey: ['models'],
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<ModelDefinition[]>('/models');
-    },
-  });
-  const triggerType: TriggerType = (data.triggerType as TriggerType) ?? 'manual';
-  const vars: InputVar[] = (data.inputVariables as InputVar[]) ?? [];
-  const testInput = (data.testInput as Record<string, string>) ?? {};
-  const cronExpression: string = (data.cronExpression as string) ?? '0 9 * * *';
-  const cronTimezone: string = (data.cronTimezone as string) ?? 'UTC';
-  const extractionModel: string = (data.extractionModel as string) ?? '';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
 
   function update(index: number, field: keyof InputVar, value: unknown) {
     onUpdate({
@@ -269,11 +226,8 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </p>
       </div>
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
-      {/* Schedule config */}
       {triggerType === "schedule" && (
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-          {/* Human-readable preview */}
           <div className="rounded-md border border-primary/20 bg-primary/5 px-2.5 py-2">
             <p className="mb-0.5 text-[10px] font-semibold tracking-wider text-primary/60 uppercase">
               Preview
@@ -284,14 +238,6 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
             <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
               {cronExpression}
             </p>
-=======
-      {triggerType === 'schedule' && (
-        <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-          <div className="rounded-md bg-primary/5 border border-primary/20 px-2.5 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/60 mb-0.5">Preview</p>
-            <p className="text-xs font-medium text-primary">{describeCron(cronExpression)}</p>
-            <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{cronExpression}</p>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
           </div>
 
           <div className="space-y-1.5">
@@ -350,14 +296,8 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
-      {/* Webhook info */}
       {triggerType === "webhook" && (
         <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3">
-=======
-      {triggerType === 'webhook' && (
-        <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
           <p className="text-xs font-medium">Webhook Trigger</p>
           <p className="text-[10px] text-muted-foreground">
             Deploy this workflow and use the Webhook panel (
@@ -367,12 +307,7 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
-      {/* Input variable schema */}
       {(triggerType === "manual" || triggerType === "webhook") && (
-=======
-      {(triggerType === 'manual' || triggerType === 'webhook') && (
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
         <div className="space-y-3 border-t border-border pt-3">
           <div className="flex items-center justify-between">
             <Label>
@@ -461,12 +396,7 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
-      {/* Extraction model — shown when there are input variables (public API enrichment) */}
       {(triggerType === "manual" || triggerType === "webhook") && (
-=======
-      {(triggerType === 'manual' || triggerType === 'webhook') && (
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
         <div className="space-y-1.5 border-t border-border pt-3">
           <Label>Input Extraction Model</Label>
           <NativeSelect
@@ -474,16 +404,13 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
             onChange={(e) => onUpdate({ extractionModel: e.target.value })}
             className="w-full"
           >
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
-            {EXTRACTION_MODELS.map((m) => (
-              <NativeSelectOption key={m.value} value={m.value}>
-                {m.label}
-              </NativeSelectOption>
-=======
-            <NativeSelectOption value="">Auto (server picks cheapest available)</NativeSelectOption>
+            <NativeSelectOption value="">
+              Auto (server picks cheapest available)
+            </NativeSelectOption>
             {extractionModels.map((m) => (
-              <NativeSelectOption key={m.id} value={m.id}>{m.name}</NativeSelectOption>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
+              <NativeSelectOption key={m.id} value={m.id}>
+                {m.name}
+              </NativeSelectOption>
             ))}
           </NativeSelect>
           <p className="text-[10px] text-muted-foreground">
@@ -493,8 +420,6 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
         </div>
       )}
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/start-panel.tsx
-      {/* Test values — manual and webhook */}
       {(triggerType === "manual" || triggerType === "webhook") &&
         vars.filter((v) => v.name).length > 0 && (
           <div className="space-y-2.5 border-t border-border pt-3">
@@ -505,27 +430,6 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
                   ? "Initial values loaded into the chat panel when testing."
                   : "Values used when you click Run."}
               </p>
-=======
-      {(triggerType === 'manual' || triggerType === 'webhook') && vars.filter((v) => v.name).length > 0 && (
-        <div className="space-y-2.5 border-t border-border pt-3">
-          <div>
-            <Label>Test Values</Label>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {triggerType === 'webhook'
-                ? 'Initial values loaded into the chat panel when testing.'
-                : 'Values used when you click Run.'}
-            </p>
-          </div>
-          {vars.filter((v) => v.name).map((v) => (
-            <div key={v.name} className="space-y-0.5">
-              <span className="text-[10px] font-medium text-muted-foreground font-mono">{v.name}</span>
-              <Input
-                value={testInput[v.name] ?? ''}
-                onChange={(e) => setTestValue(v.name, e.target.value)}
-                placeholder={v.type === 'object' ? '{"key": "value"}' : `Enter ${v.name}…`}
-                className="text-xs"
-              />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/workflow-meta/start-panel.tsx
             </div>
             {vars
               .filter((v) => v.name)

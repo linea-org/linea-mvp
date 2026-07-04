@@ -1,12 +1,7 @@
 "use client"
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/versions-panel.tsx
-import { useState, useEffect } from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { HugeiconsIcon } from "@hugeicons/react"
-=======
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { HugeiconsIcon } from '@hugeicons/react';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/versions-panel.tsx
 import {
   Cancel01Icon,
   Loading01Icon,
@@ -14,20 +9,12 @@ import {
   GitBranchIcon,
   ArrowTurnBackwardIcon,
   GitCompareIcon,
-<<<<<<< HEAD:apps/web/components/workflow-builder/versions-panel.tsx
 } from "@hugeicons/core-free-icons"
-import { createApiClient } from "@/lib/api"
+import { useApiClient } from "@/hooks/use-api-client"
 import { Button } from "@linea/ui/components/button"
 import { ScrollArea } from "@linea/ui/components/scroll-area"
+import { Spinner } from "@linea/ui/components/spinner"
 import type { Node, Edge } from "@xyflow/react"
-=======
-} from '@hugeicons/core-free-icons';
-import { useApiClient } from '@/hooks/use-api-client';
-import { Button } from '@linea/ui/components/button';
-import { ScrollArea } from '@linea/ui/components/scroll-area';
-import { Spinner } from '@linea/ui/components/spinner';
-import type { Node, Edge } from '@xyflow/react';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/versions-panel.tsx
 
 interface VersionEntry {
   id: string
@@ -41,11 +28,9 @@ interface VersionDetail extends VersionEntry {
 }
 
 interface Props {
-<<<<<<< HEAD:apps/web/components/workflow-builder/versions-panel.tsx
   workspaceId: string
   podId: string
   workflowId: string
-  token: string
   onRestore: (nodes: Node[], edges: Edge[]) => void
   onDiff?: (version: number) => void
   onClose: () => void
@@ -55,66 +40,33 @@ export function VersionsPanel({
   workspaceId,
   podId,
   workflowId,
-  token,
   onRestore,
   onDiff,
   onClose,
 }: Props) {
-  const [versions, setVersions] = useState<VersionEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [restoring, setRestoring] = useState<number | null>(null)
+  const getApi = useApiClient()
 
-  useEffect(() => {
-    void fetchVersions()
-  }, [])
-
-  async function fetchVersions() {
-    setLoading(true)
-    try {
-      const api = createApiClient(token)
-      const data = await api.get<VersionEntry[]>(
+  const {
+    data: versions = [],
+    isLoading: loading,
+    refetch,
+  } = useQuery<VersionEntry[]>({
+    queryKey: ["workflow-versions", workspaceId, podId, workflowId],
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<VersionEntry[]>(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/versions`
       )
-      setVersions(data)
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleRestore(version: number) {
-    setRestoring(version)
-    try {
-      const api = createApiClient(token)
-=======
-  workspaceId: string;
-  podId: string;
-  workflowId: string;
-  onRestore: (nodes: Node[], edges: Edge[]) => void;
-  onDiff?: (version: number) => void;
-  onClose: () => void;
-}
-
-export function VersionsPanel({ workspaceId, podId, workflowId, onRestore, onDiff, onClose }: Props) {
-  const getApi = useApiClient();
-
-  const { data: versions = [], isLoading: loading, refetch } = useQuery<VersionEntry[]>({
-    queryKey: ['workflow-versions', workspaceId, podId, workflowId],
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<VersionEntry[]>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/versions`);
     },
-  });
+  })
 
   function fetchVersions() {
-    void refetch();
+    void refetch()
   }
 
   const restoreMutation = useMutation({
     mutationFn: async (version: number) => {
-      const api = await getApi();
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/versions-panel.tsx
+      const api = await getApi()
       const data = await api.get<VersionDetail>(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}/versions/${version}`
       )
@@ -133,7 +85,6 @@ export function VersionsPanel({ workspaceId, podId, workflowId, onRestore, onDif
           : {}),
       }))
       const restoredNodes: Node[] = [
-<<<<<<< HEAD:apps/web/components/workflow-builder/versions-panel.tsx
         ...rawNodes.filter((n: any) => n.type === "frame"),
         ...rawNodes.filter((n: any) => n.type !== "frame"),
       ]
@@ -147,34 +98,13 @@ export function VersionsPanel({ workspaceId, podId, workflowId, onRestore, onDif
           label: e.label,
         })
       )
-      onRestore(restoredNodes, restoredEdges)
-      onClose()
-    } catch {
-      // ignore
-    } finally {
-      setRestoring(null)
-    }
-  }
-=======
-        ...rawNodes.filter((n: any) => n.type === 'frame'),
-        ...rawNodes.filter((n: any) => n.type !== 'frame'),
-      ];
-      const restoredEdges: Edge[] = (data.definition?.edges ?? []).map((e: any) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        label: e.label,
-      }));
-      return { restoredNodes, restoredEdges };
+      return { restoredNodes, restoredEdges }
     },
     onSuccess: ({ restoredNodes, restoredEdges }) => {
-      onRestore(restoredNodes, restoredEdges);
-      onClose();
+      onRestore(restoredNodes, restoredEdges)
+      onClose()
     },
-  });
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/versions-panel.tsx
+  })
 
   function timeAgo(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime()
@@ -196,16 +126,12 @@ export function VersionsPanel({ workspaceId, podId, workflowId, onRestore, onDif
           </p>
         </div>
         <div className="flex items-center gap-1">
-<<<<<<< HEAD:apps/web/components/workflow-builder/versions-panel.tsx
           <Button
             size="icon-sm"
             variant="ghost"
-            onClick={() => void fetchVersions()}
+            onClick={fetchVersions}
             title="Refresh"
           >
-=======
-          <Button size="icon-sm" variant="ghost" onClick={fetchVersions} title="Refresh">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/versions-panel.tsx
             <HugeiconsIcon icon={ReloadIcon} className="size-3.5" />
           </Button>
           <Button size="icon-sm" variant="ghost" onClick={onClose}>
@@ -217,14 +143,7 @@ export function VersionsPanel({ workspaceId, podId, workflowId, onRestore, onDif
       <ScrollArea className="flex-1">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-<<<<<<< HEAD:apps/web/components/workflow-builder/versions-panel.tsx
-            <HugeiconsIcon
-              icon={Loading01Icon}
-              className="size-3.5 animate-spin"
-            />
-=======
             <Spinner className="size-3.5" />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/versions-panel.tsx
           </div>
         ) : versions.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
@@ -278,30 +197,28 @@ export function VersionsPanel({ workspaceId, podId, workflowId, onRestore, onDif
                     variant="ghost"
                     className="h-6 px-2 text-[11px]"
                     title={`Restore v${v.version}`}
-                    disabled={restoreMutation.isPending && restoreMutation.variables === v.version}
+                    disabled={
+                      restoreMutation.isPending &&
+                      restoreMutation.variables === v.version
+                    }
                     onClick={() => restoreMutation.mutate(v.version)}
                   >
-<<<<<<< HEAD:apps/web/components/workflow-builder/versions-panel.tsx
-                    {restoring === v.version ? (
+                    {restoreMutation.isPending &&
+                    restoreMutation.variables === v.version ? (
                       <HugeiconsIcon
                         icon={Loading01Icon}
                         className="size-3 animate-spin"
                       />
-=======
-                    {restoreMutation.isPending && restoreMutation.variables === v.version ? (
-                      <HugeiconsIcon icon={Loading01Icon} className="size-3 animate-spin" />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/versions-panel.tsx
                     ) : (
                       <HugeiconsIcon
                         icon={ArrowTurnBackwardIcon}
                         className="mr-1 size-3"
                       />
                     )}
-<<<<<<< HEAD:apps/web/components/workflow-builder/versions-panel.tsx
-                    {restoring === v.version ? "" : "Restore"}
-=======
-                    {restoreMutation.isPending && restoreMutation.variables === v.version ? '' : 'Restore'}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/side-panels/versions-panel.tsx
+                    {restoreMutation.isPending &&
+                    restoreMutation.variables === v.version
+                      ? ""
+                      : "Restore"}
                   </Button>
                 </div>
               </div>

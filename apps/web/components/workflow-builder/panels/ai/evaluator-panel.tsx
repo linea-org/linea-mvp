@@ -1,22 +1,12 @@
 "use client"
 
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/evaluator-panel.tsx
 import { useRef } from "react"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
 import { Textarea } from "@linea/ui/components/textarea"
 import type { Node } from "@xyflow/react"
-import { VariableChips } from "../variable-picker"
-import { ModelPicker } from "../model-picker"
-=======
-import { useRef } from 'react';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { Textarea } from '@linea/ui/components/textarea';
-import type { Node } from '@xyflow/react';
-import { VariableChips } from '../../variable-picker';
-import { ModelPicker } from '../../model-picker';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/ai/evaluator-panel.tsx
+import { VariableChips } from "../../variable-picker"
+import { ModelPicker } from "../../model-picker"
 
 interface EvaluatorPanelProps {
   data: Record<string, unknown>

@@ -1,25 +1,13 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { useParams } from "next/navigation"
 import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
 import { Skeleton } from "@linea/ui/components/skeleton"
-import { friendlyApiErrorFromStatus } from "@/lib/api"
-
-const API_BASE = `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"}/v1`
-=======
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { friendlyApiErrorFromStatus, API_BASE } from '@/lib/api';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+import { friendlyApiErrorFromStatus, API_BASE } from "@/lib/api"
 
 interface InputVariable {
   name: string
@@ -36,7 +24,6 @@ interface WorkflowSchema {
   inputVariables: InputVariable[]
 }
 
-<<<<<<< HEAD
 type PageState =
   | "loading"
   | "ready"
@@ -45,108 +32,65 @@ type PageState =
   | "error"
   | "forbidden"
   | "not-found"
+type SchemaOutcome =
+  | { kind: "ok"; schema: WorkflowSchema }
+  | { kind: "not-found" }
+  | { kind: "forbidden" }
+  | { kind: "error" }
 
 export default function PublicRunPage() {
   const { workflowId } = useParams<{ workflowId: string }>()
-  const [state, setState] = useState<PageState>("loading")
-  const [schema, setSchema] = useState<WorkflowSchema | null>(null)
+  const [formState, setFormState] = useState<
+    "ready" | "submitting" | "success"
+  >("ready")
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [executionId, setExecutionId] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState("")
-=======
-type PageState = 'loading' | 'ready' | 'submitting' | 'success' | 'error' | 'forbidden' | 'not-found';
-type SchemaOutcome =
-  | { kind: 'ok'; schema: WorkflowSchema }
-  | { kind: 'not-found' }
-  | { kind: 'forbidden' }
-  | { kind: 'error' };
-
-export default function PublicRunPage() {
-  const { workflowId } = useParams<{ workflowId: string }>();
-  const [formState, setFormState] = useState<'ready' | 'submitting' | 'success'>('ready');
-  const [inputs, setInputs] = useState<Record<string, string>>({});
-  const [executionId, setExecutionId] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [defaultsFor, setDefaultsFor] = useState<string | null>(null);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  const [defaultsFor, setDefaultsFor] = useState<string | null>(null)
 
   const { data: outcome, isLoading: schemaLoading } = useQuery<SchemaOutcome>({
-    queryKey: ['public-run-schema', workflowId],
+    queryKey: ["public-run-schema", workflowId],
     retry: false,
     queryFn: async () => {
       try {
-<<<<<<< HEAD
         const res = await fetch(`${API_BASE}/run/${workflowId}`)
-        if (res.status === 404) {
-          setState("not-found")
-          return
-        }
-        if (res.status === 403) {
-          setState("forbidden")
-          return
-        }
-        if (!res.ok) {
-          setState("error")
-          return
-        }
+        if (res.status === 404) return { kind: "not-found" }
+        if (res.status === 403) return { kind: "forbidden" }
+        if (!res.ok) return { kind: "error" }
         const data = (await res.json()) as WorkflowSchema
-        setSchema(data)
-        // Pre-fill defaults
-        const defaults: Record<string, string> = {}
-        for (const v of data.inputVariables) {
-          if (v.defaultValue) defaults[v.name] = v.defaultValue
-        }
-        setInputs(defaults)
-        setState("ready")
+        return { kind: "ok", schema: data }
       } catch {
-        setState("error")
-=======
-        const res = await fetch(`${API_BASE}/run/${workflowId}`);
-        if (res.status === 404) return { kind: 'not-found' };
-        if (res.status === 403) return { kind: 'forbidden' };
-        if (!res.ok) return { kind: 'error' };
-        const data = (await res.json()) as WorkflowSchema;
-        return { kind: 'ok', schema: data };
-      } catch {
-        return { kind: 'error' };
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+        return { kind: "error" }
       }
     },
-  });
+  })
 
-  const schema = outcome?.kind === 'ok' ? outcome.schema : null;
+  const schema = outcome?.kind === "ok" ? outcome.schema : null
 
   if (schema && defaultsFor !== workflowId) {
-    setDefaultsFor(workflowId);
-    const defaults: Record<string, string> = {};
+    setDefaultsFor(workflowId)
+    const defaults: Record<string, string> = {}
     for (const v of schema.inputVariables) {
-      if (v.defaultValue) defaults[v.name] = v.defaultValue;
+      if (v.defaultValue) defaults[v.name] = v.defaultValue
     }
-<<<<<<< HEAD
-    void load()
-  }, [workflowId])
+    setInputs(defaults)
+  }
+
+  const state: PageState = schemaLoading
+    ? "loading"
+    : !outcome || outcome.kind === "error"
+      ? "error"
+      : outcome.kind === "not-found"
+        ? "not-found"
+        : outcome.kind === "forbidden"
+          ? "forbidden"
+          : formState
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!schema) return
-    setState("submitting")
+    setFormState("submitting")
     setErrorMsg("")
-=======
-    setInputs(defaults);
-  }
-
-  const state: PageState = schemaLoading ? 'loading'
-    : !outcome || outcome.kind === 'error' ? 'error'
-    : outcome.kind === 'not-found' ? 'not-found'
-    : outcome.kind === 'forbidden' ? 'forbidden'
-    : formState;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!schema) return;
-    setFormState('submitting');
-    setErrorMsg('');
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     try {
       const res = await fetch(`${API_BASE}/run/${workflowId}`, {
         method: "POST",
@@ -156,7 +100,6 @@ export default function PublicRunPage() {
       if (!res.ok) {
         let bodyMsg: string | undefined
         try {
-<<<<<<< HEAD
           const body = (await res.json()) as {
             message?: string
             error?: { message?: string }
@@ -172,42 +115,19 @@ export default function PublicRunPage() {
         setErrorMsg(
           mappedMsg ?? bodyMsg ?? "Failed to start. Please try again."
         )
-        setState("ready")
+        setFormState("ready")
         return
       }
       const result = (await res.json()) as { executionId: string }
       setExecutionId(result.executionId)
-      setState("success")
+      setFormState("success")
     } catch {
       setErrorMsg("Connection failed. Check your internet.")
-      setState("ready")
+      setFormState("ready")
     }
   }
 
-  // ── Loading ──────────────────────────────────────────────────────────────
   if (state === "loading") {
-=======
-          const body = await res.json() as { message?: string; error?: { message?: string } };
-          bodyMsg = body?.error?.message ?? body?.message;
-        } catch { /* ignore */ }
-        const mappedMsg = res.status === 401
-          ? 'This workflow is not publicly accessible.'
-          : friendlyApiErrorFromStatus(res.status);
-        setErrorMsg(mappedMsg ?? bodyMsg ?? 'Failed to start. Please try again.');
-        setFormState('ready');
-        return;
-      }
-      const result = (await res.json()) as { executionId: string };
-      setExecutionId(result.executionId);
-      setFormState('success');
-    } catch {
-      setErrorMsg('Connection failed. Check your internet.');
-      setFormState('ready');
-    }
-  }
-
-  if (state === 'loading') {
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     return (
       <Shell>
         <Skeleton className="mb-2 h-6 w-48" />
@@ -219,12 +139,7 @@ export default function PublicRunPage() {
     )
   }
 
-<<<<<<< HEAD
-  // ── Not found ────────────────────────────────────────────────────────────
   if (state === "not-found") {
-=======
-  if (state === 'not-found') {
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     return (
       <Shell>
         <h1 className="text-lg font-semibold">Workflow not found</h1>
@@ -235,12 +150,7 @@ export default function PublicRunPage() {
     )
   }
 
-<<<<<<< HEAD
-  // ── Not public ───────────────────────────────────────────────────────────
   if (state === "forbidden") {
-=======
-  if (state === 'forbidden') {
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     return (
       <Shell>
         <h1 className="text-lg font-semibold">Not publicly accessible</h1>
@@ -251,12 +161,7 @@ export default function PublicRunPage() {
     )
   }
 
-<<<<<<< HEAD
-  // ── Generic error ─────────────────────────────────────────────────────────
   if (state === "error") {
-=======
-  if (state === 'error') {
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     return (
       <Shell>
         <h1 className="text-lg font-semibold">Something went wrong</h1>
@@ -274,12 +179,7 @@ export default function PublicRunPage() {
     )
   }
 
-<<<<<<< HEAD
-  // ── Success ───────────────────────────────────────────────────────────────
   if (state === "success") {
-=======
-  if (state === 'success') {
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     return (
       <Shell>
         <div className="mb-4 flex items-center gap-3">
@@ -303,15 +203,11 @@ export default function PublicRunPage() {
           variant="outline"
           size="sm"
           className="mt-6"
-<<<<<<< HEAD
           onClick={() => {
             setInputs({})
-            setState("ready")
+            setFormState("ready")
             setExecutionId(null)
           }}
-=======
-          onClick={() => { setInputs({}); setFormState('ready'); setExecutionId(null); }}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         >
           Submit another
         </Button>

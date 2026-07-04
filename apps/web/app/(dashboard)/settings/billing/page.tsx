@@ -1,7 +1,6 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
 import { useQuery } from "@tanstack/react-query"
@@ -12,20 +11,7 @@ import { createApiClient, friendlyApiError } from "@/lib/api"
 import { Badge } from "@linea/ui/components/badge"
 import { Button } from "@linea/ui/components/button"
 import { Skeleton } from "@linea/ui/components/skeleton"
-=======
-import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
-import { useQuery } from '@tanstack/react-query';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Tick01Icon, Loading01Icon } from '@hugeicons/core-free-icons';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient, friendlyApiError } from '@/lib/api';
-import { Badge } from '@linea/ui/components/badge';
-import { Button } from '@linea/ui/components/button';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { PageSpinner } from '@linea/ui/components/page-spinner';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+import { PageSpinner } from "@linea/ui/components/page-spinner"
 
 interface PlanInfo {
   key: string
@@ -88,22 +74,12 @@ const PLAN_LIMITS: Record<
   },
 }
 
-<<<<<<< HEAD
-/* ─── Component ─────────────────────────────────────────────────────── */
-export default function BillingPage() {
+function BillingPageInner() {
   const { getToken } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const router = useRouter()
   const searchParams = useSearchParams()
   const wsId = activeWorkspace?.id ?? ""
-=======
-function BillingPageInner() {
-  const { getToken } = useAuth();
-  const { activeWorkspace } = useWorkspace();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const wsId = activeWorkspace?.id ?? '';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const [paying, setPaying] = useState<string | null>(null)
   const [payError, setPayError] = useState<string | null>(null)
@@ -189,12 +165,7 @@ function BillingPageInner() {
         </div>
       )}
 
-<<<<<<< HEAD
-      {/* Current plan */}
       <div className="space-y-4 rounded-lg border border-border bg-card p-6">
-=======
-      <div className="rounded-lg border border-border bg-card p-6 space-y-4">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[10px] font-medium tracking-widest text-muted-foreground uppercase">
@@ -228,12 +199,7 @@ function BillingPageInner() {
         </div>
       </div>
 
-<<<<<<< HEAD
-      {/* Upgrade plans */}
       {currentPlan !== "enterprise" && (
-=======
-      {currentPlan !== 'enterprise' && (
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div className="space-y-3">
           <p className="text-sm font-semibold">Upgrade your plan</p>
 
@@ -324,12 +290,7 @@ function BillingPageInner() {
         </div>
       )}
 
-<<<<<<< HEAD
-      {/* Enterprise CTA */}
       <div className="space-y-3 rounded-xl border border-dashed border-border p-6 text-center">
-=======
-      <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-3">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <p className="text-sm font-semibold">Need Enterprise?</p>
         <p className="mx-auto max-w-sm text-xs text-muted-foreground">
           Unlimited executions, SSO, audit logs, dedicated support, and custom
@@ -360,5 +321,5 @@ export default function BillingPage() {
     <Suspense fallback={<PageSpinner />}>
       <BillingPageInner />
     </Suspense>
-  );
+  )
 }

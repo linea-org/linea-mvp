@@ -1,5 +1,5 @@
-import { NodeContext, NodeExecutor, NodeResult } from "../node"
-import { HttpNodeConfig } from "./http.types"
+import type { NodeContext, NodeExecutor, NodeResult } from "../node"
+import type { HttpNodeConfig } from "./http.types"
 
 export class HttpNode implements NodeExecutor<"http"> {
   readonly type = "http"

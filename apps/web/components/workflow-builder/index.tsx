@@ -14,10 +14,11 @@ import {
   type Connection,
   type ReactFlowInstance,
   type EdgeMouseHandler,
-<<<<<<< HEAD
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import { useAuth } from "@clerk/nextjs"
+import { useQuery } from "@tanstack/react-query"
+import { useApiClient } from "@/hooks/use-api-client"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   ArrowLeft01Icon,
@@ -33,12 +34,6 @@ import {
   BorderAll01Icon,
   ArrowDown01Icon,
   ArrowUp01Icon,
-  Cursor01Icon,
-  HandGrabIcon,
-  Add01Icon,
-  MinusSignIcon,
-  FitToScreenIcon,
-  Mouse01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons"
 import {
@@ -49,503 +44,46 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@linea/ui/components/dialog"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@linea/ui/components/tooltip"
-import { Kbd } from "@linea/ui/components/kbd"
+import { TooltipProvider } from "@linea/ui/components/tooltip"
 import { createApiClient, friendlyApiError } from "@/lib/api"
+import { useUndoHistory } from "./use-undo-history"
 import { toast } from "@linea/ui/components/sonner"
 import { Button } from "@linea/ui/components/button"
 import { Spinner } from "@linea/ui/components/spinner"
 import { nodeTypes } from "./nodes/node-types"
-import { Toolbar, type ValidationState } from "./toolbar"
+import { Toolbar } from "./toolbar"
 import { LibraryPanel } from "./panels/library-panel"
-import { NodePanel } from "./panels/node-panel"
+import { NodePanel } from "./panels/node-panel/node-panel"
 import { GenerateDialog, type GenerateEvent } from "./generate-dialog"
-import { BottomPanel } from "./panels/bottom-panel"
-import { DeployPanel } from "./deploy-panel"
-import { HistoryPanel } from "./history-panel"
-import { VersionsPanel } from "./versions-panel"
-import { DiffPanel } from "./diff-panel"
-import { SharePanel } from "./share-panel"
-import { CommentsPanel } from "./comments-panel"
-import { EvalsPanel } from "./evals-panel"
-import { ChatPreviewPanel } from "./chat-preview-panel"
+import { BottomPanel } from "./panels/bottom-panel/bottom-panel"
+import { DeployPanel } from "./side-panels/deploy-panel"
+import { HistoryPanel } from "./side-panels/history-panel"
+import { VersionsPanel } from "./side-panels/versions-panel"
+import { DiffPanel } from "./side-panels/diff-panel"
+import { SharePanel } from "./side-panels/share-panel"
+import { CommentsPanel } from "./side-panels/comments-panel"
+import { EvalsPanel } from "./evals/evals-panel"
+import { ChatPreviewPanel } from "./chat-preview/chat-preview-panel"
 import { useRouter } from "next/navigation"
+import type {
+  WFNode,
+  WFEdge,
+  Workflow,
+  WorkflowBuilderProps,
+  EvalTestCase,
+  SSEEvent,
+  NodeResult,
+} from "./workflow-builder.types"
+import {
+  NODE_COLORS,
+  QUICK_NODE_TYPES,
+  getValidationState,
+} from "./workflow-validation"
+import { computeAutoLayout } from "./workflow-auto-layout"
+import { CanvasControls } from "./canvas-controls"
+import { useWorkflowSSE } from "./use-workflow-sse"
 
-const API_BASE = `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"}/v1`
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                               */
-/* ------------------------------------------------------------------ */
-interface WFNode {
-  id: string
-  type: string
-  position: { x: number; y: number }
-  data: Record<string, unknown>
-  style?: Record<string, unknown>
-  parentId?: string
-  extent?: string
-  zIndex?: number
-}
-interface WFEdge {
-  id: string
-  source: string
-  target: string
-  sourceHandle?: string
-  targetHandle?: string
-  label?: string
-}
-interface Workflow {
-  id: string
-  name: string
-  description?: string
-  definition: { nodes: WFNode[]; edges: WFEdge[] }
-  podId: string
-}
-interface WorkflowBuilderProps {
-  workflowId: string
-  podId: string
-  workspaceId: string
-}
-
-type EvalOperator =
-  | "equals"
-  | "contains"
-  | "exists"
-  | "not_exists"
-  | "gt"
-  | "lt"
-  | "llm_judge"
-  | "tool_called"
-  | "tool_not_called"
-  | "semantic_match"
-interface EvalTestCase {
-  id: string
-  name: string
-  input: string
-  assertions: {
-    source?: string
-    path: string
-    operator: EvalOperator
-    expected: string
-    rubric?: string
-    reference?: string
-    threshold?: string
-  }[]
-  trials?: number
-  scriptedResponses?: { type: "answer" | "approve" | "deny"; value: string }[]
-}
-
-interface SSEEvent {
-  type: string
-  nodeId?: string
-  status?: string
-  output?: unknown
-  error?: string
-  durationMs?: number
-  delta?: string
-  interrupt?: {
-    type?: string
-    nodeId?: string
-    message?: string
-    prompt?: string
-    question?: string
-  }
-}
-
-export interface NodeResult {
-  status: string
-  output?: unknown
-  error?: string
-  durationMs?: number
-  startedAt?: number
-}
-
-/* ------------------------------------------------------------------ */
-/*  Node color map for MiniMap                                          */
-/* ------------------------------------------------------------------ */
-const NODE_COLORS: Record<string, string> = {
-  start: "#6366f1",
-  end: "#14b8a6",
-  agent: "#3b82f6",
-  http: "#8b5cf6",
-  transform: "#7c3aed",
-  "if-else": "#f59e0b",
-  router: "#ea580c",
-  approval: "#f97316",
-  "approval-gate": "#f97316",
-  mcp: "#eab308",
-  memory: "#a855f7",
-  extract: "#0ea5e9",
-  retriever: "#10b981",
-  guardrails: "#ef4444",
-  code: "#64748b",
-  loop: "#0891b2",
-  parallel: "#6366f1",
-  wait: "#64748b",
-  variables: "#059669",
-  evaluator: "#d97706",
-  subworkflow: "#7c3aed",
-  slack: "#4a154b",
-  github: "#1f2328",
-  notion: "#37352f",
-  gmail: "#ea4335",
-  filter: "#06b6d4",
-  merge: "#8b5cf6",
-  datetime: "#0d9488",
-}
-
-/* ------------------------------------------------------------------ */
-/*  Quick-connect node picker                                           */
-/* ------------------------------------------------------------------ */
-const QUICK_NODE_TYPES: { type: string; label: string }[] = [
-  { type: "agent", label: "Agent" },
-  { type: "http", label: "HTTP" },
-  { type: "transform", label: "Transform" },
-  { type: "if-else", label: "If / Else" },
-  { type: "router", label: "Router" },
-  { type: "code", label: "Code" },
-  { type: "loop", label: "Loop" },
-  { type: "variables", label: "Variables" },
-]
-
-/* ------------------------------------------------------------------ */
-/*  Validation                                                          */
-/* ------------------------------------------------------------------ */
-function getValidationState(nodes: Node[], edges: Edge[]): ValidationState {
-  const issues: string[] = []
-  let level: ValidationState["level"] = "success"
-
-  const hasStart = nodes.some((n) => n.type === "start")
-  const actionNodes = nodes.filter(
-    (n) => n.type !== "start" && n.type !== "end"
-  )
-
-  // Hard errors — block run
-  if (!hasStart) {
-    issues.push("Missing Start node")
-    level = "error"
-  }
-  if (nodes.length > 0 && actionNodes.length === 0) {
-    issues.push("Add at least one action node (Agent, HTTP, etc.)")
-    level = "error"
-  }
-
-  if (level !== "error") {
-    // Start has no outgoing edge
-    const startNode = nodes.find((n) => n.type === "start")
-    if (
-      startNode &&
-      actionNodes.length > 0 &&
-      !edges.some((e) => e.source === startNode.id)
-    ) {
-      issues.push("Start node is not connected to anything")
-      level = "warning"
-    }
-
-    // Floating action nodes
-    const connectedIds = new Set([
-      ...edges.map((e) => e.source),
-      ...edges.map((e) => e.target),
-    ])
-    const floating = actionNodes.filter((n) => !connectedIds.has(n.id))
-    if (floating.length > 0) {
-      const label =
-        floating.length === 1
-          ? `"${(floating[0]!.data?.nodeName as string) ?? floating[0]!.type}" is not connected`
-          : `${floating.length} nodes are not connected`
-      issues.push(label)
-      if (level === "success") level = "warning"
-    }
-
-    // if-else nodes need both true/false outputs wired
-    const ifElseNodes = nodes.filter((n) => n.type === "if-else")
-    for (const bn of ifElseNodes) {
-      const hasTrue = edges.some(
-        (e) => e.source === bn.id && e.sourceHandle === "true"
-      )
-      const hasFalse = edges.some(
-        (e) => e.source === bn.id && e.sourceHandle === "false"
-      )
-      if (!hasTrue || !hasFalse) {
-        const name = (bn.data?.nodeName as string) ?? bn.type
-        const missing =
-          !hasTrue && !hasFalse
-            ? "True & False branches"
-            : !hasTrue
-              ? "True branch"
-              : "False branch"
-        issues.push(`"${name}" missing ${missing}`)
-        if (level === "success") level = "warning"
-      }
-    }
-
-    // router nodes need at least one route wired
-    const routerNodes = nodes.filter((n) => n.type === "router")
-    for (const rn of routerNodes) {
-      const hasAnyRoute = edges.some((e) => e.source === rn.id)
-      if (!hasAnyRoute) {
-        const name = (rn.data?.nodeName as string) ?? "Router"
-        issues.push(`"${name}" has no routes connected`)
-        if (level === "success") level = "warning"
-      }
-    }
-  }
-
-  return { level, issues }
-}
-
-/* ------------------------------------------------------------------ */
-/*  Auto-layout (BFS, left-to-right, height-aware)                     */
-/* ------------------------------------------------------------------ */
-const NODE_W_DEFAULT = 220
-const NODE_H_DEFAULT = 80
-const H_GAP = 80 // horizontal gap between columns
-const V_GAP = 24 // vertical gap between nodes in the same column
-
-function computeAutoLayout(nodes: Node[], edges: Edge[]): Node[] {
-  if (nodes.length === 0) return nodes
-
-  // Frame children have parent-relative positions — exclude them and frame nodes
-  // from the BFS entirely; they'll be repositioned after their parent moves.
-  const frameIds = new Set(
-    nodes.filter((n) => n.type === "frame").map((n) => n.id)
-  )
-  const childIds = new Set(nodes.filter((n) => n.parentId).map((n) => n.id))
-  const layoutNodes = nodes.filter(
-    (n) => !frameIds.has(n.id) && !childIds.has(n.id)
-  )
-
-  if (layoutNodes.length === 0) return nodes
-
-  // Build adjacency list for layout nodes only
-  const layoutIdSet = new Set(layoutNodes.map((n) => n.id))
-  const adj: Record<string, string[]> = {}
-  for (const n of layoutNodes) adj[n.id] = []
-  for (const e of edges) {
-    if (layoutIdSet.has(e.source) && layoutIdSet.has(e.target))
-      adj[e.source]?.push(e.target)
-  }
-
-  // BFS from start node to assign column (level)
-  const startNode =
-    layoutNodes.find((n) => n.type === "start") ?? layoutNodes[0]!
-  const levels: Record<string, number> = { [startNode.id]: 0 }
-  const queue = [startNode.id]
-  while (queue.length > 0) {
-    const cur = queue.shift()!
-    for (const next of adj[cur] ?? []) {
-      if (levels[next] === undefined) {
-        levels[next] = levels[cur]! + 1
-        queue.push(next)
-      }
-    }
-  }
-  // Append unreachable nodes after the last reachable level
-  let maxL = Math.max(0, ...Object.values(levels))
-  for (const n of layoutNodes) {
-    if (levels[n.id] === undefined) levels[n.id] = ++maxL
-  }
-
-  // Group nodes by column
-  const byLevel: Record<number, Node[]> = {}
-  for (const n of layoutNodes) {
-    ;(byLevel[levels[n.id]!] ??= []).push(n)
-  }
-
-  const nodeH = (n: Node) =>
-    (n.measured?.height as number | undefined) ?? NODE_H_DEFAULT
-  const nodeW = (n: Node) =>
-    (n.measured?.width as number | undefined) ?? NODE_W_DEFAULT
-
-  // Compute column x positions
-  const sortedLevels = Object.keys(byLevel)
-    .map(Number)
-    .sort((a, b) => a - b)
-  const colX: Record<number, number> = {}
-  let curX = 80
-  for (const lv of sortedLevels) {
-    colX[lv] = curX
-    const colWidth = Math.max(...byLevel[lv]!.map(nodeW))
-    curX += colWidth + H_GAP
-  }
-
-  // Stack nodes vertically per column, centered around y=300
-  const positioned = new Map<string, { x: number; y: number }>()
-  for (const lv of sortedLevels) {
-    const col = byLevel[lv]!
-    const totalH =
-      col.reduce((sum, n) => sum + nodeH(n), 0) + V_GAP * (col.length - 1)
-    let y = 300 - totalH / 2
-    for (const n of col) {
-      positioned.set(n.id, { x: colX[lv]!, y })
-      y += nodeH(n) + V_GAP
-    }
-  }
-
-  // Recompute frame positions to wrap their children (children keep parent-relative positions)
-  const FRAME_PAD = 40
-  const framePositions = new Map<
-    string,
-    { x: number; y: number; w: number; h: number }
-  >()
-  for (const frameId of frameIds) {
-    const children = nodes.filter((n) => n.parentId === frameId)
-    if (children.length === 0) continue
-    const absPositions = children.map((c) => {
-      // Children positions are relative to the frame's current absolute position
-      const frame = nodes.find((n) => n.id === frameId)!
-      return {
-        x: frame.position.x + c.position.x,
-        y: frame.position.y + c.position.y,
-        w: (c.measured?.width as number | undefined) ?? NODE_W_DEFAULT,
-        h: (c.measured?.height as number | undefined) ?? NODE_H_DEFAULT,
-      }
-    })
-    const minX = Math.min(...absPositions.map((p) => p.x)) - FRAME_PAD
-    const minY = Math.min(...absPositions.map((p) => p.y)) - FRAME_PAD
-    const maxX = Math.max(...absPositions.map((p) => p.x + p.w)) + FRAME_PAD
-    const maxY = Math.max(...absPositions.map((p) => p.y + p.h)) + FRAME_PAD
-    framePositions.set(frameId, {
-      x: minX,
-      y: minY,
-      w: maxX - minX,
-      h: maxY - minY,
-    })
-  }
-
-  return nodes.map((n) => {
-    if (frameIds.has(n.id)) {
-      const fp = framePositions.get(n.id)
-      if (!fp) return n
-      return {
-        ...n,
-        position: { x: fp.x, y: fp.y },
-        style: { ...(n.style ?? {}), width: fp.w, height: fp.h },
-        data: { ...n.data, expandedHeight: fp.h },
-      }
-    }
-    // Frame children: keep their parent-relative positions unchanged
-    if (childIds.has(n.id)) return n
-    return { ...n, position: positioned.get(n.id) ?? n.position }
-  })
-}
-
-/* ------------------------------------------------------------------ */
-/*  Canvas toolbar (inside ReactFlow, so useReactFlow() works)         */
-/* ------------------------------------------------------------------ */
-function CanvasControls({
-  cursorMode,
-  setCursorMode,
-  isInteractive,
-  onInteractiveToggle,
-}: {
-  cursorMode: "select" | "grab"
-  setCursorMode: (m: "select" | "grab") => void
-  isInteractive: boolean
-  onInteractiveToggle: () => void
-}) {
-  const { zoomIn, zoomOut, fitView } = useReactFlow()
-
-  type CtrlBtn = {
-    icon: typeof Add01Icon
-    label: string
-    shortcut?: string
-    action: () => void
-    active?: boolean
-  }
-  const sections: Array<CtrlBtn[] | null> = [
-    [
-      {
-        icon: HandGrabIcon,
-        label: "Pan mode",
-        shortcut: "G",
-        action: () => setCursorMode("grab"),
-        active: cursorMode === "grab",
-      },
-      {
-        icon: Cursor01Icon,
-        label: "Select mode",
-        shortcut: "V",
-        action: () => setCursorMode("select"),
-        active: cursorMode === "select",
-      },
-    ],
-    null,
-    [
-      {
-        icon: Add01Icon,
-        label: "Zoom in",
-        action: () => zoomIn({ duration: 200 }),
-      },
-      {
-        icon: MinusSignIcon,
-        label: "Zoom out",
-        action: () => zoomOut({ duration: 200 }),
-      },
-      {
-        icon: FitToScreenIcon,
-        label: "Fit view",
-        shortcut: "F",
-        action: () => fitView({ padding: 0.25, duration: 300 }),
-      },
-    ],
-    null,
-    [
-      {
-        icon: isInteractive ? Mouse01Icon : LockKeyIcon,
-        label: isInteractive ? "Lock canvas" : "Unlock canvas",
-        action: onInteractiveToggle,
-        active: !isInteractive,
-      },
-    ],
-  ]
-
-  return (
-    <Panel position="bottom-left" className="!m-2">
-      <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-md backdrop-blur-sm">
-        {sections.map((section, si) =>
-          section === null ? (
-            <div key={si} className="mx-1.5 h-px bg-border" />
-          ) : (
-            section.map((btn, bi) => (
-              <Tooltip key={`${si}-${bi}`}>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={btn.action}
-                    className={`flex size-8 items-center justify-center transition-colors ${
-                      btn.active
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                    }`}
-                  >
-                    <HugeiconsIcon icon={btn.icon} className="size-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="right"
-                  sideOffset={8}
-                  className="flex items-center gap-2"
-                >
-                  {btn.label}
-                  {btn.shortcut && <Kbd>{btn.shortcut}</Kbd>}
-                </TooltipContent>
-              </Tooltip>
-            ))
-          )
-        )}
-      </div>
-    </Panel>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Inner builder (must be inside ReactFlowProvider)                   */
-/* ------------------------------------------------------------------ */
+// Must render inside ReactFlowProvider — useReactFlow() is used by children.
 function BuilderInner({
   workflowId,
   podId,
@@ -560,8 +98,8 @@ function BuilderInner({
   const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [workflowName, setWorkflowName] = useState("Untitled Workflow")
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const getApi = useApiClient()
+  const seededWorkflowRef = useRef(false)
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [runStatus, setRunStatus] = useState<{
     id: string
@@ -587,8 +125,6 @@ function BuilderInner({
   const [deployedAt, setDeployedAt] = useState<string | null>(null)
   const [diffVersion, setDiffVersion] = useState<number | null>(null)
   const [autoSave, setAutoSave] = useState(false)
-  const [canUndo, setCanUndo] = useState(false)
-  const [canRedo, setCanRedo] = useState(false)
   const [confirm, setConfirm] = useState<{
     title: string
     description: string
@@ -617,93 +153,6 @@ function BuilderInner({
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [testCases, setTestCases] = useState<EvalTestCase[]>([])
-=======
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import { useAuth } from '@clerk/nextjs';
-import { useQuery } from '@tanstack/react-query';
-import { useApiClient } from '@/hooks/use-api-client';
-import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  ArrowLeft01Icon, ArrowRight01Icon, Tick01Icon, Cancel01Icon, Alert02Icon,
-  Copy01Icon, LockKeyIcon, SquareLock01Icon, Delete01Icon,
-  PlayIcon, BorderAll01Icon, ArrowDown01Icon, ArrowUp01Icon,
-  Search01Icon,
-} from '@hugeicons/core-free-icons';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@linea/ui/components/dialog';
-import { TooltipProvider } from '@linea/ui/components/tooltip';
-import { createApiClient, friendlyApiError } from '@/lib/api';
-import { useUndoHistory } from './use-undo-history';
-import { toast } from '@linea/ui/components/sonner';
-import { Button } from '@linea/ui/components/button';
-import { Spinner } from '@linea/ui/components/spinner';
-import { nodeTypes } from './nodes/node-types';
-import { Toolbar } from './toolbar';
-import { LibraryPanel } from './panels/library-panel';
-import { NodePanel } from './panels/node-panel/node-panel';
-import { GenerateDialog, type GenerateEvent } from './generate-dialog';
-import { BottomPanel } from './panels/bottom-panel/bottom-panel';
-import { DeployPanel } from './side-panels/deploy-panel';
-import { HistoryPanel } from './side-panels/history-panel';
-import { VersionsPanel } from './side-panels/versions-panel';
-import { DiffPanel } from './side-panels/diff-panel';
-import { SharePanel } from './side-panels/share-panel';
-import { CommentsPanel } from './side-panels/comments-panel';
-import { EvalsPanel } from './evals/evals-panel';
-import { ChatPreviewPanel } from './chat-preview/chat-preview-panel';
-import { useRouter } from 'next/navigation';
-import type { WFNode, WFEdge, Workflow, WorkflowBuilderProps, EvalTestCase, SSEEvent, NodeResult } from './workflow-builder.types';
-import { NODE_COLORS, QUICK_NODE_TYPES, getValidationState } from './workflow-validation';
-import { computeAutoLayout } from './workflow-auto-layout';
-import { CanvasControls } from './canvas-controls';
-import { useWorkflowSSE } from './use-workflow-sse';
-
-// Must render inside ReactFlowProvider — useReactFlow() is used by children.
-function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) {
-  const { getToken, userId } = useAuth();
-  const router = useRouter();
-
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
-  const [workflowName, setWorkflowName] = useState('Untitled Workflow');
-  const getApi = useApiClient();
-  const seededWorkflowRef = useRef(false);
-  const [libraryOpen, setLibraryOpen] = useState(true);
-  const [runStatus, setRunStatus] = useState<{ id: string; status: string } | null>(null);
-  const [interrupt, setInterrupt] = useState<SSEEvent['interrupt'] | null>(null);
-  const [executionOutput, setExecutionOutput] = useState<unknown>(undefined);
-  const [askHumanAnswer, setAskHumanAnswer] = useState('');
-  const [generateOpen, setGenerateOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [authToken, setAuthToken] = useState<string>('');
-  const [nodeResults, setNodeResults] = useState<Record<string, NodeResult>>({});
-  const [streamingTokens, setStreamingTokens] = useState<Record<string, string>>({});
-  const [deployPanelOpen, setDeployPanelOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [versionsOpen, setVersionsOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [evalsOpen, setEvalsOpen] = useState(false);
-  const [chatPreviewOpen, setChatPreviewOpen] = useState(false);
-  const [deployedAt, setDeployedAt] = useState<string | null>(null);
-  const [diffVersion, setDiffVersion] = useState<number | null>(null);
-  const [autoSave, setAutoSave] = useState(false);
-  const [confirm, setConfirm] = useState<{ title: string; description: string; action: string; onConfirm: () => void } | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: Node } | null>(null);
-  const [editingEdge, setEditingEdge] = useState<{ id: string; x: number; y: number; label: string } | null>(null);
-  const [testNodeDialog, setTestNodeDialog] = useState<{ node: Node } | null>(null);
-  const [testNodeInput, setTestNodeInput] = useState('{}');
-  const [testNodeRunning, setTestNodeRunning] = useState(false);
-  const [cursorMode, setCursorMode] = useState<'select' | 'grab'>('grab');
-  const [minimapVisible, setMinimapVisible] = useState(true);
-  const [isInteractive, setIsInteractive] = useState(true);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [testCases, setTestCases] = useState<EvalTestCase[]>([]);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   const [quickConnect, setQuickConnect] = useState<{
     screenX: number
     screenY: number
@@ -711,15 +160,14 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     sourceHandle: string | null
   } | null>(null)
 
-<<<<<<< HEAD
-  // Undo/redo history
-  const historyStackRef = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([])
-  const historyIdxRef = useRef(-1)
+  const {
+    canUndo,
+    canRedo,
+    pushHistory,
+    undo: handleUndo,
+    redo: handleRedo,
+  } = useUndoHistory(setNodes, setEdges)
   const [isDeployed, setIsDeployed] = useState(false)
-=======
-  const { canUndo, canRedo, pushHistory, undo: handleUndo, redo: handleRedo } = useUndoHistory(setNodes, setEdges);
-  const [isDeployed, setIsDeployed] = useState(false);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const validationState = useMemo(
     () => getValidationState(nodes, edges),
@@ -756,8 +204,16 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     edgesRef.current = edges
   }, [edges])
 
-<<<<<<< HEAD
-  const sseAbortRef = useRef<AbortController | null>(null)
+  const { startSSE, sseAbortRef } = useWorkflowSSE({
+    workspaceId,
+    podId,
+    setNodes,
+    setNodeResults,
+    setStreamingTokens,
+    setInterrupt,
+    setRunStatus,
+    setExecutionOutput,
+  })
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null)
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null)
@@ -768,25 +224,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     handleId: string | null
   } | null>(null)
   const connectionMadeRef = useRef(false)
-=======
-  const { startSSE, sseAbortRef } = useWorkflowSSE({
-    workspaceId,
-    podId,
-    setNodes,
-    setNodeResults,
-    setStreamingTokens,
-    setInterrupt,
-    setRunStatus,
-    setExecutionOutput,
-  });
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
-  const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
-  const nodesRef = useRef<Node[]>([]);
-  const edgesRef = useRef<Edge[]>([]);
-  const connectingFromRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
-  const connectionMadeRef = useRef(false);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   // Stable refs so keyboard handler never captures stale closures
   const handleSaveRef = useRef<(opts?: { silent?: boolean }) => Promise<void>>(
@@ -934,16 +371,12 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
   }, [getToken])
 
   // Clean up SSE on unmount
-<<<<<<< HEAD
   useEffect(
     () => () => {
       sseAbortRef.current?.abort()
     },
-    []
+    [sseAbortRef]
   )
-=======
-  useEffect(() => () => { sseAbortRef.current?.abort(); }, [sseAbortRef]);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   // Auto-save interval (30s when enabled)
   useEffect(() => {
@@ -967,8 +400,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       ? e.metaKey
       : e.ctrlKey
 
-<<<<<<< HEAD
-    // ── Modifier shortcuts (always active) ─────────────────────────────────
     if (mod && e.key === "s") {
       e.preventDefault()
       void handleSaveRef.current()
@@ -1011,17 +442,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       return
     }
     if (mod && e.key === "k" && !e.shiftKey) return // handled globally
-=======
-    if (mod && e.key === 's') { e.preventDefault(); void handleSaveRef.current(); return; }
-    if (mod && e.key === 'Enter') { e.preventDefault(); void handleRunRef.current(); return; }
-    if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); return; }
-    if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); handleRedo(); return; }
-    if (mod && e.key === 'g') { e.preventDefault(); void openGenerate(); return; }
-    if (mod && e.key === 'l') { e.preventDefault(); handleAutoLayout(); return; }
-    if (mod && e.key === "'") { e.preventDefault(); void openComments(); return; }
-    if (mod && e.key === 'f') { e.preventDefault(); setSearchOpen((v) => !v); setSearchQuery(''); return; }
-    if (mod && e.key === 'k' && !e.shiftKey) return; // handled globally
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
     if (!inInput) {
       if (e.key === "Escape") {
@@ -1081,43 +501,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-<<<<<<< HEAD
-  function pushHistory(ns: Node[], es: Edge[]) {
-    historyStackRef.current = historyStackRef.current.slice(
-      0,
-      historyIdxRef.current + 1
-    )
-    historyStackRef.current.push({
-      nodes: ns.map((n) => ({ ...n })),
-      edges: es.map((e) => ({ ...e })),
-    })
-    historyIdxRef.current = historyStackRef.current.length - 1
-    setCanUndo(historyIdxRef.current > 0)
-    setCanRedo(false)
-  }
-
-  function handleUndo() {
-    if (historyIdxRef.current <= 0) return
-    historyIdxRef.current--
-    const snap = historyStackRef.current[historyIdxRef.current]!
-    setNodes(snap.nodes)
-    setEdges(snap.edges)
-    setCanUndo(historyIdxRef.current > 0)
-    setCanRedo(true)
-  }
-
-  function handleRedo() {
-    if (historyIdxRef.current >= historyStackRef.current.length - 1) return
-    historyIdxRef.current++
-    const snap = historyStackRef.current[historyIdxRef.current]!
-    setNodes(snap.nodes)
-    setEdges(snap.edges)
-    setCanUndo(true)
-    setCanRedo(historyIdxRef.current < historyStackRef.current.length - 1)
-  }
-
-=======
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   function handleAutoLayout() {
     const positioned = computeAutoLayout(nodesRef.current, edgesRef.current)
     setNodes(positioned)
@@ -1148,142 +531,81 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     )
   }
 
-  const { data: wf, isLoading: loading, error: workflowQueryError } = useQuery({
-    queryKey: ['workflow-full-definition', workspaceId, podId, workflowId],
+  const {
+    data: wf,
+    isLoading: loading,
+    error: workflowQueryError,
+  } = useQuery({
+    queryKey: ["workflow-full-definition", workspaceId, podId, workflowId],
     queryFn: async () => {
-      const api = await getApi();
-      return api.get<Workflow>(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`);
+      const api = await getApi()
+      return api.get<Workflow>(
+        `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`
+      )
     },
-  });
-  const error = workflowQueryError ? friendlyApiError(workflowQueryError) : null;
+  })
+  const error = workflowQueryError ? friendlyApiError(workflowQueryError) : null
 
   useEffect(() => {
-<<<<<<< HEAD
-    async function fetchWorkflow() {
-      try {
-        const token = await getToken()
-        if (!token) return
-        const api = createApiClient(token)
-        const wf = await api.get<Workflow>(
-          `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`
-        )
-        setWorkflowName(wf.name)
-        if ((wf as any).deployedAt) {
-          setIsDeployed(true)
-          setDeployedAt((wf as any).deployedAt as string)
-        }
-        const savedAutoSave = localStorage.getItem(
-          `linea:autosave:${workflowId}`
-        )
-        if (savedAutoSave === "true") setAutoSave(true)
-        const rawNodes = (wf.definition?.nodes ?? []).map((n) => ({
-          id: n.id,
-          type: n.type,
-          position: n.position,
-          data: { ...n.data, nodeType: n.type },
-          ...(n.style ? { style: n.style } : {}),
-          ...(n.parentId
-            ? { parentId: n.parentId, extent: "parent" as const }
-            : {}),
-          ...(n.type === "note" ? { connectable: false } : {}),
-          ...(n.type === "frame"
-            ? { connectable: false, selectable: true, zIndex: n.zIndex ?? -1 }
-            : {}),
-        }))
-        // Frames must come before their children so ReactFlow renders them behind
-        const loadedNodes: Node[] = [
-          ...rawNodes.filter((n) => n.type === "frame"),
-          ...rawNodes.filter((n) => n.type !== "frame"),
-        ]
-        // Ensure every workflow has a Start node
-        if (loadedNodes.length === 0) {
-          loadedNodes.push({
-            id: "start-1",
-            type: "start",
-            position: { x: 200, y: 200 },
-            data: { nodeType: "start" },
-          })
-        }
-        setNodes(loadedNodes)
-        const loadedEdges = (wf.definition?.edges ?? []).map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          sourceHandle: e.sourceHandle,
-          targetHandle: e.targetHandle,
-          label: e.label,
-        }))
-        setEdges(loadedEdges)
-        // Load saved test cases
-        const savedCases = (wf.definition as any)?.settings?.testCases as
-          | EvalTestCase[]
-          | undefined
-        if (Array.isArray(savedCases)) setTestCases(savedCases)
-        // Seed undo history with the loaded state
-        historyStackRef.current = [{ nodes: loadedNodes, edges: loadedEdges }]
-        historyIdxRef.current = 0
-        setCanUndo(false)
-        setCanRedo(false)
-        // Fit view after nodes render — use ref so the async closure always sees the current instance
-        setTimeout(
-          () =>
-            rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }),
-          100
-        )
-      } catch (err) {
-        setError(friendlyApiError(err))
-      } finally {
-        setLoading(false)
-      }
-    }
-    void fetchWorkflow()
-  }, [workflowId, podId, workspaceId, getToken, setNodes, setEdges])
-=======
-    if (!wf || seededWorkflowRef.current) return;
-    seededWorkflowRef.current = true;
-    setWorkflowName(wf.name);
+    if (!wf || seededWorkflowRef.current) return
+    seededWorkflowRef.current = true
+    setWorkflowName(wf.name)
     if (wf.deployedAt) {
-      setIsDeployed(true);
-      setDeployedAt(wf.deployedAt);
+      setIsDeployed(true)
+      setDeployedAt(wf.deployedAt)
     }
-    const savedAutoSave = localStorage.getItem(`linea:autosave:${workflowId}`);
-    if (savedAutoSave === 'true') setAutoSave(true);
+    const savedAutoSave = localStorage.getItem(`linea:autosave:${workflowId}`)
+    if (savedAutoSave === "true") setAutoSave(true)
     const rawNodes = (wf.definition?.nodes ?? []).map((n) => ({
-      id: n.id, type: n.type, position: n.position,
+      id: n.id,
+      type: n.type,
+      position: n.position,
       data: { ...n.data, nodeType: n.type },
       ...(n.style ? { style: n.style } : {}),
-      ...(n.parentId ? { parentId: n.parentId, extent: 'parent' as const } : {}),
-      ...(n.type === 'note' ? { connectable: false } : {}),
-      ...(n.type === 'frame' ? { connectable: false, selectable: true, zIndex: n.zIndex ?? -1 } : {}),
-    }));
+      ...(n.parentId
+        ? { parentId: n.parentId, extent: "parent" as const }
+        : {}),
+      ...(n.type === "note" ? { connectable: false } : {}),
+      ...(n.type === "frame"
+        ? { connectable: false, selectable: true, zIndex: n.zIndex ?? -1 }
+        : {}),
+    }))
     // Frames must come before their children so ReactFlow renders them behind
     const loadedNodes: Node[] = [
-      ...rawNodes.filter((n) => n.type === 'frame'),
-      ...rawNodes.filter((n) => n.type !== 'frame'),
-    ];
+      ...rawNodes.filter((n) => n.type === "frame"),
+      ...rawNodes.filter((n) => n.type !== "frame"),
+    ]
     // Ensure every workflow has a Start node
     if (loadedNodes.length === 0) {
       loadedNodes.push({
-        id: 'start-1', type: 'start',
+        id: "start-1",
+        type: "start",
         position: { x: 200, y: 200 },
-        data: { nodeType: 'start' },
-      });
+        data: { nodeType: "start" },
+      })
     }
-    setNodes(loadedNodes);
+    setNodes(loadedNodes)
     const loadedEdges = (wf.definition?.edges ?? []).map((e) => ({
-      id: e.id, source: e.source, target: e.target,
-      sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, label: e.label,
-    }));
-    setEdges(loadedEdges);
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+      label: e.label,
+    }))
+    setEdges(loadedEdges)
     // Load saved test cases
-    const savedCases = (wf.definition as any)?.settings?.testCases as EvalTestCase[] | undefined;
-    if (Array.isArray(savedCases)) setTestCases(savedCases);
+    const savedCases = (wf.definition as any)?.settings?.testCases as
+      EvalTestCase[] | undefined
+    if (Array.isArray(savedCases)) setTestCases(savedCases)
     // Seed undo history with the loaded state
-    pushHistory(loadedNodes, loadedEdges);
+    pushHistory(loadedNodes, loadedEdges)
     // Fit view after nodes render — use ref so the async closure always sees the current instance
-    setTimeout(() => rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }), 100);
-  }, [wf, workflowId, setNodes, setEdges, pushHistory]);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+    setTimeout(
+      () => rfInstanceRef.current?.fitView({ padding: 0.25, duration: 300 }),
+      100
+    )
+  }, [wf, workflowId, setNodes, setEdges, pushHistory])
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -1294,14 +616,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         return newEdges
       })
     },
-<<<<<<< HEAD
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setEdges]
+    [setEdges, pushHistory]
   )
-=======
-    [setEdges, pushHistory],
-  );
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   // Connection-rule enforcement: limit outgoing/incoming edges per handle
   const isValidConnection = useCallback((connection: Edge | Connection) => {
@@ -1426,7 +742,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         : {}),
     }
     setNodes((nds) => {
-<<<<<<< HEAD
       const next = [...nds, newNode]
       pushHistory(next, [...edgesRef.current, newEdge])
       return next
@@ -1434,14 +749,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     setEdges((eds) => [...eds, newEdge])
     setQuickConnect(null)
   }
-=======
-      // Frames go at the start of the array so they render behind all other nodes
-      const next = isFrame ? [newNode, ...nds] : [...nds, newNode];
-      pushHistory(next, edgesRef.current);
-      return next;
-    });
-  }, [rfInstance, setNodes, pushHistory]);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node)
@@ -1502,8 +809,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         return next
       })
     },
-    [rfInstance, setNodes]
-  ) // eslint-disable-line react-hooks/exhaustive-deps
+    [rfInstance, setNodes, pushHistory]
+  )
 
   const handleNodeUpdate = useCallback(
     (nodeId: string, data: Record<string, unknown>) => {
@@ -1602,7 +909,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     input.click()
   }
 
-<<<<<<< HEAD
   const handleNodeDelete = useCallback(
     (nodeId: string) => {
       setNodes((nds) => {
@@ -1633,34 +939,8 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
       })
       setSelectedNode(null)
     },
-    [setNodes, setEdges]
-  ) // eslint-disable-line react-hooks/exhaustive-deps
-=======
-  const handleNodeDelete = useCallback((nodeId: string) => {
-    setNodes((nds) => {
-      const target = nds.find((n) => n.id === nodeId);
-      if (target?.data?.deleteLocked) return nds;
-      let updated = nds;
-      if (target?.type === 'frame') {
-        updated = nds.map((n) => {
-          if (n.parentId !== nodeId) return n;
-          return {
-            ...n,
-            parentId: undefined,
-            extent: undefined,
-            position: { x: n.position.x + target.position.x, y: n.position.y + target.position.y },
-          };
-        });
-      }
-      const next = updated.filter((n) => n.id !== nodeId);
-      const nextEdges = edgesRef.current.filter((e) => e.source !== nodeId && e.target !== nodeId);
-      setEdges(nextEdges);
-      pushHistory(next, nextEdges);
-      return next;
-    });
-    setSelectedNode(null);
-  }, [setNodes, setEdges, pushHistory]);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+    [setNodes, setEdges, pushHistory]
+  )
 
   function duplicateNode(node: Node) {
     const newNode: Node = {
@@ -2020,203 +1300,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
     }
   }
 
-<<<<<<< HEAD
-  /* ---- SSE handler -------------------------------------------- */
-  function truncatePreview(v: unknown, max = 72): string {
-    const s = typeof v === "string" ? v : (JSON.stringify(v) ?? "")
-    return s.length > max ? s.slice(0, max) + "…" : s
-  }
-
-  function handleSSEEvent(evt: SSEEvent, executionId: string) {
-    switch (evt.type) {
-      case "node_update":
-        if (evt.nodeId) {
-          setNodes((nds) =>
-            nds.map((n) =>
-              n.id === evt.nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      status: evt.status,
-                      ...(evt.status === "completed" && evt.output !== undefined
-                        ? { _outputPreview: truncatePreview(evt.output) }
-                        : {}),
-                    },
-                  }
-                : n
-            )
-          )
-          setNodeResults((prev) => ({
-            ...prev,
-            [evt.nodeId!]: {
-              ...prev[evt.nodeId!],
-              status: evt.status ?? "unknown",
-              output: evt.output,
-              error: evt.error,
-              durationMs: evt.durationMs,
-              ...(evt.status === "running" && !prev[evt.nodeId!]?.startedAt
-                ? { startedAt: Date.now() }
-                : {}),
-            },
-          }))
-        }
-        break
-      case "execution_suspended":
-        setInterrupt(evt.interrupt ?? null)
-        setRunStatus({ id: executionId, status: "suspended" })
-        break
-      case "agent_token":
-        if (evt.nodeId && evt.delta) {
-          setStreamingTokens((prev) => ({
-            ...prev,
-            [evt.nodeId!]: (prev[evt.nodeId!] ?? "") + evt.delta!,
-          }))
-        }
-        break
-      case "execution_complete":
-        setStreamingTokens({})
-        setRunStatus({ id: executionId, status: "completed" })
-        setInterrupt(null)
-        if (evt.output !== undefined) setExecutionOutput(evt.output)
-        toast.success("Execution completed", { id: `exec-${executionId}` })
-        break
-      case "execution_failed":
-        setStreamingTokens({})
-        setRunStatus({ id: executionId, status: "failed" })
-        setInterrupt(null)
-        toast.error(
-          evt.error ? `Execution failed: ${evt.error}` : "Execution failed",
-          { id: `exec-${executionId}` }
-        )
-        break
-      case "execution_status":
-        if ((evt as any).status) {
-          setRunStatus({
-            id: executionId,
-            status: (evt as any).status as string,
-          })
-        }
-        break
-      default:
-        break
-    }
-  }
-
-  async function startSSE(token: string, executionId: string) {
-    sseAbortRef.current?.abort()
-    const ac = new AbortController()
-    sseAbortRef.current = ac
-
-    let receivedTerminal = false
-    let lastEventId: string | null = null
-
-    for (let attempt = 0; attempt <= 5; attempt++) {
-      if (ac.signal.aborted) return
-
-      try {
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${token}`,
-        }
-        if (lastEventId) headers["Last-Event-ID"] = lastEventId
-
-        const resp = await fetch(
-          `${API_BASE}/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}/events`,
-          { headers, signal: ac.signal }
-        )
-        if (!resp.ok || !resp.body) return
-
-        const reader = resp.body.getReader()
-        const decoder = new TextDecoder()
-        let buf = ""
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buf += decoder.decode(value, { stream: true })
-          const lines = buf.split("\n")
-          buf = lines.pop() ?? ""
-          for (const line of lines) {
-            if (line.startsWith("id: ")) {
-              lastEventId = line.slice(4).trim()
-              continue
-            }
-            if (!line.startsWith("data: ")) continue
-            try {
-              let parsed = JSON.parse(line.slice(6)) as any
-              // NestJS SSE serializes the full MessageEvent ({data,id}) not just .data
-              if (
-                parsed &&
-                typeof parsed === "object" &&
-                !parsed.type &&
-                parsed.data &&
-                typeof parsed.data === "object"
-              ) {
-                parsed = parsed.data
-              }
-              const evt = parsed as SSEEvent
-              if (
-                evt.type === "execution_complete" ||
-                evt.type === "execution_failed"
-              ) {
-                receivedTerminal = true
-              }
-              handleSSEEvent(evt, executionId)
-            } catch {
-              /* ignore malformed */
-            }
-          }
-        }
-
-        // Stream ended cleanly — if we missed the terminal event, poll for final status
-        if (!receivedTerminal && !ac.signal.aborted) {
-          await pollExecutionFinalStatus(token, executionId)
-        }
-        return
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return
-        // Network drop — reconnect with exponential backoff
-        if (attempt < 5 && !ac.signal.aborted) {
-          await new Promise<void>((resolve) => {
-            const delay = Math.min(1_000 * 2 ** attempt, 30_000)
-            const t = setTimeout(resolve, delay)
-            ac.signal.addEventListener("abort", () => {
-              clearTimeout(t)
-              resolve()
-            })
-          })
-        }
-      }
-    }
-  }
-
-  async function pollExecutionFinalStatus(token: string, executionId: string) {
-    try {
-      const api = createApiClient(token)
-      const ex = await api.get<{
-        status: string
-        output?: { result?: unknown } | null
-        error?: string | null
-      }>(`/workspaces/${workspaceId}/pods/${podId}/executions/${executionId}`)
-      if (ex.status === "completed") {
-        setRunStatus({ id: executionId, status: "completed" })
-        const rawOutput = ex.output?.result
-        if (rawOutput !== undefined) setExecutionOutput(rawOutput)
-        toast.success("Execution completed", { id: `exec-${executionId}` })
-      } else if (ex.status === "failed") {
-        setRunStatus({ id: executionId, status: "failed" })
-        toast.error(
-          ex.error ? `Execution failed: ${ex.error}` : "Execution failed",
-          { id: `exec-${executionId}` }
-        )
-      }
-    } catch {
-      // best-effort — toast already shown if SSE delivered the event
-    }
-  }
-
-=======
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
   function validateWorkflow(): string | null {
     if (nodes.length === 0) return "Add at least one node to run the workflow"
     if (!nodes.some((n) => n.type === "start"))
@@ -2389,12 +1472,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         onImport={handleImport}
       />
 
-<<<<<<< HEAD
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Library panel */}
-=======
-      <div className="flex flex-1 min-h-0 overflow-hidden">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <div
           className={`shrink-0 bg-background transition-all duration-200 overflow-hidden${libraryOpen ? "border-r border-border" : ""}`}
           style={{ width: libraryOpen ? 240 : 0 }}
@@ -2414,17 +1492,13 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
           />
         </button>
 
-<<<<<<< HEAD
-        {/* Center column: canvas + bottom panel */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {/* Canvas */}
           <div
             ref={reactFlowWrapper}
             className="relative min-h-0 flex-1"
             onDragOver={isGenerating ? undefined : onDragOver}
             onDrop={isGenerating ? undefined : onDrop}
           >
-            {/* Canvas node search (Ctrl+F) */}
             {searchOpen && (
               <>
                 <div
@@ -2531,7 +1605,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               </>
             )}
 
-            {/* Read-only overlay during AI generation */}
             {isGenerating && (
               <div className="pointer-events-none absolute inset-0 z-10 flex items-end justify-center pb-6">
                 <div className="flex items-center gap-2 rounded-full border bg-background/90 px-4 py-2 text-sm font-medium text-violet-600 shadow-lg backdrop-blur-sm">
@@ -2578,7 +1651,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
                 onInteractiveToggle={() => setIsInteractive((v) => !v)}
               />
 
-              {/* Minimap with chevron toggle */}
               <Panel position="bottom-right" className="!m-0 !p-0">
                 <div className="flex flex-col items-end">
                   <button
@@ -2612,7 +1684,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               </Panel>
             </ReactFlow>
 
-            {/* Multi-select toolbar */}
             {(() => {
               const sel = nodes.filter((n) => n.selected)
               if (sel.length < 2) return null
@@ -2652,7 +1723,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               )
             })()}
 
-            {/* Edge label editor */}
             {editingEdge && (
               <>
                 <div
@@ -2663,22 +1733,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
                   className="fixed z-[199]"
                   style={{ left: editingEdge.x - 64, top: editingEdge.y - 16 }}
                 >
-=======
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
-
-        <div
-          ref={reactFlowWrapper}
-          className="relative flex-1 min-h-0"
-          onDragOver={isGenerating ? undefined : onDragOver}
-          onDrop={isGenerating ? undefined : onDrop}
-        >
-          {searchOpen && (
-            <>
-              <div className="absolute inset-0 z-[90]" onClick={() => { setSearchOpen(false); setSearchQuery(''); }} />
-              <div className="absolute top-3 left-1/2 z-[91] -translate-x-1/2 w-80 rounded-xl border border-border bg-background shadow-xl overflow-hidden">
-                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border">
-                  <HugeiconsIcon icon={Search01Icon} className="size-3.5 text-muted-foreground shrink-0" />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                   <input
                     autoFocus
                     value={editingEdge.label}
@@ -2699,8 +1753,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               </>
             )}
 
-<<<<<<< HEAD
-            {/* Quick-connect node picker */}
             {quickConnect && (
               <>
                 <div
@@ -2713,196 +1765,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
                     left: quickConnect.screenX + 12,
                     top: quickConnect.screenY - 48,
                   }}
-=======
-          {isGenerating && (
-            <div className="absolute inset-0 z-10 flex items-end justify-center pb-6 pointer-events-none">
-              <div className="flex items-center gap-2 rounded-full border bg-background/90 px-4 py-2 shadow-lg text-sm font-medium text-violet-600 backdrop-blur-sm">
-                <span className="size-2 rounded-full bg-violet-500 animate-pulse" />
-                AI is building your workflow…
-              </div>
-            </div>
-          )}
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={isGenerating ? undefined : onNodesChange}
-            onEdgesChange={isGenerating ? undefined : onEdgesChange}
-            onConnect={isGenerating ? undefined : onConnect}
-            isValidConnection={isValidConnection}
-            onConnectStart={isGenerating ? undefined : onConnectStart}
-            onConnectEnd={isGenerating ? undefined : onConnectEnd}
-            onNodeClick={isGenerating ? undefined : onNodeClick}
-            onPaneClick={isGenerating ? undefined : onPaneClick}
-            onNodeContextMenu={isGenerating ? undefined : onNodeContextMenu}
-            onEdgeDoubleClick={isGenerating ? undefined : onEdgeDoubleClick}
-            onInit={(inst) => { rfInstanceRef.current = inst; setRfInstance(inst); }}
-            nodeTypes={nodeTypes}
-            nodesDraggable={!isGenerating && isInteractive}
-            nodesConnectable={!isGenerating && isInteractive}
-            elementsSelectable={!isGenerating && isInteractive}
-            panOnDrag={!isGenerating && cursorMode === 'grab'}
-            selectionOnDrag={!isGenerating && cursorMode === 'select'}
-            fitView
-            fitViewOptions={{ padding: 0.4, maxZoom: 0.85 }}
-            minZoom={0.1}
-            maxZoom={2}
-            deleteKeyCode={isGenerating ? null : ['Delete', 'Backspace']}
-            proOptions={{ hideAttribution: true }}
-            className={isGenerating ? 'pointer-events-none' : ''}
-          >
-            <CanvasControls
-              cursorMode={cursorMode}
-              setCursorMode={setCursorMode}
-              isInteractive={isInteractive}
-              onInteractiveToggle={() => setIsInteractive((v) => !v)}
-            />
-
-            <Panel position="bottom-right" className="!m-0 !p-0">
-              <div className="flex flex-col items-end">
-                <button
-                  onClick={() => setMinimapVisible((v) => !v)}
-                  title={minimapVisible ? 'Collapse minimap' : 'Expand minimap'}
-                  className="mr-2.5 flex size-5 items-center justify-center rounded-t-md border border-b-0 border-border bg-background/90 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <HugeiconsIcon
-                    icon={minimapVisible ? ArrowDown01Icon : ArrowUp01Icon}
-                    className="size-2.5"
-                  />
-                </button>
-                {minimapVisible && (
-                  <MiniMap
-                    nodeColor={(n) => NODE_COLORS[(n.data?.nodeType as string) ?? n.type ?? ''] ?? '#6b7280'}
-                    maskColor="rgba(128,128,128,0.12)"
-                    style={{ background: 'hsl(var(--background))', border: 'none' }}
-                    className="!relative !bottom-auto !right-auto !m-0 rounded-b-lg rounded-tl-lg border border-border"
-                  />
-                )}
-              </div>
-            </Panel>
-          </ReactFlow>
-
-          {(() => {
-            const sel = nodes.filter((n) => n.selected);
-            if (sel.length < 2) return null;
-            return (
-              <div className="absolute top-3 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1 rounded-lg border bg-background/95 backdrop-blur-sm px-3 py-1.5 shadow-md">
-                <span className="text-xs font-medium text-muted-foreground pr-2 border-r border-border mr-1">
-                  {sel.length} selected
-                </span>
-                <button
-                  onClick={duplicateSelected}
-                  title="Duplicate selected"
-                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-foreground hover:bg-muted transition-colors"
-                >
-                  <HugeiconsIcon icon={Copy01Icon} className="size-3.5" />
-                  Duplicate
-                </button>
-                <button
-                  onClick={groupSelectedNodes}
-                  title="Group into frame"
-                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-foreground hover:bg-muted transition-colors"
-                >
-                  <HugeiconsIcon icon={BorderAll01Icon} className="size-3.5" />
-                  Group
-                </button>
-                <button
-                  onClick={deleteSelected}
-                  title="Delete selected"
-                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-destructive hover:bg-destructive/10 transition-colors"
-                >
-                  <HugeiconsIcon icon={Delete01Icon} className="size-3.5" />
-                  Delete
-                </button>
-              </div>
-            );
-          })()}
-
-          {editingEdge && (
-            <>
-              <div className="fixed inset-0 z-[198]" onClick={commitEdgeLabel} />
-              <div
-                className="fixed z-[199]"
-                style={{ left: editingEdge.x - 64, top: editingEdge.y - 16 }}
-              >
-                <input
-                  autoFocus
-                  value={editingEdge.label}
-                  onChange={(e) => setEditingEdge((prev) => prev ? { ...prev, label: e.target.value } : null)}
-                  onBlur={commitEdgeLabel}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitEdgeLabel();
-                    if (e.key === 'Escape') setEditingEdge(null);
-                  }}
-                  placeholder="Edge label…"
-                  className="w-36 rounded-lg border-2 border-primary bg-background px-3 py-1.5 text-xs font-medium shadow-xl outline-none text-center text-foreground placeholder:text-muted-foreground/50"
-                />
-              </div>
-            </>
-          )}
-
-          {quickConnect && (
-            <>
-              <div className="fixed inset-0 z-[98]" onClick={() => setQuickConnect(null)} />
-              <div
-                className="fixed z-[99] w-48 overflow-hidden rounded-xl border border-border bg-background shadow-xl"
-                style={{ left: quickConnect.screenX + 12, top: quickConnect.screenY - 48 }}
-              >
-                <p className="border-b border-border px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Add node
-                </p>
-                <div className="grid grid-cols-2 gap-0.5 p-1.5">
-                  {QUICK_NODE_TYPES.map(({ type, label }) => (
-                    <button
-                      key={type}
-                      onClick={() => handleQuickConnectPick(type)}
-                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted"
-                    >
-                      <span
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: NODE_COLORS[type] ?? '#6366f1' }}
-                      />
-                      <span className="text-xs">{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {contextMenu && (
-            <>
-              <div className="fixed inset-0 z-[99]" onClick={() => setContextMenu(null)} />
-              <div
-                className="fixed z-[100] min-w-44 overflow-hidden rounded-lg border border-border bg-background shadow-lg py-1"
-                style={{ left: contextMenu.x, top: contextMenu.y }}
-              >
-                {(() => {
-                  const isFrame = contextMenu.node.type === 'frame';
-                  const isCanvas = contextMenu.node.type === 'note' || isFrame;
-                  const isTerminal = contextMenu.node.type === 'start' || contextMenu.node.type === 'end';
-                  type MenuItem = { icon: typeof PlayIcon; label: string; onClick: () => void };
-                  const items: MenuItem[] = [];
-                  if (!isCanvas && !isTerminal) items.push({ icon: PlayIcon, label: 'Test node', onClick: () => { setTestNodeInput('{}'); setTestNodeDialog({ node: contextMenu.node }); setContextMenu(null); } });
-                  items.push({ icon: Copy01Icon, label: 'Duplicate', onClick: () => duplicateNode(contextMenu.node) });
-                  if (isFrame) items.push({ icon: BorderAll01Icon, label: 'Ungroup', onClick: () => ungroupFrame(contextMenu.node.id) });
-                  if (!isFrame) items.push({ icon: LockKeyIcon, label: contextMenu.node.data?.positionLocked ? 'Unlock position' : 'Lock position', onClick: () => toggleNodePositionLock(contextMenu.node) });
-                  if (!isFrame) items.push({ icon: SquareLock01Icon, label: contextMenu.node.data?.deleteLocked ? 'Allow deletion' : 'Lock from deletion', onClick: () => toggleNodeDeletionLock(contextMenu.node) });
-                  return items.map(({ icon, label, onClick }) => (
-                    <button
-                      key={label}
-                      onClick={onClick}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
-                    >
-                      <HugeiconsIcon icon={icon} className="size-3.5 text-muted-foreground shrink-0" />
-                      {label}
-                    </button>
-                  ));
-                })()}
-                <div className="h-px bg-border my-1 mx-1" />
-                <button
-                  onClick={() => { handleNodeDelete(contextMenu.node.id); setContextMenu(null); }}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                 >
                   <p className="border-b border-border px-3 py-1.5 text-[9px] font-bold tracking-widest text-muted-foreground uppercase">
                     Add node
@@ -2928,8 +1790,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
               </>
             )}
 
-<<<<<<< HEAD
-            {/* Context menu */}
             {contextMenu && (
               <>
                 <div
@@ -3022,7 +1882,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             )}
           </div>
 
-          {/* Bottom panel — centered under canvas only */}
           <BottomPanel
             nodes={nodes}
             nodeResults={nodeResults}
@@ -3032,27 +1891,10 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             workspaceId={workspaceId}
             podId={podId}
             workflowId={workflowId}
-            token={authToken}
             onRetryNode={handleRetryNode}
             executionOutput={executionOutput}
           />
         </div>
-        {/* end center column */}
-=======
-        <BottomPanel
-          nodes={nodes}
-          nodeResults={nodeResults}
-          streamingTokens={streamingTokens}
-          validationState={validationState}
-          runStatus={runStatus}
-          workspaceId={workspaceId}
-          podId={podId}
-          workflowId={workflowId}
-          onRetryNode={handleRetryNode}
-          executionOutput={executionOutput}
-        />
-        </div>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
         <div
           className={`shrink-0 overflow-hidden transition-all duration-200${selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen ? "border-l border-border" : ""}`}
@@ -3070,7 +1912,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
                 : 0,
           }}
         >
-<<<<<<< HEAD
           {selectedNode &&
             !generateOpen &&
             !deployPanelOpen &&
@@ -3080,6 +1921,7 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
             !evalsOpen &&
             !chatPreviewOpen && (
               <NodePanel
+                key={selectedNode.id}
                 node={selectedNode}
                 nodes={nodes}
                 edges={edges}
@@ -3087,31 +1929,12 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
                 onUpdate={handleNodeUpdate}
                 onDelete={handleNodeDelete}
                 nodeResult={nodeResults[selectedNode.id]}
-                token={authToken}
                 workspaceId={workspaceId}
                 podId={podId}
                 executionId={runStatus?.id}
                 onRetry={() => handleRetryNode(selectedNode.id)}
               />
             )}
-=======
-          {selectedNode && !generateOpen && !deployPanelOpen && !historyOpen && !versionsOpen && !shareOpen && !evalsOpen && !chatPreviewOpen && (
-            <NodePanel
-              key={selectedNode.id}
-              node={selectedNode}
-              nodes={nodes}
-              edges={edges}
-              onClose={() => setSelectedNode(null)}
-              onUpdate={handleNodeUpdate}
-              onDelete={handleNodeDelete}
-              nodeResult={nodeResults[selectedNode.id]}
-              workspaceId={workspaceId}
-              podId={podId}
-              executionId={runStatus?.id}
-              onRetry={() => handleRetryNode(selectedNode.id)}
-            />
-          )}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         </div>
 
         <div
@@ -3264,10 +2087,6 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         </div>
       </div>
 
-<<<<<<< HEAD
-      {/* Diff viewer */}
-=======
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       {diffVersion !== null && (
         <DiffPanel
           workspaceId={workspaceId}
@@ -3349,17 +2168,12 @@ function BuilderInner({ workflowId, podId, workspaceId }: WorkflowBuilderProps) 
         </div>
       )}
 
-<<<<<<< HEAD
-      {/* Test node dialog */}
       <Dialog
         open={!!testNodeDialog}
         onOpenChange={(o) => {
           if (!o) setTestNodeDialog(null)
         }}
       >
-=======
-      <Dialog open={!!testNodeDialog} onOpenChange={(o) => { if (!o) setTestNodeDialog(null); }}>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <div className="flex items-center gap-2">

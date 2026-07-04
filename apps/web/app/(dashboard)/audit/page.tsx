@@ -1,23 +1,13 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
-import { useAuth } from "@clerk/nextjs"
+import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { useWorkspace } from "@/contexts/workspace-context"
-import { createApiClient } from "@/lib/api"
+import { useApiClient } from "@/hooks/use-api-client"
+import { ApiError } from "@/lib/api"
 import { Button } from "@linea/ui/components/button"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { HugeiconsIcon } from "@hugeicons/react"
-=======
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { useApiClient } from '@/hooks/use-api-client';
-import { ApiError } from '@/lib/api';
-import { Button } from '@linea/ui/components/button';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { HugeiconsIcon } from '@hugeicons/react';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   BookOpen01Icon,
   Search01Icon,
@@ -129,72 +119,34 @@ function timeLabel(iso: string): string {
 }
 
 export default function AuditPage() {
-<<<<<<< HEAD
-  const { getToken } = useAuth()
+  const getApi = useApiClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
-  const [logs, setLogs] = useState<AuditLog[]>([])
-  const [loading, setLoading] = useState(true)
-  const [unavailable, setUnavailable] = useState(false)
+  const wsId = activeWorkspace?.id ?? ""
   const [period, setPeriod] = useState<Period>("7d")
   const [resourceType, setResourceType] = useState("all")
   const [search, setSearch] = useState("")
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (wsLoading || !activeWorkspace) return
-    setLoading(true)
-    setUnavailable(false)
-
-    async function load() {
-      const token = await getToken()
-      if (!token || !activeWorkspace) return
-      try {
-        const api = createApiClient(token)
-        const params = new URLSearchParams()
-        if (period !== "all") params.set("period", period)
-        if (resourceType !== "all") params.set("resourceType", resourceType)
-        const data = await api.get<AuditLog[]>(
-          `/workspaces/${activeWorkspace.id}/audit-logs?${params.toString()}`
-        )
-        setLogs(data ?? [])
-      } catch (err: unknown) {
-        const status = (err as { status?: number })?.status
-        if (status === 404 || status === 501) {
-          setUnavailable(true)
-          setLogs([])
-        } else {
-          setLogs([])
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void load()
-  }, [activeWorkspace, wsLoading, period, resourceType, getToken])
-=======
-  const getApi = useApiClient();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const wsId = activeWorkspace?.id ?? '';
-  const [period, setPeriod] = useState<Period>('7d');
-  const [resourceType, setResourceType] = useState('all');
-  const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  const { data: logs = [], isLoading: loading, error } = useQuery<AuditLog[]>({
-    queryKey: ['audit-logs', wsId, period, resourceType],
+  const {
+    data: logs = [],
+    isLoading: loading,
+    error,
+  } = useQuery<AuditLog[]>({
+    queryKey: ["audit-logs", wsId, period, resourceType],
     enabled: !!wsId,
     queryFn: async () => {
-      const api = await getApi();
-      const params = new URLSearchParams();
-      if (period !== 'all') params.set('period', period);
-      if (resourceType !== 'all') params.set('resourceType', resourceType);
-      return api.get<AuditLog[]>(`/workspaces/${wsId}/audit-logs?${params.toString()}`);
+      const api = await getApi()
+      const params = new URLSearchParams()
+      if (period !== "all") params.set("period", period)
+      if (resourceType !== "all") params.set("resourceType", resourceType)
+      return api.get<AuditLog[]>(
+        `/workspaces/${wsId}/audit-logs?${params.toString()}`
+      )
     },
-  });
+  })
 
-  const unavailable = error instanceof ApiError && (error.status === 404 || error.status === 501);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  const unavailable =
+    error instanceof ApiError && (error.status === 404 || error.status === 501)
 
   const filtered = logs.filter((l) => {
     if (!search.trim()) return true
@@ -218,12 +170,7 @@ export default function AuditPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-<<<<<<< HEAD
-        {/* Search */}
         <div className="relative max-w-xs min-w-[180px] flex-1">
-=======
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           <HugeiconsIcon
             icon={Search01Icon}
             className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -345,18 +292,11 @@ export default function AuditPage() {
                       <HugeiconsIcon icon={ActionIcon} className="size-4" />
                     </span>
 
-<<<<<<< HEAD
-                    {/* Action + resource */}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-sm font-medium">
                           {formatAction(log.action)}
                         </span>
-=======
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-medium">{formatAction(log.action)}</span>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                         {log.resourceName && (
                           <>
                             <span className="text-xs text-muted-foreground/40">
@@ -384,14 +324,8 @@ export default function AuditPage() {
                       </div>
                     </div>
 
-<<<<<<< HEAD
-                    {/* Time + expand */}
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="text-xs whitespace-nowrap text-muted-foreground">
-=======
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                         {timeLabel(log.createdAt)}
                       </span>
                       {hasMetadata && (

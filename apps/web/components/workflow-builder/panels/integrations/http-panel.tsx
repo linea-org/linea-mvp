@@ -7,19 +7,13 @@ import { Textarea } from "@linea/ui/components/textarea"
 import { Label } from "@linea/ui/components/label"
 import { Switch } from "@linea/ui/components/switch"
 import {
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/http-panel.tsx
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@linea/ui/components/select"
-import { VariableChips } from "../variable-picker"
-=======
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@linea/ui/components/select';
-import { VariableChips } from '../../variable-picker';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/integrations/http-panel.tsx
+import { VariableChips } from "../../variable-picker"
 
 interface HttpPanelProps {
   data: Record<string, unknown>

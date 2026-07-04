@@ -1,11 +1,12 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
+import { Suspense, useState } from "react"
+import { useForm } from "react-hook-form"
 import { useSearchParams } from "next/navigation"
-import { useAuth } from "@clerk/nextjs"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useWorkspace } from "@/contexts/workspace-context"
-import { createApiClient } from "@/lib/api"
+import { useApiClient } from "@/hooks/use-api-client"
+import { PageSpinner } from "@linea/ui/components/page-spinner"
 import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
@@ -16,22 +17,6 @@ import {
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { Badge } from "@linea/ui/components/badge"
 import { Separator } from "@linea/ui/components/separator"
-=======
-import { Suspense, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { useSearchParams } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { useApiClient } from '@/hooks/use-api-client';
-import { PageSpinner } from '@linea/ui/components/page-spinner';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { Badge } from '@linea/ui/components/badge';
-import { Separator } from '@linea/ui/components/separator';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -49,11 +34,6 @@ import {
   LinkSquare01Icon,
 } from "@hugeicons/core-free-icons"
 
-<<<<<<< HEAD
-const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3000"
-
-=======
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 interface OAuthConnection {
   id: string
   provider: string
@@ -73,29 +53,54 @@ const OAUTH_PROVIDERS = [
 ]
 
 interface ProviderConnection {
-  id: string;
-  provider: string;
-  createdAt: string;
-  enabled: boolean;
+  id: string
+  provider: string
+  createdAt: string
+  enabled: boolean
 }
 
 interface ModelDefinition {
-  id: string;
-  name: string;
-  provider: string;
+  id: string
+  name: string
+  provider: string
 }
 
 const AI_PROVIDERS = [
-  { id: 'anthropic', label: 'Anthropic', placeholder: 'sk-ant-…', field: 'apiKey' as const },
-  { id: 'openai',     label: 'OpenAI',    placeholder: 'sk-…',      field: 'apiKey' as const },
-  { id: 'groq',       label: 'Groq',      placeholder: 'gsk_…',     field: 'apiKey' as const },
-  { id: 'google',     label: 'Google AI', placeholder: 'AIza…',     field: 'apiKey' as const },
-  { id: 'xai',        label: 'xAI (Grok)', placeholder: 'xai-…',    field: 'apiKey' as const },
-  { id: 'ollama',     label: 'Ollama (local)', placeholder: 'http://localhost:11434', field: 'host' as const },
-];
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    placeholder: "sk-ant-…",
+    field: "apiKey" as const,
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    placeholder: "sk-…",
+    field: "apiKey" as const,
+  },
+  { id: "groq", label: "Groq", placeholder: "gsk_…", field: "apiKey" as const },
+  {
+    id: "google",
+    label: "Google AI",
+    placeholder: "AIza…",
+    field: "apiKey" as const,
+  },
+  {
+    id: "xai",
+    label: "xAI (Grok)",
+    placeholder: "xai-…",
+    field: "apiKey" as const,
+  },
+  {
+    id: "ollama",
+    label: "Ollama (local)",
+    placeholder: "http://localhost:11434",
+    field: "host" as const,
+  },
+]
 
 interface AIKeyFormState {
-  value: string;
+  value: string
 }
 
 function AIProviderCard({
@@ -105,73 +110,95 @@ function AIProviderCard({
   models,
   getApi,
 }: {
-  wsId: string;
-  provider: (typeof AI_PROVIDERS)[number];
-  connection: ProviderConnection | undefined;
-  models: ModelDefinition[];
-  getApi: ReturnType<typeof useApiClient>;
+  wsId: string
+  provider: (typeof AI_PROVIDERS)[number]
+  connection: ProviderConnection | undefined
+  models: ModelDefinition[]
+  getApi: ReturnType<typeof useApiClient>
 }) {
-  const queryClient = useQueryClient();
-  const { register, handleSubmit, reset, watch } = useForm<AIKeyFormState>({ defaultValues: { value: '' } });
-  const value = watch('value');
+  const queryClient = useQueryClient()
+  const { register, handleSubmit, reset, watch } = useForm<AIKeyFormState>({
+    defaultValues: { value: "" },
+  })
+  const value = watch("value")
 
   const connect = useMutation({
     mutationFn: async ({ value }: AIKeyFormState) => {
-      const api = await getApi();
-      if (connection) await api.delete(`/workspaces/${wsId}/connections/${connection.id}`);
-      const config = provider.field === 'host' ? { host: value.trim() } : { apiKey: value.trim() };
-      return api.post<ProviderConnection>(`/workspaces/${wsId}/connections/${provider.id}`, {
-        config: JSON.stringify(config),
-      });
+      const api = await getApi()
+      if (connection)
+        await api.delete(`/workspaces/${wsId}/connections/${connection.id}`)
+      const config =
+        provider.field === "host"
+          ? { host: value.trim() }
+          : { apiKey: value.trim() }
+      return api.post<ProviderConnection>(
+        `/workspaces/${wsId}/connections/${provider.id}`,
+        {
+          config: JSON.stringify(config),
+        }
+      )
     },
     onSuccess: (created) => {
-      queryClient.setQueryData<ProviderConnection[]>(['connections', wsId], (prev = []) => [
-        ...prev.filter((c) => c.provider !== provider.id),
-        created,
-      ]);
-      reset({ value: '' });
+      queryClient.setQueryData<ProviderConnection[]>(
+        ["connections", wsId],
+        (prev = []) => [
+          ...prev.filter((c) => c.provider !== provider.id),
+          created,
+        ]
+      )
+      reset({ value: "" })
     },
-  });
+  })
 
   const disconnect = useMutation({
     mutationFn: async () => {
-      if (!connection) return;
-      const api = await getApi();
-      await api.delete(`/workspaces/${wsId}/connections/${connection.id}`);
-      return connection.id;
+      if (!connection) return
+      const api = await getApi()
+      await api.delete(`/workspaces/${wsId}/connections/${connection.id}`)
+      return connection.id
     },
     onSuccess: (id) => {
-      if (!id) return;
-      queryClient.setQueryData<ProviderConnection[]>(['connections', wsId], (prev = []) => prev.filter((c) => c.id !== id));
+      if (!id) return
+      queryClient.setQueryData<ProviderConnection[]>(
+        ["connections", wsId],
+        (prev = []) => prev.filter((c) => c.id !== id)
+      )
     },
-  });
+  })
 
-  const providerModels = models.filter((m) => m.provider === provider.id);
-  const onSave = handleSubmit((values) => connect.mutate(values));
+  const providerModels = models.filter((m) => m.provider === provider.id)
+  const onSave = handleSubmit((values) => connect.mutate(values))
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
+    <div className="space-y-3 rounded-lg border bg-card p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">{provider.label}</p>
             {connection ? (
-              <Badge variant="default" className="text-[10px]">connected</Badge>
+              <Badge variant="default" className="text-[10px]">
+                connected
+              </Badge>
             ) : (
-              <Badge variant="outline" className="text-[10px]">not set</Badge>
+              <Badge variant="outline" className="text-[10px]">
+                not set
+              </Badge>
             )}
           </div>
           {providerModels.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
+            <div className="mt-1.5 flex flex-wrap gap-1">
               {providerModels.map((m) => (
-                <span key={m.id} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
+                <span
+                  key={m.id}
+                  className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+                >
                   {m.name}
                 </span>
               ))}
             </div>
           )}
           {connection && (
-            <p className="text-[10px] text-muted-foreground mt-1">
+            <p className="mt-1 text-[10px] text-muted-foreground">
               Set {new Date(connection.createdAt).toLocaleDateString()}
             </p>
           )}
@@ -180,28 +207,37 @@ function AIProviderCard({
           <Button
             size="sm"
             variant="ghost"
-            className="shrink-0 text-destructive hover:text-destructive text-xs"
+            className="shrink-0 text-xs text-destructive hover:text-destructive"
             disabled={disconnect.isPending}
             onClick={() => disconnect.mutate()}
           >
-            {disconnect.isPending ? 'Removing…' : 'Remove'}
+            {disconnect.isPending ? "Removing…" : "Remove"}
           </Button>
         )}
       </div>
 
       <form onSubmit={onSave} className="flex gap-2">
         <Input
-          type={provider.field === 'host' ? 'text' : 'password'}
-          placeholder={connection ? '••••••••••••  (re-enter to rotate)' : provider.placeholder}
-          className="font-mono text-sm flex-1"
-          {...register('value')}
+          type={provider.field === "host" ? "text" : "password"}
+          placeholder={
+            connection
+              ? "••••••••••••  (re-enter to rotate)"
+              : provider.placeholder
+          }
+          className="flex-1 font-mono text-sm"
+          {...register("value")}
         />
-        <Button size="sm" className="self-end" type="submit" disabled={!value.trim() || connect.isPending}>
-          {connect.isPending ? 'Saving…' : connection ? 'Rotate' : 'Save'}
+        <Button
+          size="sm"
+          className="self-end"
+          type="submit"
+          disabled={!value.trim() || connect.isPending}
+        >
+          {connect.isPending ? "Saving…" : connection ? "Rotate" : "Save"}
         </Button>
       </form>
     </div>
-  );
+  )
 }
 
 interface McpServer {
@@ -237,86 +273,124 @@ const STATUS_VARIANT: Record<
   unknown: "outline",
 }
 
-<<<<<<< HEAD
-export default function ConnectionsPage() {
-  const { getToken } = useAuth()
+function ConnectionsPageInner() {
+  const getApi = useApiClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
   const searchParams = useSearchParams()
-  const [servers, setServers] = useState<McpServer[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const wsId = activeWorkspace?.id ?? ""
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<McpServer | null>(null)
-  const [form, setForm] = useState<FormState>(BLANK)
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState<string | null>(null)
+  const { register, handleSubmit, reset, watch } = useForm<FormState>({
+    defaultValues: BLANK,
+  })
 
-  const [oauthConnections, setOauthConnections] = useState<OAuthConnection[]>(
-    []
-  )
-  const [oauthLoading, setOauthLoading] = useState(true)
-  const [disconnecting, setDisconnecting] = useState<string | null>(null)
+  const { data: servers = [], isLoading: loading } = useQuery<McpServer[]>({
+    queryKey: ["mcp-servers", wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<McpServer[]>(`/workspaces/${wsId}/mcp-servers`)
+    },
+  })
 
-  async function load() {
-    if (!activeWorkspace) return
-    setLoading(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const data = await api.get<McpServer[]>(
-        `/workspaces/${activeWorkspace.id}/mcp-servers`
+  const { data: oauthConnections = [], isLoading: oauthLoading } = useQuery<
+    OAuthConnection[]
+  >({
+    queryKey: ["oauth-connections", wsId, searchParams.get("connected")],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<OAuthConnection[]>(`/workspaces/${wsId}/oauth/connections`)
+    },
+  })
+
+  const {
+    data: providerConnections = [],
+    isLoading: providerConnectionsLoading,
+  } = useQuery<ProviderConnection[]>({
+    queryKey: ["connections", wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<ProviderConnection[]>(`/workspaces/${wsId}/connections`)
+    },
+  })
+
+  const { data: models = [] } = useQuery<ModelDefinition[]>({
+    queryKey: ["models"],
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<ModelDefinition[]>("/models")
+    },
+  })
+
+  const saveServer = useMutation({
+    mutationFn: async (values: FormState) => {
+      const api = await getApi()
+      const body: Record<string, string> = {
+        name: values.name.trim(),
+        url: values.url.trim(),
+        authType: values.authType,
+      }
+      if (values.accessToken.trim())
+        body.accessToken = values.accessToken.trim()
+      return editTarget
+        ? api.patch<McpServer>(
+            `/workspaces/${wsId}/mcp-servers/${editTarget.id}`,
+            body
+          )
+        : api.post<McpServer>(`/workspaces/${wsId}/mcp-servers`, body)
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<McpServer[]>(
+        ["mcp-servers", wsId],
+        (prev = []) =>
+          editTarget
+            ? prev.map((s) => (s.id === result.id ? result : s))
+            : [result, ...prev]
       )
-      setServers(data)
-    } finally {
-      setLoading(false)
-    }
-  }
+      setDialogOpen(false)
+    },
+  })
 
-  async function loadOAuth() {
-    if (!activeWorkspace) return
-    setOauthLoading(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const data = await api.get<OAuthConnection[]>(
-        `/workspaces/${activeWorkspace.id}/oauth/connections`
+  const deleteServer = useMutation({
+    mutationFn: async (server: McpServer) => {
+      const api = await getApi()
+      await api.delete(`/workspaces/${wsId}/mcp-servers/${server.id}`)
+      return server.id
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<McpServer[]>(
+        ["mcp-servers", wsId],
+        (prev = []) => prev.filter((s) => s.id !== id)
       )
-      setOauthConnections(data)
-    } catch {
-      setOauthConnections([])
-    } finally {
-      setOauthLoading(false)
-    }
-  }
+    },
+  })
 
-  useEffect(() => {
-    if (wsLoading) return
-    if (!activeWorkspace) {
-      setLoading(false)
-      setOauthLoading(false)
-      return
-    }
-    void load()
-    void loadOAuth()
-  }, [activeWorkspace, wsLoading])
-
-  useEffect(() => {
-    const connected = searchParams.get("connected")
-    if (connected && activeWorkspace) {
-      void loadOAuth()
-    }
-  }, [searchParams])
+  const disconnectOAuth = useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApi()
+      await api.delete(`/workspaces/${wsId}/oauth/connections/${id}`)
+      return id
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<OAuthConnection[]>(
+        ["oauth-connections", wsId, searchParams.get("connected")],
+        (prev = []) => prev.filter((c) => c.id !== id)
+      )
+    },
+  })
 
   function openCreate() {
     setEditTarget(null)
-    setForm(BLANK)
+    reset(BLANK)
     setDialogOpen(true)
   }
 
   function openEdit(server: McpServer) {
     setEditTarget(server)
-    setForm({
+    reset({
       name: server.name,
       url: server.url,
       authType: server.authType,
@@ -325,199 +399,20 @@ export default function ConnectionsPage() {
     setDialogOpen(true)
   }
 
-  async function handleSave() {
-    if (!activeWorkspace || !form.name.trim() || !form.url.trim()) return
-    setSaving(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const body: Record<string, string> = {
-        name: form.name.trim(),
-        url: form.url.trim(),
-        authType: form.authType,
-      }
-      if (form.accessToken.trim()) body.accessToken = form.accessToken.trim()
-
-      if (editTarget) {
-        const updated = await api.patch<McpServer>(
-          `/workspaces/${activeWorkspace.id}/mcp-servers/${editTarget.id}`,
-          body
-        )
-        setServers((prev) =>
-          prev.map((s) => (s.id === updated.id ? updated : s))
-        )
-      } else {
-        const created = await api.post<McpServer>(
-          `/workspaces/${activeWorkspace.id}/mcp-servers`,
-          body
-        )
-        setServers((prev) => [created, ...prev])
-      }
-      setDialogOpen(false)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleDelete(server: McpServer) {
-    if (!activeWorkspace) return
-    setDeleting(server.id)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      await api.delete(
-        `/workspaces/${activeWorkspace.id}/mcp-servers/${server.id}`
-      )
-      setServers((prev) => prev.filter((s) => s.id !== server.id))
-    } finally {
-      setDeleting(null)
-    }
-  }
-
-  async function handleDisconnectOAuth(id: string) {
-    if (!activeWorkspace) return
-    setDisconnecting(id)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      await api.delete(
-        `/workspaces/${activeWorkspace.id}/oauth/connections/${id}`
-      )
-      setOauthConnections((prev) => prev.filter((c) => c.id !== id))
-    } finally {
-      setDisconnecting(null)
-    }
-  }
-
   async function handleConnectOAuth(provider: string) {
     if (!activeWorkspace) return
-    const token = await getToken()
-    if (!token) return
-    const api = createApiClient(token)
+    const api = await getApi()
     const data = await api.get<{ url: string }>(
       `/workspaces/${activeWorkspace.id}/oauth/${provider}/connect-url`
     )
     window.location.href = data.url
   }
 
-  const needsToken = form.authType !== "none"
-=======
-function ConnectionsPageInner() {
-  const getApi = useApiClient();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
-  const wsId = activeWorkspace?.id ?? '';
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<McpServer | null>(null);
-  const { register, handleSubmit, reset, watch } = useForm<FormState>({ defaultValues: BLANK });
-
-  const { data: servers = [], isLoading: loading } = useQuery<McpServer[]>({
-    queryKey: ['mcp-servers', wsId],
-    enabled: !!wsId,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<McpServer[]>(`/workspaces/${wsId}/mcp-servers`);
-    },
-  });
-
-  const { data: oauthConnections = [], isLoading: oauthLoading } = useQuery<OAuthConnection[]>({
-    queryKey: ['oauth-connections', wsId, searchParams.get('connected')],
-    enabled: !!wsId,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<OAuthConnection[]>(`/workspaces/${wsId}/oauth/connections`);
-    },
-  });
-
-  const { data: providerConnections = [], isLoading: providerConnectionsLoading } = useQuery<ProviderConnection[]>({
-    queryKey: ['connections', wsId],
-    enabled: !!wsId,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<ProviderConnection[]>(`/workspaces/${wsId}/connections`);
-    },
-  });
-
-  const { data: models = [] } = useQuery<ModelDefinition[]>({
-    queryKey: ['models'],
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<ModelDefinition[]>('/models');
-    },
-  });
-
-  const saveServer = useMutation({
-    mutationFn: async (values: FormState) => {
-      const api = await getApi();
-      const body: Record<string, string> = {
-        name: values.name.trim(),
-        url: values.url.trim(),
-        authType: values.authType,
-      };
-      if (values.accessToken.trim()) body.accessToken = values.accessToken.trim();
-      return editTarget
-        ? api.patch<McpServer>(`/workspaces/${wsId}/mcp-servers/${editTarget.id}`, body)
-        : api.post<McpServer>(`/workspaces/${wsId}/mcp-servers`, body);
-    },
-    onSuccess: (result) => {
-      queryClient.setQueryData<McpServer[]>(['mcp-servers', wsId], (prev = []) =>
-        editTarget ? prev.map((s) => (s.id === result.id ? result : s)) : [result, ...prev]);
-      setDialogOpen(false);
-    },
-  });
-
-  const deleteServer = useMutation({
-    mutationFn: async (server: McpServer) => {
-      const api = await getApi();
-      await api.delete(`/workspaces/${wsId}/mcp-servers/${server.id}`);
-      return server.id;
-    },
-    onSuccess: (id) => {
-      queryClient.setQueryData<McpServer[]>(['mcp-servers', wsId], (prev = []) => prev.filter((s) => s.id !== id));
-    },
-  });
-
-  const disconnectOAuth = useMutation({
-    mutationFn: async (id: string) => {
-      const api = await getApi();
-      await api.delete(`/workspaces/${wsId}/oauth/connections/${id}`);
-      return id;
-    },
-    onSuccess: (id) => {
-      queryClient.setQueryData<OAuthConnection[]>(['oauth-connections', wsId, searchParams.get('connected')],
-        (prev = []) => prev.filter((c) => c.id !== id));
-    },
-  });
-
-  function openCreate() {
-    setEditTarget(null);
-    reset(BLANK);
-    setDialogOpen(true);
-  }
-
-  function openEdit(server: McpServer) {
-    setEditTarget(server);
-    reset({ name: server.name, url: server.url, authType: server.authType, accessToken: '' });
-    setDialogOpen(true);
-  }
-
-  async function handleConnectOAuth(provider: string) {
-    if (!activeWorkspace) return;
-    const api = await getApi();
-    const data = await api.get<{ url: string }>(`/workspaces/${activeWorkspace.id}/oauth/${provider}/connect-url`);
-    window.location.href = data.url;
-  }
-
-  const authType = watch('authType');
-  const nameValue = watch('name');
-  const urlValue = watch('url');
-  const needsToken = authType !== 'none';
-  const onSave = handleSubmit((values) => saveServer.mutate(values));
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  const authType = watch("authType")
+  const nameValue = watch("name")
+  const urlValue = watch("url")
+  const needsToken = authType !== "none"
+  const onSave = handleSubmit((values) => saveServer.mutate(values))
 
   return (
     <div className="space-y-6">
@@ -600,7 +495,10 @@ function ConnectionsPageInner() {
                 <Button
                   size="icon-sm"
                   variant="destructive"
-                  disabled={deleteServer.isPending && deleteServer.variables?.id === server.id}
+                  disabled={
+                    deleteServer.isPending &&
+                    deleteServer.variables?.id === server.id
+                  }
                   onClick={() => deleteServer.mutate(server)}
                 >
                   <HugeiconsIcon icon={Delete01Icon} />
@@ -676,21 +574,20 @@ function ConnectionsPageInner() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={disconnectOAuth.isPending && disconnectOAuth.variables === conn.id}
+                      disabled={
+                        disconnectOAuth.isPending &&
+                        disconnectOAuth.variables === conn.id
+                      }
                       onClick={() => disconnectOAuth.mutate(conn.id)}
                     >
-<<<<<<< HEAD
                       <HugeiconsIcon
                         icon={Delete01Icon}
                         className="mr-1.5 size-3.5"
                       />
-                      {disconnecting === conn.id
+                      {disconnectOAuth.isPending &&
+                      disconnectOAuth.variables === conn.id
                         ? "Disconnecting…"
                         : "Disconnect"}
-=======
-                      <HugeiconsIcon icon={Delete01Icon} className="mr-1.5 size-3.5" />
-                      {disconnectOAuth.isPending && disconnectOAuth.variables === conn.id ? 'Disconnecting…' : 'Disconnect'}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                     </Button>
                   ) : (
                     <Button
@@ -717,13 +614,16 @@ function ConnectionsPageInner() {
         <div>
           <h2 className="text-base font-semibold">AI Model Keys</h2>
           <p className="text-sm text-muted-foreground">
-            Add API keys for AI model providers. Keys are stored encrypted and used by Agent nodes when selecting a model.
+            Add API keys for AI model providers. Keys are stored encrypted and
+            used by Agent nodes when selecting a model.
           </p>
         </div>
 
         {providerConnectionsLoading ? (
           <div className="space-y-3">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)}
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            ))}
           </div>
         ) : (
           <div className="space-y-4">
@@ -732,7 +632,9 @@ function ConnectionsPageInner() {
                 key={provider.id}
                 wsId={wsId}
                 provider={provider}
-                connection={providerConnections.find((c) => c.provider === provider.id)}
+                connection={providerConnections.find(
+                  (c) => c.provider === provider.id
+                )}
                 models={models}
                 getApi={getApi}
               />
@@ -751,49 +653,22 @@ function ConnectionsPageInner() {
           <form onSubmit={onSave} className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label>Name</Label>
-<<<<<<< HEAD
               <Input
                 placeholder="e.g. Firecrawl, Browserbase"
-                value={form.name}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, name: e.target.value }))
-                }
                 autoFocus
+                {...register("name")}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Server URL</Label>
               <Input
                 placeholder="https://mcp.example.com"
-                value={form.url}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, url: e.target.value }))
-                }
+                {...register("url")}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Auth type</Label>
-              <NativeSelect
-                value={form.authType}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    authType: e.target.value as FormState["authType"],
-                  }))
-                }
-                className="w-full"
-              >
-=======
-              <Input placeholder="e.g. Firecrawl, Browserbase" autoFocus {...register('name')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Server URL</Label>
-              <Input placeholder="https://mcp.example.com" {...register('url')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Auth type</Label>
-              <NativeSelect className="w-full" {...register('authType')}>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+              <NativeSelect className="w-full" {...register("authType")}>
                 <NativeSelectOption value="none">None</NativeSelectOption>
                 <NativeSelectOption value="bearer">
                   Bearer token
@@ -814,18 +689,10 @@ function ConnectionsPageInner() {
                 </Label>
                 <Input
                   type="password"
-<<<<<<< HEAD
                   placeholder={
                     editTarget?.hasToken ? "••••••••" : "Paste token…"
                   }
-                  value={form.accessToken}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, accessToken: e.target.value }))
-                  }
-=======
-                  placeholder={editTarget?.hasToken ? '••••••••' : 'Paste token…'}
-                  {...register('accessToken')}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+                  {...register("accessToken")}
                 />
               </div>
             )}
@@ -836,13 +703,15 @@ function ConnectionsPageInner() {
             </Button>
             <Button
               onClick={onSave}
-              disabled={!nameValue.trim() || !urlValue.trim() || saveServer.isPending}
+              disabled={
+                !nameValue.trim() || !urlValue.trim() || saveServer.isPending
+              }
             >
-<<<<<<< HEAD
-              {saving ? "Saving…" : editTarget ? "Update" : "Add connection"}
-=======
-              {saveServer.isPending ? 'Saving…' : editTarget ? 'Update' : 'Add connection'}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+              {saveServer.isPending
+                ? "Saving…"
+                : editTarget
+                  ? "Update"
+                  : "Add connection"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -856,5 +725,5 @@ export default function ConnectionsPage() {
     <Suspense fallback={<PageSpinner />}>
       <ConnectionsPageInner />
     </Suspense>
-  );
+  )
 }

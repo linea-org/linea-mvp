@@ -5,7 +5,6 @@ import { useAuth } from "@clerk/nextjs"
 import { useQuery } from "@tanstack/react-query"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-<<<<<<< HEAD
   PlayIcon,
   Loading01Icon,
   Tick01Icon,
@@ -15,20 +14,10 @@ import {
   Clock01Icon,
 } from "@hugeicons/core-free-icons"
 import { useWorkspace } from "@/contexts/workspace-context"
-import { createApiClient, friendlyApiError } from "@/lib/api"
+import { createApiClient, friendlyApiError, unwrapList } from "@/lib/api"
 import { Button } from "@linea/ui/components/button"
 import { Badge } from "@linea/ui/components/badge"
 import { Skeleton } from "@linea/ui/components/skeleton"
-=======
-  PlayIcon, Loading01Icon, Tick01Icon, Cancel01Icon,
-  ArrowDown01Icon, ArrowUp01Icon, Clock01Icon,
-} from '@hugeicons/core-free-icons';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { createApiClient, friendlyApiError, unwrapList } from '@/lib/api';
-import { Button } from '@linea/ui/components/button';
-import { Badge } from '@linea/ui/components/badge';
-import { Skeleton } from '@linea/ui/components/skeleton';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Select,
   SelectContent,
@@ -121,23 +110,13 @@ export default function EvalsPage() {
     queryKey: ["wf-evals", wsId, selectedPodId],
     enabled: !!wsId && !!selectedPodId,
     queryFn: async () => {
-<<<<<<< HEAD
       const token = await getToken()
       if (!token) return []
       const api = createApiClient(token)
-      const res = await api.get<Workflow[]>(
+      const res = await api.get<Workflow[] | { workflows: Workflow[] }>(
         `/workspaces/${wsId}/pods/${selectedPodId}/workflows?limit=100`
       )
-      return Array.isArray(res)
-        ? res
-        : (((res as any)?.workflows ?? []) as Workflow[])
-=======
-      const token = await getToken();
-      if (!token) return [];
-      const api = createApiClient(token);
-      const res = await api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${selectedPodId}/workflows?limit=100`);
-      return unwrapList(res, 'workflows');
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+      return unwrapList(res, "workflows")
     },
   })
 
@@ -196,12 +175,7 @@ export default function EvalsPage() {
 
   return (
     <div className="space-y-6">
-<<<<<<< HEAD
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-=======
-      <div className="flex items-center justify-between gap-3 flex-wrap">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <h1 className="text-xl font-semibold">Evals</h1>
         <div className="flex flex-wrap items-center gap-2">
           {podsLoading ? (

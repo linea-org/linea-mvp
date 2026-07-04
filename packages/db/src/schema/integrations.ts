@@ -10,7 +10,6 @@ export const oauthConnections = pgTable("oauth_connections", {
   workspaceId: uuid("workspace_id")
     .references(() => workspaces.id, { onDelete: "cascade" })
     .notNull(),
-<<<<<<< HEAD
   provider: text("provider").notNull(), // google, slack, github, notion
   accessTokenEncrypted: text("access_token_encrypted").notNull(),
   refreshTokenEncrypted: text("refresh_token_encrypted"),
@@ -23,33 +22,6 @@ export const oauthConnections = pgTable("oauth_connections", {
     .notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
-=======
-  provider: text('provider').notNull(), // google, slack, github, notion
-  accessTokenEncrypted: text('access_token_encrypted').notNull(),
-  refreshTokenEncrypted: text('refresh_token_encrypted'),
-  expiresAt: timestamp('expires_at', { withTimezone: true }),
-  scope: text('scope'),
-  providerUserId: text('provider_user_id'),
-  providerEmail: text('provider_email'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
-
-export const oauthConnectionsRelations = relations(oauthConnections, ({ one }) => ({
-  workspace: one(workspaces, {
-    fields: [oauthConnections.workspaceId],
-    references: [workspaces.id],
-  }),
-}));
-
-export type OAuthConnection = typeof oauthConnections.$inferSelect;
-export type NewOAuthConnection = typeof oauthConnections.$inferInsert;
-
-export const secrets = pgTable('secrets', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id')
-    .references(() => workspaces.id, { onDelete: 'cascade' })
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     .notNull(),
 })
 
@@ -126,7 +98,6 @@ export const webhooks = pgTable("webhooks", {
     .notNull(),
 })
 
-<<<<<<< HEAD
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   workspace: one(workspaces, {
     fields: [apiKeys.workspaceId],
@@ -135,8 +106,6 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
 }))
 
-=======
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 export const lineaApiKeysRelations = relations(lineaApiKeys, ({ one }) => ({
   workspace: one(workspaces, {
     fields: [lineaApiKeys.workspaceId],
@@ -145,13 +114,7 @@ export const lineaApiKeysRelations = relations(lineaApiKeys, ({ one }) => ({
   user: one(users, { fields: [lineaApiKeys.userId], references: [users.id] }),
 }))
 
-<<<<<<< HEAD
 export type ApiKey = typeof apiKeys.$inferSelect
 export type Secret = typeof secrets.$inferSelect
 export type LineaApiKey = typeof lineaApiKeys.$inferSelect
 export type Webhook = typeof webhooks.$inferSelect
-=======
-export type Secret = typeof secrets.$inferSelect;
-export type LineaApiKey = typeof lineaApiKeys.$inferSelect;
-export type Webhook = typeof webhooks.$inferSelect;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))

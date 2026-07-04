@@ -1,27 +1,15 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
-import { useAuth } from "@clerk/nextjs"
+import { useState } from "react"
+import { useApiClient } from "@/hooks/use-api-client"
+import { useQuery } from "@tanstack/react-query"
 import { useWorkspace } from "@/contexts/workspace-context"
 import { usePod } from "@/contexts/space-context"
-import { createApiClient } from "@/lib/api"
+import { formatDurationShort, formatTokenCount } from "@/lib/format"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { Button } from "@linea/ui/components/button"
 import { Separator } from "@linea/ui/components/separator"
 import { HugeiconsIcon } from "@hugeicons/react"
-=======
-import { useState } from 'react';
-import { useApiClient } from '@/hooks/use-api-client';
-import { useQuery } from '@tanstack/react-query';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { usePod } from '@/contexts/space-context';
-import { formatDurationShort, formatTokenCount } from '@/lib/format';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { Button } from '@linea/ui/components/button';
-import { Separator } from '@linea/ui/components/separator';
-import { HugeiconsIcon } from '@hugeicons/react';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   AnalyticsUpIcon,
   WorkflowSquare01Icon,
@@ -65,21 +53,6 @@ interface MetricsData {
   }>
 }
 
-<<<<<<< HEAD
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
-}
-
-function formatMs(ms: number | null | undefined): string {
-  if (ms == null || Number.isNaN(ms)) return "—"
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
-
-=======
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 function StatCard({
   label,
   value,
@@ -153,52 +126,25 @@ function EmptyMetrics() {
 }
 
 export default function MetricsPage() {
-<<<<<<< HEAD
-  const { getToken } = useAuth()
+  const getApi = useApiClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
+  const wsId = activeWorkspace?.id ?? ""
   const [period, setPeriod] = useState<Period>("7d")
-  const [data, setData] = useState<MetricsData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
 
-  useEffect(() => {
-    if (wsLoading || !activeWorkspace) return
-    setLoading(true)
-    setError(false)
-
-    async function load() {
-      const token = await getToken()
-      if (!token || !activeWorkspace) return
-      try {
-        const api = createApiClient(token)
-        const result = await api.get<MetricsData>(
-          `/workspaces/${activeWorkspace.id}/metrics?period=${period}`
-        )
-        setData(result)
-      } catch {
-        setError(true)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void load()
-  }, [activeWorkspace, wsLoading, period, getToken])
-=======
-  const getApi = useApiClient();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const wsId = activeWorkspace?.id ?? '';
-  const [period, setPeriod] = useState<Period>('7d');
-
-  const { data, isLoading: loading, isError: error } = useQuery<MetricsData>({
-    queryKey: ['metrics', wsId, period],
+  const {
+    data,
+    isLoading: loading,
+    isError: error,
+  } = useQuery<MetricsData>({
+    queryKey: ["metrics", wsId, period],
     enabled: !!wsId,
     queryFn: async () => {
-      const api = await getApi();
-      return api.get<MetricsData>(`/workspaces/${wsId}/metrics?period=${period}`);
+      const api = await getApi()
+      return api.get<MetricsData>(
+        `/workspaces/${wsId}/metrics?period=${period}`
+      )
     },
-  });
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  })
 
   const hasData = data && data.executions.total > 0
 
@@ -282,24 +228,18 @@ export default function MetricsPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-<<<<<<< HEAD
             <StatCard
               label="Avg duration"
-              value={formatMs(data.duration.avgMs)}
+              value={formatDurationShort(data.duration.avgMs)}
             />
             <StatCard
               label="p50 duration"
-              value={formatMs(data.duration.p50Ms)}
+              value={formatDurationShort(data.duration.p50Ms)}
             />
             <StatCard
               label="p95 duration"
-              value={formatMs(data.duration.p95Ms)}
+              value={formatDurationShort(data.duration.p95Ms)}
             />
-=======
-            <StatCard label="Avg duration" value={formatDurationShort(data.duration.avgMs)} />
-            <StatCard label="p50 duration" value={formatDurationShort(data.duration.p50Ms)} />
-            <StatCard label="p95 duration" value={formatDurationShort(data.duration.p95Ms)} />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           </div>
 
           {data.tokens && data.tokens.totalTokens > 0 && (

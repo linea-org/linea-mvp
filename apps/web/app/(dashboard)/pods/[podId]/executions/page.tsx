@@ -1,11 +1,12 @@
 "use client"
 
-<<<<<<< HEAD
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useAuth } from "@clerk/nextjs"
+import { useApiClient } from "@/hooks/use-api-client"
+import { unwrapList } from "@/lib/api"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useWorkspace } from "@/contexts/workspace-context"
-import { createApiClient } from "@/lib/api"
+import { formatDurationLong } from "@/lib/format"
 import { Badge } from "@linea/ui/components/badge"
 import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
@@ -16,21 +17,6 @@ import {
   Search01Icon,
   ReloadIcon,
 } from "@hugeicons/core-free-icons"
-=======
-import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useApiClient } from '@/hooks/use-api-client';
-import { unwrapList } from '@/lib/api';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { formatDurationLong } from '@/lib/format';
-import { Badge } from '@linea/ui/components/badge';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { FlowCircleIcon, Search01Icon, ReloadIcon } from '@hugeicons/core-free-icons';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Select,
   SelectContent,
@@ -86,17 +72,9 @@ const DATE_FILTERS = [
 ] as const
 
 function duration(start: string | null, end: string | null): string {
-<<<<<<< HEAD
   if (!start) return "—"
   const ms = new Date(end ?? Date.now()).getTime() - new Date(start).getTime()
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`
-=======
-  if (!start) return '—';
-  const ms = new Date(end ?? Date.now()).getTime() - new Date(start).getTime();
-  return formatDurationLong(ms) ?? '—';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  return formatDurationLong(ms) ?? "—"
 }
 
 function matchesDateFilter(createdAt: string, filter: string): boolean {
@@ -117,178 +95,75 @@ const ACTIVE_STATUSES = new Set(["running", "queued", "suspended"])
 const PAGE_SIZE = 20
 
 export default function ExecutionsPage() {
-<<<<<<< HEAD
   const { podId } = useParams<{ podId: string }>()
-  const { getToken } = useAuth()
+  const getApi = useApiClient()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
-  const [executions, setExecutions] = useState<Execution[]>([])
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [workflowNames, setWorkflowNames] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const wsId = activeWorkspace?.id ?? ""
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [workflowFilter, setWorkflowFilter] = useState<string>("all")
   const [dateFilter, setDateFilter] = useState<string>("all")
   const [search, setSearch] = useState("")
-  const [actioning, setActioning] = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
   const [page, setPage] = useState(1)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const router = useRouter()
 
-  const load = useCallback(
-    async (silent = false) => {
-      if (!activeWorkspace) return
-      if (!silent) setLoading(true)
-      else setRefreshing(true)
-      try {
-        const token = await getToken()
-        if (!token) return
-        const api = createApiClient(token)
-        const [execList, wfArr] = await Promise.all([
-          api.get<Execution[]>(
-            `/workspaces/${activeWorkspace.id}/pods/${podId}/executions`
-          ),
-          api.get<Workflow[]>(
-            `/workspaces/${activeWorkspace.id}/pods/${podId}/workflows`
-          ),
-        ])
-        const list: Execution[] = Array.isArray(execList)
-          ? execList
-          : ((execList as any)?.executions ?? [])
-        setExecutions(list)
-        const wfList: Workflow[] = Array.isArray(wfArr)
-          ? wfArr
-          : ((wfArr as any)?.workflows ?? [])
-        setWorkflows(wfList)
-        const nameMap: Record<string, string> = {}
-        for (const wf of wfList) nameMap[wf.id] = wf.name
-        setWorkflowNames(nameMap)
-        // Auto-refresh while any execution is active
-        const hasActive = list.some((ex) => ACTIVE_STATUSES.has(ex.status))
-        if (hasActive && !pollRef.current) {
-          pollRef.current = setInterval(() => void load(true), 4_000)
-        } else if (!hasActive && pollRef.current) {
-          clearInterval(pollRef.current)
-          pollRef.current = null
-        }
-      } finally {
-        setLoading(false)
-        setRefreshing(false)
-      }
-    },
-    [activeWorkspace, podId, getToken]
-  ) // eslint-disable-line react-hooks/exhaustive-deps
+  const executionsKey = ["pod-executions", wsId, podId]
 
-  useEffect(() => {
-    if (wsLoading) return
-    if (!activeWorkspace) {
-      setLoading(false)
-      return
-    }
-    void load()
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current)
-        pollRef.current = null
-      }
-    }
-  }, [activeWorkspace, wsLoading, podId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function handleCancel(ex: Execution, e: React.MouseEvent) {
-    e.stopPropagation()
-    if (!activeWorkspace) return
-    setActioning(ex.id)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      await api.delete(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions/${ex.id}`
-      )
-      await load()
-    } finally {
-      setActioning(null)
-    }
-  }
-
-  async function handleRerun(ex: Execution, e: React.MouseEvent) {
-    e.stopPropagation()
-    if (!activeWorkspace || !ex.workflowId) return
-    setActioning(ex.id)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      await api.post(
-        `/workspaces/${activeWorkspace.id}/pods/${podId}/executions`,
-        {
-          workflowId: ex.workflowId,
-          input: ex.input ?? {},
-        }
-      )
-      await load()
-    } finally {
-      setActioning(null)
-    }
-  }
-=======
-  const { podId } = useParams<{ podId: string }>();
-  const getApi = useApiClient();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const queryClient = useQueryClient();
-  const wsId = activeWorkspace?.id ?? '';
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [workflowFilter, setWorkflowFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const router = useRouter();
-
-  const executionsKey = ['pod-executions', wsId, podId];
-
-  const { data: executions = [], isLoading: loading, isFetching: refreshing } = useQuery<Execution[]>({
+  const {
+    data: executions = [],
+    isLoading: loading,
+    isFetching: refreshing,
+  } = useQuery<Execution[]>({
     queryKey: executionsKey,
     enabled: !!wsId,
     queryFn: async () => {
-      const api = await getApi();
-      const execList = await api.get<Execution[] | { executions: Execution[] }>(`/workspaces/${wsId}/pods/${podId}/executions`);
-      return unwrapList(execList, 'executions');
+      const api = await getApi()
+      const execList = await api.get<Execution[] | { executions: Execution[] }>(
+        `/workspaces/${wsId}/pods/${podId}/executions`
+      )
+      return unwrapList(execList, "executions")
     },
     refetchInterval: (query) => {
-      const list = query.state.data ?? [];
-      return list.some((ex) => ACTIVE_STATUSES.has(ex.status)) ? 4_000 : false;
+      const list = query.state.data ?? []
+      return list.some((ex) => ACTIVE_STATUSES.has(ex.status)) ? 4_000 : false
     },
-  });
+  })
 
   const { data: workflows = [] } = useQuery<Workflow[]>({
-    queryKey: ['pod-workflows-list', wsId, podId],
+    queryKey: ["pod-workflows-list", wsId, podId],
     enabled: !!wsId,
     queryFn: async () => {
-      const api = await getApi();
-      const wfArr = await api.get<Workflow[] | { workflows: Workflow[] }>(`/workspaces/${wsId}/pods/${podId}/workflows`);
-      return unwrapList(wfArr, 'workflows');
+      const api = await getApi()
+      const wfArr = await api.get<Workflow[] | { workflows: Workflow[] }>(
+        `/workspaces/${wsId}/pods/${podId}/workflows`
+      )
+      return unwrapList(wfArr, "workflows")
     },
-  });
+  })
 
-  const workflowNames = Object.fromEntries(workflows.map((wf) => [wf.id, wf.name]));
+  const workflowNames = Object.fromEntries(
+    workflows.map((wf) => [wf.id, wf.name])
+  )
 
   const cancelExecution = useMutation({
     mutationFn: async (ex: Execution) => {
-      const api = await getApi();
-      await api.delete(`/workspaces/${wsId}/pods/${podId}/executions/${ex.id}`);
+      const api = await getApi()
+      await api.delete(`/workspaces/${wsId}/pods/${podId}/executions/${ex.id}`)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: executionsKey }),
-  });
+  })
 
   const rerunExecution = useMutation({
     mutationFn: async (ex: Execution) => {
-      if (!ex.workflowId) throw new Error('No workflow for this execution');
-      const api = await getApi();
-      await api.post(`/workspaces/${wsId}/pods/${podId}/executions`, { workflowId: ex.workflowId, input: ex.input ?? {} });
+      if (!ex.workflowId) throw new Error("No workflow for this execution")
+      const api = await getApi()
+      await api.post(`/workspaces/${wsId}/pods/${podId}/executions`, {
+        workflowId: ex.workflowId,
+        input: ex.input ?? {},
+      })
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: executionsKey }),
-  });
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  })
 
   const searchLower = search.toLowerCase()
   const filtered = executions.filter((ex) => {
@@ -328,12 +203,7 @@ export default function ExecutionsPage() {
             />
           )}
         </div>
-<<<<<<< HEAD
         <div className="flex flex-wrap items-center gap-2">
-          {/* Search */}
-=======
-        <div className="flex items-center gap-2 flex-wrap">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           <div className="relative">
             <HugeiconsIcon
               icon={Search01Icon}
@@ -390,8 +260,6 @@ export default function ExecutionsPage() {
             </Select>
           )}
 
-<<<<<<< HEAD
-          {/* Status filter */}
           <Select
             value={statusFilter}
             onValueChange={(v) => {
@@ -399,9 +267,6 @@ export default function ExecutionsPage() {
               setPage(1)
             }}
           >
-=======
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             <SelectTrigger className="w-36">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
@@ -529,8 +394,14 @@ export default function ExecutionsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={cancelExecution.isPending && cancelExecution.variables?.id === ex.id}
-                        onClick={(e) => { e.stopPropagation(); cancelExecution.mutate(ex); }}
+                        disabled={
+                          cancelExecution.isPending &&
+                          cancelExecution.variables?.id === ex.id
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          cancelExecution.mutate(ex)
+                        }}
                       >
                         Cancel
                       </Button>
@@ -539,8 +410,14 @@ export default function ExecutionsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={rerunExecution.isPending && rerunExecution.variables?.id === ex.id}
-                        onClick={(e) => { e.stopPropagation(); rerunExecution.mutate(ex); }}
+                        disabled={
+                          rerunExecution.isPending &&
+                          rerunExecution.variables?.id === ex.id
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          rerunExecution.mutate(ex)
+                        }}
                       >
                         Re-run
                       </Button>

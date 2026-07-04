@@ -1,7 +1,7 @@
 "use client"
 
-<<<<<<< HEAD
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
 import { useWorkspace } from "@/contexts/workspace-context"
@@ -12,20 +12,6 @@ import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
 import { HugeiconsIcon } from "@hugeicons/react"
-=======
-import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { usePod } from '@/contexts/space-context';
-import { createApiClient } from '@/lib/api';
-import { Dialog, DialogContent, DialogTitle } from '@linea/ui/components/dialog';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { HugeiconsIcon } from '@hugeicons/react';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   WorkflowSquare01Icon,
   LayoutLeftIcon,
@@ -243,51 +229,27 @@ export function WelcomeModal() {
   const { getToken } = useAuth()
   const router = useRouter()
 
-<<<<<<< HEAD
-  const [open, setOpen] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
   const [step, setStep] = useState<Step>("welcome")
   const [podName, setPodName] = useState("")
-  const [creating, setCreating] = useState(false)
   const [createdPodId, setCreatedPodId] = useState<string | null>(null)
   const [createdWorkflowId, setCreatedWorkflowId] = useState<string | null>(
     null
   )
-  const [creatingTemplate, setCreatingTemplate] = useState(false)
-
-  useEffect(() => {
-    if (wsLoading || podLoading) return
-    if (!activeWorkspace || pods.length > 0) return
-
-    async function checkOnboarded() {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const me = await api.get<{ onboardedAt: string | null }>("/users/me")
-      if (!me.onboardedAt) setOpen(true)
-    }
-
-    void checkOnboarded()
-  }, [wsLoading, podLoading, pods.length, activeWorkspace, getToken])
-=======
-  const [dismissed, setDismissed] = useState(false);
-  const [step, setStep] = useState<Step>('welcome');
-  const [podName, setPodName] = useState('');
-  const [createdPodId, setCreatedPodId] = useState<string | null>(null);
-  const [createdWorkflowId, setCreatedWorkflowId] = useState<string | null>(null);
 
   const { data: me } = useQuery({
-    queryKey: ['user-onboarding-status'],
-    enabled: !wsLoading && !podLoading && !!activeWorkspace && pods.length === 0,
+    queryKey: ["user-onboarding-status"],
+    enabled:
+      !wsLoading && !podLoading && !!activeWorkspace && pods.length === 0,
     queryFn: async () => {
-      const token = await getToken();
-      if (!token) throw new Error('Not authenticated');
-      const api = createApiClient(token);
-      return api.get<{ onboardedAt: string | null }>('/users/me');
+      const token = await getToken()
+      if (!token) throw new Error("Not authenticated")
+      const api = createApiClient(token)
+      return api.get<{ onboardedAt: string | null }>("/users/me")
     },
-  });
+  })
 
-  const open = !dismissed && !!me && !me.onboardedAt;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  const open = !dismissed && !!me && !me.onboardedAt
 
   async function markOnboarded() {
     const token = await getToken()
@@ -297,99 +259,53 @@ export function WelcomeModal() {
   }
 
   function dismiss() {
-<<<<<<< HEAD
     void markOnboarded()
-    setOpen(false)
+    setDismissed(true)
   }
 
-  async function handleCreatePod() {
-    if (!activeWorkspace || !podName.trim()) return
-    setCreating(true)
-    try {
+  const createPodMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeWorkspace) throw new Error("No active workspace")
       const token = await getToken()
-      if (!token) return
+      if (!token) throw new Error("Not authenticated")
       const api = createApiClient(token)
-      const pod = await api.post<{ id: string; name: string }>(
+      return api.post<{ id: string; name: string }>(
         `/workspaces/${activeWorkspace.id}/pods`,
         { name: podName.trim() }
       )
+    },
+    onSuccess: (pod) => {
       setCreatedPodId(pod.id)
       void reloadPods()
       void markOnboarded()
       localStorage.setItem("linea_gs_pod", "true")
       setStep("template")
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  async function handleSelectTemplate(template: StarterTemplate) {
-    if (!activeWorkspace || !createdPodId) return
-    setCreatingTemplate(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const wf = await api.post<{ id: string }>(
-        `/workspaces/${activeWorkspace.id}/pods/${createdPodId}/workflows`,
-        { name: template.name, definition: template.definition }
-      )
-      setCreatedWorkflowId(wf.id)
-    } catch {
-      // silently skip — user can still create workflows manually
-    } finally {
-      setCreatingTemplate(false)
-      setStep("ready")
-    }
-=======
-    void markOnboarded();
-    setDismissed(true);
-  }
-
-  const createPodMutation = useMutation({
-    mutationFn: async () => {
-      if (!activeWorkspace) throw new Error('No active workspace');
-      const token = await getToken();
-      if (!token) throw new Error('Not authenticated');
-      const api = createApiClient(token);
-      return api.post<{ id: string; name: string }>(
-        `/workspaces/${activeWorkspace.id}/pods`,
-        { name: podName.trim() },
-      );
     },
-    onSuccess: (pod) => {
-      setCreatedPodId(pod.id);
-      void reloadPods();
-      void markOnboarded();
-      localStorage.setItem('linea_gs_pod', 'true');
-      setStep('template');
-    },
-  });
+  })
 
   function handleCreatePod() {
-    if (!activeWorkspace || !podName.trim()) return;
-    createPodMutation.mutate();
+    if (!activeWorkspace || !podName.trim()) return
+    createPodMutation.mutate()
   }
 
   const createWorkflowMutation = useMutation({
     mutationFn: async (template: StarterTemplate) => {
-      if (!activeWorkspace || !createdPodId) throw new Error('No active pod');
-      const token = await getToken();
-      if (!token) throw new Error('Not authenticated');
-      const api = createApiClient(token);
+      if (!activeWorkspace || !createdPodId) throw new Error("No active pod")
+      const token = await getToken()
+      if (!token) throw new Error("Not authenticated")
+      const api = createApiClient(token)
       return api.post<{ id: string }>(
         `/workspaces/${activeWorkspace.id}/pods/${createdPodId}/workflows`,
-        { name: template.name, definition: template.definition },
-      );
+        { name: template.name, definition: template.definition }
+      )
     },
     onSuccess: (wf) => setCreatedWorkflowId(wf.id),
-    onSettled: () => setStep('ready'),
-  });
+    onSettled: () => setStep("ready"),
+  })
 
   function handleSelectTemplate(template: StarterTemplate) {
-    if (!activeWorkspace || !createdPodId) return;
-    createWorkflowMutation.mutate(template);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+    if (!activeWorkspace || !createdPodId) return
+    createWorkflowMutation.mutate(template)
   }
 
   function handleGoToBuilder() {
@@ -400,11 +316,7 @@ export function WelcomeModal() {
         router.push(`/pods/${createdPodId}/workflows`)
       }
     }
-<<<<<<< HEAD
-    setOpen(false)
-=======
-    setDismissed(true);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+    setDismissed(true)
   }
 
   return (
@@ -530,19 +442,11 @@ function PodStep({
   loading,
   onSkip,
 }: {
-<<<<<<< HEAD
   value: string
   onChange: (v: string) => void
-  onSubmit: () => Promise<void>
+  onSubmit: () => void
   loading: boolean
   onSkip: () => void
-=======
-  value: string;
-  onChange: (v: string) => void;
-  onSubmit: () => void;
-  loading: boolean;
-  onSkip: () => void;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }) {
   return (
     <div className="flex flex-col">
@@ -568,13 +472,9 @@ function PodStep({
             placeholder="e.g. Production, Research, Sales"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-<<<<<<< HEAD
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !loading) void onSubmit()
+              if (e.key === "Enter" && !loading) onSubmit()
             }}
-=======
-            onKeyDown={(e) => { if (e.key === 'Enter' && !loading) onSubmit(); }}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             autoFocus
           />
         </div>
@@ -587,20 +487,11 @@ function PodStep({
         >
           Skip for now
         </button>
-<<<<<<< HEAD
-        <Button
-          onClick={() => void onSubmit()}
-          disabled={!value.trim() || loading}
-        >
+        <Button onClick={onSubmit} disabled={!value.trim() || loading}>
           {loading ? "Creating…" : "Create pod"}
           {!loading && (
             <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
           )}
-=======
-        <Button onClick={onSubmit} disabled={!value.trim() || loading}>
-          {loading ? 'Creating…' : 'Create pod'}
-          {!loading && <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         </Button>
       </div>
     </div>
@@ -612,15 +503,9 @@ function TemplateStep({
   onSelect,
   onSkip,
 }: {
-<<<<<<< HEAD
   loading: boolean
-  onSelect: (t: StarterTemplate) => Promise<void>
+  onSelect: (t: StarterTemplate) => void
   onSkip: () => void
-=======
-  loading: boolean;
-  onSelect: (t: StarterTemplate) => void;
-  onSkip: () => void;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 }) {
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -639,13 +524,8 @@ function TemplateStep({
             key={t.id}
             disabled={loading}
             onClick={() => {
-<<<<<<< HEAD
               setSelected(t.id)
-              void onSelect(t)
-=======
-              setSelected(t.id);
-              onSelect(t);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+              onSelect(t)
             }}
             className={`relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all hover:shadow-sm focus:outline-none disabled:opacity-60 ${t.accent} ${selected === t.id ? "ring-2 ring-primary" : ""}`}
           >

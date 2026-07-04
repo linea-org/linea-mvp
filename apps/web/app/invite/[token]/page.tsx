@@ -1,10 +1,11 @@
 "use client"
 
-<<<<<<< HEAD
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
-import { createApiClient, friendlyApiError } from "@/lib/api"
+import { useQuery } from "@tanstack/react-query"
+import { useApiClient } from "@/hooks/use-api-client"
+import { friendlyApiError } from "@/lib/api"
 import { Button } from "@linea/ui/components/button"
 import { Skeleton } from "@linea/ui/components/skeleton"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -13,18 +14,6 @@ import {
   UserAdd01Icon,
   ArrowRight01Icon,
 } from "@hugeicons/core-free-icons"
-=======
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
-import { useQuery } from '@tanstack/react-query';
-import { useApiClient } from '@/hooks/use-api-client';
-import { friendlyApiError } from '@/lib/api';
-import { Button } from '@linea/ui/components/button';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Building04Icon, UserAdd01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 interface InviteDetails {
   workspaceId: string
@@ -43,98 +32,52 @@ const ROLE_DESCRIPTION: Record<string, string> = {
 }
 
 export default function InvitePage() {
-<<<<<<< HEAD
   const { token } = useParams<{ token: string }>()
   const router = useRouter()
-  const { getToken, isSignedIn, isLoaded } = useAuth()
+  const { isSignedIn, isLoaded } = useAuth()
+  const getApi = useApiClient()
 
-  const [details, setDetails] = useState<InviteDetails | null>(null)
-  const [loadingDetails, setLoadingDetails] = useState(true)
   const [accepting, setAccepting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [acceptError, setAcceptError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
   useEffect(() => {
-    if (!isLoaded) return
-    if (!isSignedIn) {
+    if (isLoaded && !isSignedIn) {
       router.push(
         `/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`
       )
-      return
-=======
-  const { token } = useParams<{ token: string }>();
-  const router = useRouter();
-  const { isSignedIn, isLoaded } = useAuth();
-  const getApi = useApiClient();
-
-  const [accepting, setAccepting] = useState(false);
-  const [acceptError, setAcceptError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      router.push(`/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
     }
-  }, [isLoaded, isSignedIn, router]);
+  }, [isLoaded, isSignedIn, router])
 
-<<<<<<< HEAD
-    async function fetchDetails() {
-      try {
-        const authToken = await getToken()
-        if (!authToken) return
-        const api = createApiClient(authToken)
-        const data = await api.get<InviteDetails>(`/invites/${token}`)
-        setDetails(data)
-      } catch (err) {
-        setError(friendlyApiError(err))
-      } finally {
-        setLoadingDetails(false)
-      }
-    }
-
-    void fetchDetails()
-  }, [isLoaded, isSignedIn, token, getToken, router])
+  const {
+    data: details,
+    isLoading: loadingDetails,
+    error: queryError,
+  } = useQuery({
+    queryKey: ["invite-details", token],
+    enabled: isLoaded && isSignedIn,
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<InviteDetails>(`/invites/${token}`)
+    },
+    retry: false,
+  })
+  const error =
+    acceptError ?? (queryError ? friendlyApiError(queryError) : null)
 
   async function handleAccept() {
     setAccepting(true)
-    setError(null)
+    setAcceptError(null)
     try {
-      const authToken = await getToken()
-      if (!authToken) return
-      const api = createApiClient(authToken)
+      const api = await getApi()
       await api.post(`/invites/${token}/accept`)
       setDone(true)
-=======
-  const { data: details, isLoading: loadingDetails, error: queryError } = useQuery({
-    queryKey: ['invite-details', token],
-    enabled: isLoaded && isSignedIn,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<InviteDetails>(`/invites/${token}`);
-    },
-    retry: false,
-  });
-  const error = acceptError ?? (queryError ? friendlyApiError(queryError) : null);
-
-  async function handleAccept() {
-    setAccepting(true);
-    setAcceptError(null);
-    try {
-      const api = await getApi();
-      await api.post(`/invites/${token}/accept`);
-      setDone(true);
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
       // Brief pause then redirect to the workspace
       setTimeout(() => {
         router.push("/pods")
       }, 1500)
     } catch (err) {
-<<<<<<< HEAD
-      setError(friendlyApiError(err))
-=======
-      setAcceptError(friendlyApiError(err));
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+      setAcceptError(friendlyApiError(err))
     } finally {
       setAccepting(false)
     }
@@ -155,13 +98,7 @@ export default function InvitePage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <div className="w-full max-w-sm">
-<<<<<<< HEAD
-        {/* Card */}
         <div className="space-y-6 rounded-xl border bg-background p-8 shadow-sm">
-          {/* Icon */}
-=======
-        <div className="rounded-xl border bg-background p-8 shadow-sm space-y-6">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
           <div className="flex justify-center">
             <div className="flex size-14 items-center justify-center rounded-full bg-primary/10">
               <HugeiconsIcon

@@ -1,22 +1,14 @@
 "use client"
 
-<<<<<<< HEAD
 import { useEffect, useRef, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@linea/ui/components/popover"
 import { cn } from "@linea/ui/lib/utils"
-
-const API_BASE = `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"}/v1`
-=======
-import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Popover, PopoverContent, PopoverTrigger } from '@linea/ui/components/popover';
-import { cn } from '@linea/ui/lib/utils';
-import { API_BASE } from '@/lib/api';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+import { API_BASE } from "@/lib/api"
 
 interface ModelDef {
   id: string
@@ -84,41 +76,20 @@ export function ModelPicker({
   className,
   placeholder = "Select a model…",
 }: ModelPickerProps) {
-<<<<<<< HEAD
-  const [models, setModels] = useState<ModelDef[]>([])
-  const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [providerFilter, setProviderFilter] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    fetch(`${API_BASE}/models`)
-      .then((r) => r.json())
-      .then((data: unknown) => {
-        const raw = (data as { data?: unknown }).data ?? data
-        const list = Array.isArray(raw) ? (raw as ModelDef[]) : []
-        setModels(list)
-      })
-      .catch(() => setModels([]))
-      .finally(() => setLoading(false))
-  }, [])
-=======
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [providerFilter, setProviderFilter] = useState<string | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
-
   const { data: models = [], isLoading: loading } = useQuery<ModelDef[]>({
-    queryKey: ['models-list'],
+    queryKey: ["models-list"],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/models`);
-      const data: unknown = await res.json();
-      const raw = (data as { data?: unknown }).data ?? data;
-      return Array.isArray(raw) ? (raw as ModelDef[]) : [];
+      const res = await fetch(`${API_BASE}/models`)
+      const data: unknown = await res.json()
+      const raw = (data as { data?: unknown }).data ?? data
+      return Array.isArray(raw) ? (raw as ModelDef[]) : []
     },
-  });
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  })
 
   useEffect(() => {
     if (open) {

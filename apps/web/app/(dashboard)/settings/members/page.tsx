@@ -1,10 +1,11 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState } from "react"
-import { useAuth, useUser } from "@clerk/nextjs"
+import { useState } from "react"
+import { useForm, Controller } from "react-hook-form"
+import { useUser } from "@clerk/nextjs"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useWorkspace } from "@/contexts/workspace-context"
-import { createApiClient } from "@/lib/api"
+import { useApiClient } from "@/hooks/use-api-client"
 import { Button } from "@linea/ui/components/button"
 import { Input } from "@linea/ui/components/input"
 import { Label } from "@linea/ui/components/label"
@@ -15,20 +16,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@linea/ui/components/avatar"
-=======
-import { useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
-import { useUser } from '@clerk/nextjs';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { useApiClient } from '@/hooks/use-api-client';
-import { Button } from '@linea/ui/components/button';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { Badge } from '@linea/ui/components/badge';
-import { Skeleton } from '@linea/ui/components/skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@linea/ui/components/avatar';
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 import {
   Dialog,
   DialogContent,
@@ -79,30 +66,21 @@ interface Invite {
 
 type MemberRole = "owner" | "admin" | "editor" | "viewer"
 
-<<<<<<< HEAD
+interface InviteFormValues {
+  email: string
+  role: "editor" | "viewer" | "admin"
+}
+
+interface RoleFormValues {
+  role: MemberRole
+}
+
 const ROLE_BADGE: Record<string, "default" | "secondary" | "outline"> = {
   owner: "default",
   admin: "secondary",
   editor: "outline",
   viewer: "outline",
 }
-=======
-interface InviteFormValues {
-  email: string;
-  role: 'editor' | 'viewer' | 'admin';
-}
-
-interface RoleFormValues {
-  role: MemberRole;
-}
-
-const ROLE_BADGE: Record<string, 'default' | 'secondary' | 'outline'> = {
-  owner: 'default',
-  admin: 'secondary',
-  editor: 'outline',
-  viewer: 'outline',
-};
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 const ROLE_LEVEL: Record<string, number> = {
   owner: 4,
@@ -116,235 +94,115 @@ function canManage(actorRole: string, targetRole: string) {
 }
 
 export default function MembersPage() {
-<<<<<<< HEAD
-  const { getToken } = useAuth()
+  const getApi = useApiClient()
   const { user: clerkUser } = useUser()
   const { activeWorkspace, loading: wsLoading } = useWorkspace()
-  const [members, setMembers] = useState<Member[]>([])
-  const [invites, setInvites] = useState<Invite[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const wsId = activeWorkspace?.id ?? ""
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState("")
-  const [inviteRole, setInviteRole] = useState<"editor" | "viewer" | "admin">(
-    "editor"
-  )
-  const [inviting, setInviting] = useState(false)
   const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const inviteForm = useForm<InviteFormValues>({
+    defaultValues: { email: "", role: "editor" },
+  })
 
-  // Role change state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false)
   const [roleTarget, setRoleTarget] = useState<Member | null>(null)
-  const [newRole, setNewRole] = useState<MemberRole>("editor")
-  const [savingRole, setSavingRole] = useState(false)
+  const roleForm = useForm<RoleFormValues>({
+    defaultValues: { role: "editor" },
+  })
+  const currentNewRole = roleForm.watch("role")
 
-  // Remove state
-  const [removing, setRemoving] = useState<string | null>(null)
+  const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
+    queryKey: ["members", wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<Member[]>(`/workspaces/${wsId}/members`)
+    },
+  })
 
-  async function load() {
-    if (!activeWorkspace) return
-    setLoading(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const [m, i] = await Promise.all([
-        api.get<Member[]>(`/workspaces/${activeWorkspace.id}/members`),
-        api.get<Invite[]>(`/workspaces/${activeWorkspace.id}/invites`),
-      ])
-      setMembers(m)
-      setInvites(i)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data: invites = [], isLoading: invitesLoading } = useQuery<Invite[]>({
+    queryKey: ["invites", wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi()
+      return api.get<Invite[]>(`/workspaces/${wsId}/invites`)
+    },
+  })
 
-  useEffect(() => {
-    if (wsLoading) return
-    if (!activeWorkspace) {
-      setLoading(false)
-      return
-    }
-    void load()
-  }, [activeWorkspace, wsLoading])
+  const loading = membersLoading || invitesLoading
 
-  // Derive current user's role from the members list
   const myEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? ""
   const me = members.find((m) => m.user.email === myEmail)
   const myRole = me?.role ?? "viewer"
   const isAdmin = (ROLE_LEVEL[myRole] ?? 0) >= (ROLE_LEVEL["admin"] ?? 0)
 
-  async function handleInvite() {
-    if (!activeWorkspace) return
-    setInviting(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      const invite = await api.post<Invite>(
-        `/workspaces/${activeWorkspace.id}/invites`,
-        {
-          email: inviteEmail || undefined,
-          role: inviteRole,
-        }
-      )
-      const link = `${window.location.origin}/invite/${invite.token}`
-      setInviteLink(link)
-      setInvites((prev) => [...prev, invite])
-      setInviteEmail("")
-    } finally {
-      setInviting(false)
-    }
-  }
-
-  async function revokeInvite(inviteId: string) {
-    if (!activeWorkspace) return
-    const token = await getToken()
-    if (!token) return
-    const api = createApiClient(token)
-    await api.delete(`/workspaces/${activeWorkspace.id}/invites/${inviteId}`)
-    setInvites((prev) => prev.filter((i) => i.id !== inviteId))
-  }
-
-  function openRoleDialog(member: Member) {
-    setRoleTarget(member)
-    setNewRole(member.role as MemberRole)
-    setRoleDialogOpen(true)
-  }
-
-  async function handleRoleChange() {
-    if (!activeWorkspace || !roleTarget) return
-    setSavingRole(true)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      await api.patch(
-        `/workspaces/${activeWorkspace.id}/members/${roleTarget.userId}`,
-        { role: newRole }
-      )
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.userId === roleTarget.userId ? { ...m, role: newRole } : m
-        )
-      )
-      setRoleDialogOpen(false)
-    } finally {
-      setSavingRole(false)
-    }
-  }
-
-  async function handleRemoveMember(member: Member) {
-    if (!activeWorkspace) return
-    setRemoving(member.userId)
-    try {
-      const token = await getToken()
-      if (!token) return
-      const api = createApiClient(token)
-      await api.delete(
-        `/workspaces/${activeWorkspace.id}/members/${member.userId}`
-      )
-      setMembers((prev) => prev.filter((m) => m.userId !== member.userId))
-    } finally {
-      setRemoving(null)
-    }
-  }
-=======
-  const getApi = useApiClient();
-  const { user: clerkUser } = useUser();
-  const { activeWorkspace, loading: wsLoading } = useWorkspace();
-  const queryClient = useQueryClient();
-  const wsId = activeWorkspace?.id ?? '';
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const inviteForm = useForm<InviteFormValues>({ defaultValues: { email: '', role: 'editor' } });
-
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
-  const [roleTarget, setRoleTarget] = useState<Member | null>(null);
-  const roleForm = useForm<RoleFormValues>({ defaultValues: { role: 'editor' } });
-  const currentNewRole = roleForm.watch('role');
-
-  const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
-    queryKey: ['members', wsId],
-    enabled: !!wsId,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<Member[]>(`/workspaces/${wsId}/members`);
-    },
-  });
-
-  const { data: invites = [], isLoading: invitesLoading } = useQuery<Invite[]>({
-    queryKey: ['invites', wsId],
-    enabled: !!wsId,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<Invite[]>(`/workspaces/${wsId}/invites`);
-    },
-  });
-
-  const loading = membersLoading || invitesLoading;
-
-  const myEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? '';
-  const me = members.find((m) => m.user.email === myEmail);
-  const myRole = me?.role ?? 'viewer';
-  const isAdmin = (ROLE_LEVEL[myRole] ?? 0) >= (ROLE_LEVEL['admin'] ?? 0);
-
   const inviteMember = useMutation({
     mutationFn: async (values: InviteFormValues) => {
-      const api = await getApi();
+      const api = await getApi()
       return api.post<Invite>(`/workspaces/${wsId}/invites`, {
         email: values.email || undefined,
         role: values.role,
-      });
+      })
     },
     onSuccess: (invite) => {
-      setInviteLink(`${window.location.origin}/invite/${invite.token}`);
-      queryClient.setQueryData<Invite[]>(['invites', wsId], (prev = []) => [...prev, invite]);
-      inviteForm.setValue('email', '');
+      setInviteLink(`${window.location.origin}/invite/${invite.token}`)
+      queryClient.setQueryData<Invite[]>(["invites", wsId], (prev = []) => [
+        ...prev,
+        invite,
+      ])
+      inviteForm.setValue("email", "")
     },
-  });
+  })
 
   const revokeInvite = useMutation({
     mutationFn: async (inviteId: string) => {
-      const api = await getApi();
-      await api.delete(`/workspaces/${wsId}/invites/${inviteId}`);
-      return inviteId;
+      const api = await getApi()
+      await api.delete(`/workspaces/${wsId}/invites/${inviteId}`)
+      return inviteId
     },
     onSuccess: (inviteId) => {
-      queryClient.setQueryData<Invite[]>(['invites', wsId], (prev = []) => prev.filter((i) => i.id !== inviteId));
+      queryClient.setQueryData<Invite[]>(["invites", wsId], (prev = []) =>
+        prev.filter((i) => i.id !== inviteId)
+      )
     },
-  });
+  })
 
   function openRoleDialog(member: Member) {
-    setRoleTarget(member);
-    roleForm.reset({ role: member.role as MemberRole });
-    setRoleDialogOpen(true);
+    setRoleTarget(member)
+    roleForm.reset({ role: member.role as MemberRole })
+    setRoleDialogOpen(true)
   }
 
   const changeRole = useMutation({
     mutationFn: async (values: RoleFormValues) => {
-      if (!roleTarget) throw new Error('No target selected');
-      const api = await getApi();
-      await api.patch(`/workspaces/${wsId}/members/${roleTarget.userId}`, { role: values.role });
-      return { userId: roleTarget.userId, role: values.role };
+      if (!roleTarget) throw new Error("No target selected")
+      const api = await getApi()
+      await api.patch(`/workspaces/${wsId}/members/${roleTarget.userId}`, {
+        role: values.role,
+      })
+      return { userId: roleTarget.userId, role: values.role }
     },
     onSuccess: ({ userId, role }) => {
-      queryClient.setQueryData<Member[]>(['members', wsId], (prev = []) =>
-        prev.map((m) => (m.userId === userId ? { ...m, role } : m)));
-      setRoleDialogOpen(false);
+      queryClient.setQueryData<Member[]>(["members", wsId], (prev = []) =>
+        prev.map((m) => (m.userId === userId ? { ...m, role } : m))
+      )
+      setRoleDialogOpen(false)
     },
-  });
+  })
 
   const removeMember = useMutation({
     mutationFn: async (member: Member) => {
-      const api = await getApi();
-      await api.delete(`/workspaces/${wsId}/members/${member.userId}`);
-      return member.userId;
+      const api = await getApi()
+      await api.delete(`/workspaces/${wsId}/members/${member.userId}`)
+      return member.userId
     },
     onSuccess: (userId) => {
-      queryClient.setQueryData<Member[]>(['members', wsId], (prev = []) => prev.filter((m) => m.userId !== userId));
+      queryClient.setQueryData<Member[]>(["members", wsId], (prev = []) =>
+        prev.filter((m) => m.userId !== userId)
+      )
     },
-  });
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+  })
 
   if (wsLoading || loading) {
     return (
@@ -399,15 +257,14 @@ export default function MembersPage() {
                 {manageable && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-<<<<<<< HEAD
                       <Button
                         size="icon-sm"
                         variant="ghost"
-                        disabled={removing === m.userId}
+                        disabled={
+                          removeMember.isPending &&
+                          removeMember.variables?.userId === m.userId
+                        }
                       >
-=======
-                      <Button size="icon-sm" variant="ghost" disabled={removeMember.isPending && removeMember.variables?.userId === m.userId}>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
                         <HugeiconsIcon icon={MoreVerticalIcon} />
                       </Button>
                     </DropdownMenuTrigger>
@@ -468,8 +325,6 @@ export default function MembersPage() {
         </div>
       )}
 
-<<<<<<< HEAD
-      {/* Invite dialog */}
       <Dialog
         open={dialogOpen}
         onOpenChange={(o) => {
@@ -477,9 +332,6 @@ export default function MembersPage() {
           if (!o) setInviteLink(null)
         }}
       >
-=======
-      <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setInviteLink(null); }}>
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Invite member</DialogTitle>
@@ -508,43 +360,20 @@ export default function MembersPage() {
           ) : (
             <form
               id="invite-member-form"
-              onSubmit={inviteForm.handleSubmit((values) => inviteMember.mutate(values))}
+              onSubmit={inviteForm.handleSubmit((values) =>
+                inviteMember.mutate(values)
+              )}
               className="space-y-4 py-2"
             >
               <div className="space-y-1.5">
                 <Label>Email (optional)</Label>
-<<<<<<< HEAD
                 <Input
                   placeholder="colleague@company.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
+                  {...inviteForm.register("email")}
                 />
                 <p className="text-xs text-muted-foreground">
                   Leave blank to create a general invite link.
                 </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Role</Label>
-                <Select
-                  value={inviteRole}
-                  onValueChange={(v) => setInviteRole(v as typeof inviteRole)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer — read only</SelectItem>
-                    <SelectItem value="editor">
-                      Editor — can create and run workflows
-                    </SelectItem>
-                    <SelectItem value="admin">
-                      Admin — full access except billing
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-=======
-                <Input placeholder="colleague@company.com" {...inviteForm.register('email')} />
-                <p className="text-xs text-muted-foreground">Leave blank to create a general invite link.</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>
@@ -557,14 +386,19 @@ export default function MembersPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="viewer">Viewer — read only</SelectItem>
-                        <SelectItem value="editor">Editor — can create and run workflows</SelectItem>
-                        <SelectItem value="admin">Admin — full access except billing</SelectItem>
+                        <SelectItem value="viewer">
+                          Viewer — read only
+                        </SelectItem>
+                        <SelectItem value="editor">
+                          Editor — can create and run workflows
+                        </SelectItem>
+                        <SelectItem value="admin">
+                          Admin — full access except billing
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   )}
                 />
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
               </div>
             </form>
           )}
@@ -580,13 +414,12 @@ export default function MembersPage() {
               {inviteLink ? "Done" : "Cancel"}
             </Button>
             {!inviteLink && (
-<<<<<<< HEAD
-              <Button onClick={() => void handleInvite()} disabled={inviting}>
-                {inviting ? "Creating…" : "Create invite"}
-=======
-              <Button type="submit" form="invite-member-form" disabled={inviteMember.isPending}>
-                {inviteMember.isPending ? 'Creating…' : 'Create invite'}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+              <Button
+                type="submit"
+                form="invite-member-form"
+                disabled={inviteMember.isPending}
+              >
+                {inviteMember.isPending ? "Creating…" : "Create invite"}
               </Button>
             )}
           </DialogFooter>
@@ -598,52 +431,19 @@ export default function MembersPage() {
           <DialogHeader>
             <DialogTitle>Change role</DialogTitle>
           </DialogHeader>
-<<<<<<< HEAD
-          <div className="space-y-3 py-2">
-=======
           <form
             id="change-role-form"
-            onSubmit={roleForm.handleSubmit((values) => changeRole.mutate(values))}
-            className="py-2 space-y-3"
+            onSubmit={roleForm.handleSubmit((values) =>
+              changeRole.mutate(values)
+            )}
+            className="space-y-3 py-2"
           >
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
             <p className="text-sm text-muted-foreground">
               Changing role for{" "}
               <span className="font-medium text-foreground">
                 {roleTarget?.user.name ?? roleTarget?.user.email}
               </span>
             </p>
-<<<<<<< HEAD
-            <Select
-              value={newRole}
-              onValueChange={(v) => setNewRole(v as MemberRole)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="viewer">Viewer — read only</SelectItem>
-                <SelectItem value="editor">
-                  Editor — can create and run workflows
-                </SelectItem>
-                {myRole === "owner" && (
-                  <SelectItem value="admin">
-                    Admin — full access except billing
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleRoleChange()}
-              disabled={savingRole || newRole === roleTarget?.role}
-            >
-              {savingRole ? "Saving…" : "Save"}
-=======
             <Controller
               control={roleForm.control}
               name="role"
@@ -654,9 +454,13 @@ export default function MembersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="viewer">Viewer — read only</SelectItem>
-                    <SelectItem value="editor">Editor — can create and run workflows</SelectItem>
-                    {myRole === 'owner' && (
-                      <SelectItem value="admin">Admin — full access except billing</SelectItem>
+                    <SelectItem value="editor">
+                      Editor — can create and run workflows
+                    </SelectItem>
+                    {myRole === "owner" && (
+                      <SelectItem value="admin">
+                        Admin — full access except billing
+                      </SelectItem>
                     )}
                   </SelectContent>
                 </Select>
@@ -664,14 +468,17 @@ export default function MembersPage() {
             />
           </form>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
+              Cancel
+            </Button>
             <Button
               type="submit"
               form="change-role-form"
-              disabled={changeRole.isPending || currentNewRole === roleTarget?.role}
+              disabled={
+                changeRole.isPending || currentNewRole === roleTarget?.role
+              }
             >
-              {changeRole.isPending ? 'Saving…' : 'Save'}
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
+              {changeRole.isPending ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

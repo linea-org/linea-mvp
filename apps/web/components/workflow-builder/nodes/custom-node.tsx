@@ -51,19 +51,11 @@ import {
   TooltipTrigger,
 } from "@linea/ui/components/tooltip"
 
-<<<<<<< HEAD
-/* ------------------------------------------------------------------ */
-/*  Theme map                                                           */
-/* ------------------------------------------------------------------ */
 interface Theme {
   icon: IconSvgElement
   color: string
 }
 const defaultTheme: Theme = { icon: Robot01Icon, color: "#3b82f6" }
-=======
-interface Theme { icon: IconSvgElement; color: string }
-const defaultTheme: Theme = { icon: Robot01Icon, color: '#3b82f6' };
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 const themes: Record<string, Theme> = {
   start: { icon: ZapIcon, color: "#6366f1" },
   end: { icon: Square01Icon, color: "#14b8a6" },
@@ -317,10 +309,6 @@ const FALSE_CLS =
   "!size-3 !rounded-full !border-[2px] !border-background !bg-red-400 " +
   "hover:!bg-red-500 hover:!scale-125 transition-transform duration-150"
 
-<<<<<<< HEAD
-/* ------------------------------------------------------------------ */
-/*  Status ring map                                                     */
-/* ------------------------------------------------------------------ */
 const STATUS_RING: Record<
   string,
   { border: string; shadow: string; animate?: string }
@@ -343,14 +331,6 @@ const STATUS_RING: Record<
     shadow: "0 0 0 2px rgba(245,158,11,0.55)",
   },
 }
-=======
-const STATUS_RING: Record<string, { border: string; shadow: string; animate?: string }> = {
-  running:   { border: 'rgb(59,130,246)',  shadow: '0 0 0 3px rgba(59,130,246,0.45)', animate: 'animate-pulse' },
-  completed: { border: 'rgb(34,197,94)',   shadow: '0 0 0 2px rgba(34,197,94,0.55)'  },
-  failed:    { border: 'rgb(239,68,68)',   shadow: '0 0 0 2px rgba(239,68,68,0.55)'  },
-  suspended: { border: 'rgb(245,158,11)',  shadow: '0 0 0 2px rgba(245,158,11,0.55)' },
-};
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 function NodeShell({
   nodeType,
@@ -728,10 +708,6 @@ export const CustomNode = memo(function CustomNode({
   )
 })
 
-<<<<<<< HEAD
-/* ------------------------------------------------------------------ */
-/*  StartNode                                                           */
-/* ------------------------------------------------------------------ */
 export const StartNode = memo(function StartNode({
   id,
   data,
@@ -745,17 +721,6 @@ export const StartNode = memo(function StartNode({
   const outputPreview = data._outputPreview as string | undefined
   const properties = getNodeProperties("start", data as Record<string, unknown>)
   const outPos = portsVertical ? Position.Bottom : Position.Right
-=======
-export const StartNode = memo(function StartNode({ id, data, selected }: NodeProps) {
-  const { setNodes } = useReactFlow();
-  const label         = (data.nodeName       as string)  ?? (data.label as string) ?? 'Start';
-  const posLocked     = (data.positionLocked  as boolean) ?? false;
-  const delLocked     = (data.deleteLocked    as boolean) ?? false;
-  const portsVertical = (data.portsVertical   as boolean) ?? false;
-  const outputPreview = data._outputPreview   as string | undefined;
-  const properties    = getNodeProperties('start', data as Record<string, unknown>);
-  const outPos        = portsVertical ? Position.Bottom : Position.Right;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function togglePorts() {
     setNodes((nds) =>
@@ -784,10 +749,6 @@ export const StartNode = memo(function StartNode({ id, data, selected }: NodePro
   )
 })
 
-<<<<<<< HEAD
-/* ------------------------------------------------------------------ */
-/*  EndNode                                                             */
-/* ------------------------------------------------------------------ */
 export const EndNode = memo(function EndNode({
   id,
   data,
@@ -799,15 +760,6 @@ export const EndNode = memo(function EndNode({
   const delLocked = (data.deleteLocked as boolean) ?? false
   const portsVertical = (data.portsVertical as boolean) ?? false
   const inPos = portsVertical ? Position.Top : Position.Left
-=======
-export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) {
-  const { setNodes } = useReactFlow();
-  const label         = (data.nodeName       as string)  ?? (data.label as string) ?? 'End';
-  const posLocked     = (data.positionLocked  as boolean) ?? false;
-  const delLocked     = (data.deleteLocked    as boolean) ?? false;
-  const portsVertical = (data.portsVertical   as boolean) ?? false;
-  const inPos         = portsVertical ? Position.Top : Position.Left;
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
   function togglePorts() {
     setNodes((nds) =>
@@ -836,10 +788,6 @@ export const EndNode = memo(function EndNode({ id, data, selected }: NodeProps) 
   )
 })
 
-<<<<<<< HEAD
-/* ------------------------------------------------------------------ */
-/*  FrameNode                                                           */
-/* ------------------------------------------------------------------ */
 const FRAME_COLORS = [
   "#6366f1",
   "#3b82f6",
@@ -850,9 +798,6 @@ const FRAME_COLORS = [
   "#ec4899",
   "#64748b",
 ]
-=======
-const FRAME_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117))
 
 export const FrameNode = memo(function FrameNode({
   id,

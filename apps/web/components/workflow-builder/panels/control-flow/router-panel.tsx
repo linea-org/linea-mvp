@@ -100,15 +100,10 @@ export function RouterPanel({ data, onUpdate }: RouterPanelProps) {
         ) : (
           <div className="space-y-2">
             {routes.map((route, i) => (
-<<<<<<< HEAD:apps/web/components/workflow-builder/panels/router-panel.tsx
               <div
                 key={route.id}
                 className="space-y-2 rounded-md border border-border bg-muted/20 p-2.5"
               >
-                {/* Route header */}
-=======
-              <div key={route.id} className="rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
->>>>>>> bfb8587 (LIN-53: Codebase cleanup - split oversized files, fix AI-slop patterns, audit fixes (#117)):apps/web/components/workflow-builder/panels/control-flow/router-panel.tsx
                 <div className="flex items-center gap-1.5">
                   <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-[10px] font-bold text-foreground">
                     {i + 1}
