@@ -72,7 +72,9 @@ import {
   UserMultiple02Icon,
   Key01Icon,
   SquareLock01Icon,
+  AiBrain01Icon,
   GlobalIcon,
+  ComputerCloudIcon,
   Invoice03Icon,
   Home01Icon,
   CheckmarkCircle01Icon,
@@ -329,15 +331,16 @@ const SETTINGS_NAV_SECTIONS = [
     items: [
       { href: "/settings/general", label: "General", icon: Settings01Icon },
       { href: "/settings/members", label: "Members", icon: UserMultiple02Icon },
-      ...(BILLING_ENABLED
-        ? [{ href: "/settings/billing", label: "Billing", icon: Invoice03Icon }]
-        : []),
     ],
   },
   {
     label: "Security",
     items: [
       { href: "/settings/api-keys", label: "API Keys", icon: Key01Icon },
+      { href: "/settings/audit-log", label: "Audit Log", icon: Archive02Icon },
+      ...(BILLING_ENABLED
+        ? [{ href: "/settings/billing", label: "Billing", icon: Invoice03Icon }]
+        : []),
       {
         href: "/settings/credentials",
         label: "Secrets",
@@ -348,38 +351,40 @@ const SETTINGS_NAV_SECTIONS = [
   {
     label: "AI & Integrations",
     items: [
+      { href: "/settings/model-keys", label: "Model Keys", icon: AiBrain01Icon },
       {
         href: "/settings/models",
         label: "Model Preferences",
         icon: AiMagicIcon,
       },
       { href: "/settings/connections", label: "Connections", icon: GlobalIcon },
+      {
+        href: "/settings/mcp-servers",
+        label: "MCP Servers",
+        icon: ComputerCloudIcon,
+      },
     ],
   },
 ]
 
 function DashboardSidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const {
-    workspaces,
-    activeWorkspace,
-    setActiveWorkspace,
-    addWorkspace,
-    loading: wsLoading,
-  } = useWorkspace()
-  const { activePod } = usePod()
-  const { user } = useUser()
-  const { signOut } = useClerk()
-  const { getToken } = useAuth()
-  const [wsDialogOpen, setWsDialogOpen] = useState(false)
-  const [wsName, setWsName] = useState("")
-  const [creatingWs, setCreatingWs] = useState(false)
+  const pathname = usePathname();
+  const { workspaces, activeWorkspace, setActiveWorkspace, addWorkspace, loading: wsLoading } = useWorkspace();
+  const { activePod } = usePod();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const { getToken } = useAuth();
+  const [wsDialogOpen, setWsDialogOpen] = useState(false);
+  const [wsName, setWsName] = useState('');
+  const [creatingWs, setCreatingWs] = useState(false);
 
-  const isSettings = pathname.startsWith("/settings")
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  const isSettings = pathname.startsWith('/settings');
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   async function handleCreateWorkspace() {
     if (!wsName.trim()) return
@@ -883,13 +888,22 @@ function NotificationBell() {
   }, [workspaceId, getToken, loadNotifs])
 
   useEffect(() => {
-    if (!workspaceId) return
-    void loadNotifs()
-    void startSSE()
-    return () => {
-      sseAbortRef.current?.abort()
-    }
-  }, [workspaceId, loadNotifs, startSSE])
+    if (!workspaceId) return;
+    const init = async () => {
+      await loadNotifs();
+      await startSSE();
+    };
+    void init();
+    return () => { sseAbortRef.current?.abort(); };
+  }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!open) return;
+    const refresh = async () => {
+      await loadNotifs();
+    };
+    void refresh();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function markRead(id: string) {
     if (!workspaceId) return
