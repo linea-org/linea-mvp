@@ -6,7 +6,7 @@ import { KnowledgeController } from './knowledge.controller';
 import { KnowledgeEmbedProcessor } from './knowledge.processor';
 import { AuditModule } from '../audit/audit.module';
 import { RAG_EMBED_QUEUE } from './knowledge.queue';
-import { AIModule } from 'src/agent-chat/ai.module';
+import { AIModule } from 'src/services/ai/ai.module';
 
 @Module({
   imports: [

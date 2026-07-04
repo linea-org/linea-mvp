@@ -1,0 +1,35 @@
+{
+  "name": "@linea/runtime",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "demo": "pnpm dlx ts-node --transpile-only tests/main.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "format": "prettier --write \"**/*.ts\""
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@langchain/langgraph": "^0.2.0"
+  },
+  "devDependencies": {
+    "@linea/eslint-config": "workspace:*",
+    "@linea/db": "workspace:*",
+    "@linea/ai": "workspace:*",
+    "@linea/shared": "workspace:*",
+    "@linea/types": "workspace:*",
+    "@linea/typescript-config": "workspace:*",
+    "@types/node": "^22.19.17",
+    "dotenv": "^16.4.5",
+    "typescript": "^5.9.3"
+  }
+}

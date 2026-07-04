@@ -1,0 +1,312 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useAuth } from "@clerk/nextjs"
+import { useWorkspace } from "@/contexts/workspace-context"
+import { createApiClient } from "@/lib/api"
+import { Button } from "@linea/ui/components/button"
+import { Input } from "@linea/ui/components/input"
+import { Label } from "@linea/ui/components/label"
+import { Skeleton } from "@linea/ui/components/skeleton"
+
+interface Secret {
+  id: string
+  name: string
+  createdAt: string
+}
+
+interface ModelProvider {
+  key: string
+  label: string
+  placeholder: string
+  docsUrl: string
+  hint: string
+  models?: string[]
+  inputType?: "password" | "text"
+}
+
+const PROVIDERS: ModelProvider[] = [
+  {
+    key: "ANTHROPIC_API_KEY",
+    label: "Anthropic",
+    placeholder: "sk-ant-…",
+    docsUrl: "https://console.anthropic.com/settings/keys",
+    hint: "Claude Sonnet 4.6, Claude Opus 4.7, Claude Haiku 4.5",
+    models: ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5"],
+  },
+  {
+    key: "OPENAI_API_KEY",
+    label: "OpenAI",
+    placeholder: "sk-…",
+    docsUrl: "https://platform.openai.com/api-keys",
+    hint: "GPT-4o, GPT-4.1, o4 Mini, o3",
+    models: ["gpt-4o", "gpt-4.1", "o4-mini", "o3"],
+  },
+  {
+    key: "XAI_API_KEY",
+    label: "xAI (Grok)",
+    placeholder: "xai-…",
+    docsUrl: "https://console.x.ai",
+    hint: "Grok 3, Grok 3 Mini, Grok 2 Vision",
+    models: ["grok-3", "grok-3-mini", "grok-2-vision-1212"],
+  },
+  {
+    key: "GROQ_API_KEY",
+    label: "Groq",
+    placeholder: "gsk_…",
+    docsUrl: "https://console.groq.com/keys",
+    hint: "Llama 3.3 70B, DeepSeek R1, Qwen QwQ 32B — ultra-fast inference",
+    models: [
+      "llama-3.3-70b-versatile",
+      "deepseek-r1-distill-llama-70b",
+      "qwen-qwq-32b",
+    ],
+  },
+  {
+    key: "GOOGLE_API_KEY",
+    label: "Google AI",
+    placeholder: "AIza…",
+    docsUrl: "https://aistudio.google.com/app/apikey",
+    hint: "Gemini 2.5 Pro, Gemini 2.0 Flash — 1M token context window",
+    models: [
+      "gemini-2.5-pro-preview-05-06",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+    ],
+  },
+  {
+    key: "OLLAMA_BASE_URL",
+    label: "Ollama (local)",
+    placeholder: "http://localhost:11434",
+    docsUrl: "https://ollama.com",
+    hint: "Self-hosted — Llama, Qwen, DeepSeek R1, Mistral. No API key required.",
+    inputType: "text",
+    models: ["llama3.2", "qwen2.5", "deepseek-r1", "mistral"],
+  },
+]
+
+export default function ModelKeysPage() {
+  const { getToken } = useAuth()
+  const { activeWorkspace, loading: wsLoading } = useWorkspace()
+  const [secrets, setSecrets] = useState<Secret[]>([])
+  const [loading, setLoading] = useState(true)
+  const [inputs, setInputs] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState<Record<string, boolean>>({})
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({})
+  const [saved, setSaved] = useState<Record<string, boolean>>({})
+
+  async function load() {
+    if (!activeWorkspace) return
+    setLoading(true)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const api = createApiClient(token)
+      const data = await api.get<Secret[]>(
+        `/workspaces/${activeWorkspace.id}/secrets`
+      )
+      setSecrets(data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (wsLoading) return
+    if (!activeWorkspace) {
+      setLoading(false)
+      return
+    }
+    void load()
+  }, [activeWorkspace, wsLoading])
+
+  function isSet(key: string) {
+    return secrets.some((s) => s.name === key)
+  }
+
+  function secretId(key: string) {
+    return secrets.find((s) => s.name === key)?.id
+  }
+
+  async function handleSave(key: string) {
+    const value = inputs[key]?.trim()
+    if (!value || !activeWorkspace) return
+    setSaving((p) => ({ ...p, [key]: true }))
+    try {
+      const token = await getToken()
+      if (!token) return
+      const api = createApiClient(token)
+      const existing = secretId(key)
+      if (existing) {
+        await api.delete(
+          `/workspaces/${activeWorkspace.id}/secrets/${existing}`
+        )
+      }
+      const created = await api.post<Secret>(
+        `/workspaces/${activeWorkspace.id}/secrets`,
+        { name: key, value }
+      )
+      setSecrets((prev) => [...prev.filter((s) => s.name !== key), created])
+      setInputs((p) => ({ ...p, [key]: "" }))
+      setSaved((p) => ({ ...p, [key]: true }))
+      setTimeout(() => setSaved((p) => ({ ...p, [key]: false })), 2500)
+    } finally {
+      setSaving((p) => ({ ...p, [key]: false }))
+    }
+  }
+
+  async function handleDelete(key: string) {
+    const id = secretId(key)
+    if (!id || !activeWorkspace) return
+    setDeleting((p) => ({ ...p, [key]: true }))
+    try {
+      const token = await getToken()
+      if (!token) return
+      const api = createApiClient(token)
+      await api.delete(`/workspaces/${activeWorkspace.id}/secrets/${id}`)
+      setSecrets((prev) => prev.filter((s) => s.name !== key))
+    } finally {
+      setDeleting((p) => ({ ...p, [key]: false }))
+    }
+  }
+
+  if (wsLoading || loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-24 w-full rounded-lg" />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-sm font-medium">Model API Keys</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Add API keys for AI model providers. Keys are stored encrypted and
+          used by Agent nodes when selecting a model. Values are write-only —
+          re-enter to rotate.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {PROVIDERS.map((p) => {
+          const set = isSet(p.key)
+          const secret = secrets.find((s) => s.name === p.key)
+          return (
+            <div
+              key={p.key}
+              className="space-y-3 rounded-lg border bg-card p-4"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">{p.label}</p>
+                    {set ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        <span className="size-1.5 rounded-full bg-green-500" />
+                        Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        Not set
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {p.hint}
+                  </p>
+                  {p.models && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {p.models.map((m) => (
+                        <span
+                          key={m}
+                          className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        >
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {set && secret && (
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Set {new Date(secret.createdAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                {set && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="shrink-0 text-xs text-destructive hover:text-destructive"
+                    disabled={deleting[p.key]}
+                    onClick={() => void handleDelete(p.key)}
+                  >
+                    {deleting[p.key] ? "Removing…" : "Remove"}
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-1">
+                  <Label className="font-mono text-xs text-muted-foreground">
+                    {p.key}
+                  </Label>
+                  <Input
+                    type={p.inputType === "text" ? "text" : "password"}
+                    placeholder={
+                      set && p.inputType !== "text"
+                        ? "••••••••••••  (re-enter to rotate)"
+                        : p.placeholder
+                    }
+                    value={inputs[p.key] ?? ""}
+                    onChange={(e) =>
+                      setInputs((prev) => ({
+                        ...prev,
+                        [p.key]: e.target.value,
+                      }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleSave(p.key)
+                    }}
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  className="self-end"
+                  disabled={!inputs[p.key]?.trim() || saving[p.key]}
+                  onClick={() => void handleSave(p.key)}
+                >
+                  {saving[p.key]
+                    ? "Saving…"
+                    : saved[p.key]
+                      ? "Saved!"
+                      : set
+                        ? "Rotate"
+                        : "Save"}
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="space-y-1 rounded-lg border border-dashed p-4 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">How model keys are used</p>
+        <p>
+          When an Agent node specifies a model (e.g.{" "}
+          <code className="rounded bg-muted px-1 font-mono">
+            claude-sonnet-4-6
+          </code>
+          ), Linea picks the matching provider key from your workspace secrets.
+          If no key is set, the platform falls back to the default
+          environment-level key (if configured). For Ollama, set the base URL to
+          your local or remote Ollama server — no API key required.
+        </p>
+      </div>
+    </div>
+  )
+}

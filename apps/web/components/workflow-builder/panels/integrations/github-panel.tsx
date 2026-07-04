@@ -1,20 +1,26 @@
-'use client';
+"use client"
 
-import type { Node } from '@xyflow/react';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
-import { Textarea } from '@linea/ui/components/textarea';
+import type { Node } from "@xyflow/react"
+import { Input } from "@linea/ui/components/input"
+import { Label } from "@linea/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@linea/ui/components/select"
+import { Textarea } from "@linea/ui/components/textarea"
 
 interface GitHubPanelProps {
-  data: Record<string, unknown>;
-  onUpdate: (fields: Record<string, unknown>) => void;
-  nodes?: Node[];
-  nodeId?: string;
+  data: Record<string, unknown>
+  onUpdate: (fields: Record<string, unknown>) => void
+  nodes?: Node[]
+  nodeId?: string
 }
 
 export function GitHubPanel({ data, onUpdate }: GitHubPanelProps) {
-  const action = (data.action as string) ?? 'create_issue';
+  const action = (data.action as string) ?? "create_issue"
 
   return (
     <div className="space-y-4">
@@ -37,7 +43,7 @@ export function GitHubPanel({ data, onUpdate }: GitHubPanelProps) {
         <div className="space-y-1.5">
           <Label>Owner</Label>
           <Input
-            value={(data.owner as string) ?? ''}
+            value={(data.owner as string) ?? ""}
             onChange={(e) => onUpdate({ owner: e.target.value })}
             placeholder="acme-inc"
           />
@@ -45,42 +51,42 @@ export function GitHubPanel({ data, onUpdate }: GitHubPanelProps) {
         <div className="space-y-1.5">
           <Label>Repo</Label>
           <Input
-            value={(data.repo as string) ?? ''}
+            value={(data.repo as string) ?? ""}
             onChange={(e) => onUpdate({ repo: e.target.value })}
             placeholder="my-repo"
           />
         </div>
       </div>
 
-      {(action === 'comment_issue') && (
+      {action === "comment_issue" && (
         <div className="space-y-1.5">
           <Label>Issue number</Label>
           <Input
             type="number"
-            value={(data.issueNumber as string) ?? ''}
+            value={(data.issueNumber as string) ?? ""}
             onChange={(e) => onUpdate({ issueNumber: e.target.value })}
             placeholder="42"
           />
         </div>
       )}
 
-      {(action === 'create_issue' || action === 'create_pr') && (
+      {(action === "create_issue" || action === "create_pr") && (
         <div className="space-y-1.5">
           <Label>Title</Label>
           <Input
-            value={(data.title as string) ?? ''}
+            value={(data.title as string) ?? ""}
             onChange={(e) => onUpdate({ title: e.target.value })}
             placeholder="Issue title"
           />
         </div>
       )}
 
-      {(action === 'create_pr') && (
+      {action === "create_pr" && (
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1.5">
             <Label>Head branch</Label>
             <Input
-              value={(data.head as string) ?? ''}
+              value={(data.head as string) ?? ""}
               onChange={(e) => onUpdate({ head: e.target.value })}
               placeholder="feature/my-branch"
             />
@@ -88,7 +94,7 @@ export function GitHubPanel({ data, onUpdate }: GitHubPanelProps) {
           <div className="space-y-1.5">
             <Label>Base branch</Label>
             <Input
-              value={(data.base as string) ?? ''}
+              value={(data.base as string) ?? ""}
               onChange={(e) => onUpdate({ base: e.target.value })}
               placeholder="main"
             />
@@ -96,22 +102,29 @@ export function GitHubPanel({ data, onUpdate }: GitHubPanelProps) {
         </div>
       )}
 
-      {(action === 'create_issue' || action === 'comment_issue' || action === 'create_pr') && (
+      {(action === "create_issue" ||
+        action === "comment_issue" ||
+        action === "create_pr") && (
         <div className="space-y-1.5">
-          <Label>{action === 'comment_issue' ? 'Comment' : 'Body'} <span className="text-muted-foreground">(optional)</span></Label>
+          <Label>
+            {action === "comment_issue" ? "Comment" : "Body"}{" "}
+            <span className="text-muted-foreground">(optional)</span>
+          </Label>
           <Textarea
-            value={(data.body as string) ?? ''}
+            value={(data.body as string) ?? ""}
             onChange={(e) => onUpdate({ body: e.target.value })}
             rows={4}
           />
         </div>
       )}
 
-      {action === 'create_issue' && (
+      {action === "create_issue" && (
         <div className="space-y-1.5">
-          <Label>Labels <span className="text-muted-foreground">(optional)</span></Label>
+          <Label>
+            Labels <span className="text-muted-foreground">(optional)</span>
+          </Label>
           <Input
-            value={(data.labels as string) ?? ''}
+            value={(data.labels as string) ?? ""}
             onChange={(e) => onUpdate({ labels: e.target.value })}
             placeholder="bug, enhancement"
           />
@@ -123,5 +136,5 @@ export function GitHubPanel({ data, onUpdate }: GitHubPanelProps) {
         Token resolved from workspace secret <code>GITHUB_TOKEN</code>.
       </p>
     </div>
-  );
+  )
 }

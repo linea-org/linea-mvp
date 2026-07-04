@@ -32,7 +32,8 @@ export const providerConnections = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (t) => ({
-    uniquePerWorkspace: unique().on(t.workspaceId, t.provider),
-  })
+  (t) => [unique().on(t.workspaceId, t.provider)]
 )
+
+export type ProviderConnection = typeof providerConnections.$inferSelect
+export type NewProviderConnection = typeof providerConnections.$inferInsert

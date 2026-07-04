@@ -23,11 +23,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared packages
-        run: pnpm --filter=@linea/db build
-
       - name: Generate Fumadocs source
         run: pnpm --filter=docs exec fumadocs-mdx
+
+      - name: Build shared packages
+        run: pnpm --filter=@linea/shared --filter=@linea/ai --filter=@linea/db --filter=@linea/runtime build
 
       - name: Type check
         run: pnpm typecheck
@@ -91,7 +91,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build shared packages
-        run: pnpm --filter=@linea/db build
+        run: pnpm --filter=@linea/shared --filter=@linea/ai --filter=@linea/db --filter=@linea/runtime build
 
       - name: Run tests
         run: pnpm test

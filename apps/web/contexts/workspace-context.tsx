@@ -1,24 +1,24 @@
-'use client';
+"use client"
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
-import { createApiClient, friendlyApiError } from '@/lib/api';
-import { toast } from '@linea/ui/components/sonner';
+import { createContext, useContext, useEffect, useState } from "react"
+import { useAuth } from "@clerk/nextjs"
+import { createApiClient, friendlyApiError } from "@/lib/api"
+import { toast } from "@linea/ui/components/sonner"
 
 interface Workspace {
-  id: string;
-  name: string;
-  slug: string;
-  plan?: string;
+  id: string
+  name: string
+  slug: string
+  plan?: string
 }
 
 interface WorkspaceContextValue {
-  workspaces: Workspace[];
-  activeWorkspace: Workspace | null;
-  setActiveWorkspace: (ws: Workspace | null) => void;
-  addWorkspace: (ws: Workspace) => void;
-  removeWorkspace: (id: string) => void;
-  loading: boolean;
+  workspaces: Workspace[]
+  activeWorkspace: Workspace | null
+  setActiveWorkspace: (ws: Workspace | null) => void
+  addWorkspace: (ws: Workspace) => void
+  removeWorkspace: (id: string) => void
+  loading: boolean
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue>({
@@ -28,68 +28,87 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   addWorkspace: () => {},
   removeWorkspace: () => {},
   loading: true,
-});
+})
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
-  const { getToken } = useAuth();
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [activeWorkspace, setActiveWorkspaceState] = useState<Workspace | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { getToken } = useAuth()
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [activeWorkspace, setActiveWorkspaceState] = useState<Workspace | null>(
+    null
+  )
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
       try {
-        const token = await getToken();
-        if (!token) return;
-        const api = createApiClient(token);
-        const raw = await api.get<Array<{ id: string; name: string; slug: string; plan?: string }>>('/workspaces');
-        const data: Workspace[] = raw.map(({ id, name, slug, plan }) => ({ id, name, slug, plan }));
-        setWorkspaces(data);
+        const token = await getToken()
+        if (!token) return
+        const api = createApiClient(token)
+        const raw =
+          await api.get<
+            Array<{ id: string; name: string; slug: string; plan?: string }>
+          >("/workspaces")
+        const data: Workspace[] = raw.map(({ id, name, slug, plan }) => ({
+          id,
+          name,
+          slug,
+          plan,
+        }))
+        setWorkspaces(data)
 
-        const storedId = localStorage.getItem('activeWorkspaceId');
-        const active = data.find((w) => w.id === storedId) ?? data[0] ?? null;
-        setActiveWorkspaceState(active);
+        const storedId = localStorage.getItem("activeWorkspaceId")
+        const active = data.find((w) => w.id === storedId) ?? data[0] ?? null
+        setActiveWorkspaceState(active)
       } catch (err) {
-        toast.error(friendlyApiError(err));
+        toast.error(friendlyApiError(err))
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
     }
-    void load();
-  }, [getToken]);
+    void load()
+  }, [getToken])
 
   function setActiveWorkspace(ws: Workspace | null) {
-    setActiveWorkspaceState(ws);
+    setActiveWorkspaceState(ws)
     if (ws) {
-      localStorage.setItem('activeWorkspaceId', ws.id);
+      localStorage.setItem("activeWorkspaceId", ws.id)
     } else {
-      localStorage.removeItem('activeWorkspaceId');
+      localStorage.removeItem("activeWorkspaceId")
     }
   }
 
   function addWorkspace(ws: Workspace) {
-    setWorkspaces((prev) => [...prev, ws]);
-    setActiveWorkspace(ws);
+    setWorkspaces((prev) => [...prev, ws])
+    setActiveWorkspace(ws)
   }
 
   function removeWorkspace(id: string) {
     setWorkspaces((prev) => {
-      const next = prev.filter((w) => w.id !== id);
+      const next = prev.filter((w) => w.id !== id)
       // If the deleted workspace was active, switch to first remaining or null
       if (activeWorkspace?.id === id) {
-        setActiveWorkspace(next[0] ?? null);
+        setActiveWorkspace(next[0] ?? null)
       }
-      return next;
-    });
+      return next
+    })
   }
 
   return (
-    <WorkspaceContext.Provider value={{ workspaces, activeWorkspace, loading, setActiveWorkspace, addWorkspace, removeWorkspace }}>
+    <WorkspaceContext.Provider
+      value={{
+        workspaces,
+        activeWorkspace,
+        loading,
+        setActiveWorkspace,
+        addWorkspace,
+        removeWorkspace,
+      }}
+    >
       {children}
     </WorkspaceContext.Provider>
-  );
+  )
 }
 
 export function useWorkspace() {
-  return useContext(WorkspaceContext);
+  return useContext(WorkspaceContext)
 }

@@ -372,7 +372,7 @@ export class WorkflowsService {
     const [updated] = await this.db
       .update(workflows)
       .set({
-        definition: ver.definition as NewWorkflow['definition'],
+        definition: ver.definition,
         version: existing.version + 1,
         updatedAt: new Date(),
       })
@@ -412,7 +412,7 @@ export class WorkflowsService {
       definition = sourceWorkflow.definition;
       description = sourceWorkflow.description ?? description;
     } else if (template.definition) {
-      definition = template.definition as NewWorkflow['definition'];
+      definition = template.definition;
     } else {
       throw new NotFoundException('Template has no workflow definition');
     }

@@ -1,183 +1,263 @@
-'use client';
+"use client"
 
-import { useState, useRef } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { HugeiconsIcon } from '@hugeicons/react';
+import { useState, useRef } from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  Cancel01Icon, Loading01Icon, CheckmarkCircle01Icon, ArrowUp01Icon,
-  BubbleChatAddIcon, SmileIcon, ArrowTurnBackwardIcon, MoreHorizontalIcon,
-  Delete01Icon, PinIcon, Link01Icon, Attachment01Icon,
-} from '@hugeicons/core-free-icons';
-import { Button } from '@linea/ui/components/button';
-import { Textarea } from '@linea/ui/components/textarea';
-import { Avatar, AvatarFallback, AvatarImage } from '@linea/ui/components/avatar';
-import { Spinner } from '@linea/ui/components/spinner';
+  Cancel01Icon,
+  Loading01Icon,
+  CheckmarkCircle01Icon,
+  ArrowUp01Icon,
+  BubbleChatAddIcon,
+  SmileIcon,
+  ArrowTurnBackwardIcon,
+  MoreHorizontalIcon,
+  Delete01Icon,
+  PinIcon,
+  Link01Icon,
+  Attachment01Icon,
+} from "@hugeicons/core-free-icons"
+import { Button } from "@linea/ui/components/button"
+import { Textarea } from "@linea/ui/components/textarea"
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger,
-} from '@linea/ui/components/dropdown-menu';
-import { type Node } from '@xyflow/react';
-import { friendlyApiError } from '@/lib/api';
-import { useApiClient } from '@/hooks/use-api-client';
-import { toast } from '@linea/ui/components/sonner';
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@linea/ui/components/avatar"
+import { Spinner } from "@linea/ui/components/spinner"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@linea/ui/components/dropdown-menu"
+import { type Node } from "@xyflow/react"
+import { friendlyApiError } from "@/lib/api"
+import { useApiClient } from "@/hooks/use-api-client"
+import { toast } from "@linea/ui/components/sonner"
 
-interface Reaction { emoji: string; count: number; reacted: boolean }
+interface Reaction {
+  emoji: string
+  count: number
+  reacted: boolean
+}
 interface Comment {
-  id: string; nodeId: string | null; userId: string; userClerkId: string | null;
-  userName: string | null; userEmail: string; userAvatarUrl: string | null;
-  body: string; resolved: boolean; pinned: boolean; createdAt: string;
-  reactions: Reaction[]; replies: Comment[];
+  id: string
+  nodeId: string | null
+  userId: string
+  userClerkId: string | null
+  userName: string | null
+  userEmail: string
+  userAvatarUrl: string | null
+  body: string
+  resolved: boolean
+  pinned: boolean
+  createdAt: string
+  reactions: Reaction[]
+  replies: Comment[]
 }
 interface Props {
-  workspaceId: string; podId: string; workflowId: string;
-  nodes: Node[]; selectedNodeId?: string | null; currentUserId?: string; onClose: () => void;
+  workspaceId: string
+  podId: string
+  workflowId: string
+  nodes: Node[]
+  selectedNodeId?: string | null
+  currentUserId?: string
+  onClose: () => void
 }
 
 const BASE_PATH = (ws: string, pod: string, wf: string) =>
-  `/workspaces/${ws}/pods/${pod}/workflows/${wf}/comments`;
-const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+  `/workspaces/${ws}/pods/${pod}/workflows/${wf}/comments`
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"]
 
 // px from reply-item top to the horizontal elbow (= card py-2.5 + half avatar size-5)
-const ELBOW_Y = 20;
+const ELBOW_Y = 20
 // px from left of connector column where the vertical line is drawn
-const LINE_X = 8;
+const LINE_X = 8
 // width of horizontal elbow arm in px
-const ELBOW_W = 12;
+const ELBOW_W = 12
 
 function toggleCommentField(
   list: Comment[],
   id: string,
-  field: 'resolved' | 'pinned',
-  value: boolean,
+  field: "resolved" | "pinned",
+  value: boolean
 ): Comment[] {
   return list.map((c) =>
     c.id === id
       ? { ...c, [field]: value }
-      : { ...c, replies: toggleCommentField(c.replies, id, field, value) },
-  );
+      : { ...c, replies: toggleCommentField(c.replies, id, field, value) }
+  )
 }
 
 function timeAgo(iso: string) {
-  const d = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(d / 60000);
-  if (m < 1) return 'now';
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
+  const d = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(d / 60000)
+  if (m < 1) return "now"
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h`
+  return `${Math.floor(h / 24)}d`
 }
 
 function ReactionPicker({ onReact }: { onReact: (e: string) => void }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false)
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
         title="Add reaction"
-        className="flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        className="flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         <HugeiconsIcon icon={SmileIcon} className="size-3.5" />
       </button>
       {open && (
-        <div className="absolute bottom-full right-0 mb-1 z-50 flex gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-lg">
+        <div className="absolute right-0 bottom-full z-50 mb-1 flex gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-lg">
           {REACTION_EMOJIS.map((e) => (
-            <button key={e} onClick={() => { onReact(e); setOpen(false); }}
-              className="rounded p-1 text-sm hover:bg-muted transition-colors">
+            <button
+              key={e}
+              onClick={() => {
+                onReact(e)
+                setOpen(false)
+              }}
+              className="rounded p-1 text-sm transition-colors hover:bg-muted"
+            >
               {e}
             </button>
           ))}
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function ReplyConnector({
-  isLast, elbow = true, isCollapsed, onClick,
+  isLast,
+  elbow = true,
+  isCollapsed,
+  onClick,
 }: {
-  isLast: boolean; elbow?: boolean; isCollapsed: boolean; onClick: () => void;
+  isLast: boolean
+  elbow?: boolean
+  isCollapsed: boolean
+  onClick: () => void
 }) {
   return (
     <button
       onClick={onClick}
-      title={isCollapsed ? 'Expand replies' : 'Collapse replies'}
-      className="group/line relative w-5 shrink-0 self-stretch cursor-pointer"
+      title={isCollapsed ? "Expand replies" : "Collapse replies"}
+      className="group/line relative w-5 shrink-0 cursor-pointer self-stretch"
     >
       <span
-        className="absolute w-px rounded-full bg-border/60 group-hover/line:bg-primary/60 transition-colors"
+        className="absolute w-px rounded-full bg-border/60 transition-colors group-hover/line:bg-primary/60"
         style={{
-          left: LINE_X, top: 0,
+          left: LINE_X,
+          top: 0,
           ...(isLast ? { height: ELBOW_Y } : { bottom: 0 }),
         }}
       />
       {elbow && (
         <span
-          className="absolute h-px rounded-full bg-border/60 group-hover/line:bg-primary/60 transition-colors"
+          className="absolute h-px rounded-full bg-border/60 transition-colors group-hover/line:bg-primary/60"
           style={{ left: LINE_X, top: ELBOW_Y, width: ELBOW_W }}
         />
       )}
     </button>
-  );
+  )
 }
 
 function CommentCard({
-  comment, isTopLevel, currentUserId,
-  onResolve, onReply, onReact, onDelete, onPin,
+  comment,
+  isTopLevel,
+  currentUserId,
+  onResolve,
+  onReply,
+  onReact,
+  onDelete,
+  onPin,
 }: {
-  comment: Comment; isTopLevel: boolean; currentUserId?: string;
-  onResolve: (id: string, resolved: boolean) => void;
-  onReply: (id: string, userName: string | null) => void;
-  onReact: (id: string, emoji: string) => void;
-  onDelete: (id: string) => void;
-  onPin: (id: string, pinned: boolean) => void;
+  comment: Comment
+  isTopLevel: boolean
+  currentUserId?: string
+  onResolve: (id: string, resolved: boolean) => void
+  onReply: (id: string, userName: string | null) => void
+  onReact: (id: string, emoji: string) => void
+  onDelete: (id: string) => void
+  onPin: (id: string, pinned: boolean) => void
 }) {
-  const initials = ((comment.userName ?? comment.userEmail)[0] ?? '?').toUpperCase();
-  const visibleReactions = comment.reactions.filter((r) => r.count > 0);
-  const isOwner = !!currentUserId && currentUserId === comment.userClerkId;
+  const initials = (
+    (comment.userName ?? comment.userEmail)[0] ?? "?"
+  ).toUpperCase()
+  const visibleReactions = comment.reactions.filter((r) => r.count > 0)
+  const isOwner = !!currentUserId && currentUserId === comment.userClerkId
 
   return (
-    <div className={`group rounded-lg border border-border px-3 py-2.5 space-y-1.5 transition-opacity ${comment.resolved ? 'opacity-40' : ''} ${comment.pinned ? 'border-primary/30 bg-primary/5' : ''}`}>
+    <div
+      className={`group space-y-1.5 rounded-lg border border-border px-3 py-2.5 transition-opacity ${comment.resolved ? "opacity-40" : ""} ${comment.pinned ? "border-primary/30 bg-primary/5" : ""}`}
+    >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex min-w-0 items-center gap-1.5">
           <Avatar className="size-5 shrink-0">
-            {comment.userAvatarUrl && <AvatarImage src={comment.userAvatarUrl} />}
+            {comment.userAvatarUrl && (
+              <AvatarImage src={comment.userAvatarUrl} />
+            )}
             <AvatarFallback className="text-[9px]">{initials}</AvatarFallback>
           </Avatar>
-          <span className="text-xs font-medium truncate max-w-[7rem]">
-            {comment.userName ?? comment.userEmail.split('@')[0]}
+          <span className="max-w-[7rem] truncate text-xs font-medium">
+            {comment.userName ?? comment.userEmail.split("@")[0]}
           </span>
-          <span className="text-[10px] text-muted-foreground/60 shrink-0">{timeAgo(comment.createdAt)}</span>
+          <span className="shrink-0 text-[10px] text-muted-foreground/60">
+            {timeAgo(comment.createdAt)}
+          </span>
           {comment.pinned && (
-            <span className="text-[10px] text-primary/60 font-medium shrink-0">pinned</span>
+            <span className="shrink-0 text-[10px] font-medium text-primary/60">
+              pinned
+            </span>
           )}
         </div>
 
-        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           {isTopLevel && (
             <button
               onClick={() => onResolve(comment.id, !comment.resolved)}
-              title={comment.resolved ? 'Reopen' : 'Resolve'}
+              title={comment.resolved ? "Reopen" : "Resolve"}
               className={`rounded p-1 transition-colors ${
-                comment.resolved ? 'text-green-600' : 'text-muted-foreground hover:text-green-600'
+                comment.resolved
+                  ? "text-green-600"
+                  : "text-muted-foreground hover:text-green-600"
               }`}
             >
-              <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-3.5" />
+              <HugeiconsIcon
+                icon={CheckmarkCircle01Icon}
+                className="size-3.5"
+              />
             </button>
           )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              <button className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                 <HugeiconsIcon icon={MoreHorizontalIcon} className="size-3.5" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-36">
-              <DropdownMenuItem onClick={() => onPin(comment.id, !comment.pinned)}>
-                <HugeiconsIcon icon={PinIcon} className="size-3.5 text-muted-foreground" />
-                {comment.pinned ? 'Unpin' : 'Pin'}
+              <DropdownMenuItem
+                onClick={() => onPin(comment.id, !comment.pinned)}
+              >
+                <HugeiconsIcon
+                  icon={PinIcon}
+                  className="size-3.5 text-muted-foreground"
+                />
+                {comment.pinned ? "Unpin" : "Pin"}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onReply(comment.id, comment.userName)}>
-                <HugeiconsIcon icon={ArrowTurnBackwardIcon} className="size-3.5 text-muted-foreground" />
+              <DropdownMenuItem
+                onClick={() => onReply(comment.id, comment.userName)}
+              >
+                <HugeiconsIcon
+                  icon={ArrowTurnBackwardIcon}
+                  className="size-3.5 text-muted-foreground"
+                />
                 Reply
               </DropdownMenuItem>
               {isOwner && (
@@ -197,17 +277,19 @@ function CommentCard({
         </div>
       </div>
 
-      <p className="text-xs leading-relaxed text-foreground/90">{comment.body}</p>
+      <p className="text-xs leading-relaxed text-foreground/90">
+        {comment.body}
+      </p>
 
-      <div className="flex items-center gap-1 flex-wrap">
+      <div className="flex flex-wrap items-center gap-1">
         {visibleReactions.map((r) => (
           <button
             key={r.emoji}
             onClick={() => onReact(comment.id, r.emoji)}
             className={`flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] transition-colors ${
               r.reacted
-                ? 'border-primary/30 bg-primary/10 text-primary'
-                : 'border-border bg-muted/30 hover:bg-muted text-foreground/80'
+                ? "border-primary/30 bg-primary/10 text-primary"
+                : "border-border bg-muted/30 text-foreground/80 hover:bg-muted"
             }`}
           >
             <span>{r.emoji}</span>
@@ -215,47 +297,68 @@ function CommentCard({
           </button>
         ))}
 
-        <div className="ml-auto flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="ml-auto flex items-center gap-0 opacity-0 transition-opacity group-hover:opacity-100">
           <ReactionPicker onReact={(e) => onReact(comment.id, e)} />
           <button
             onClick={() => onReply(comment.id, comment.userName)}
             title="Reply"
-            className="flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <HugeiconsIcon icon={ArrowTurnBackwardIcon} className="size-3.5" />
           </button>
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 // When collapsed: hides ALL replies and shows an expand pill.
 // This gives a clear visual signal regardless of reply count.
 function CommentThread({
-  comment, depth, collapsedIds, onToggle,
-  onResolve, onReply, onReact, onDelete, onPin, currentUserId,
+  comment,
+  depth,
+  collapsedIds,
+  onToggle,
+  onResolve,
+  onReply,
+  onReact,
+  onDelete,
+  onPin,
+  currentUserId,
 }: {
-  comment: Comment; depth: number; collapsedIds: Set<string>;
-  onToggle: (id: string) => void;
-  onResolve: (id: string, resolved: boolean) => void;
-  onReply: (id: string, userName: string | null) => void;
-  onReact: (id: string, emoji: string) => void;
-  onDelete: (id: string) => void;
-  onPin: (id: string, pinned: boolean) => void;
-  currentUserId?: string;
+  comment: Comment
+  depth: number
+  collapsedIds: Set<string>
+  onToggle: (id: string) => void
+  onResolve: (id: string, resolved: boolean) => void
+  onReply: (id: string, userName: string | null) => void
+  onReact: (id: string, emoji: string) => void
+  onDelete: (id: string) => void
+  onPin: (id: string, pinned: boolean) => void
+  currentUserId?: string
 }) {
-  const replies = comment.replies;
-  const hasReplies = replies.length > 0;
-  const isCollapsed = hasReplies && collapsedIds.has(comment.id);
-  const toggleThis = () => onToggle(comment.id);
-  const sharedProps = { onResolve, onReply, onReact, onDelete, onPin, currentUserId };
+  const replies = comment.replies
+  const hasReplies = replies.length > 0
+  const isCollapsed = hasReplies && collapsedIds.has(comment.id)
+  const toggleThis = () => onToggle(comment.id)
+  const sharedProps = {
+    onResolve,
+    onReply,
+    onReact,
+    onDelete,
+    onPin,
+    currentUserId,
+  }
 
   // Reply thread lines are built from absolutely-positioned spans: a vertical bridge from the
   // parent card, then (when collapsed) a short stub + horizontal arm forming an elbow to the pill.
   return (
     <div>
-      <CommentCard comment={comment} isTopLevel={depth === 0} {...sharedProps} />
+      <CommentCard
+        comment={comment}
+        isTopLevel={depth === 0}
+        {...sharedProps}
+      />
 
       {hasReplies && (
         <div className="ml-2.5">
@@ -270,33 +373,38 @@ function CommentThread({
             <div className="flex items-center">
               <button
                 onClick={toggleThis}
-                className="group/line relative w-5 shrink-0 self-stretch cursor-pointer"
+                className="group/line relative w-5 shrink-0 cursor-pointer self-stretch"
                 title="Expand replies"
               >
                 <span
-                  className="absolute w-px rounded-full bg-border/60 group-hover/line:bg-primary/60 transition-colors"
+                  className="absolute w-px rounded-full bg-border/60 transition-colors group-hover/line:bg-primary/60"
                   style={{ left: LINE_X, top: 0, height: 16 }}
                 />
                 <span
-                  className="absolute h-px rounded-full bg-border/60 group-hover/line:bg-primary/60 transition-colors"
+                  className="absolute h-px rounded-full bg-border/60 transition-colors group-hover/line:bg-primary/60"
                   style={{ left: LINE_X, top: 16, width: ELBOW_W }}
                 />
               </button>
               <button
                 onClick={toggleThis}
-                className="flex-1 text-left text-[10px] text-muted-foreground hover:text-foreground py-1 transition-colors"
+                className="flex-1 py-1 text-left text-[10px] text-muted-foreground transition-colors hover:text-foreground"
               >
-                {replies.length} {replies.length === 1 ? 'reply' : 'replies'} — click to expand
+                {replies.length} {replies.length === 1 ? "reply" : "replies"} —
+                click to expand
               </button>
             </div>
           ) : (
             /* ── Expanded: all replies with tree connectors ── */
             replies.map((reply, idx) => {
-              const isLast = idx === replies.length - 1;
+              const isLast = idx === replies.length - 1
               return (
                 <div key={reply.id} className="flex">
-                  <ReplyConnector isLast={isLast} isCollapsed={isCollapsed} onClick={toggleThis} />
-                  <div className="flex-1 min-w-0 pb-1.5">
+                  <ReplyConnector
+                    isLast={isLast}
+                    isCollapsed={isCollapsed}
+                    onClick={toggleThis}
+                  />
+                  <div className="min-w-0 flex-1 pb-1.5">
                     <CommentThread
                       comment={reply}
                       depth={depth + 1}
@@ -306,260 +414,301 @@ function CommentThread({
                     />
                   </div>
                 </div>
-              );
+              )
             })
           )}
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function AttachBar({
-  onLink, onFile, uploading,
+  onLink,
+  onFile,
+  uploading,
 }: {
-  onLink: () => void;
-  onFile: () => void;
-  uploading?: boolean;
+  onLink: () => void
+  onFile: () => void
+  uploading?: boolean
 }) {
   return (
     <div className="flex items-center gap-0.5">
       <button
         onClick={onFile}
         disabled={uploading}
-        title={uploading ? 'Uploading…' : 'Attach file'}
-        className="flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title={uploading ? "Uploading…" : "Attach file"}
+        className="flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
       >
         <HugeiconsIcon
           icon={uploading ? Loading01Icon : Attachment01Icon}
-          className={`size-3.5 ${uploading ? 'animate-spin' : ''}`}
+          className={`size-3.5 ${uploading ? "animate-spin" : ""}`}
         />
       </button>
       <button
         onClick={onLink}
         title="Attach link"
-        className="flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        className="flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         <HugeiconsIcon icon={Link01Icon} className="size-3.5" />
       </button>
     </div>
-  );
+  )
 }
 
-export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedNodeId, currentUserId, onClose }: Props) {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
-  const [filterNodeId, setFilterNodeId] = useState<string | 'all'>('all');
-  const [body, setBody] = useState('');
-  const [replyTo, setReplyTo] = useState<{ id: string; userName: string | null } | null>(null);
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
-  const [linkPrompt, setLinkPrompt] = useState(false);
-  const [linkUrl, setLinkUrl] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export function CommentsPanel({
+  workspaceId,
+  podId,
+  workflowId,
+  nodes,
+  selectedNodeId,
+  currentUserId,
+  onClose,
+}: Props) {
+  const [comments, setComments] = useState<Comment[]>([])
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
+  const [filterNodeId, setFilterNodeId] = useState<string | "all">("all")
+  const [body, setBody] = useState("")
+  const [replyTo, setReplyTo] = useState<{
+    id: string
+    userName: string | null
+  } | null>(null)
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+  const [linkPrompt, setLinkPrompt] = useState(false)
+  const [linkUrl, setLinkUrl] = useState("")
+  const [uploading, setUploading] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const getApi = useApiClient();
-  const path = BASE_PATH(workspaceId, podId, workflowId);
+  const getApi = useApiClient()
+  const path = BASE_PATH(workspaceId, podId, workflowId)
 
-  const [prevSelectedNodeId, setPrevSelectedNodeId] = useState(selectedNodeId);
+  const [prevSelectedNodeId, setPrevSelectedNodeId] = useState(selectedNodeId)
   if (selectedNodeId !== prevSelectedNodeId) {
-    setPrevSelectedNodeId(selectedNodeId);
-    if (selectedNodeId) setFilterNodeId(selectedNodeId);
+    setPrevSelectedNodeId(selectedNodeId)
+    if (selectedNodeId) setFilterNodeId(selectedNodeId)
   }
 
   function toggleCollapse(id: string) {
     setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
-  const { data: fetchedComments, isLoading: loading, refetch } = useQuery({
-    queryKey: ['workflow-comments', workspaceId, podId, workflowId],
+  const {
+    data: fetchedComments,
+    isLoading: loading,
+    refetch,
+  } = useQuery({
+    queryKey: ["workflow-comments", workspaceId, podId, workflowId],
     queryFn: async () => {
-      const api = await getApi();
-      const data = await api.get<Comment[]>(path);
+      const api = await getApi()
+      const data = await api.get<Comment[]>(path)
       const normalise = (c: Comment): Comment => ({
         ...c,
         reactions: c.reactions ?? [],
         replies: (c.replies ?? []).map(normalise),
-      });
-      return (data ?? []).map(normalise);
+      })
+      return (data ?? []).map(normalise)
     },
-  });
+  })
 
   if (fetchedComments && loadedFor !== path) {
-    setLoadedFor(path);
-    setComments(fetchedComments);
+    setLoadedFor(path)
+    setComments(fetchedComments)
   }
 
-
   async function load() {
-    const result = await refetch();
-    if (result.data) setComments(result.data);
+    const result = await refetch()
+    if (result.data) setComments(result.data)
   }
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const api = await getApi();
+      const api = await getApi()
       await api.post(path, {
         body: body.trim(),
-        nodeId: filterNodeId !== 'all' ? filterNodeId : null,
+        nodeId: filterNodeId !== "all" ? filterNodeId : null,
         parentId: replyTo?.id ?? undefined,
-      });
+      })
     },
     onSuccess: async () => {
-      setBody('');
-      setReplyTo(null);
-      await load();
+      setBody("")
+      setReplyTo(null)
+      await load()
     },
-  });
+  })
 
   function handleSubmit() {
-    if (!body.trim()) return;
-    submitMutation.mutate();
+    if (!body.trim()) return
+    submitMutation.mutate()
   }
 
   const resolveMutation = useMutation({
     mutationFn: async ({ id, resolved }: { id: string; resolved: boolean }) => {
-      const api = await getApi();
-      await api.patch(`${path}/${id}`, { resolved });
-      return { id, resolved };
+      const api = await getApi()
+      await api.patch(`${path}/${id}`, { resolved })
+      return { id, resolved }
     },
-    onSuccess: ({ id, resolved }) => setComments((prev) => toggleCommentField(prev, id, 'resolved', resolved)),
-  });
+    onSuccess: ({ id, resolved }) =>
+      setComments((prev) => toggleCommentField(prev, id, "resolved", resolved)),
+  })
 
   function handleResolve(id: string, resolved: boolean) {
-    resolveMutation.mutate({ id, resolved });
+    resolveMutation.mutate({ id, resolved })
   }
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const api = await getApi();
-      await api.delete(`${path}/${id}`);
-      return id;
+      const api = await getApi()
+      await api.delete(`${path}/${id}`)
+      return id
     },
     onSuccess: (id) => {
       const remove = (list: Comment[]): Comment[] =>
-        list.filter((c) => c.id !== id).map((c) => ({ ...c, replies: remove(c.replies) }));
-      setComments((prev) => remove(prev));
+        list
+          .filter((c) => c.id !== id)
+          .map((c) => ({ ...c, replies: remove(c.replies) }))
+      setComments((prev) => remove(prev))
     },
-  });
+  })
 
   function handleDelete(id: string) {
-    deleteMutation.mutate(id);
+    deleteMutation.mutate(id)
   }
 
   const pinMutation = useMutation({
     mutationFn: async ({ id, pinned }: { id: string; pinned: boolean }) => {
-      const api = await getApi();
-      await api.patch(`${path}/${id}`, { pinned });
-      return { id, pinned };
+      const api = await getApi()
+      await api.patch(`${path}/${id}`, { pinned })
+      return { id, pinned }
     },
-    onSuccess: ({ id, pinned }) => setComments((prev) => toggleCommentField(prev, id, 'pinned', pinned)),
-  });
+    onSuccess: ({ id, pinned }) =>
+      setComments((prev) => toggleCommentField(prev, id, "pinned", pinned)),
+  })
 
   function handlePin(id: string, pinned: boolean) {
-    pinMutation.mutate({ id, pinned });
+    pinMutation.mutate({ id, pinned })
   }
 
   const reactMutation = useMutation({
-    mutationFn: async ({ commentId, emoji }: { commentId: string; emoji: string }) => {
-      const api = await getApi();
-      await api.post(`${path}/${commentId}/react`, { emoji });
-      return { commentId, emoji };
+    mutationFn: async ({
+      commentId,
+      emoji,
+    }: {
+      commentId: string
+      emoji: string
+    }) => {
+      const api = await getApi()
+      await api.post(`${path}/${commentId}/react`, { emoji })
+      return { commentId, emoji }
     },
     onSuccess: ({ commentId, emoji }) => {
       const update = (c: Comment): Comment => {
         if (c.id === commentId) {
-          const existing = c.reactions.find((r) => r.emoji === emoji);
+          const existing = c.reactions.find((r) => r.emoji === emoji)
           const reactions = existing
             ? c.reactions.map((r) =>
                 r.emoji === emoji
-                  ? { ...r, count: r.reacted ? r.count - 1 : r.count + 1, reacted: !r.reacted }
+                  ? {
+                      ...r,
+                      count: r.reacted ? r.count - 1 : r.count + 1,
+                      reacted: !r.reacted,
+                    }
                   : r
               )
-            : [...c.reactions, { emoji, count: 1, reacted: true }];
-          return { ...c, reactions };
+            : [...c.reactions, { emoji, count: 1, reacted: true }]
+          return { ...c, reactions }
         }
-        return { ...c, replies: c.replies.map(update) };
-      };
-      setComments((prev) => prev.map(update));
+        return { ...c, replies: c.replies.map(update) }
+      }
+      setComments((prev) => prev.map(update))
     },
-  });
+  })
 
   function handleReact(commentId: string, emoji: string) {
-    reactMutation.mutate({ commentId, emoji });
+    reactMutation.mutate({ commentId, emoji })
   }
 
   function handleReply(id: string, userName: string | null) {
-    setReplyTo({ id, userName });
-    setTimeout(() => textareaRef.current?.focus(), 50);
+    setReplyTo({ id, userName })
+    setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
   function insertLink() {
-    const url = linkUrl.trim();
-    if (!url) return;
-    setBody((b) => b + (b ? ' ' : '') + url);
-    setLinkUrl('');
-    setLinkPrompt(false);
-    setTimeout(() => textareaRef.current?.focus(), 50);
+    const url = linkUrl.trim()
+    if (!url) return
+    setBody((b) => b + (b ? " " : "") + url)
+    setLinkUrl("")
+    setLinkPrompt(false)
+    setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
 
-    setUploading(true);
+    setUploading(true)
     try {
       // 1. Get a presigned URL from the API
-      const presignPath = `/workspaces/${workspaceId}/uploads/presign`;
-      const api = await getApi();
-      const { presignedUrl, publicUrl } = await api.post<{ presignedUrl: string; publicUrl: string; key: string }>(
-        presignPath,
-        { filename: file.name, contentType: file.type, size: file.size },
-      );
+      const presignPath = `/workspaces/${workspaceId}/uploads/presign`
+      const api = await getApi()
+      const { presignedUrl, publicUrl } = await api.post<{
+        presignedUrl: string
+        publicUrl: string
+        key: string
+      }>(presignPath, {
+        filename: file.name,
+        contentType: file.type,
+        size: file.size,
+      })
 
       // 2. PUT the file directly to R2
       await fetch(presignedUrl, {
-        method: 'PUT',
+        method: "PUT",
         body: file,
-        headers: { 'Content-Type': file.type },
-      });
+        headers: { "Content-Type": file.type },
+      })
 
       // 3. Insert the public URL into the comment body
-      const label = publicUrl || file.name;
-      setBody((b) => b + (b ? '\n' : '') + label);
+      const label = publicUrl || file.name
+      setBody((b) => b + (b ? "\n" : "") + label)
     } catch (err) {
-      toast.error(friendlyApiError(err));
+      toast.error(friendlyApiError(err))
       // Fallback: insert filename so the comment still references what was attached
-      setBody((b) => b + (b ? ' ' : '') + `[file: ${file.name}]`);
+      setBody((b) => b + (b ? " " : "") + `[file: ${file.name}]`)
     } finally {
-      setUploading(false);
-      setTimeout(() => textareaRef.current?.focus(), 50);
+      setUploading(false)
+      setTimeout(() => textareaRef.current?.focus(), 50)
     }
   }
 
-  const filtered = filterNodeId === 'all'
-    ? comments
-    : comments.filter((c) => c.nodeId === filterNodeId);
+  const filtered =
+    filterNodeId === "all"
+      ? comments
+      : comments.filter((c) => c.nodeId === filterNodeId)
 
-  const nodeOptions = nodes.filter((n) => n.type !== 'note');
-  const unresolved = filtered.filter((c) => !c.resolved).length;
+  const nodeOptions = nodes.filter((n) => n.type !== "note")
+  const unresolved = filtered.filter((c) => !c.resolved).length
 
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
-          <HugeiconsIcon icon={BubbleChatAddIcon} className="size-4 text-muted-foreground" />
+          <HugeiconsIcon
+            icon={BubbleChatAddIcon}
+            className="size-4 text-muted-foreground"
+          />
           <div>
-            <p className="text-sm font-semibold leading-none">Comments</p>
+            <p className="text-sm leading-none font-semibold">Comments</p>
             {unresolved > 0 && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">{unresolved} open</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                {unresolved} open
+              </p>
             )}
           </div>
         </div>
@@ -570,10 +719,10 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
 
       {nodeOptions.length > 0 && (
         <div className="no-scrollbar overflow-x-auto border-b border-border">
-          <div className="flex items-center gap-0.5 px-2 py-1.5 min-w-max">
+          <div className="flex min-w-max items-center gap-0.5 px-2 py-1.5">
             <button
-              onClick={() => setFilterNodeId('all')}
-              className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${filterNodeId === 'all' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setFilterNodeId("all")}
+              className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${filterNodeId === "all" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
               All
             </button>
@@ -581,7 +730,7 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
               <button
                 key={n.id}
                 onClick={() => setFilterNodeId(n.id)}
-                className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium transition-colors max-w-[7rem] truncate ${filterNodeId === n.id ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`max-w-[7rem] shrink-0 truncate rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${filterNodeId === n.id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 {(n.data?.label as string | undefined) ?? n.type}
               </button>
@@ -590,18 +739,25 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Spinner className="size-4 text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-1.5 text-center">
+          <div className="flex flex-col items-center justify-center gap-1.5 py-12 text-center">
             <div className="flex size-10 items-center justify-center rounded-xl bg-muted">
-              <HugeiconsIcon icon={BubbleChatAddIcon} className="size-4 text-muted-foreground" />
+              <HugeiconsIcon
+                icon={BubbleChatAddIcon}
+                className="size-4 text-muted-foreground"
+              />
             </div>
-            <p className="text-xs font-medium text-foreground mt-1">No comments yet</p>
-            <p className="text-[11px] text-muted-foreground">Add the first one below</p>
+            <p className="mt-1 text-xs font-medium text-foreground">
+              No comments yet
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Add the first one below
+            </p>
           </div>
         ) : (
           filtered.map((c) => (
@@ -622,15 +778,20 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
         )}
       </div>
 
-      <div className="border-t border-border p-3 space-y-2">
+      <div className="space-y-2 border-t border-border p-3">
         {replyTo && (
           <div className="flex items-center justify-between rounded-md bg-muted/50 px-2 py-1.5">
-            <p className="text-[11px] text-muted-foreground truncate">
-              Replying to{' '}
-              <span className="font-medium text-foreground">{replyTo.userName ?? 'comment'}</span>
+            <p className="truncate text-[11px] text-muted-foreground">
+              Replying to{" "}
+              <span className="font-medium text-foreground">
+                {replyTo.userName ?? "comment"}
+              </span>
             </p>
-            <button onClick={() => setReplyTo(null)} className="shrink-0 ml-2">
-              <HugeiconsIcon icon={Cancel01Icon} className="size-3 text-muted-foreground hover:text-foreground" />
+            <button onClick={() => setReplyTo(null)} className="ml-2 shrink-0">
+              <HugeiconsIcon
+                icon={Cancel01Icon}
+                className="size-3 text-muted-foreground hover:text-foreground"
+              />
             </button>
           </div>
         )}
@@ -642,22 +803,41 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') insertLink();
-                if (e.key === 'Escape') { setLinkPrompt(false); setLinkUrl(''); }
+                if (e.key === "Enter") insertLink()
+                if (e.key === "Escape") {
+                  setLinkPrompt(false)
+                  setLinkUrl("")
+                }
               }}
               placeholder="Paste URL and press Enter…"
               className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring/50"
             />
-            <button onClick={insertLink} className="text-[11px] text-primary hover:underline">
+            <button
+              onClick={insertLink}
+              className="text-[11px] text-primary hover:underline"
+            >
               Insert
             </button>
-            <button onClick={() => { setLinkPrompt(false); setLinkUrl(''); }}>
-              <HugeiconsIcon icon={Cancel01Icon} className="size-3 text-muted-foreground" />
+            <button
+              onClick={() => {
+                setLinkPrompt(false)
+                setLinkUrl("")
+              }}
+            >
+              <HugeiconsIcon
+                icon={Cancel01Icon}
+                className="size-3 text-muted-foreground"
+              />
             </button>
           </div>
         )}
 
-        <input ref={fileInputRef} type="file" className="sr-only" onChange={handleFileSelect} />
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="sr-only"
+          onChange={handleFileSelect}
+        />
 
         <div className="flex gap-2">
           <Textarea
@@ -665,9 +845,12 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                handleSubmit()
+              }
             }}
-            placeholder={replyTo ? 'Write a reply…' : 'Add a comment…'}
+            placeholder={replyTo ? "Write a reply…" : "Add a comment…"}
             className="min-h-[56px] resize-none text-xs"
             rows={2}
           />
@@ -675,24 +858,26 @@ export function CommentsPanel({ workspaceId, podId, workflowId, nodes, selectedN
             size="icon-sm"
             onClick={handleSubmit}
             disabled={!body.trim() || submitMutation.isPending}
-            className="self-end shrink-0"
+            className="shrink-0 self-end"
           >
             <HugeiconsIcon
               icon={submitMutation.isPending ? Loading01Icon : ArrowUp01Icon}
-              className={`size-3.5 ${submitMutation.isPending ? 'animate-spin' : ''}`}
+              className={`size-3.5 ${submitMutation.isPending ? "animate-spin" : ""}`}
             />
           </Button>
         </div>
 
-        <div className="flex items-center gap-1 -mt-0.5">
+        <div className="-mt-0.5 flex items-center gap-1">
           <AttachBar
             onFile={() => !uploading && fileInputRef.current?.click()}
             onLink={() => setLinkPrompt((v) => !v)}
             uploading={uploading}
           />
-          <p className="text-[10px] text-muted-foreground/50 ml-1">Shift+Enter for newline</p>
+          <p className="ml-1 text-[10px] text-muted-foreground/50">
+            Shift+Enter for newline
+          </p>
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -24,37 +24,10 @@
   "devDependencies": {
     "@linea/eslint-config": "workspace:*",
     "@linea/typescript-config": "workspace:*",
-    "prettier": "^3.8.1",
-    "prettier-plugin-tailwindcss": "^0.7.2",
-    "turbo": "^2.8.17",
+    "prettier": "^3.9.4",
+    "prettier-plugin-tailwindcss": "^0.7.4",
+    "turbo": "^2.10.3",
     "typescript": "5.9.3"
-  },
-  "pnpm": {
-    "peerDependencyRules": {
-      "ignoreMissing": ["pg", "@types/pg"]
-    },
-    "overrides": {
-      "basic-ftp": ">=5.2.0",
-      "handlebars": ">=4.7.9",
-      "lodash": ">=4.18.1",
-      "flatted": ">=3.4.0",
-      "fast-uri": ">=3.1.2",
-      "picomatch": ">=2.3.2",
-      "langsmith": ">=0.5.19",
-      "minimatch@3": "3.1.4",
-      "minimatch@9": "9.0.7",
-      "postcss": ">=8.5.10",
-      "hono": ">=4.12.16",
-      "brace-expansion@1": "1.1.13",
-      "uuid@>=11 <11.1.1": "11.1.1",
-      "tmp": "0.2.4",
-      "esbuild": ">=0.25.0",
-      "ip-address": ">=9.0.5",
-      "ajv": ">=6.12.6",
-      "next@>=16.0.0 <16.2.6": "16.2.6",
-      "next@>=15.0.0 <15.5.18": "15.5.18",
-      "brace-expansion@2": "2.0.2"
-    }
   },
   "packageManager": "pnpm@9.15.9",
   "engines": {

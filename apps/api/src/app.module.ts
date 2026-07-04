@@ -45,7 +45,7 @@ import { WorkspaceThrottlerGuard } from './common/guards/throttler.guard';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller';
 import { ConnectionsModule } from './connections/connections.module';
-import { AIModule } from './agent-chat/ai.module';
+import { AIModule } from './services/ai/ai.module';
 
 @Module({
   imports: [

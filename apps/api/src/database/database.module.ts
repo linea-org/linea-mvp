@@ -1,7 +1,6 @@
+import { createDb, type DrizzleDB } from '@linea/db';
 import { Module, Global } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createDb } from '@linea/db';
-import type { DrizzleDB } from '@linea/db';
 
 export const DB_TOKEN = Symbol('DRIZZLE_DB');
 

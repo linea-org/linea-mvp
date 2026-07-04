@@ -1,24 +1,30 @@
-'use client';
+"use client"
 
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
+import { Input } from "@linea/ui/components/input"
+import { Label } from "@linea/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@linea/ui/components/select"
 
 interface WaitPanelProps {
-  data: Record<string, unknown>;
-  onUpdate: (fields: Record<string, unknown>) => void;
+  data: Record<string, unknown>
+  onUpdate: (fields: Record<string, unknown>) => void
 }
 
 // Hours removed — the 5-minute hard cap makes values > 5m silently misleading.
 const UNITS = [
-  { value: 'ms', label: 'Milliseconds' },
-  { value: 's',  label: 'Seconds' },
-  { value: 'm',  label: 'Minutes (max 5)' },
-];
+  { value: "ms", label: "Milliseconds" },
+  { value: "s", label: "Seconds" },
+  { value: "m", label: "Minutes (max 5)" },
+]
 
 export function WaitPanel({ data, onUpdate }: WaitPanelProps) {
-  const duration = (data.duration as number) ?? 1;
-  const unit = (data.unit as string) ?? 's';
+  const duration = (data.duration as number) ?? 1
+  const unit = (data.unit as string) ?? "s"
 
   return (
     <div className="space-y-4">
@@ -29,7 +35,9 @@ export function WaitPanel({ data, onUpdate }: WaitPanelProps) {
             type="number"
             min={1}
             value={duration}
-            onChange={(e) => onUpdate({ duration: Number(e.target.value) || 1 })}
+            onChange={(e) =>
+              onUpdate({ duration: Number(e.target.value) || 1 })
+            }
             className="w-28"
           />
           <Select value={unit} onValueChange={(v) => onUpdate({ unit: v })}>
@@ -38,13 +46,17 @@ export function WaitPanel({ data, onUpdate }: WaitPanelProps) {
             </SelectTrigger>
             <SelectContent>
               {UNITS.map((u) => (
-                <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                <SelectItem key={u.value} value={u.value}>
+                  {u.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        <p className="text-xs text-muted-foreground">Maximum wait is 5 minutes regardless of configured value.</p>
+        <p className="text-xs text-muted-foreground">
+          Maximum wait is 5 minutes regardless of configured value.
+        </p>
       </div>
     </div>
-  );
+  )
 }
