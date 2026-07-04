@@ -290,10 +290,16 @@ export class ExecutionProcessor extends WorkerHost {
 
   private shouldNotifyFailureStreak(streak: number): boolean {
     if (streak < this.FAILURE_NOTIFY_THRESHOLD) return false;
-    return (streak - this.FAILURE_NOTIFY_THRESHOLD) % this.FAILURE_NOTIFY_INTERVAL === 0;
+    return (
+      (streak - this.FAILURE_NOTIFY_THRESHOLD) %
+        this.FAILURE_NOTIFY_INTERVAL ===
+      0
+    );
   }
 
-  private async getConsecutiveFailureCount(workflowId: string): Promise<number> {
+  private async getConsecutiveFailureCount(
+    workflowId: string,
+  ): Promise<number> {
     const recent = await this.db
       .select({ status: executions.status })
       .from(executions)

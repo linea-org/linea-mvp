@@ -1,11 +1,18 @@
 import { ExecutionSupervisor } from './supervisor';
 import { ConfigService } from '@nestjs/config';
+import type { AIService } from '../../services/ai/ai.service';
 import type { SupervisorContext } from './supervisor';
 
 function makeConfig(overrides: Record<string, string> = {}): ConfigService {
   return {
     get: (key: string) => overrides[key] ?? undefined,
   } as unknown as ConfigService;
+}
+
+function makeAIService(): AIService {
+  return {
+    initialize: () => Promise.reject(new Error('No API key configured')),
+  } as unknown as AIService;
 }
 
 function makeCtx(
@@ -19,7 +26,7 @@ function makeCtx(
     retryCount: 0,
     maxRetries: 2,
     state: { variables: {} },
-    apiKeys: {},
+    workspaceId: 'workspace-1',
     ...overrides,
   };
 }
@@ -28,7 +35,7 @@ describe('ExecutionSupervisor — hard rules', () => {
   let supervisor: ExecutionSupervisor;
 
   beforeEach(() => {
-    supervisor = new ExecutionSupervisor(makeConfig());
+    supervisor = new ExecutionSupervisor(makeConfig(), makeAIService());
   });
 
   it('aborts when retries are exhausted', async () => {
@@ -115,8 +122,8 @@ describe('ExecutionSupervisor — hard rules', () => {
 
 describe('ExecutionSupervisor — LLM fallback', () => {
   it('falls back to retry when no API key is configured', async () => {
-    const supervisor = new ExecutionSupervisor(makeConfig());
-    // No API keys → createModelClient will fail → supervisor catches and falls back
+    const supervisor = new ExecutionSupervisor(makeConfig(), makeAIService());
+    // No API keys → aiService.initialize will fail → supervisor catches and falls back
     const decision = await supervisor.assess(
       makeCtx({ elapsedMs: 10_000, retryCount: 1 }),
     );

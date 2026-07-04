@@ -31,8 +31,9 @@ import { MessageBubble } from './message-bubble';
 import { HistorySidebar } from './history-sidebar';
 import { AttachMenu } from './attach-menu';
 import { useSpeechRecognition } from './use-speech-recognition';
+import { useModelCatalog } from './use-model-catalog';
 import {
-  API_BASE, MODEL_LIST, MODEL_PROVIDERS, MODELS_BY_PROVIDER,
+  API_BASE, DEFAULT_MODEL_ID,
   SLASH_COMMANDS, PRESETS, TICKER_PROMPTS, PROVIDER_LABELS,
 } from './constants';
 import type { Message, Session, Attachment, SSEEvent } from './types';
@@ -51,7 +52,8 @@ function TasksPageInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionId, setSessionId] = useState(() => `s-${Date.now()}`);
-  const [model, setModel] = useState(MODEL_LIST[0]!.id);
+  const [model, setModel] = useState(DEFAULT_MODEL_ID);
+  const { data: modelList = [] } = useModelCatalog();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down'>>({});
 
@@ -554,7 +556,11 @@ function TasksPageInner() {
     )
   }
 
-  const currentModel = MODEL_LIST.find((m) => m.id === model) ?? MODEL_LIST[0]!
+  const currentModel = modelList.find((m) => m.id === model) ?? { id: model, label: model, hint: '', provider: '' }
+  const modelProviders = Array.from(new Set(modelList.map((m) => m.provider)))
+  const modelsByProvider = Object.fromEntries(
+    modelProviders.map((p) => [p, modelList.filter((m) => m.provider === p)]),
+  )
 
   const inputBox = (
     <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm transition-all focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/50">
@@ -734,13 +740,13 @@ function TasksPageInner() {
             align="end"
             className="max-h-[360px] w-52 overflow-y-auto"
           >
-            {MODEL_PROVIDERS.map((provider, pi) => (
+            {modelProviders.map((provider, pi) => (
               <div key={provider}>
                 {pi > 0 && <DropdownMenuSeparator />}
                 <DropdownMenuLabel className="px-2 py-1 text-[10px] font-normal tracking-widest text-muted-foreground uppercase">
                   {PROVIDER_LABELS[provider] ?? provider}
                 </DropdownMenuLabel>
-                {(MODELS_BY_PROVIDER[provider] ?? []).map((m) => (
+                {(modelsByProvider[provider] ?? []).map((m) => (
                   <DropdownMenuItem
                     key={m.id}
                     onClick={() => setModel(m.id)}

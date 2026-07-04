@@ -24,7 +24,7 @@ import { McpService } from '../mcp/mcp.service';
 import type {
   ChatMessage as ModelChatMessage,
   NormalizedToolCall,
-} from '../executions/engine/models/client.factory';
+} from '../services/ai/types';
 import { SYSTEM_PROMPT, AGENT_TOOLS } from './agent-chat.prompt';
 import type { ChatDto } from './dto/chat.dto';
 import { AIService } from 'src/services/ai/ai.service';

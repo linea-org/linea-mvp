@@ -17,7 +17,7 @@ type AssertionSource =
   | `tool_calls:${string}`
   | 'tool_calls';
 
-export type Operator =
+type Operator =
   | 'equals'
   | 'contains'
   | 'exists'
@@ -64,7 +64,7 @@ export interface AssertionResult {
   reasoning?: string;
 }
 
-export interface TrialResult {
+interface TrialResult {
   executionId: string;
   status: string;
   passed: boolean;

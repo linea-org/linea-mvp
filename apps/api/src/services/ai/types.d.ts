@@ -3,13 +3,6 @@ export type ModelProvider = Extract<
   'anthropic' | 'openai' | 'groq' | 'google' | 'ollama' | 'xai'
 >;
 
-export type FactoryMap = {
-  [K in ModelProvider]: (
-    modelId: string,
-    config: ProviderConfigMap[K],
-  ) => ModelClient;
-};
-
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
@@ -61,17 +54,3 @@ export interface CompletionResult {
   stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop';
   usage: { inputTokens: number; outputTokens: number };
 }
-
-export type ModelApiKeys = {
-  ANTHROPIC_API_KEY?: string;
-  OPENAI_API_KEY?: string;
-  XAI_API_KEY?: string;
-  GROQ_API_KEY?: string;
-  GOOGLE_API_KEY?: string;
-  OLLAMA_BASE_URL?: string;
-};
-
-export type ModelClient = (
-  messages: ChatMessage[],
-  opts?: CompletionOptions,
-) => Promise<CompletionResult>;

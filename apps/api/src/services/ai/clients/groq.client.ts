@@ -8,7 +8,7 @@ import {
 } from 'openai/resources/chat';
 
 export class GroqClient implements ModelClient {
-  displayModels: ModelDefinition[] = [
+  static readonly displayModels: ModelDefinition[] = [
     {
       id: 'llama-3.3-70b-versatile',
       name: 'Llama 3.3 70B',
@@ -146,12 +146,15 @@ export class GroqClient implements ModelClient {
       status: 'preview',
     },
   ];
+  static readonly embeddingModels: string[] = [];
+
+  displayModels: ModelDefinition[] = GroqClient.displayModels;
   models: string[] = [
-    ...this.displayModels.map((m) => m.id),
+    ...GroqClient.displayModels.map((m) => m.id),
     'llama3.2',
     'deepseek-r1-distill-llama-70b',
   ];
-  embeddingModels: string[] = [];
+  embeddingModels: string[] = GroqClient.embeddingModels;
 
   private _client: OpenAI;
   constructor(apiKey: string) {

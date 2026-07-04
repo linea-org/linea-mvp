@@ -31,18 +31,6 @@ export const oauthConnectionsRelations = relations(oauthConnections, ({ one }) =
 export type OAuthConnection = typeof oauthConnections.$inferSelect;
 export type NewOAuthConnection = typeof oauthConnections.$inferInsert;
 
-export const apiKeys = pgTable('api_keys', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id')
-    .references(() => workspaces.id, { onDelete: 'cascade' })
-    .notNull(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
-  provider: text('provider').notNull(),
-  keyEncrypted: text('key_encrypted').notNull(),
-  label: text('label'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
-
 export const secrets = pgTable('secrets', {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id')
@@ -83,17 +71,11 @@ export const webhooks = pgTable('webhooks', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
-  workspace: one(workspaces, { fields: [apiKeys.workspaceId], references: [workspaces.id] }),
-  user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
-}));
-
 export const lineaApiKeysRelations = relations(lineaApiKeys, ({ one }) => ({
   workspace: one(workspaces, { fields: [lineaApiKeys.workspaceId], references: [workspaces.id] }),
   user: one(users, { fields: [lineaApiKeys.userId], references: [users.id] }),
 }));
 
-export type ApiKey = typeof apiKeys.$inferSelect;
 export type Secret = typeof secrets.$inferSelect;
 export type LineaApiKey = typeof lineaApiKeys.$inferSelect;
 export type Webhook = typeof webhooks.$inferSelect;

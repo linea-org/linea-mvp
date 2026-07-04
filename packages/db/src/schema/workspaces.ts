@@ -10,7 +10,6 @@ import {
 import { relations } from 'drizzle-orm';
 
 export interface WorkspaceSettings {
-  modelFallbackChain?: string[];
   ragSimilarityThreshold?: number;
   ragChunkSize?: number;
   ragChunkOverlap?: number;

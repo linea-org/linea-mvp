@@ -527,16 +527,12 @@ function RestApiTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDepl
   );
 }
 
-const SUPERVISOR_MODELS = [
-  { id: 'claude-haiku-4-5',             label: 'Claude Haiku 4.5 (default — fast)',    provider: 'anthropic' },
-  { id: 'claude-sonnet-4-6',            label: 'Claude Sonnet 4.6 (balanced)',          provider: 'anthropic' },
-  { id: 'claude-opus-4-7',              label: 'Claude Opus 4.7 (most capable)',        provider: 'anthropic' },
-  { id: 'gpt-4o-mini',                  label: 'GPT-4o Mini (fast)',                    provider: 'openai'    },
-  { id: 'gpt-4o',                       label: 'GPT-4o (balanced)',                     provider: 'openai'    },
-  { id: 'llama-3.1-8b-instant',         label: 'Llama 3.1 8B Instant (Groq)',          provider: 'groq'      },
-  { id: 'llama-3.3-70b-versatile',      label: 'Llama 3.3 70B (Groq)',                 provider: 'groq'      },
-  { id: 'gemini-2.0-flash',             label: 'Gemini 2.0 Flash (Google)',             provider: 'google'    },
-] as const;
+interface ModelDefinition {
+  id: string;
+  name: string;
+  provider: string;
+  tier: 'fast' | 'balanced' | 'powerful' | 'reasoning';
+}
 
 function SettingsTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDeployed' | 'deployedAt' | 'onDeploy' | 'onUndeploy' | 'onClose'>) {
   const getApi = useApiClient();
@@ -549,6 +545,14 @@ function SettingsTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDep
     queryFn: async () => {
       const api = await getApi();
       return api.get(`/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`);
+    },
+  });
+
+  const { data: supervisorModels = [] } = useQuery<ModelDefinition[]>({
+    queryKey: ['models'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ModelDefinition[]>('/models');
     },
   });
 
@@ -613,8 +617,8 @@ function SettingsTab({ workspaceId, podId, workflowId }: Omit<PanelProps, 'isDep
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__default__">Platform default (Haiku 4.5)</SelectItem>
-              {SUPERVISOR_MODELS.map((m) => (
-                <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+              {supervisorModels.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.name} ({m.tier})</SelectItem>
               ))}
             </SelectContent>
           </Select>

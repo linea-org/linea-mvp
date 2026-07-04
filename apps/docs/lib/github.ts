@@ -10,7 +10,7 @@ export interface GitHubMilestone {
   due_on: string | null;
 }
 
-export interface GitHubLabel {
+interface GitHubLabel {
   name: string;
   color: string;
 }

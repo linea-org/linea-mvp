@@ -1,14 +1,18 @@
 import { interrupt } from '@langchain/langgraph';
-import { getModelOrDefault, MODEL_REGISTRY } from '../models/registry';
-import type { ModelDefinition, ModelProvider } from '../models/registry';
-import { createModelClient } from '../models/client.factory';
+import {
+  AI_MODEL_CATALOG,
+  type ModelDefinition,
+} from '../../../services/ai/model-catalog';
 import type {
   ChatMessage,
-  CompletionOptions,
-  ModelClient,
   NormalizedToolCall,
-  ModelApiKeys,
-} from '../models/client.factory';
+  CompletionResult,
+} from '../../../services/ai/types';
+import type {
+  ModelClient,
+  ModelChatProps,
+} from '../../../services/ai/clients/interface';
+import { AIService } from '../../../services/ai/ai.service';
 import type { WorkflowState } from '../variable-substitution';
 import { substituteVariables } from '../variable-substitution';
 import { getEnabledTools, toolNeedsApproval } from '../tools/definitions';
@@ -17,6 +21,8 @@ import type { ToolExecutorContext } from '../tools/tool-executor';
 
 const DEFAULT_MAX_STEPS = 10;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+type ChatOpts = Omit<ModelChatProps, 'messages'>;
 
 /**
  * Wraps an onToken callback to suppress <think>...</think> blocks that
@@ -71,98 +77,13 @@ function wrapOnToken(
   };
 }
 
-function hasApiKey(provider: ModelProvider, apiKeys: ModelApiKeys): boolean {
-  if (provider === 'ollama') return true;
-  const map: Record<string, keyof ModelApiKeys> = {
-    anthropic: 'ANTHROPIC_API_KEY',
-    openai: 'OPENAI_API_KEY',
-    xai: 'XAI_API_KEY',
-    groq: 'GROQ_API_KEY',
-    google: 'GOOGLE_API_KEY',
-  };
-  return Boolean(apiKeys[map[provider]]);
-}
-
-/** Returns up to 2 fallback models from other providers, ordered by tier closeness then cost. */
-function buildFallbackChain(
-  primary: ModelDefinition,
-  apiKeys: ModelApiKeys,
-): Array<{ def: ModelDefinition; client: ModelClient }> {
-  const tierRank: Record<string, number> = {
-    fast: 0,
-    balanced: 1,
-    powerful: 2,
-    reasoning: 3,
-  };
-  const primaryRank = tierRank[primary.tier] ?? 1;
-
-  const candidates = Object.values(MODEL_REGISTRY)
-    .filter(
-      (m) =>
-        m.id !== primary.id &&
-        !m.capabilities.embedding &&
-        m.capabilities.functionCalling &&
-        hasApiKey(m.provider, apiKeys),
-    )
-    .sort((a, b) => {
-      const tierDiff =
-        Math.abs((tierRank[a.tier] ?? 1) - primaryRank) -
-        Math.abs((tierRank[b.tier] ?? 1) - primaryRank);
-      if (tierDiff !== 0) return tierDiff;
-      return a.costPer1mTokens.input - b.costPer1mTokens.input;
-    })
-    .slice(0, 2);
-
-  const result: Array<{ def: ModelDefinition; client: ModelClient }> = [];
-  for (const def of candidates) {
-    try {
-      result.push({
-        def,
-        client: createModelClient(def.id, def.provider, apiKeys),
-      });
-    } catch {
-      // Skip — shouldn't happen since we checked hasApiKey, but guard anyway
-    }
-  }
-  return result;
-}
-
-function isProviderError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return (
-    /API key|not configured|authentication|401/i.test(msg) ||
-    /quota|rate.?limit|overload|unavailable|503|529/i.test(msg)
-  );
-}
-
-/**
- * Call the active client; on provider-level errors rotate to the next fallback.
- * Updates `activeRef.def` and `activeRef.client` in place when switching.
- */
-async function callWithFallback(
+async function callModel(
+  client: ModelClient,
+  modelDef: ModelDefinition,
   messages: ChatMessage[],
-  opts: CompletionOptions,
-  activeRef: { def: ModelDefinition; client: ModelClient },
-  fallbacks: Array<{ def: ModelDefinition; client: ModelClient }>,
-  fallbackIdx: { v: number },
-): Promise<ReturnType<ModelClient>> {
-  try {
-    return await activeRef.client(messages, opts);
-  } catch (err) {
-    if (!isProviderError(err)) throw err;
-    while (fallbackIdx.v < fallbacks.length) {
-      const next = fallbacks[fallbackIdx.v++];
-      activeRef.def = next.def;
-      activeRef.client = next.client;
-      try {
-        return await activeRef.client(messages, opts);
-      } catch (fallbackErr) {
-        if (!isProviderError(fallbackErr)) throw fallbackErr;
-        // continue to next fallback
-      }
-    }
-    throw err; // all fallbacks exhausted
-  }
+  opts: ChatOpts,
+): Promise<CompletionResult> {
+  return client.chat(modelDef.id, { messages, ...opts });
 }
 
 export interface AgentResult {
@@ -200,49 +121,25 @@ export interface LongTermMemoryContext {
 export async function executeAgentNode(
   nodeData: Record<string, any>,
   state: WorkflowState,
-  apiKeys: ModelApiKeys,
+  aiService: AIService,
+  workspaceId: string,
   ltmCtx?: LongTermMemoryContext,
   onToken?: (delta: string) => void,
-  workspaceFallbackChain?: string[],
 ): Promise<AgentResult> {
   // Filter <think> blocks from streaming output of reasoning models
   const filteredOnToken = wrapOnToken(onToken);
-  const modelDef = getModelOrDefault(nodeData.model, 'balanced');
 
-  // Build fallback chain: workspace-configured chain takes priority; auto-detect from API keys as fallback.
-  const fallbacks: Array<{ def: ModelDefinition; client: ModelClient }> =
-    workspaceFallbackChain?.length
-      ? workspaceFallbackChain
-          .filter((id) => id !== modelDef.id)
-          .flatMap((modelId) => {
-            const def = MODEL_REGISTRY[modelId];
-            if (!def || !hasApiKey(def.provider, apiKeys)) return [];
-            try {
-              return [
-                {
-                  def,
-                  client: createModelClient(def.id, def.provider, apiKeys),
-                },
-              ];
-            } catch {
-              return [];
-            }
-          })
-      : buildFallbackChain(modelDef, apiKeys);
-
-  const fallbackIdx = { v: 0 };
-  const activeRef: { def: ModelDefinition; client: ModelClient } = (() => {
-    try {
-      return {
-        def: modelDef,
-        client: createModelClient(modelDef.id, modelDef.provider, apiKeys),
-      };
-    } catch (err) {
-      if (!isProviderError(err) || fallbacks.length === 0) throw err;
-      const first = fallbacks[fallbackIdx.v++];
-      return { def: first.def, client: first.client };
-    }
-  })();
+  const modelId: string | undefined = nodeData.model;
+  if (!modelId) {
+    throw new Error(
+      'No model selected for this Agent node — set one in the node configuration.',
+    );
+  }
+  const modelDef = AI_MODEL_CATALOG.find((m) => m.id === modelId);
+  if (!modelDef) {
+    throw new Error(`No model selected: unknown model "${modelId}"`);
+  }
+  const client = await aiService.initialize(workspaceId, modelDef.provider);
 
   const maxSteps: number = nodeData.maxSteps ?? DEFAULT_MAX_STEPS;
   const toolNames: string[] = nodeData.tools ?? [];
@@ -359,12 +256,15 @@ export async function executeAgentNode(
     // the LLM makes the same choices so it hits the same interrupt() call.
     const temperature = tools.length > 0 ? 0 : (nodeData.temperature ?? 0.7);
 
-    const response = await callWithFallback(
+    const response = await callModel(
+      client,
+      modelDef,
       await compactWithSummary(
         messages,
-        activeRef.def.contextWindow,
+        modelDef.contextWindow,
         budgetPct,
-        apiKeys,
+        aiService,
+        workspaceId,
       ),
       {
         maxTokens: nodeData.maxTokens ?? 4096,
@@ -373,9 +273,6 @@ export async function executeAgentNode(
         toolChoice: tools.length ? 'auto' : undefined,
         onToken: filteredOnToken,
       },
-      activeRef,
-      fallbacks,
-      fallbackIdx,
     );
 
     totalUsage.input_tokens += response.usage.inputTokens;
@@ -395,7 +292,7 @@ export async function executeAgentNode(
             variableUpdates,
             memoryUpdates,
             toolCallLog,
-            activeRef.def,
+            modelDef,
             false,
           );
         }
@@ -418,7 +315,7 @@ export async function executeAgentNode(
         variableUpdates,
         memoryUpdates,
         toolCallLog,
-        activeRef.def,
+        modelDef,
         false,
       );
     }
@@ -562,7 +459,7 @@ export async function executeAgentNode(
     variableUpdates,
     memoryUpdates,
     toolCallLog,
-    activeRef.def,
+    modelDef,
     true,
   );
 }
@@ -622,21 +519,6 @@ function estimateTokens(messages: ChatMessage[]): number {
   return Math.ceil(JSON.stringify(messages).length / 4);
 }
 
-function hasApiKeyForProvider(
-  provider: ModelProvider,
-  apiKeys: ModelApiKeys,
-): boolean {
-  if (provider === 'ollama') return true;
-  const map: Record<string, keyof ModelApiKeys> = {
-    anthropic: 'ANTHROPIC_API_KEY',
-    openai: 'OPENAI_API_KEY',
-    xai: 'XAI_API_KEY',
-    groq: 'GROQ_API_KEY',
-    google: 'GOOGLE_API_KEY',
-  };
-  return Boolean(apiKeys[map[provider]]);
-}
-
 /**
  * Compact the message list to fit within the token budget.
  * When the list is over-budget, the oldest non-system turns are summarized
@@ -647,7 +529,8 @@ async function compactWithSummary(
   messages: ChatMessage[],
   contextWindow: number,
   budgetPct: number,
-  apiKeys: ModelApiKeys,
+  aiService: AIService,
+  workspaceId: string,
 ): Promise<ChatMessage[]> {
   const budget = Math.floor(contextWindow * budgetPct);
 
@@ -677,34 +560,38 @@ async function compactWithSummary(
   const toKeep = rest.slice(rest.length - SUMMARY_KEEP_LAST);
 
   try {
-    // Pick cheapest model we have a key for
-    const cheapestDef = Object.values(MODEL_REGISTRY)
-      .filter(
-        (m) =>
-          !m.capabilities.embedding &&
-          hasApiKeyForProvider(m.provider, apiKeys),
-      )
-      .sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input)[0];
+    // Pick the cheapest model the workspace actually has a working client for
+    const sortedByCost = AI_MODEL_CATALOG.filter(
+      (m) => !m.capabilities.embedding,
+    ).sort((a, b) => a.costPer1mTokens.input - b.costPer1mTokens.input);
 
-    if (cheapestDef) {
-      const summaryClient = createModelClient(
-        cheapestDef.id,
-        cheapestDef.provider,
-        apiKeys,
-      );
+    let summaryClient: ModelClient | null = null;
+    let cheapestDef: ModelDefinition | undefined;
+    for (const def of sortedByCost) {
+      try {
+        summaryClient = await aiService.initialize(workspaceId, def.provider);
+        cheapestDef = def;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (summaryClient && cheapestDef) {
       const convText = toSummarize
         .map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 600)}`)
         .join('\n');
 
-      const summaryResp = await summaryClient(
-        [
+      const summaryResp = await summaryClient.chat(cheapestDef.id, {
+        messages: [
           {
             role: 'user',
             content: `Summarize the following conversation history in 3-5 concise bullet points. Focus on key facts discovered, decisions made, and tool results. Be terse.\n\n${convText}`,
           },
         ],
-        { maxTokens: 512, temperature: 0 },
-      );
+        maxTokens: 512,
+        temperature: 0,
+      });
 
       const compacted = [
         ...system,

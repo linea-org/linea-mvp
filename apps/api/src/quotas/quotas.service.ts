@@ -84,7 +84,8 @@ export class QuotasService {
       .where(eq(resourceQuotas.workspaceId, workspaceId))
       .returning();
 
-    if (userId && after) this.notifyIfThresholdCrossed(userId, workspaceId, before, after);
+    if (userId && after)
+      this.notifyIfThresholdCrossed(userId, workspaceId, before, after);
   }
 
   private notifyIfThresholdCrossed(
@@ -94,8 +95,18 @@ export class QuotasService {
     after: typeof resourceQuotas.$inferSelect,
   ): void {
     for (const [label, usedBefore, usedAfter, limit] of [
-      ['executions', before.executionsUsed, after.executionsUsed, after.executionsPerMonth],
-      ['tokens', before.tokensUsedMonth, after.tokensUsedMonth, after.tokensPerMonth],
+      [
+        'executions',
+        before.executionsUsed,
+        after.executionsUsed,
+        after.executionsPerMonth,
+      ],
+      [
+        'tokens',
+        before.tokensUsedMonth,
+        after.tokensUsedMonth,
+        after.tokensPerMonth,
+      ],
     ] as const) {
       for (const threshold of QUOTA_ALERT_THRESHOLDS) {
         const boundary = threshold * limit;
@@ -103,7 +114,9 @@ export class QuotasService {
           void this.notifications.create(
             userId,
             'quota_threshold',
-            threshold >= 1 ? `${label} quota reached` : `${label} quota nearing limit`,
+            threshold >= 1
+              ? `${label} quota reached`
+              : `${label} quota nearing limit`,
             `Workspace has used ${usedAfter.toLocaleString()}/${limit.toLocaleString()} ${label} this month (${Math.round(threshold * 100)}%).`,
             workspaceId,
           );

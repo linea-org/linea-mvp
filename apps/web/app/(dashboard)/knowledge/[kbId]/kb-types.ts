@@ -4,7 +4,7 @@ export interface KnowledgeBase {
   description: string | null;
 }
 
-export type EntryStatus = 'pending' | 'embedding' | 'indexed' | 'failed';
+type EntryStatus = 'pending' | 'embedding' | 'indexed' | 'failed';
 
 export interface Entry {
   id: string;

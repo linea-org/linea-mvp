@@ -9,7 +9,7 @@ import { ModelChatProps, ModelClient, ModelDefinition } from './interface';
 import { withRetry } from '../helpers';
 
 export class GoogleClient implements ModelClient {
-  displayModels: ModelDefinition[] = [
+  static readonly displayModels: ModelDefinition[] = [
     {
       id: 'gemini-2.5-pro-preview-05-06',
       name: 'Gemini 2.5 Pro',
@@ -59,13 +59,15 @@ export class GoogleClient implements ModelClient {
     },
   ];
 
-  models: string[] = this.displayModels.map((m) => m.id);
-
-  embeddingModels: string[] = [
+  static readonly embeddingModels: string[] = [
     'gemini-embedding-001',
     'text-embedding-005',
     'text-multilingual-embedding-002',
   ];
+
+  displayModels: ModelDefinition[] = GoogleClient.displayModels;
+  models: string[] = GoogleClient.displayModels.map((m) => m.id);
+  embeddingModels: string[] = GoogleClient.embeddingModels;
 
   private _client: GoogleGenerativeAI;
 

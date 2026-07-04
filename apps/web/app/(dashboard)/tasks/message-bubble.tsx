@@ -9,7 +9,7 @@ import {
 import { ThinkingSteps } from './thinking-steps';
 import { MarkdownText } from './markdown-text';
 import { WorkflowArtifactCard } from './workflow-artifact-card';
-import { MODEL_LIST } from './constants';
+import { useModelCatalog } from './use-model-catalog';
 import type { Message, CreatedWorkflow } from './types';
 
 export function MessageBubble({ msg, feedbackVote, onFeedback }: {
@@ -25,7 +25,8 @@ export function MessageBubble({ msg, feedbackVote, onFeedback }: {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const modelLabel = MODEL_LIST.find((m) => m.id === msg.model)?.label;
+  const { data: modelList = [] } = useModelCatalog();
+  const modelLabel = modelList.find((m) => m.id === msg.model)?.label;
 
   const createdWorkflows: CreatedWorkflow[] = (msg.toolCalls ?? [])
     .filter((tc) => tc.name === 'create_workflow' && tc.result != null)

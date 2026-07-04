@@ -64,6 +64,13 @@
       "when": 1783108578190,
       "tag": "0008_brown_warbird",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783155236827,
+      "tag": "0009_loud_arachne",
+      "breakpoints": true
     }
   ]
 }

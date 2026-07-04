@@ -8,7 +8,7 @@ import {
 } from 'openai/resources/chat';
 
 export class OpenAIClient implements ModelClient {
-  displayModels: ModelDefinition[] = [
+  static readonly displayModels: ModelDefinition[] = [
     {
       id: 'gpt-4o',
       name: 'GPT-4o',
@@ -93,12 +93,15 @@ export class OpenAIClient implements ModelClient {
       costPer1mTokens: { input: 10, output: 40 },
     },
   ];
-  models: string[] = this.displayModels.map((m) => m.id);
-  embeddingModels: string[] = [
+  static readonly embeddingModels: string[] = [
     'text-embedding-3-small',
     'text-embedding-3-large',
     'text-embedding-ada-002',
   ];
+
+  displayModels: ModelDefinition[] = OpenAIClient.displayModels;
+  models: string[] = OpenAIClient.displayModels.map((m) => m.id);
+  embeddingModels: string[] = OpenAIClient.embeddingModels;
 
   private _client: OpenAI;
   constructor(apiKey: string) {

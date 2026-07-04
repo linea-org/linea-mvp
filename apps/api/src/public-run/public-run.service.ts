@@ -11,11 +11,11 @@ import type { DrizzleDB } from '@linea/db';
 import { workflows, pods, executions } from '@linea/db';
 import { DB_TOKEN } from '../database/database.module';
 import { ExecutionsService } from '../executions/executions.service';
-import { MemoryService } from '../executions/engine/memory.service';
-import { createModelClient } from '../executions/engine/models/client.factory';
-import { MODEL_REGISTRY } from '../executions/engine/models/registry';
-import type { ModelApiKeys } from '../executions/engine/models/client.factory';
-import type { ModelProvider } from '../executions/engine/models/registry';
+import { AIService } from '../services/ai/ai.service';
+import {
+  AI_MODEL_CATALOG,
+  type ModelProvider,
+} from '../services/ai/model-catalog';
 
 /** Scan a workflow definition for all {{input.X}} variable references. */
 function extractInputVars(definition: unknown): string[] {
@@ -41,7 +41,7 @@ export class PublicRunService {
   constructor(
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
     private readonly executionsService: ExecutionsService,
-    private readonly memoryService: MemoryService,
+    private readonly aiService: AIService,
   ) {}
 
   async getSchema(workflowId: string) {
@@ -235,41 +235,25 @@ export class PublicRunService {
     workspaceId: string,
     preferredModelId?: string,
   ): Promise<Record<string, string>> {
-    // Load workspace API keys for all providers in parallel
-    const [anthropicKey, openaiKey, groqKey, googleKey] = await Promise.all([
-      this.memoryService.loadApiKey(workspaceId, 'anthropic'),
-      this.memoryService.loadApiKey(workspaceId, 'openai'),
-      this.memoryService.loadApiKey(workspaceId, 'groq'),
-      this.memoryService.loadApiKey(workspaceId, 'google'),
-    ]);
-
-    const apiKeys: ModelApiKeys = {
-      ANTHROPIC_API_KEY: anthropicKey,
-      OPENAI_API_KEY: openaiKey,
-      GROQ_API_KEY: groqKey,
-      GOOGLE_API_KEY: googleKey,
-    };
-
-    // Build candidate list — preferred model first, then cheap fallbacks
+    // Build candidate list — preferred model first, then standard fallbacks in
+    // preference order. Availability is determined lazily per-candidate below,
+    // since checking for a configured key requires an async call.
     const candidates: Array<{ modelId: string; provider: ModelProvider }> = [];
 
     if (preferredModelId) {
-      const modelDef = MODEL_REGISTRY[preferredModelId];
+      const modelDef = AI_MODEL_CATALOG.find((m) => m.id === preferredModelId);
       if (modelDef)
         candidates.push({ modelId: modelDef.id, provider: modelDef.provider });
     }
 
-    // Cheap/fast fallbacks in preference order
-    if (anthropicKey)
-      candidates.push({ modelId: 'claude-haiku-4-5', provider: 'anthropic' });
-    if (groqKey)
-      candidates.push({ modelId: 'llama-3.1-8b-instant', provider: 'groq' });
-    if (openaiKey)
-      candidates.push({ modelId: 'gpt-4o-mini', provider: 'openai' });
-    if (googleKey)
-      candidates.push({ modelId: 'gemini-2.0-flash', provider: 'google' });
-    // Ollama is always available as last resort (local, no key required)
-    candidates.push({ modelId: 'llama3.2', provider: 'ollama' });
+    candidates.push(
+      { modelId: 'claude-haiku-4-5', provider: 'anthropic' },
+      { modelId: 'llama-3.1-8b-instant', provider: 'groq' },
+      { modelId: 'gpt-4o-mini', provider: 'openai' },
+      { modelId: 'gemini-2.0-flash', provider: 'google' },
+      // Ollama is always available as last resort (local, no key required)
+      { modelId: 'llama3.2', provider: 'ollama' },
+    );
 
     // Deduplicate while preserving order
     const seen = new Set<string>();
@@ -294,8 +278,9 @@ Rules:
 
     for (const { modelId, provider } of uniqueCandidates) {
       try {
-        const client = createModelClient(modelId, provider, apiKeys);
-        const { text } = await client([{ role: 'user', content: prompt }], {
+        const client = await this.aiService.initialize(workspaceId, provider);
+        const { text } = await client.chat(modelId, {
+          messages: [{ role: 'user', content: prompt }],
           maxTokens: 256,
           temperature: 0,
         });

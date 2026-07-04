@@ -6,7 +6,7 @@
 //   parameters  - JSON Schema for the tool arguments
 //   approval    - when human confirmation is required
 
-export interface ToolParameterSchema {
+interface ToolParameterSchema {
   type: string;
   description?: string;
   enum?: string[];
@@ -27,7 +27,7 @@ export interface ToolDefinition {
   approval: 'never' | 'always' | 'on_mutation';
 }
 
-export const BUILTIN_TOOLS: Record<string, ToolDefinition> = {
+const BUILTIN_TOOLS: Record<string, ToolDefinition> = {
   memory_store: {
     name: 'memory_store',
     description:

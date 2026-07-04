@@ -2,12 +2,19 @@
 
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import { Add01Icon, Delete01Icon, WebhookIcon, ClockIcon, PlayIcon } from '@hugeicons/core-free-icons';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@linea/ui/components/button';
 import { Input } from '@linea/ui/components/input';
 import { Label } from '@linea/ui/components/label';
 import { NativeSelect, NativeSelectOption } from '@linea/ui/components/native-select';
 import { cn } from '@linea/ui/lib/utils';
+import { useApiClient } from '@/hooks/use-api-client';
 import type { InputVar } from '../../evals/eval-input-form';
+
+interface ModelDefinition {
+  id: string;
+  name: string;
+}
 
 interface StartPanelProps {
   data: Record<string, unknown>;
@@ -20,17 +27,6 @@ const TRIGGERS: { value: TriggerType; label: string; icon: IconSvgElement; descr
   { value: 'manual',   label: 'Manual',   icon: PlayIcon,            description: 'Run from the builder or API' },
   { value: 'webhook',  label: 'Webhook',  icon: WebhookIcon,         description: 'Triggered by HTTP POST' },
   { value: 'schedule', label: 'Schedule', icon: ClockIcon,           description: 'Runs on a cron schedule' },
-];
-
-const EXTRACTION_MODELS = [
-  { value: '', label: 'Auto (server picks cheapest available)' },
-  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 — fast, cheap' },
-  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini — fast, cheap' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash — fast, cheap' },
-  { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (Groq) — cheapest' },
-  { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq)' },
 ];
 
 const CRON_PRESETS = [
@@ -99,6 +95,14 @@ function describeCron(expr: string): string {
 }
 
 export function StartPanel({ data, onUpdate }: StartPanelProps) {
+  const getApi = useApiClient();
+  const { data: extractionModels = [] } = useQuery<ModelDefinition[]>({
+    queryKey: ['models'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ModelDefinition[]>('/models');
+    },
+  });
   const triggerType: TriggerType = (data.triggerType as TriggerType) ?? 'manual';
   const vars: InputVar[] = (data.inputVariables as InputVar[]) ?? [];
   const testInput = (data.testInput as Record<string, string>) ?? {};
@@ -281,8 +285,9 @@ export function StartPanel({ data, onUpdate }: StartPanelProps) {
             onChange={(e) => onUpdate({ extractionModel: e.target.value })}
             className="w-full"
           >
-            {EXTRACTION_MODELS.map((m) => (
-              <NativeSelectOption key={m.value} value={m.value}>{m.label}</NativeSelectOption>
+            <NativeSelectOption value="">Auto (server picks cheapest available)</NativeSelectOption>
+            {extractionModels.map((m) => (
+              <NativeSelectOption key={m.id} value={m.id}>{m.name}</NativeSelectOption>
             ))}
           </NativeSelect>
           <p className="text-[10px] text-muted-foreground">

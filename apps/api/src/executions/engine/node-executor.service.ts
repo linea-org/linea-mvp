@@ -4,7 +4,6 @@ import { isGraphInterrupt, interrupt } from '@langchain/langgraph';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { WorkflowState } from './variable-substitution';
 import { substituteInValue } from './variable-substitution';
-import { MODEL_REGISTRY } from './models/registry';
 import { executeAgentNode } from './executors/agent.executor';
 import type { LongTermMemoryContext } from './executors/agent.executor';
 import { executeHTTPNode } from './executors/http.executor';
@@ -32,7 +31,7 @@ import { executeMergeNode } from './executors/merge.executor';
 import { executeDatetimeNode } from './executors/datetime.executor';
 import { ExecutionSupervisor } from './supervisor';
 import { MemoryService } from './memory.service';
-import type { ModelApiKeys } from './models/client.factory';
+import { AIService } from '../../services/ai/ai.service';
 import type { DrizzleDB, WorkspaceSettings } from '@linea/db';
 import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module';
@@ -92,22 +91,15 @@ const MAX_RETRIES = 2;
 @Injectable()
 export class NodeExecutorService {
   private readonly logger = new Logger(NodeExecutorService.name);
-  private readonly envApiKeys: ModelApiKeys;
   private readonly defaultAgentModel: string;
 
   constructor(
     private readonly config: ConfigService,
     private readonly supervisor: ExecutionSupervisor,
     private readonly memoryService: MemoryService,
+    private readonly aiService: AIService,
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
   ) {
-    this.envApiKeys = {
-      ANTHROPIC_API_KEY: config.get('ANTHROPIC_API_KEY'),
-      OPENAI_API_KEY: config.get('OPENAI_API_KEY'),
-      GROQ_API_KEY: config.get('GROQ_API_KEY'),
-      GOOGLE_API_KEY: config.get('GOOGLE_API_KEY'),
-      OLLAMA_BASE_URL: config.get('OLLAMA_BASE_URL'),
-    };
     this.defaultAgentModel =
       config.get('DEFAULT_AGENT_MODEL') ?? 'claude-sonnet-4-6';
     if (!config.get('SUPERVISOR_MODEL')) {
@@ -127,10 +119,8 @@ export class NodeExecutorService {
 
     let attempt = 0;
     let lastError: unknown;
-    let resolvedApiKeys:
-      | Awaited<ReturnType<typeof this.resolveApiKeys>>
-      | undefined;
     let resolvedSupervisorModel: string | undefined;
+    let supervisorModelResolved = false;
 
     while (attempt <= maxRetries) {
       const startedAt = Date.now();
@@ -154,12 +144,12 @@ export class NodeExecutorService {
           `Node ${nodeId} (${nodeType}) ${isTimeout ? 'timed out' : 'failed'} after ${elapsed}ms [attempt ${attempt + 1}]: ${errorMsg}`,
         );
 
-        // Resolve workspace API keys + supervisor model once on first failure
-        if (!resolvedApiKeys) {
-          [resolvedApiKeys, resolvedSupervisorModel] = await Promise.all([
-            this.resolveApiKeys(input.workspaceId),
-            this.resolveWorkspaceSupervisorModel(input.workspaceId),
-          ]);
+        // Resolve workspace supervisor model once on first failure
+        if (!supervisorModelResolved) {
+          resolvedSupervisorModel = await this.resolveWorkspaceSupervisorModel(
+            input.workspaceId,
+          );
+          supervisorModelResolved = true;
         }
 
         // Ask supervisor whether to retry, skip, or abort
@@ -173,7 +163,7 @@ export class NodeExecutorService {
           retryCount: attempt,
           maxRetries,
           state: { variables: input.state.variables },
-          apiKeys: resolvedApiKeys,
+          workspaceId: input.workspaceId,
           workspaceSupervisorModel: resolvedSupervisorModel,
         });
 
@@ -266,11 +256,9 @@ export class NodeExecutorService {
       case 'agent': {
         const data = { ...nodeData };
         if (!data.model) data.model = this.defaultAgentModel;
-        const resolvedKeys = await this.resolveApiKeys(workspaceId);
 
         let ltmCtx: LongTermMemoryContext | undefined;
         if (threadId) {
-          const openaiKey = resolvedKeys.OPENAI_API_KEY;
           ltmCtx = {
             workspaceId,
             workflowId,
@@ -282,7 +270,7 @@ export class NodeExecutorService {
                 threadId,
                 key,
                 value,
-                openaiKey,
+                this.aiService,
               ),
             search: (query, topK) =>
               this.memoryService.searchSemantic(
@@ -290,7 +278,7 @@ export class NodeExecutorService {
                 workflowId,
                 query,
                 topK,
-                openaiKey,
+                this.aiService,
               ),
             loadRecent: (topK) =>
               this.memoryService.loadRecentForContext(
@@ -302,14 +290,13 @@ export class NodeExecutorService {
           };
         }
 
-        const wsSettings = await this.loadWorkspaceSettings(workspaceId);
         const raw = await executeAgentNode(
           data,
           state,
-          resolvedKeys,
+          this.aiService,
+          workspaceId,
           ltmCtx,
           onToken,
-          wsSettings.modelFallbackChain,
         );
         return { result: raw, isAgentOutput: true };
       }
@@ -415,21 +402,15 @@ export class NodeExecutorService {
         const embModelId =
           (nodeData.embeddingModel as string | undefined) ??
           'text-embedding-3-small';
-        const modelDef = MODEL_REGISTRY[embModelId];
-        const provider = modelDef?.provider ?? 'openai';
-
-        const embApiKey =
-          provider !== 'ollama'
-            ? await this.memoryService.loadApiKey(workspaceId, provider)
-            : undefined;
 
         const rawQuery =
           (nodeData.query as string | undefined) ??
           String(state.variables['lastOutput'] ?? '');
         const resolvedQuery = substituteInValue(rawQuery, state) as string;
         const queryEmbedding = await this.memoryService.generateEmbedding(
+          this.aiService,
+          workspaceId,
           resolvedQuery,
-          embApiKey,
           embModelId,
         );
 
@@ -540,9 +521,9 @@ export class NodeExecutorService {
 
             let ranked = merged;
             if (enableRerank) {
-              const cohereKey = await this.memoryService.loadApiKey(
+              const cohereKey = await this.memoryService.loadSecret(
                 workspaceId,
-                'cohere',
+                'COHERE_API_KEY',
               );
               if (cohereKey) {
                 try {
@@ -674,12 +655,12 @@ export class NodeExecutorService {
       }
 
       case 'evaluator': {
-        // Prefer workspace BYOK; fall back to platform key so dev/testing still works
-        const resolvedKeys = await this.resolveApiKeys(workspaceId);
-        const anthropicKey =
-          resolvedKeys['ANTHROPIC_API_KEY'] ??
-          this.config.get<string>('ANTHROPIC_API_KEY');
-        const r = await executeEvaluatorNode(nodeData, state, anthropicKey);
+        const r = await executeEvaluatorNode(
+          nodeData,
+          state,
+          this.aiService,
+          workspaceId,
+        );
         return { result: r, isAgentOutput: false };
       }
 
@@ -758,36 +739,6 @@ export class NodeExecutorService {
       .where(eq(workspaces.id, workspaceId))
       .limit(1);
     return ws?.settings ?? {};
-  }
-
-  private async resolveApiKeys(workspaceId: string): Promise<ModelApiKeys> {
-    const PROVIDERS = [
-      { key: 'ANTHROPIC_API_KEY', provider: 'anthropic' },
-      { key: 'OPENAI_API_KEY', provider: 'openai' },
-      { key: 'GROQ_API_KEY', provider: 'groq' },
-      { key: 'GOOGLE_API_KEY', provider: 'google' },
-    ] as const;
-
-    const resolved: ModelApiKeys = { ...this.envApiKeys };
-
-    await Promise.all(
-      PROVIDERS.map(async ({ key, provider }) => {
-        const dbKey = await this.memoryService.loadApiKey(
-          workspaceId,
-          provider,
-        );
-        if (dbKey) resolved[key] = dbKey;
-      }),
-    );
-
-    // Ollama base URL from secrets table (users can set it per-workspace)
-    const ollamaUrl = await this.memoryService.loadSecret(
-      workspaceId,
-      'OLLAMA_BASE_URL',
-    );
-    if (ollamaUrl) resolved.OLLAMA_BASE_URL = ollamaUrl;
-
-    return resolved;
   }
 
   private async resolveWorkspaceSupervisorModel(

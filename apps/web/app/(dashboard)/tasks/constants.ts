@@ -4,7 +4,6 @@ import {
   HelpCircleIcon, MailSend01Icon, ReloadIcon, SourceCodeSquareIcon, UserGroupIcon,
   Message01Icon, StickyNote01Icon,
 } from '@hugeicons/core-free-icons';
-import type { ModelOption } from './types';
 export { API_BASE } from '@/lib/api';
 
 export const PROVIDER_LABELS: Record<string, string> = {
@@ -12,38 +11,8 @@ export const PROVIDER_LABELS: Record<string, string> = {
   groq: 'Groq', google: 'Google', ollama: 'Ollama (Local)',
 };
 
-export const MODEL_LIST: ModelOption[] = [
-  { id: 'claude-sonnet-4-6',              label: 'Claude Sonnet 4.6',     hint: 'Balanced',    provider: 'anthropic', badge: 'best-for-agents' },
-  { id: 'claude-opus-4-7',               label: 'Claude Opus 4.7',       hint: 'Powerful',    provider: 'anthropic', badge: 'most-capable'   },
-  { id: 'claude-haiku-4-5',              label: 'Claude Haiku 4.5',      hint: 'Fast',        provider: 'anthropic'                          },
-  { id: 'claude-3-5-sonnet-20241022',    label: 'Claude 3.5 Sonnet',     hint: 'Legacy',      provider: 'anthropic'                          },
-  { id: 'gpt-4o',                        label: 'GPT-4o',                hint: 'Balanced',    provider: 'openai',    badge: 'recommended'    },
-  { id: 'gpt-4o-mini',                   label: 'GPT-4o Mini',           hint: 'Fast',        provider: 'openai',    badge: 'best-value'     },
-  { id: 'gpt-4.1',                       label: 'GPT-4.1',               hint: 'Long ctx',    provider: 'openai'                             },
-  { id: 'o4-mini',                       label: 'o4 Mini',               hint: 'Reasoning',   provider: 'openai',    badge: 'best-reasoning' },
-  { id: 'o3',                            label: 'o3',                    hint: 'Reasoning',   provider: 'openai'                             },
-  { id: 'grok-3',                        label: 'Grok 3',                hint: 'Powerful',    provider: 'xai',       badge: 'recommended'    },
-  { id: 'grok-3-mini',                   label: 'Grok 3 Mini',           hint: 'Reasoning',   provider: 'xai',       badge: 'best-value'     },
-  { id: 'grok-2-1212',                   label: 'Grok 2',                hint: 'Balanced',    provider: 'xai'                                },
-  { id: 'grok-2-vision-1212',            label: 'Grok 2 Vision',         hint: 'Vision',      provider: 'xai'                                },
-  { id: 'llama-3.3-70b-versatile',       label: 'Llama 3.3 70B',         hint: 'Fast',        provider: 'groq',      badge: 'recommended'    },
-  { id: 'llama-3.1-8b-instant',          label: 'Llama 3.1 8B',          hint: 'Fastest',     provider: 'groq',      badge: 'fastest'        },
-  { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 70B',       hint: 'Reasoning',   provider: 'groq',      badge: 'best-reasoning' },
-  { id: 'qwen-qwq-32b',                  label: 'Qwen QwQ 32B',          hint: 'Reasoning',   provider: 'groq'                               },
-  { id: 'mixtral-8x7b-32768',            label: 'Mixtral 8x7B',          hint: 'Balanced',    provider: 'groq'                               },
-  { id: 'gemini-2.5-pro-preview-05-06',  label: 'Gemini 2.5 Pro',        hint: 'Powerful',    provider: 'google',    badge: 'most-capable'   },
-  { id: 'gemini-2.0-flash',              label: 'Gemini 2.0 Flash',      hint: 'Fast',        provider: 'google',    badge: 'recommended'    },
-  { id: 'gemini-2.0-flash-lite',         label: 'Gemini 2.0 Flash Lite', hint: 'Cheapest',    provider: 'google',    badge: 'best-value'     },
-  { id: 'llama3.2',                      label: 'Llama 3.2',             hint: 'Local',       provider: 'ollama'                             },
-  { id: 'qwen2.5',                       label: 'Qwen 2.5',              hint: 'Local',       provider: 'ollama',    badge: 'recommended'    },
-  { id: 'deepseek-r1',                   label: 'DeepSeek R1',           hint: 'Local',       provider: 'ollama'                             },
-  { id: 'mistral',                       label: 'Mistral 7B',            hint: 'Local',       provider: 'ollama'                             },
-];
-
-export const MODEL_PROVIDERS = Array.from(new Set(MODEL_LIST.map((m) => m.provider)));
-export const MODELS_BY_PROVIDER = Object.fromEntries(
-  MODEL_PROVIDERS.map((p) => [p, MODEL_LIST.filter((m) => m.provider === p)]),
-);
+// The default model used before the /models catalog has loaded.
+export const DEFAULT_MODEL_ID = 'claude-sonnet-4-6';
 
 export const TOOL_LABELS: Record<string, string> = {
   check_workspace_secrets: 'Check workspace secrets',

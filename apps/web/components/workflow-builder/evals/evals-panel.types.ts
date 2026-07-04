@@ -17,7 +17,7 @@ export interface AssertionResult {
   reasoning?: string;
 }
 
-export interface TrialResult {
+interface TrialResult {
   executionId: string;
   status: string;
   passed: boolean;

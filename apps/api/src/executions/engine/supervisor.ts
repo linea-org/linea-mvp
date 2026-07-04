@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { getModelOrDefault } from './models/registry';
-import { createModelClient } from './models/client.factory';
-import type { ModelApiKeys } from './models/client.factory';
+import { getModelOrDefault } from '../../services/ai/model-catalog';
+import { AIService } from '../../services/ai/ai.service';
 import type { WorkflowState } from './variable-substitution';
 
 type SupervisorAction = 'retry' | 'skip' | 'abort' | 'continue';
@@ -19,7 +18,7 @@ export interface SupervisorContext {
   modelOverride?: string;
   /** Workspace-level supervisor model set in Settings → Model Preferences */
   workspaceSupervisorModel?: string;
-  apiKeys: ModelApiKeys;
+  workspaceId: string;
 }
 
 export interface SupervisorDecision {
@@ -32,7 +31,10 @@ export interface SupervisorDecision {
 export class ExecutionSupervisor {
   private readonly logger = new Logger(ExecutionSupervisor.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly aiService: AIService,
+  ) {}
 
   /**
    * Assess whether to retry, skip, or abort a failed/timed-out node.
@@ -160,10 +162,9 @@ export class ExecutionSupervisor {
     modelId: string,
   ): Promise<SupervisorDecision> {
     const modelDef = getModelOrDefault(modelId, 'fast');
-    const client = createModelClient(
-      modelDef.id,
+    const client = await this.aiService.initialize(
+      ctx.workspaceId,
       modelDef.provider,
-      ctx.apiKeys,
     );
 
     const isTimeout = !ctx.error;
@@ -189,7 +190,8 @@ Rules:
 - "skip" if the node is non-critical and the workflow can continue without its output
 - "abort" if the error is fatal (missing config, invalid data, repeated failure)`;
 
-    const { text } = await client([{ role: 'user', content: prompt }], {
+    const { text } = await client.chat(modelDef.id, {
+      messages: [{ role: 'user', content: prompt }],
       maxTokens: 150,
       temperature: 0,
     });

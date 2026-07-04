@@ -68,7 +68,6 @@ import {
   UserMultiple02Icon,
   Key01Icon,
   SquareLock01Icon,
-  AiBrain01Icon,
   GlobalIcon,
   Invoice03Icon,
   Home01Icon,
@@ -310,7 +309,6 @@ const SETTINGS_NAV_SECTIONS = [
   {
     label: 'AI & Integrations',
     items: [
-      { href: '/settings/model-keys',  label: 'Model Keys',        icon: AiBrain01Icon    },
       { href: '/settings/models',      label: 'Model Preferences', icon: AiMagicIcon      },
       { href: '/settings/connections', label: 'Connections',       icon: GlobalIcon        },
     ],

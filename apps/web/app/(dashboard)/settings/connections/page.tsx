@@ -49,6 +49,138 @@ const OAUTH_PROVIDERS = [
   { id: 'notion',  label: 'Notion',  description: 'Read and write Notion pages' },
 ];
 
+interface ProviderConnection {
+  id: string;
+  provider: string;
+  createdAt: string;
+  enabled: boolean;
+}
+
+interface ModelDefinition {
+  id: string;
+  name: string;
+  provider: string;
+}
+
+const AI_PROVIDERS = [
+  { id: 'anthropic', label: 'Anthropic', placeholder: 'sk-ant-…', field: 'apiKey' as const },
+  { id: 'openai',     label: 'OpenAI',    placeholder: 'sk-…',      field: 'apiKey' as const },
+  { id: 'groq',       label: 'Groq',      placeholder: 'gsk_…',     field: 'apiKey' as const },
+  { id: 'google',     label: 'Google AI', placeholder: 'AIza…',     field: 'apiKey' as const },
+  { id: 'xai',        label: 'xAI (Grok)', placeholder: 'xai-…',    field: 'apiKey' as const },
+  { id: 'ollama',     label: 'Ollama (local)', placeholder: 'http://localhost:11434', field: 'host' as const },
+];
+
+interface AIKeyFormState {
+  value: string;
+}
+
+function AIProviderCard({
+  wsId,
+  provider,
+  connection,
+  models,
+  getApi,
+}: {
+  wsId: string;
+  provider: (typeof AI_PROVIDERS)[number];
+  connection: ProviderConnection | undefined;
+  models: ModelDefinition[];
+  getApi: ReturnType<typeof useApiClient>;
+}) {
+  const queryClient = useQueryClient();
+  const { register, handleSubmit, reset, watch } = useForm<AIKeyFormState>({ defaultValues: { value: '' } });
+  const value = watch('value');
+
+  const connect = useMutation({
+    mutationFn: async ({ value }: AIKeyFormState) => {
+      const api = await getApi();
+      if (connection) await api.delete(`/workspaces/${wsId}/connections/${connection.id}`);
+      const config = provider.field === 'host' ? { host: value.trim() } : { apiKey: value.trim() };
+      return api.post<ProviderConnection>(`/workspaces/${wsId}/connections/${provider.id}`, {
+        config: JSON.stringify(config),
+      });
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData<ProviderConnection[]>(['connections', wsId], (prev = []) => [
+        ...prev.filter((c) => c.provider !== provider.id),
+        created,
+      ]);
+      reset({ value: '' });
+    },
+  });
+
+  const disconnect = useMutation({
+    mutationFn: async () => {
+      if (!connection) return;
+      const api = await getApi();
+      await api.delete(`/workspaces/${wsId}/connections/${connection.id}`);
+      return connection.id;
+    },
+    onSuccess: (id) => {
+      if (!id) return;
+      queryClient.setQueryData<ProviderConnection[]>(['connections', wsId], (prev = []) => prev.filter((c) => c.id !== id));
+    },
+  });
+
+  const providerModels = models.filter((m) => m.provider === provider.id);
+  const onSave = handleSubmit((values) => connect.mutate(values));
+
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">{provider.label}</p>
+            {connection ? (
+              <Badge variant="default" className="text-[10px]">connected</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px]">not set</Badge>
+            )}
+          </div>
+          {providerModels.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {providerModels.map((m) => (
+                <span key={m.id} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
+                  {m.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {connection && (
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Set {new Date(connection.createdAt).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+        {connection && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="shrink-0 text-destructive hover:text-destructive text-xs"
+            disabled={disconnect.isPending}
+            onClick={() => disconnect.mutate()}
+          >
+            {disconnect.isPending ? 'Removing…' : 'Remove'}
+          </Button>
+        )}
+      </div>
+
+      <form onSubmit={onSave} className="flex gap-2">
+        <Input
+          type={provider.field === 'host' ? 'text' : 'password'}
+          placeholder={connection ? '••••••••••••  (re-enter to rotate)' : provider.placeholder}
+          className="font-mono text-sm flex-1"
+          {...register('value')}
+        />
+        <Button size="sm" className="self-end" type="submit" disabled={!value.trim() || connect.isPending}>
+          {connect.isPending ? 'Saving…' : connection ? 'Rotate' : 'Save'}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 interface McpServer {
   id: string;
   name: string;
@@ -99,6 +231,23 @@ function ConnectionsPageInner() {
     queryFn: async () => {
       const api = await getApi();
       return api.get<OAuthConnection[]>(`/workspaces/${wsId}/oauth/connections`);
+    },
+  });
+
+  const { data: providerConnections = [], isLoading: providerConnectionsLoading } = useQuery<ProviderConnection[]>({
+    queryKey: ['connections', wsId],
+    enabled: !!wsId,
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ProviderConnection[]>(`/workspaces/${wsId}/connections`);
+    },
+  });
+
+  const { data: models = [] } = useQuery<ModelDefinition[]>({
+    queryKey: ['models'],
+    queryFn: async () => {
+      const api = await getApi();
+      return api.get<ModelDefinition[]>('/models');
     },
   });
 
@@ -304,6 +453,36 @@ function ConnectionsPageInner() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">AI Model Keys</h2>
+          <p className="text-sm text-muted-foreground">
+            Add API keys for AI model providers. Keys are stored encrypted and used by Agent nodes when selecting a model.
+          </p>
+        </div>
+
+        {providerConnectionsLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {AI_PROVIDERS.map((provider) => (
+              <AIProviderCard
+                key={provider.id}
+                wsId={wsId}
+                provider={provider}
+                connection={providerConnections.find((c) => c.provider === provider.id)}
+                models={models}
+                getApi={getApi}
+              />
+            ))}
           </div>
         )}
       </div>

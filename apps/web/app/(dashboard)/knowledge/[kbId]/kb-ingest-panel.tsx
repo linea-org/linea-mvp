@@ -30,10 +30,6 @@ const TABS: Array<{ id: IngestTab; icon: typeof NoteEditIcon; label: string }> =
   { id: 'website', icon: GlobalIcon,     label: 'Website' },
 ];
 
-export interface RecrawlTarget {
-  websiteUrl: string;
-}
-
 export function KbIngestPanel({
   wsId,
   kbId,

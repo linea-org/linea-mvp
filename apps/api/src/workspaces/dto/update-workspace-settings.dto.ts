@@ -1,23 +1,7 @@
-import {
-  IsArray,
-  IsNumber,
-  IsOptional,
-  IsString,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateWorkspaceSettingsDto {
-  @ApiPropertyOptional({
-    description: 'Ordered list of model IDs to try when the primary fails',
-    type: [String],
-  })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  modelFallbackChain?: string[];
-
   @ApiPropertyOptional({
     description: 'Cosine distance threshold for RAG retrieval (0.0–1.0)',
     minimum: 0,
