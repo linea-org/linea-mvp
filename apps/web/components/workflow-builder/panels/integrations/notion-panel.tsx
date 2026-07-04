@@ -1,20 +1,26 @@
-'use client';
+"use client"
 
-import type { Node } from '@xyflow/react';
-import { Input } from '@linea/ui/components/input';
-import { Label } from '@linea/ui/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
-import { Textarea } from '@linea/ui/components/textarea';
+import type { Node } from "@xyflow/react"
+import { Input } from "@linea/ui/components/input"
+import { Label } from "@linea/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@linea/ui/components/select"
+import { Textarea } from "@linea/ui/components/textarea"
 
 interface NotionPanelProps {
-  data: Record<string, unknown>;
-  onUpdate: (fields: Record<string, unknown>) => void;
-  nodes?: Node[];
-  nodeId?: string;
+  data: Record<string, unknown>
+  onUpdate: (fields: Record<string, unknown>) => void
+  nodes?: Node[]
+  nodeId?: string
 }
 
 export function NotionPanel({ data, onUpdate }: NotionPanelProps) {
-  const action = (data.action as string) ?? 'create_page';
+  const action = (data.action as string) ?? "create_page"
 
   return (
     <div className="space-y-4">
@@ -33,55 +39,62 @@ export function NotionPanel({ data, onUpdate }: NotionPanelProps) {
         </Select>
       </div>
 
-      {(action === 'create_page' || action === 'query_database') && (
+      {(action === "create_page" || action === "query_database") && (
         <div className="space-y-1.5">
           <Label>Database ID</Label>
           <Input
-            value={(data.databaseId as string) ?? ''}
+            value={(data.databaseId as string) ?? ""}
             onChange={(e) => onUpdate({ databaseId: e.target.value })}
             placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
           />
         </div>
       )}
 
-      {(action === 'append_block' || action === 'get_page') && (
+      {(action === "append_block" || action === "get_page") && (
         <div className="space-y-1.5">
           <Label>Page ID</Label>
           <Input
-            value={(data.pageId as string) ?? ''}
+            value={(data.pageId as string) ?? ""}
             onChange={(e) => onUpdate({ pageId: e.target.value })}
             placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
           />
         </div>
       )}
 
-      {action === 'create_page' && (
+      {action === "create_page" && (
         <div className="space-y-1.5">
-          <Label>Title <span className="text-muted-foreground">(optional)</span></Label>
+          <Label>
+            Title <span className="text-muted-foreground">(optional)</span>
+          </Label>
           <Input
-            value={(data.title as string) ?? ''}
+            value={(data.title as string) ?? ""}
             onChange={(e) => onUpdate({ title: e.target.value })}
             placeholder="Page title"
           />
         </div>
       )}
 
-      {(action === 'create_page' || action === 'append_block') && (
+      {(action === "create_page" || action === "append_block") && (
         <div className="space-y-1.5">
-          <Label>Content <span className="text-muted-foreground">(optional)</span></Label>
+          <Label>
+            Content <span className="text-muted-foreground">(optional)</span>
+          </Label>
           <Textarea
-            value={(data.content as string) ?? ''}
+            value={(data.content as string) ?? ""}
             onChange={(e) => onUpdate({ content: e.target.value })}
             rows={4}
           />
         </div>
       )}
 
-      {action === 'query_database' && (
+      {action === "query_database" && (
         <div className="space-y-1.5">
-          <Label>Filter <span className="text-muted-foreground">(optional JSON)</span></Label>
+          <Label>
+            Filter{" "}
+            <span className="text-muted-foreground">(optional JSON)</span>
+          </Label>
           <Textarea
-            value={(data.filter as string) ?? ''}
+            value={(data.filter as string) ?? ""}
             onChange={(e) => onUpdate({ filter: e.target.value })}
             placeholder='{"property":"Status","select":{"equals":"Done"}}'
             className="font-mono text-xs"
@@ -94,5 +107,5 @@ export function NotionPanel({ data, onUpdate }: NotionPanelProps) {
         Token resolved from workspace secret <code>NOTION_TOKEN</code>.
       </p>
     </div>
-  );
+  )
 }

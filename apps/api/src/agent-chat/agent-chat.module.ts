@@ -4,7 +4,7 @@ import { AgentChatController } from './agent-chat.controller';
 import { SecretsModule } from '../secrets/secrets.module';
 import { ExecutionsModule } from '../executions/executions.module';
 import { McpModule } from '../mcp/mcp.module';
-import { AIModule } from './ai.module';
+import { AIModule } from '../services/ai/ai.module';
 
 @Module({
   imports: [SecretsModule, ExecutionsModule, McpModule, AIModule],

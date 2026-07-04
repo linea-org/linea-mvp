@@ -12,7 +12,6 @@ import { OllamaClient } from './clients/ollama.client';
 import { XAIClient } from './clients/xai.client';
 import { GoogleClient } from './clients/google.client';
 import { GroqClient } from './clients/groq.client';
-import { PinoLogger } from 'nestjs-pino';
 
 @Injectable()
 export class AIService {
@@ -21,7 +20,6 @@ export class AIService {
   constructor(
     private readonly config: ConfigService,
     private readonly connectionsService: ConnectionsService,
-    private readonly logger: PinoLogger,
   ) {
     const apiKeys = {
       ANTHROPIC_API_KEY: this.config.get<string>('ANTHROPIC_API_KEY') ?? '',

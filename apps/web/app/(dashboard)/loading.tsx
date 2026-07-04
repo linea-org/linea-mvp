@@ -1,4 +1,4 @@
-import { Skeleton } from '@linea/ui/components/skeleton';
+import { Skeleton } from "@linea/ui/components/skeleton"
 
 export default function DashboardLoading() {
   return (
@@ -10,5 +10,5 @@ export default function DashboardLoading() {
         ))}
       </div>
     </div>
-  );
+  )
 }

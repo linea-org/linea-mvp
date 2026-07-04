@@ -1,42 +1,62 @@
-'use client';
+"use client"
 
-import { useQuery } from '@tanstack/react-query';
-import { useApiClient } from '@/hooks/use-api-client';
-import { useWorkspace } from '@/contexts/workspace-context';
-import { Input } from '@linea/ui/components/input';
-import { Textarea } from '@linea/ui/components/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@linea/ui/components/select';
-import { Label } from '@linea/ui/components/label';
+import { useEffect, useState } from "react"
+import { useAuth } from "@clerk/nextjs"
+import { useWorkspace } from "@/contexts/workspace-context"
+import { createApiClient } from "@/lib/api"
+import { Input } from "@linea/ui/components/input"
+import { Textarea } from "@linea/ui/components/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@linea/ui/components/select"
+import { Label } from "@linea/ui/components/label"
 
 interface McpPanelProps {
-  data: Record<string, unknown>;
-  onUpdate: (data: Record<string, unknown>) => void;
+  data: Record<string, unknown>
+  onUpdate: (data: Record<string, unknown>) => void
 }
 
-interface McpServer { id: string; name: string; url: string }
+interface McpServer {
+  id: string
+  name: string
+  url: string
+}
 
 const OUTPUT_OPTIONS = [
-  { value: 'full',     label: 'Full response' },
-  { value: 'text',     label: 'Text only' },
-  { value: 'json',     label: 'JSON parsed' },
-  { value: 'markdown', label: 'Markdown' },
-];
+  { value: "full", label: "Full response" },
+  { value: "text", label: "Text only" },
+  { value: "json", label: "JSON parsed" },
+  { value: "markdown", label: "Markdown" },
+]
 
 export function McpPanel({ data, onUpdate }: McpPanelProps) {
-  const getApi = useApiClient();
-  const { activeWorkspace } = useWorkspace();
+  const { getToken } = useAuth()
+  const { activeWorkspace } = useWorkspace()
+  const [servers, setServers] = useState<McpServer[]>([])
 
-  const { data: servers = [] } = useQuery<McpServer[]>({
-    queryKey: ['mcp-servers', activeWorkspace?.id],
-    enabled: !!activeWorkspace,
-    queryFn: async () => {
-      const api = await getApi();
-      return api.get<McpServer[]>(`/workspaces/${activeWorkspace!.id}/mcp-servers`);
-    },
-  });
+  useEffect(() => {
+    async function load() {
+      if (!activeWorkspace) return
+      try {
+        const token = await getToken()
+        if (!token) return
+        const api = createApiClient(token)
+        const list = await api.get<McpServer[]>(
+          `/workspaces/${activeWorkspace.id}/mcp-servers`
+        )
+        setServers(list)
+      } catch {
+        /* non-fatal */
+      }
+    }
+    void load()
+  }, [activeWorkspace, getToken])
 
-
-  const selectedServerId = (data.mcpServerId as string) ?? '';
+  const selectedServerId = (data.mcpServerId as string) ?? ""
 
   return (
     <div className="space-y-4">
@@ -51,7 +71,9 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
           </SelectTrigger>
           <SelectContent>
             {servers.map((s) => (
-              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -66,7 +88,7 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
         <Label htmlFor="mcp-action">Tool name</Label>
         <Input
           id="mcp-action"
-          value={(data.mcpAction as string) ?? ''}
+          value={(data.mcpAction as string) ?? ""}
           onChange={(e) => onUpdate({ mcpAction: e.target.value })}
           placeholder="e.g. fetch, search, scrape"
         />
@@ -75,7 +97,7 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
       <div className="space-y-1.5">
         <Label>Output field</Label>
         <Select
-          value={(data.outputField as string) ?? 'full'}
+          value={(data.outputField as string) ?? "full"}
           onValueChange={(v) => onUpdate({ outputField: v })}
         >
           <SelectTrigger className="w-full">
@@ -83,7 +105,9 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
           </SelectTrigger>
           <SelectContent>
             {OUTPUT_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -94,12 +118,12 @@ export function McpPanel({ data, onUpdate }: McpPanelProps) {
         <Textarea
           id="mcp-params"
           rows={5}
-          value={(data.mcpParams as string) ?? ''}
+          value={(data.mcpParams as string) ?? ""}
           onChange={(e) => onUpdate({ mcpParams: e.target.value })}
           placeholder={'{\n  "url": "{{url}}"\n}'}
           className="resize-y font-mono text-[11px]"
         />
       </div>
     </div>
-  );
+  )
 }

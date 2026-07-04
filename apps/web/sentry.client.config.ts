@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/nextjs';
+import * as Sentry from "@sentry/nextjs"
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
@@ -16,13 +16,19 @@ Sentry.init({
     }),
   ],
 
-  enabled: process.env.NODE_ENV === 'production' && !!process.env.NEXT_PUBLIC_SENTRY_DSN,
+  enabled:
+    process.env.NODE_ENV === "production" &&
+    !!process.env.NEXT_PUBLIC_SENTRY_DSN,
   sendDefaultPii: false,
 
   beforeSend(event) {
-    if (event.exception?.values?.some((v) => v.value?.includes('The user aborted a request'))) {
-      return null;
+    if (
+      event.exception?.values?.some((v) =>
+        v.value?.includes("The user aborted a request")
+      )
+    ) {
+      return null
     }
-    return event;
+    return event
   },
-});
+})

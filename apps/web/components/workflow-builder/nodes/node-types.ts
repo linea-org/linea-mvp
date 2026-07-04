@@ -1,4 +1,10 @@
-import { CustomNode, NoteNode, StartNode, EndNode, FrameNode } from './custom-node';
+import {
+  CustomNode,
+  NoteNode,
+  StartNode,
+  EndNode,
+  FrameNode,
+} from "./custom-node"
 
 export const nodeTypes = {
   start: StartNode,
@@ -6,10 +12,10 @@ export const nodeTypes = {
   agent: CustomNode,
   http: CustomNode,
   transform: CustomNode,
-  'if-else': CustomNode,
+  "if-else": CustomNode,
   router: CustomNode,
   approval: CustomNode,
-  'approval-gate': CustomNode,
+  "approval-gate": CustomNode,
   mcp: CustomNode,
   memory: CustomNode,
   extract: CustomNode,
@@ -31,4 +37,4 @@ export const nodeTypes = {
   datetime: CustomNode,
   note: NoteNode,
   frame: FrameNode,
-} as const;
+} as const

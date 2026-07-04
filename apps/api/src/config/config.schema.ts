@@ -19,6 +19,8 @@ export const configSchema = z.object({
     .string()
     .length(44, 'Must be a base64-encoded 32-byte key (44 chars)'),
 
+  ENCRYPTION_KEY: z.string(),
+
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),

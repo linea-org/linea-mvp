@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import * as schema from "./schema/index"
+import { ConnectionRepository } from "./repositories"
 
 export type DrizzleDB = ReturnType<typeof createDb>
 
