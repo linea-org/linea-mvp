@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
-import { WebhooksService, WEBHOOK_REDIS } from './webhooks.service';
+import { Redis } from 'ioredis';
+import { WebhooksService, WEBHOOK_REDIS } from './webhooks.service.js';
 import {
   WebhooksController,
   WebhookTriggerController,
-} from './webhooks.controller';
-import { ExecutionsModule } from '../executions/executions.module';
-import { PodsModule } from '../pods/pods.module';
-import { AuditModule } from '../audit/audit.module';
+} from './webhooks.controller.js';
+import { ExecutionsModule } from '../executions/executions.module.js';
+import { PodsModule } from '../pods/pods.module.js';
+import { AuditModule } from '../audit/audit.module.js';
 
 @Module({
   imports: [ExecutionsModule, PodsModule, ConfigModule, AuditModule],

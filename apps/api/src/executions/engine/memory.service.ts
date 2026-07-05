@@ -4,9 +4,9 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
 import { memories, mcpServers, secrets, oauthConnections } from '@linea/db';
-import { DB_TOKEN } from '../../database/database.module';
-import { AIService } from '../../services/ai/ai.service';
-import { AI_EMBEDDING_MODELS } from '../../services/ai/model-catalog';
+import { DB_TOKEN } from '../../database/database.module.js';
+import { AIService } from '../../services/ai/ai.service.js';
+import { AI_EMBEDDING_MODELS } from '../../services/ai/model-catalog.js';
 
 @Injectable()
 export class MemoryService {

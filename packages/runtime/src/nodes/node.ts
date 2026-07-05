@@ -1,8 +1,10 @@
-import { RuntimeState } from "../graph/state"
-import { TemplateEngine } from "../template/engine"
-import { WorkflowNodeMap, WorkflowNodeType } from "../types"
-
-export type VariableMap = Record<string, unknown>
+import type {
+  VariableMap,
+  WorkflowNodeMap,
+  WorkflowNodeType,
+} from "@linea/shared/contracts"
+import { TemplateEngine } from "../template/engine.js"
+import { RuntimeState } from "../types.js"
 
 export interface NodeResult {
   variables: VariableMap

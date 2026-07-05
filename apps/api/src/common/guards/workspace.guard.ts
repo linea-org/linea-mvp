@@ -10,7 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Request } from 'express';
 import type { DrizzleDB, User, WorkspaceMember } from '@linea/db';
 import { workspaceMembers, workspaces } from '@linea/db';
-import { DB_TOKEN } from '../../database/database.module';
+import { DB_TOKEN } from '../../database/database.module.js';
 
 export type AuthedRequest = Request & {
   user: User;

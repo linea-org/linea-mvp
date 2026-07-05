@@ -2,6 +2,7 @@
   "name": "@linea/db",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
@@ -18,15 +19,15 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./schema": {
-      "types": "./src/schema/index.ts",
+      "types": "./dist/schema/index.d.ts",
       "default": "./dist/schema/index.js"
     },
     "./client": {
-      "types": "./src/client.ts",
+      "types": "./dist/client.d.ts",
       "default": "./dist/client.js"
     }
   },

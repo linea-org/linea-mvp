@@ -2,7 +2,7 @@ import {
   Controller,
   Post,
   Headers,
-  RawBodyRequest,
+  type RawBodyRequest,
   Req,
   HttpCode,
   BadRequestException,
@@ -13,10 +13,10 @@ import { ConfigService } from '@nestjs/config';
 import { Webhook } from 'svix';
 import type { Redis } from 'ioredis';
 import type { Request } from 'express';
-import { Public } from '../../common/decorators/public.decorator';
-import { UsersService } from '../../users/users.service';
-import { WorkspacesService } from '../../workspaces/workspaces.service';
-import { APP_REDIS } from '../../app.module';
+import { Public } from '../../common/decorators/public.decorator.js';
+import { UsersService } from '../../users/users.service.js';
+import { WorkspacesService } from '../../workspaces/workspaces.service.js';
+import { APP_REDIS } from '../../tokens.js';
 
 interface ClerkUserPayload {
   id: string;

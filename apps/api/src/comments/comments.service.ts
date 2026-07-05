@@ -12,9 +12,9 @@ import {
   users,
   workflows,
 } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import type { CreateCommentDto } from './dto/create-comment.dto';
-import type { UpdateCommentDto } from './dto/update-comment.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import type { CreateCommentDto } from './dto/create-comment.dto.js';
+import type { UpdateCommentDto } from './dto/update-comment.dto.js';
 
 const ALLOWED_EMOJIS = new Set(['👍', '❤️', '😂', '😮', '😢', '🎉']);
 

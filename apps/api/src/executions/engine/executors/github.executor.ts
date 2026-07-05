@@ -1,4 +1,4 @@
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 export interface GitHubNodeData {
   action?: 'create_issue' | 'comment_issue' | 'list_issues' | 'create_pr';

@@ -10,7 +10,7 @@ export class MailService {
   private readonly webUrl: string;
 
   constructor(private readonly config: ConfigService) {
-    const apiKey = config.get<string>('RESEND_API_KEY');
+    const apiKey = this.config.get<string>('RESEND_API_KEY');
     this.resend = apiKey ? new Resend(apiKey) : null;
     this.from =
       config.get<string>('RESEND_FROM') ?? 'Linea <noreply@getlinea.app>';

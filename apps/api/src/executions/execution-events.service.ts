@@ -1,7 +1,7 @@
 import { Injectable, Inject, Optional } from '@nestjs/common';
 import { Subject, Observable } from 'rxjs';
 import { filter } from 'rxjs/operators';
-import type Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 
 export const EXEC_EVENTS_REDIS = 'EXEC_EVENTS_REDIS';
 

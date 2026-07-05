@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { WorkspacesService } from './workspaces.service';
-import { WorkspacesController } from './workspaces.controller';
-import { InvitesController } from './invites.controller';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { MailModule } from '../mail/mail.module';
+import { WorkspacesService } from './workspaces.service.js';
+import { WorkspacesController } from './workspaces.controller.js';
+import { InvitesController } from './invites.controller.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { MailModule } from '../mail/mail.module.js';
 
 @Module({
   imports: [MailModule],

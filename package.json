@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "turbo build",
-    "dev": "turbo dev --filter=!docs",
+    "dev": "turbo dev --filter=!@linea/docs",
     "dev:api": "pnpm --filter=@linea/api dev",
     "dev:web": "pnpm --filter=@linea/web dev",
     "dev:docs": "pnpm --filter=@linea/docs dev",

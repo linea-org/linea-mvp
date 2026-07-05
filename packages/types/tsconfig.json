@@ -1,7 +1,10 @@
 {
   "extends": "@linea/typescript-config/base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022"
   },
   "include": ["src"],
   "exclude": ["node_modules"]

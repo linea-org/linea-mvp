@@ -14,11 +14,11 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { SecretsService } from './secrets.service';
-import { CreateSecretDto } from './dto/create-secret.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
+import { SecretsService } from './secrets.service.js';
+import { CreateSecretDto } from './dto/create-secret.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
 
 @ApiTags('Secrets')
 @ApiBearerAuth()

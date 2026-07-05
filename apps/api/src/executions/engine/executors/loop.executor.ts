@@ -1,5 +1,5 @@
 import jexl from 'jexl';
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 export interface LoopNodeData {
   arrayPath?: string;

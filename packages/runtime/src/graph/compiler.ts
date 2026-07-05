@@ -1,10 +1,10 @@
 import { END, START, StateGraph } from "@langchain/langgraph"
 
-import { NodeRegistry } from "../registry"
+import { NodeRegistry } from "../registry.js"
 
-import { RuntimeStateAnnotation } from "./state"
-import type { WorkflowDefinition, WorkflowNode } from "../types"
-import { TemplateEngine } from "../template/engine"
+import { RuntimeStateAnnotation } from "./state.js"
+import { TemplateEngine } from "../template/engine.js"
+import { WorkflowDefinition, WorkflowNode } from "@linea/shared/contracts"
 
 export class LangGraphCompiler {
   constructor(

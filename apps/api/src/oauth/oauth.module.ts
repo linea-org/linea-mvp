@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { OAuthService } from './oauth.service';
-import { OAuthController, OAuthCallbackController } from './oauth.controller';
+import { OAuthService } from './oauth.service.js';
+import { OAuthController, OAuthCallbackController } from './oauth.controller.js';
 
 @Module({
   imports: [ConfigModule],

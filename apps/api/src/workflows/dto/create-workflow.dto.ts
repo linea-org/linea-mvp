@@ -14,13 +14,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class WorkflowNodeDto {
   @IsString()
-  id: string;
+  id!: string;
 
   @IsString()
-  type: string;
+  type!: string;
 
   @IsObject()
-  position: { x: number; y: number };
+  position!: { x: number; y: number };
 
   @IsOptional()
   @IsObject()
@@ -49,13 +49,13 @@ class WorkflowNodeDto {
 
 class WorkflowEdgeDto {
   @IsString()
-  id: string;
+  id!: string;
 
   @IsString()
-  source: string;
+  source!: string;
 
   @IsString()
-  target: string;
+  target!: string;
 
   @IsOptional()
   @IsString()
@@ -100,12 +100,12 @@ export class WorkflowDefinitionDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => WorkflowNodeDto)
-  nodes: WorkflowNodeDto[];
+  nodes!: WorkflowNodeDto[];
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => WorkflowEdgeDto)
-  edges: WorkflowEdgeDto[];
+  edges!: WorkflowEdgeDto[];
 
   @IsOptional()
   @ValidateNested()
@@ -118,7 +118,7 @@ export class CreateWorkflowDto {
   @IsString()
   @MinLength(1)
   @MaxLength(128)
-  name: string;
+  name!: string;
 
   @ApiPropertyOptional()
   @IsOptional()

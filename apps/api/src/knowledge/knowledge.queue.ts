@@ -1,4 +1,4 @@
-import { AIProviderType } from '../common/utils/config-types';
+import { AIProviderType } from '../common/utils/config-types.js';
 
 export const RAG_EMBED_QUEUE = 'rag-embed';
 

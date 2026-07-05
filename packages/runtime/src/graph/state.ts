@@ -1,5 +1,5 @@
 import { Annotation } from "@langchain/langgraph"
-import { VariableMap } from "../nodes/node"
+import { VariableMap } from "@linea/shared/contracts"
 
 export const RuntimeStateAnnotation = Annotation.Root({
   workspaceId: Annotation<string>(),
@@ -13,5 +13,3 @@ export const RuntimeStateAnnotation = Annotation.Root({
     default: () => ({}),
   }),
 })
-
-export type RuntimeState = typeof RuntimeStateAnnotation.State

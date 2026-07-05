@@ -15,12 +15,12 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { ConnectionsService } from './connections.service';
-import { CreateConnectionDto } from './dto/create-connection.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { PROVIDERS, ProviderType } from '../common/utils/config-types';
+import { ConnectionsService } from './connections.service.js';
+import { CreateConnectionDto } from './dto/create-connection.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { PROVIDERS, type ProviderType } from '../common/utils/config-types.js';
 
 @ApiTags('Connections')
 @ApiBearerAuth()

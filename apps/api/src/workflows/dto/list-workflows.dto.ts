@@ -1,7 +1,7 @@
 import { IsOptional, IsBoolean, IsString } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import { PaginationDto } from '../../common/dto/pagination.dto.js';
 
 export class ListWorkflowsDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Filter by template flag' })

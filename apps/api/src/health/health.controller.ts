@@ -8,8 +8,8 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { sql } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { Public } from '../common/decorators/public.decorator';
+import { DB_TOKEN } from '../database/database.module.js';
+import { Public } from '../common/decorators/public.decorator.js';
 
 @ApiTags('Health')
 @Public()

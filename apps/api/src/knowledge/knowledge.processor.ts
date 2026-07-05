@@ -4,10 +4,10 @@ import type { Job } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { knowledgeEntries } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { RAG_EMBED_QUEUE } from './knowledge.queue';
-import type { RagEmbedJobData } from './knowledge.queue';
-import { AIService } from '../services/ai/ai.service';
+import { DB_TOKEN } from '../database/database.module.js';
+import { RAG_EMBED_QUEUE } from './knowledge.queue.js';
+import type { RagEmbedJobData } from './knowledge.queue.js';
+import { AIService } from '../services/ai/ai.service.js';
 
 @Processor(RAG_EMBED_QUEUE)
 export class KnowledgeEmbedProcessor extends WorkerHost {

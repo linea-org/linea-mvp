@@ -1,4 +1,4 @@
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 export function executeMergeNode(
   nodeData: Record<string, any>,

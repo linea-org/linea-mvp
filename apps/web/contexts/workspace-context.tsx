@@ -44,16 +44,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         const token = await getToken()
         if (!token) return
         const api = createApiClient(token)
-        const raw =
-          await api.get<
-            Array<{ id: string; name: string; slug: string; plan?: string }>
-          >("/workspaces")
+        const raw = await api.get<Workspace[]>("/workspaces")
         const data: Workspace[] = raw.map(({ id, name, slug, plan }) => ({
           id,
           name,
           slug,
           plan,
         }))
+
+        console.log(raw)
         setWorkspaces(data)
 
         const storedId = localStorage.getItem("activeWorkspaceId")

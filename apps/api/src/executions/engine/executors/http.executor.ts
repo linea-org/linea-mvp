@@ -1,6 +1,6 @@
-import type { WorkflowState } from '../variable-substitution';
-import { substituteVariables } from '../variable-substitution';
-import { assertSafeUrl } from '../../../common/utils/ssrf-guard';
+import type { WorkflowState } from '../variable-substitution.js';
+import { substituteVariables } from '../variable-substitution.js';
+import { assertSafeUrl } from '../../../common/utils/ssrf-guard.js';
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 

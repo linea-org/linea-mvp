@@ -17,7 +17,7 @@ config({ path: resolve(__dirname, '../../../.env.local') });
 import { createDb } from '@linea/db/client';
 import { eq } from 'drizzle-orm';
 import { templates } from '@linea/db';
-import { BUILT_IN_TEMPLATES } from '../src/workflows/templates.data';
+import { BUILT_IN_TEMPLATES } from '../src/workflows/templates.data.js';
 
 async function main() {
   const url = process.env['DATABASE_URL'];

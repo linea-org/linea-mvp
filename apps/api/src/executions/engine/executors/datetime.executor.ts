@@ -1,4 +1,4 @@
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 type DatetimeOp = 'format' | 'parse' | 'add' | 'subtract' | 'diff' | 'now';
 

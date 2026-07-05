@@ -4,18 +4,18 @@ import type { Job } from 'bullmq';
 import { eq, desc } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { executions, executionLogs, workflows, users } from '@linea/db';
-import { DB_TOKEN } from '../../database/database.module';
-import { LangGraphService } from '../engine/langgraph.service';
-import type { WorkflowDefinition } from '../engine/langgraph.service';
-import { ExecutionEventsService } from '../execution-events.service';
-import { MemoryService } from '../engine/memory.service';
-import { CheckpointerService } from '../engine/checkpointer.service';
-import { NotificationsService } from '../../notifications/notifications.service';
-import { QuotasService } from '../../quotas/quotas.service';
-import { MailService } from '../../mail/mail.service';
-import { EXECUTION_QUEUE } from './execution.queue';
-import type { ExecutionJobData } from './execution.queue';
-import { drainWithTimeout } from '../engine/drain-with-timeout';
+import { DB_TOKEN } from '../../database/database.module.js';
+import { LangGraphService } from '../engine/langgraph.service.js';
+import type { WorkflowDefinition } from '../engine/langgraph.service.js';
+import { ExecutionEventsService } from '../execution-events.service.js';
+import { MemoryService } from '../engine/memory.service.js';
+import { CheckpointerService } from '../engine/checkpointer.service.js';
+import { NotificationsService } from '../../notifications/notifications.service.js';
+import { QuotasService } from '../../quotas/quotas.service.js';
+import { MailService } from '../../mail/mail.service.js';
+import { EXECUTION_QUEUE } from './execution.queue.js';
+import type { ExecutionJobData } from './execution.queue.js';
+import { drainWithTimeout } from '../engine/drain-with-timeout.js';
 
 const EXECUTION_TIMEOUT_MS = 15 * 60 * 1_000; // 15 minutes wall-clock per execution
 

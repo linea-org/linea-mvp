@@ -16,9 +16,9 @@ import { ConfigService } from '@nestjs/config';
 import type { Redis } from 'ioredis';
 import type { DrizzleDB } from '@linea/db';
 import { webhooks, pods, workflows } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { ExecutionsService } from '../executions/executions.service';
-import type { CreateWebhookDto } from './dto/create-webhook.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import { ExecutionsService } from '../executions/executions.service.js';
+import type { CreateWebhookDto } from './dto/create-webhook.dto.js';
 
 export const WEBHOOK_REDIS = 'WEBHOOK_REDIS';
 

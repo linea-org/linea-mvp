@@ -1,11 +1,7 @@
 import OpenAI from 'openai';
-import { CompletionResult, NormalizedToolCall } from '../types';
-import { ModelChatProps, ModelClient, ModelDefinition } from './interface';
-import { withRetry } from '../helpers';
-import {
-  ChatCompletionCreateParamsNonStreaming,
-  ChatCompletionCreateParamsStreaming,
-} from 'openai/resources/chat';
+import { CompletionResult, NormalizedToolCall } from '../types.js';
+import { ModelChatProps, ModelClient, ModelDefinition } from './interface.js';
+import { withRetry } from '../helpers.js';
 
 export class GroqClient implements ModelClient {
   static readonly displayModels: ModelDefinition[] = [
@@ -243,14 +239,14 @@ export class GroqClient implements ModelClient {
     };
 
     if (onToken) {
-      const stream = await this._client.chat.completions.create(
+      const stream: any = await this._client.chat.completions.create(
         {
           ...options,
           stream: true,
           stream_options: {
             include_usage: true,
           },
-        } as ChatCompletionCreateParamsStreaming,
+        } as any,
         { signal: opts?.signal },
       );
 
@@ -289,7 +285,7 @@ export class GroqClient implements ModelClient {
           {
             ...options,
             stream: false,
-          } as ChatCompletionCreateParamsNonStreaming,
+          } as any,
           { signal: opts?.signal },
         ),
       );

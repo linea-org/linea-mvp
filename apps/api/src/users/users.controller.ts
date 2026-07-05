@@ -10,9 +10,9 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { IsOptional, IsString, IsUrl } from 'class-validator';
-import { UsersService } from './users.service';
-import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { UsersService } from './users.service.js';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { User } from '@linea/db';
 
 class UpdateProfileDto {

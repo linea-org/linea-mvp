@@ -15,11 +15,11 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
-import { EvalsService, type TestCase } from './evals.service';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { PodGuard } from '../common/guards/pod.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
+import { EvalsService, type TestCase } from './evals.service.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { PodGuard } from '../common/guards/pod.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
 
 class RunEvalsDto {
   testCases!: TestCase[];

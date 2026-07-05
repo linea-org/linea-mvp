@@ -1,6 +1,6 @@
 import { AIClient } from "@linea/ai"
-import type { NodeContext, NodeExecutor, NodeResult } from "../node"
-import type { AgentNodeConfig } from "./agent.types"
+import type { NodeContext, NodeExecutor, NodeResult } from "../node.js"
+import type { AgentNodeConfig } from "@linea/shared/contracts"
 
 export class AgentNode implements NodeExecutor<"agent"> {
   constructor(private readonly ai: AIClient) {}

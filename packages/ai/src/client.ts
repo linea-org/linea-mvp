@@ -1,18 +1,18 @@
-import { ModelClient } from "./clients/interface"
-import { OpenAIClient } from "./clients/openai.client"
-import { AnthropicClient } from "./clients/anthropic.client"
-import { OllamaClient } from "./clients/ollama.client"
-import { XAIClient } from "./clients/xai.client"
-import { GoogleClient } from "./clients/google.client"
-import { GroqClient } from "./clients/groq.client"
+import { ModelClient } from "./clients/interface.js"
+import { OpenAIClient } from "./clients/openai.client.js"
+import { AnthropicClient } from "./clients/anthropic.client.js"
+import { OllamaClient } from "./clients/ollama.client.js"
+import { XAIClient } from "./clients/xai.client.js"
+import { GoogleClient } from "./clients/google.client.js"
+import { GroqClient } from "./clients/groq.client.js"
 import {
   AIProviderConfigMap,
   AIProviderType,
   decryptConfig,
   parseProviderConfig,
 } from "@linea/shared"
-import type { AIOptions, EncryptionKeys } from "./types"
-import { Database } from "@linea/db"
+import type { AIOptions, EncryptionKeys } from "./types.js"
+import { ConnectionRepository } from "@linea/shared/contracts"
 
 export class AIClient {
   private readonly systemConfig: AIProviderConfigMap
@@ -20,8 +20,7 @@ export class AIClient {
 
   constructor(
     options: AIOptions,
-
-    private readonly db: Database
+    private readonly connection: ConnectionRepository
   ) {
     this.systemConfig = {
       anthropic: {
@@ -115,7 +114,7 @@ export class AIClient {
     workspaceId: string,
     provider: T
   ): Promise<AIProviderConfigMap[T] | null> {
-    const connection = await this.db.connection.findByProvider(
+    const connection = await this.connection.findByProvider(
       workspaceId,
       provider
     )

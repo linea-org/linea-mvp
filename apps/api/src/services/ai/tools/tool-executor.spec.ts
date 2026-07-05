@@ -1,6 +1,6 @@
-import { WorkflowState } from '../../../executions/engine/variable-substitution';
-import { executeTool } from './tool-executor';
-import type { ToolCallRequest } from './tool-executor';
+import { WorkflowState } from '../../../executions/engine/variable-substitution.js';
+import { executeTool } from './tool-executor.js';
+import type { ToolCallRequest } from './tool-executor.js';
 
 const baseState: WorkflowState = {
   variables: {},

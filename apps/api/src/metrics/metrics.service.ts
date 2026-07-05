@@ -1,7 +1,7 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
+import { DB_TOKEN } from '../database/database.module.js';
 
 const PERIOD_HOURS: Record<string, number> = {
   '24h': 24,

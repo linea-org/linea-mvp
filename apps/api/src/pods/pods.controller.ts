@@ -15,14 +15,14 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { PodsService } from './pods.service';
-import { CreatePodDto } from './dto/create-pod.dto';
-import { UpdatePodDto } from './dto/update-pod.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuditService } from '../audit/audit.service';
+import { PodsService } from './pods.service.js';
+import { CreatePodDto } from './dto/create-pod.dto.js';
+import { UpdatePodDto } from './dto/update-pod.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { AuditService } from '../audit/audit.service.js';
 import type { User } from '@linea/db';
 
 @ApiTags('Pods')

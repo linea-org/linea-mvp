@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { PublicRunService } from './public-run.service';
+import { PublicRunService } from './public-run.service.js';
 import {
   PublicRunController,
   WorkflowApiController,
-} from './public-run.controller';
-import { ExecutionsModule } from '../executions/executions.module';
-import { WorkspacesModule } from '../workspaces/workspaces.module';
-import { PodsModule } from '../pods/pods.module';
-import { AIModule } from '../services/ai/ai.module';
+} from './public-run.controller.js';
+import { ExecutionsModule } from '../executions/executions.module.js';
+import { WorkspacesModule } from '../workspaces/workspaces.module.js';
+import { PodsModule } from '../pods/pods.module.js';
+import { AIModule } from '../services/ai/ai.module.js';
 
 @Module({
   imports: [ExecutionsModule, WorkspacesModule, PodsModule, AIModule],

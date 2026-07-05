@@ -22,27 +22,27 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { WorkflowsService } from './workflows.service';
-import { GenerateWorkflowService } from './generate-workflow.service';
-import { CreateWorkflowDto } from './dto/create-workflow.dto';
-import { UpdateWorkflowDto } from './dto/update-workflow.dto';
-import { ListWorkflowsDto } from './dto/list-workflows.dto';
-import { ListTemplatesDto } from './dto/list-templates.dto';
-import { GenerateWorkflowDto } from './dto/generate-workflow.dto';
+import { WorkflowsService } from './workflows.service.js';
+import { GenerateWorkflowService } from './generate-workflow.service.js';
+import { CreateWorkflowDto } from './dto/create-workflow.dto.js';
+import { UpdateWorkflowDto } from './dto/update-workflow.dto.js';
+import { ListWorkflowsDto } from './dto/list-workflows.dto.js';
+import { ListTemplatesDto } from './dto/list-templates.dto.js';
+import { GenerateWorkflowDto } from './dto/generate-workflow.dto.js';
 import {
   PublishTemplateDto,
   UpdateTemplateDto,
-} from './dto/publish-template.dto';
-import { UpdateLogSettingsDto } from './dto/log-settings.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { PodGuard } from '../common/guards/pod.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { GlobalAdminGuard } from '../common/guards/global-admin.guard';
-import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+} from './dto/publish-template.dto.js';
+import { UpdateLogSettingsDto } from './dto/log-settings.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { PodGuard } from '../common/guards/pod.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { GlobalAdminGuard } from '../common/guards/global-admin.guard.js';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { User } from '@linea/db';
-import { AuditService } from '../audit/audit.service';
+import { AuditService } from '../audit/audit.service.js';
 
 @ApiTags('Workflows')
 @ApiBearerAuth()

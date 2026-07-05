@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { PodsService } from './pods.service';
-import { PodsController } from './pods.controller';
-import { PodGuard } from '../common/guards/pod.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { AuditModule } from '../audit/audit.module';
+import { PodsService } from './pods.service.js';
+import { PodsController } from './pods.controller.js';
+import { PodGuard } from '../common/guards/pod.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { AuditModule } from '../audit/audit.module.js';
 
 @Module({
   imports: [AuditModule],

@@ -2,11 +2,13 @@
   "extends": "@linea/typescript-config/base.json",
   "compilerOptions": {
     "noEmit": false,
-    "outDir": "./dist",
+    "outDir": "dist",
+    "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
     "module": "nodenext",
-    "moduleResolution": "nodenext"
+    "moduleResolution": "nodenext",
+    "target": "ES2022"
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

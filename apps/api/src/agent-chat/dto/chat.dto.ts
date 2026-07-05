@@ -7,7 +7,10 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { AI_PROVIDERS, AIProviderType } from '../../common/utils/config-types';
+import {
+  AI_PROVIDERS,
+  type AIProviderType,
+} from '../../common/utils/config-types.js';
 
 export class ChatMessage {
   @IsString()

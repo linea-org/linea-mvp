@@ -1,11 +1,7 @@
 import OpenAI from 'openai';
-import { CompletionResult, NormalizedToolCall } from '../types';
-import { ModelChatProps, ModelClient, ModelDefinition } from './interface';
-import { withRetry } from '../helpers';
-import {
-  ChatCompletionCreateParamsNonStreaming,
-  ChatCompletionCreateParamsStreaming,
-} from 'openai/resources/chat';
+import { CompletionResult, NormalizedToolCall } from '../types.js';
+import { ModelChatProps, ModelClient, ModelDefinition } from './interface.js';
+import { withRetry } from '../helpers.js';
 
 export class OllamaClient implements ModelClient {
   static readonly displayModels: ModelDefinition[] = [
@@ -156,14 +152,14 @@ export class OllamaClient implements ModelClient {
     };
 
     if (onToken) {
-      const stream = await this._client.chat.completions.create(
+      const stream: any = await this._client.chat.completions.create(
         {
           ...options,
           stream: true,
           stream_options: {
             include_usage: true,
           },
-        } as ChatCompletionCreateParamsStreaming,
+        } as any,
         { signal: opts?.signal },
       );
 
@@ -203,7 +199,7 @@ export class OllamaClient implements ModelClient {
           {
             ...options,
             stream: false,
-          } as ChatCompletionCreateParamsNonStreaming,
+          } as any,
           { signal: opts?.signal },
         ),
       );

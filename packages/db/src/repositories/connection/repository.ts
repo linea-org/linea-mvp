@@ -1,26 +1,14 @@
 import { and, eq } from "drizzle-orm"
-import { DrizzleDB } from "../client"
+import { DrizzleDB } from "../../client.js"
+import { providerConnections } from "../../schema/index.js"
+import type { AIProviderType, IntegrationType } from "@linea/shared"
 import {
+  ConnectionRepository,
   NewProviderConnection,
   ProviderConnection,
-  providerConnections,
-} from "../schema"
-import type { AIProviderType, IntegrationType } from "@linea/shared"
+} from "@linea/shared/contracts"
 
-interface ConnectionRepositoryInter {
-  findById(id: string): Promise<ProviderConnection | null>
-  findByProvider(
-    workspaceId: string,
-    provider: AIProviderType
-  ): Promise<ProviderConnection | null>
-
-  create(payload: NewProviderConnection): Promise<ProviderConnection | null>
-  delete(connectId: string): Promise<void>
-
-  findAll(workspaceId: string): Promise<ProviderConnection[]>
-}
-
-export class ConnectionRepository implements ConnectionRepositoryInter {
+export class ConnectionRepositoryImpl implements ConnectionRepository {
   constructor(private readonly db: DrizzleDB) {}
 
   async findById(id: string): Promise<ProviderConnection | null> {

@@ -16,8 +16,8 @@ import {
 } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { oauthConnections } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { OAUTH_PROVIDERS } from './providers';
+import { DB_TOKEN } from '../database/database.module.js';
+import { OAUTH_PROVIDERS } from './providers.js';
 
 @Injectable()
 export class OAuthService {

@@ -1,5 +1,5 @@
-import { assertSafeUrl } from '../../../common/utils/ssrf-guard';
-import type { WorkflowState } from '../variable-substitution';
+import { assertSafeUrl } from '../../../common/utils/ssrf-guard.js';
+import type { WorkflowState } from '../variable-substitution.js';
 
 export interface ExtractNodeData {
   scrapeUrl?: string; // URL to scrape — also accepts 'url' (panel field name)

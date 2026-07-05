@@ -1,4 +1,4 @@
-import { VariableMap } from "../nodes/node"
+import { VariableMap } from "@linea/shared/contracts"
 
 const TEMPLATE_REGEX = /\{\{\s*([^}]+?)\s*\}\}/g
 

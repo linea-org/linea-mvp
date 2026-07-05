@@ -15,10 +15,11 @@ import {
   isNotNull,
   gt,
   ne,
+  inArray,
 } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import type { SQL } from 'drizzle-orm';
-import type { DrizzleDB, NewWorkflow } from '@linea/db';
+import type { DrizzleDB, NewWorkflow, Workflow } from '@linea/db';
 import {
   workflows,
   workflowVersions,
@@ -29,17 +30,17 @@ import {
   workflowPresence,
   users,
 } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { SchedulesService } from '../schedules/schedules.service';
-import type { CreateWorkflowDto } from './dto/create-workflow.dto';
-import type { UpdateWorkflowDto } from './dto/update-workflow.dto';
-import type { ListWorkflowsDto } from './dto/list-workflows.dto';
-import type { ListTemplatesDto } from './dto/list-templates.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import { SchedulesService } from '../schedules/schedules.service.js';
+import type { CreateWorkflowDto } from './dto/create-workflow.dto.js';
+import type { UpdateWorkflowDto } from './dto/update-workflow.dto.js';
+import type { ListWorkflowsDto } from './dto/list-workflows.dto.js';
+import type { ListTemplatesDto } from './dto/list-templates.dto.js';
 import type {
   PublishTemplateDto,
   UpdateTemplateDto,
-} from './dto/publish-template.dto';
-import type { UpdateLogSettingsDto } from './dto/log-settings.dto';
+} from './dto/publish-template.dto.js';
+import type { UpdateLogSettingsDto } from './dto/log-settings.dto.js';
 
 const SECRET_NODE_FIELDS = ['accessToken', 'apiKey', 'secretToken', 'password'];
 
@@ -65,7 +66,11 @@ export class WorkflowsService {
     private readonly schedulesService: SchedulesService,
   ) {}
 
-  async create(podId: string, userId: string, dto: CreateWorkflowDto) {
+  async create(
+    podId: string,
+    userId: string,
+    dto: CreateWorkflowDto,
+  ): Promise<any> {
     const [workflow] = await this.db
       .insert(workflows)
       .values({
@@ -84,7 +89,11 @@ export class WorkflowsService {
     return workflow;
   }
 
-  async findAll(podId: string, query: ListWorkflowsDto, userId: string) {
+  async findAll(
+    podId: string,
+    query: ListWorkflowsDto,
+    userId: string,
+  ): Promise<any> {
     const conditions = [eq(workflows.podId, podId)];
 
     if (query.trashed) {
@@ -115,7 +124,6 @@ export class WorkflowsService {
           meta: { page: query.page, limit: query.limit, total: 0 },
         };
       }
-      const { inArray } = await import('drizzle-orm');
       conditions.push(inArray(workflows.id, ids));
     }
 
@@ -138,7 +146,7 @@ export class WorkflowsService {
     };
   }
 
-  async findOne(podId: string, id: string) {
+  async findOne(podId: string, id: string): Promise<any> {
     const [workflow] = await this.db
       .select()
       .from(workflows)
@@ -154,7 +162,7 @@ export class WorkflowsService {
     id: string,
     userId: string,
     dto: UpdateWorkflowDto,
-  ) {
+  ): Promise<any> {
     const existing = await this.findOne(podId, id);
 
     const shouldVersion = dto.definition && !dto.skipVersion;
@@ -162,7 +170,7 @@ export class WorkflowsService {
       await this.db.insert(workflowVersions).values({
         workflowId: id,
         version: existing.version,
-        definition: existing.definition,
+        definition: existing.definition as any,
         createdBy: userId,
       });
     }
@@ -202,7 +210,7 @@ export class WorkflowsService {
       throw new NotFoundException(`Workflow ${id} not found`);
   }
 
-  async deploy(podId: string, id: string) {
+  async deploy(podId: string, id: string): Promise<any> {
     const [updated] = await this.db
       .update(workflows)
       .set({ deployedAt: new Date(), updatedAt: new Date() })
@@ -213,7 +221,7 @@ export class WorkflowsService {
     return updated;
   }
 
-  async undeploy(podId: string, id: string) {
+  async undeploy(podId: string, id: string): Promise<any> {
     const [updated] = await this.db
       .update(workflows)
       .set({ deployedAt: null, updatedAt: new Date() })
@@ -249,7 +257,7 @@ export class WorkflowsService {
     }
   }
 
-  async star(podId: string, id: string, starred: boolean) {
+  async star(podId: string, id: string, starred: boolean): Promise<any> {
     const [updated] = await this.db
       .update(workflows)
       .set({ starred, updatedAt: new Date() })
@@ -260,7 +268,7 @@ export class WorkflowsService {
     return updated;
   }
 
-  async duplicate(podId: string, id: string, userId: string) {
+  async duplicate(podId: string, id: string, userId: string): Promise<any> {
     const [original] = await this.db
       .select()
       .from(workflows)
@@ -284,7 +292,7 @@ export class WorkflowsService {
     return copy;
   }
 
-  async trash(podId: string, id: string) {
+  async trash(podId: string, id: string): Promise<any> {
     const [updated] = await this.db
       .update(workflows)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
@@ -301,7 +309,7 @@ export class WorkflowsService {
     return updated;
   }
 
-  async restore(podId: string, id: string) {
+  async restore(podId: string, id: string): Promise<any> {
     const [updated] = await this.db
       .update(workflows)
       .set({ deletedAt: null, updatedAt: new Date() })
@@ -334,7 +342,11 @@ export class WorkflowsService {
       .orderBy(desc(workflowVersions.version));
   }
 
-  async getVersion(podId: string, workflowId: string, version: number) {
+  async getVersion(
+    podId: string,
+    workflowId: string,
+    version: number,
+  ): Promise<any> {
     await this.findOne(podId, workflowId);
 
     const [ver] = await this.db
@@ -357,7 +369,7 @@ export class WorkflowsService {
     workflowId: string,
     version: number,
     userId: string,
-  ) {
+  ): Promise<any> {
     const ver = await this.getVersion(podId, workflowId, version);
     const existing = await this.findOne(podId, workflowId);
 
@@ -365,7 +377,7 @@ export class WorkflowsService {
     await this.db.insert(workflowVersions).values({
       workflowId,
       version: existing.version,
-      definition: existing.definition,
+      definition: existing.definition as any,
       createdBy: userId,
     });
 
@@ -387,7 +399,7 @@ export class WorkflowsService {
     userId: string,
     templateId: string,
     name?: string,
-  ) {
+  ): Promise<any> {
     const [template] = await this.db
       .select()
       .from(templates)
@@ -461,7 +473,11 @@ export class WorkflowsService {
     await this.db.delete(workflows).where(eq(workflows.id, id));
   }
 
-  async setTemplate(podId: string, id: string, isTemplate: boolean) {
+  async setTemplate(
+    podId: string,
+    id: string,
+    isTemplate: boolean,
+  ): Promise<Workflow> {
     const [updated] = await this.db
       .update(workflows)
       .set({ isTemplate, updatedAt: new Date() })
@@ -483,7 +499,7 @@ export class WorkflowsService {
     workflowId: string,
     userId: string,
     dto: PublishTemplateDto,
-  ) {
+  ): Promise<any> {
     const workflow = await this.findOne(podId, workflowId);
 
     // Block publishing if this workflow is an unmodified clone of a template
@@ -527,7 +543,7 @@ export class WorkflowsService {
     return template;
   }
 
-  async getTemplate(id: string, incrementView = false) {
+  async getTemplate(id: string, incrementView = false): Promise<any> {
     const [template] = await this.db
       .select()
       .from(templates)
@@ -543,7 +559,10 @@ export class WorkflowsService {
     return template;
   }
 
-  async updateGalleryTemplate(id: string, dto: UpdateTemplateDto) {
+  async updateGalleryTemplate(
+    id: string,
+    dto: UpdateTemplateDto,
+  ): Promise<any> {
     const [updated] = await this.db
       .update(templates)
       .set({ ...dto, updatedAt: new Date() })
@@ -644,7 +663,7 @@ export class WorkflowsService {
     podId: string,
     id: string,
     dto: UpdateLogSettingsDto,
-  ) {
+  ): Promise<any> {
     const [updated] = await this.db
       .update(workflows)
       .set({

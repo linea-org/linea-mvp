@@ -3,8 +3,8 @@ import { eq, and, desc } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import type { DrizzleDB } from '@linea/db';
 import { executions, evalRuns } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { ExecutionsService } from '../executions/executions.service';
+import { DB_TOKEN } from '../database/database.module.js';
+import { ExecutionsService } from '../executions/executions.service.js';
 import { ConfigService } from '@nestjs/config';
 
 type AssertionSource =

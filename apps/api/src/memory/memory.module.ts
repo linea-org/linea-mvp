@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { MemoryService } from './memory.service';
-import { MemoryController } from './memory.controller';
-import { ExtractionService } from './extraction.service';
-import { AIModule } from 'src/services/ai/ai.module';
+import { MemoryService } from './memory.service.js';
+import { MemoryController } from './memory.controller.js';
+import { ExtractionService } from './extraction.service.js';
+import { AIModule } from '../services/ai/ai.module.js';
 
 @Module({
   imports: [ConfigModule, AIModule],

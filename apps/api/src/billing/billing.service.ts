@@ -9,7 +9,7 @@ import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { workspaces } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
+import { DB_TOKEN } from '../database/database.module.js';
 
 const PLANS: Record<
   string,

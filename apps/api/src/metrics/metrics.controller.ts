@@ -5,9 +5,9 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { MetricsService } from './metrics.service';
-import { GetMetricsDto } from './dto/get-metrics.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
+import { MetricsService } from './metrics.service.js';
+import { GetMetricsDto } from './dto/get-metrics.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
 
 @ApiTags('Metrics')
 @ApiBearerAuth()

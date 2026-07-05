@@ -1,9 +1,9 @@
 import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
-import { workspaces } from "./workspaces"
-import { pods } from "./pods"
-import { users } from "./users"
-import { workflows } from "./workflows"
+import { workspaces } from "./workspaces.js"
+import { pods } from "./pods.js"
+import { users } from "./users.js"
+import { workflows } from "./workflows.js"
 
 export const oauthConnections = pgTable("oauth_connections", {
   id: uuid("id").primaryKey().defaultRandom(),

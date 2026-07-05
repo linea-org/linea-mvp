@@ -11,9 +11,9 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { Public } from '../common/decorators/public.decorator';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { OAuthService } from './oauth.service';
+import { Public } from '../common/decorators/public.decorator.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { OAuthService } from './oauth.service.js';
 
 // Authenticated routes — list connections, revoke, initiate OAuth flow
 @Controller('workspaces/:workspaceId/oauth')

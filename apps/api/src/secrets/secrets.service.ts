@@ -9,8 +9,8 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
 import { secrets } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import type { CreateSecretDto } from './dto/create-secret.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import type { CreateSecretDto } from './dto/create-secret.dto.js';
 
 @Injectable()
 export class SecretsService {

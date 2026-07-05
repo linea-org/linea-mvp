@@ -10,14 +10,14 @@ import type {
   KnowledgeBaseSettings,
 } from '@linea/db';
 import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import type { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
-import type { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto';
-import type { CreateEntryDto } from './dto/create-entry.dto';
-import type { SearchEntriesDto } from './dto/search-entries.dto';
-import { RAG_EMBED_QUEUE } from './knowledge.queue';
-import type { RagEmbedJobData } from './knowledge.queue';
-import { AIService } from '../services/ai/ai.service';
+import { DB_TOKEN } from '../database/database.module.js';
+import type { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto.js';
+import type { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto.js';
+import type { CreateEntryDto } from './dto/create-entry.dto.js';
+import type { SearchEntriesDto } from './dto/search-entries.dto.js';
+import { RAG_EMBED_QUEUE } from './knowledge.queue.js';
+import type { RagEmbedJobData } from './knowledge.queue.js';
+import { AIService } from '../services/ai/ai.service.js';
 
 @Injectable()
 export class KnowledgeService {

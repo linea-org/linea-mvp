@@ -30,18 +30,18 @@ import {
   of,
   filter,
 } from 'rxjs';
-import { ExecutionsService } from './executions.service';
-import { ExecutionEventsService } from './execution-events.service';
-import type { BusEntry } from './execution-events.service';
-import { CreateExecutionDto } from './dto/create-execution.dto';
-import { ListExecutionsDto } from './dto/list-executions.dto';
-import { ApproveExecutionDto } from './dto/approve-execution.dto';
-import { ReplayExecutionDto } from './dto/replay-execution.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { PodGuard } from '../common/guards/pod.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ExecutionsService } from './executions.service.js';
+import { ExecutionEventsService } from './execution-events.service.js';
+import type { BusEntry } from './execution-events.service.js';
+import { CreateExecutionDto } from './dto/create-execution.dto.js';
+import { ListExecutionsDto } from './dto/list-executions.dto.js';
+import { ApproveExecutionDto } from './dto/approve-execution.dto.js';
+import { ReplayExecutionDto } from './dto/replay-execution.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { PodGuard } from '../common/guards/pod.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { User } from '@linea/db';
 
 @ApiTags('Executions')

@@ -1,0 +1,41 @@
+import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export class UpdateWorkspaceSettingsDto {
+  @ApiPropertyOptional({
+    description: 'Cosine distance threshold for RAG retrieval (0.0–1.0)',
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  ragSimilarityThreshold?: number;
+
+  @ApiPropertyOptional({
+    description: 'Characters per knowledge chunk',
+    minimum: 100,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(100)
+  ragChunkSize?: number;
+
+  @ApiPropertyOptional({
+    description: 'Overlap between consecutive chunks',
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  ragChunkOverlap?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Model ID used by the execution supervisor to decide retry/skip/abort on node failures',
+  })
+  @IsOptional()
+  @IsString()
+  supervisorModel?: string;
+}

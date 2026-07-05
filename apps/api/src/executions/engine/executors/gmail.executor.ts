@@ -1,4 +1,4 @@
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 export interface GmailNodeData {
   action?: 'send_email' | 'list_emails' | 'get_email';

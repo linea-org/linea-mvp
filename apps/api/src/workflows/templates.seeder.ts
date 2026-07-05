@@ -7,8 +7,8 @@ import {
 import { eq } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { templates } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { BUILT_IN_TEMPLATES } from './templates.data';
+import { DB_TOKEN } from '../database/database.module.js';
+import { BUILT_IN_TEMPLATES } from './templates.data.js';
 
 @Injectable()
 export class TemplatesSeeder implements OnApplicationBootstrap {

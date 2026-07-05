@@ -1,4 +1,4 @@
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 export interface NotionNodeData {
   action?: 'create_page' | 'append_block' | 'query_database' | 'get_page';

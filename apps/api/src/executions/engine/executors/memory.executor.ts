@@ -1,5 +1,5 @@
-import type { WorkflowState } from '../variable-substitution';
-import type { MemoryService } from '../memory.service';
+import type { WorkflowState } from '../variable-substitution.js';
+import type { MemoryService } from '../memory.service.js';
 
 export interface MemoryNodeData {
   memoryMode?: 'smart' | 'retrieve' | 'write' | 'delete' | 'clear';

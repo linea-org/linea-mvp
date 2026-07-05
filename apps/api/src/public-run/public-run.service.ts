@@ -9,13 +9,13 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { workflows, pods, executions } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { ExecutionsService } from '../executions/executions.service';
-import { AIService } from '../services/ai/ai.service';
+import { DB_TOKEN } from '../database/database.module.js';
+import { ExecutionsService } from '../executions/executions.service.js';
+import { AIService } from '../services/ai/ai.service.js';
 import {
   AI_MODEL_CATALOG,
   type ModelProvider,
-} from '../services/ai/model-catalog';
+} from '../services/ai/model-catalog.js';
 
 /** Scan a workflow definition for all {{input.X}} variable references. */
 function extractInputVars(definition: unknown): string[] {
