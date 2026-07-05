@@ -23,7 +23,7 @@ import { Database } from '@linea/db';
               },
             },
           },
-          db,
+          db.connection,
         );
       },
       inject: [ConfigService, Database],
