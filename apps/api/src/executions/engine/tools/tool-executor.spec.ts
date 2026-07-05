@@ -1,6 +1,7 @@
 import { executeTool } from './tool-executor.js';
 import type { WorkflowState } from '../variable-substitution.js';
 import type { ToolCallRequest } from './tool-executor.js';
+import { jest } from '@jest/globals';
 
 const baseState: WorkflowState = {
   variables: {},

@@ -6,14 +6,14 @@ import {
 } from './dto/create-workflow.dto.js';
 import { ListWorkflowsDto } from './dto/list-workflows.dto.js';
 import { UpdateWorkflowDto } from './dto/update-workflow.dto.js';
-import { DBWorkflowDefinition, WorkflowNodeMap } from '@linea/shared/contracts';
+import { DBWorkflowDefinition } from '@linea/shared/contracts';
 
 @Injectable()
 export class WorkflowService {
   constructor(private readonly db: Database) {}
 
   async create(
-    workspaceId: string,
+    _workspaceId: string,
     podId: string,
     userId: string,
     dto: CreateWorkflowDto,
@@ -24,12 +24,15 @@ export class WorkflowService {
     const workflow = await this.db.workflow.create({
       name: dto.name,
       podId: podId,
-
       description: dto.description ?? null,
       definition: def,
       isTemplate: dto.isTemplate ?? false,
       isPublic: dto.isPublic ?? false,
       createdBy: userId,
+      apiEnabled: undefined,
+      apiVisibility: undefined,
+      apiKey: undefined,
+      clonedFromTemplateId: undefined,
     });
 
     return workflow;
@@ -83,7 +86,7 @@ export class WorkflowService {
         id: node.id,
         name: node.label ?? node.id,
         type: node.type,
-        config: node.data as WorkflowNodeMap[typeof node.type] as any, // limitation, I hate typescript
+        config: node.data as any, // limitation, I hate typescript
         metadata: {
           position: node.position,
           label: node.label,

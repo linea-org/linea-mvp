@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core';
 import { randomUUID } from 'crypto';
 import { Redis } from 'ioredis';
 
@@ -35,11 +34,6 @@ import { BillingModule } from './billing/billing.module.js';
 import { ModelsModule } from './models/models.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { MailModule } from './mail/mail.module.js';
-import { ClerkAuthGuard } from './auth/guards/clerk-auth.guard.js';
-import { GlobalExceptionFilter } from './common/filters/http-exception.filter.js';
-import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
-import { WorkspaceThrottlerGuard } from './common/guards/throttler.guard.js';
 import { ClerkWebhookController } from './auth/webhooks/clerk-webhook.controller.js';
 import { ConnectionsModule } from './connections/connections.module.js';
 import { AIModule } from './services/ai/ai.module.js';

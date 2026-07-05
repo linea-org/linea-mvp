@@ -170,7 +170,7 @@ export class WorkflowsService {
       await this.db.insert(workflowVersions).values({
         workflowId: id,
         version: existing.version,
-        definition: existing.definition as any,
+        definition: existing.definition,
         createdBy: userId,
       });
     }
@@ -377,7 +377,7 @@ export class WorkflowsService {
     await this.db.insert(workflowVersions).values({
       workflowId,
       version: existing.version,
-      definition: existing.definition as any,
+      definition: existing.definition,
       createdBy: userId,
     });
 

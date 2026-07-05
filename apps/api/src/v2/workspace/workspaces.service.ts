@@ -1,6 +1,5 @@
 import {
   Injectable,
-  Inject,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -79,7 +78,7 @@ export class WorkspacesService {
   }
 
   async findAllForUser(userId: string) {
-    const rows = await await this.db.client
+    const rows = await this.db.client
       .select({ workspace: workspaces, role: workspaceMembers.role })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
@@ -88,7 +87,7 @@ export class WorkspacesService {
   }
 
   async findOne(id: string) {
-    const [ws] = await await this.db.client
+    const [ws] = await this.db.client
       .select()
       .from(workspaces)
       .where(eq(workspaces.id, id))
@@ -116,7 +115,7 @@ export class WorkspacesService {
         throw new ConflictException(`Slug '${dto.slug}' is already taken`);
     }
 
-    const [updated] = await await this.db.client
+    const [updated] = await this.db.client
       .update(workspaces)
       .set({ ...dto, updatedAt: new Date() })
       .where(eq(workspaces.id, id))

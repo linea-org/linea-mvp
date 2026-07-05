@@ -16,7 +16,10 @@ import { workflows } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module.js';
 import { NodeExecutorService } from './node-executor.service.js';
 import type { WorkflowState } from './variable-substitution.js';
-import { executeLoopNode, checkLoopTimeout } from './executors/loop.executor.js';
+import {
+  executeLoopNode,
+  checkLoopTimeout,
+} from './executors/loop.executor.js';
 import type { LoopNodeData, LoopOutput } from './executors/loop.executor.js';
 import type { AgentResult } from './executors/agent.executor.js';
 import { drainWithTimeout } from './drain-with-timeout.js';
@@ -604,7 +607,7 @@ export class LangGraphService {
             SUBWORKFLOW_TIMEOUT_MS,
           );
           const subOutput: unknown =
-            (finalSubState as any)?.variables?.lastOutput ?? null;
+            finalSubState?.variables?.lastOutput ?? null;
 
           const subDurationMs = Date.now() - subStart;
           const nodeKey =

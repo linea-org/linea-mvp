@@ -3,14 +3,10 @@ import { WorkflowModule } from './workflows/workflow.module.js';
 import { QueueModule } from './services/queue/queue.module.js';
 import { DatabaseModule } from './services/database/database.module.js';
 import { ConfigModule } from './services/config/config.module.js';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { ClerkAuthGuard } from './common/guards/clerk-auth.guard.js';
 import { WorkspacesModule } from './workspace/workspaces.module.js';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
 import { MailModule } from '../mail/mail.module.js';
-import { LoggingInterceptor } from '../common/interceptors/logging.interceptor.js';
-import { ResponseInterceptor } from '../common/interceptors/response.interceptor.js';
 import { PodsModule } from './pods/pods.module.js';
 import { UsersModule } from './users/users.module.js';
 

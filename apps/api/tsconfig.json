@@ -23,12 +23,7 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "types": ["jest", "node"],
-    "paths": {
-      // "@linea/db": ["../../packages/db/src/index.ts"],
-      // "@linea/db/*": ["../../packages/db/src/*"],
-      // "@linea/types": ["../../packages/types/src/index.ts"],
-      // "@linea/types/*": ["../../packages/types/src/*"]
-    }
+   
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist"]

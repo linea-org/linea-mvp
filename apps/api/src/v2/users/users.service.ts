@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { Database, type User } from '@linea/db';

@@ -100,9 +100,9 @@ export class PodsController {
   async delete(
     @Param('workspaceId') workspaceId: string,
     @Param('podId') podId: string,
-    @CurrentUser() user: User,
+    @CurrentUser() _user: User,
   ) {
-    const pod = await this.service.findOne(workspaceId, podId);
+    const _pod = await this.service.findOne(workspaceId, podId);
     await this.service.delete(workspaceId, podId);
     // void this.auditService.log({
     //   workspaceId,
