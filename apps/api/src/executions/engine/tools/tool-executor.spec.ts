@@ -87,7 +87,9 @@ describe('memory_store', () => {
   });
 
   it('calls memoryStore callback when context is provided', async () => {
-    const storeMock = jest.fn().mockResolvedValue(undefined);
+    const storeMock: jest.MockedFunction<
+      (key: string, value: unknown) => Promise<void>
+    > = jest.fn();
     const ctx = { memoryStore: storeMock };
     await executeTool(
       req('memory_store', { key: 'fact', value: 'hello' }),
@@ -125,11 +127,16 @@ describe('memory_search', () => {
   });
 
   it('uses memorySearch callback when context is provided', async () => {
-    const searchMock = jest
-      .fn()
-      .mockResolvedValue([
-        { key: 'preference', value: 'dark mode', score: 0.92 },
-      ]);
+    const searchMock: jest.MockedFunction<
+      (
+        query: string,
+        topK: number,
+      ) => Promise<Array<{ key: string; value: string; score: number }>>
+    > = jest.fn();
+
+    searchMock.mockResolvedValue([
+      { key: 'preference', value: 'dark mode', score: 0.92 },
+    ]);
     const ctx = { memorySearch: searchMock };
     const result = await executeTool(
       req('memory_search', { query: 'theme', topK: 3 }),
@@ -164,12 +171,14 @@ describe('http_request', () => {
   });
 
   it('calls fetch with the right method and URL', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({
+    const mockFetch: jest.MockedFunction<typeof fetch> = jest.fn();
+    mockFetch.mockResolvedValue({
       status: 200,
       ok: true,
       text: async () => '{"result":"ok"}',
-    });
-    global.fetch = mockFetch as any;
+    } as Response);
+
+    global.fetch = mockFetch;
 
     await executeTool(
       req('http_request', { method: 'GET', url: 'https://example.com/api' }),
@@ -183,11 +192,15 @@ describe('http_request', () => {
   });
 
   it('returns { status, ok, data } on success', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    const mockFetch: jest.MockedFunction<typeof fetch> = jest.fn();
+
+    mockFetch.mockResolvedValue({
       status: 200,
       ok: true,
       text: async () => '{"hello":"world"}',
-    }) as any;
+    } as Response);
+
+    global.fetch = mockFetch;
 
     const result = await executeTool(
       req('http_request', { method: 'GET', url: 'https://example.com' }),
@@ -201,12 +214,15 @@ describe('http_request', () => {
   });
 
   it('returns raw text when body is not JSON', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    const mockFetch: jest.MockedFunction<typeof fetch> = jest.fn();
+
+    mockFetch.mockResolvedValue({
       status: 200,
       ok: true,
       text: async () => 'not json',
-    }) as any;
+    } as Response);
 
+    global.fetch = mockFetch;
     const result = await executeTool(
       req('http_request', { method: 'GET', url: 'https://example.com' }),
       baseState,
