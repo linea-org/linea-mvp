@@ -45,11 +45,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Build shared packages
-        run: pnpm --filter=@linea/shared --filter=@linea/ai --filter=@linea/db --filter=@linea/runtime build
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm --filter=@linea/shared --filter=@linea/ai --filter=@linea/db --filter=@linea/runtime build
 
       - name: Lint
         run: pnpm lint
