@@ -10,9 +10,9 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
-import { pods } from "./pods"
-import { users } from "./users"
-import type { WorkflowDefinition } from "./types"
+import { pods } from "./pods.js"
+import { users } from "./users.js"
+import { DBWorkflowDefinition } from "@linea/shared/contracts"
 
 export const workflowLogLevelEnum = pgEnum("workflow_log_level", [
   "none",
@@ -33,18 +33,20 @@ export const workflows = pgTable("workflows", {
     .notNull(),
   name: text("name").notNull(),
   description: text("description"),
-  definition: jsonb("definition")
-    .$type<WorkflowDefinition>()
-    .default({ nodes: [], edges: [] })
-    .notNull(),
+  definition: jsonb("definition").$type<DBWorkflowDefinition>(),
   isTemplate: boolean("is_template").default(false).notNull(),
   isPublic: boolean("is_public").default(false).notNull(),
+
   version: integer("version").default(1).notNull(),
-  deployedAt: timestamp("deployed_at", { withTimezone: true }),
   starred: boolean("starred").default(false).notNull(),
+
+  deployedAt: timestamp("deployed_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+
   logLevel: workflowLogLevelEnum("log_level").default("info").notNull(),
+
   logRetentionDays: integer("log_retention_days"),
+
   apiEnabled: boolean("api_enabled").default(false).notNull(),
   apiVisibility: workflowApiVisibilityEnum("api_visibility")
     .default("api_key")
@@ -52,6 +54,7 @@ export const workflows = pgTable("workflows", {
   apiKey: text("api_key"),
   /** Set when a workflow is cloned from a template; used to prevent publishing unmodified clones. */
   clonedFromTemplateId: uuid("cloned_from_template_id"),
+
   createdBy: uuid("created_by").references(() => users.id, {
     onDelete: "set null",
   }),
@@ -69,7 +72,7 @@ export const workflowVersions = pgTable("workflow_versions", {
     .references(() => workflows.id, { onDelete: "cascade" })
     .notNull(),
   version: integer("version").notNull(),
-  definition: jsonb("definition").$type<WorkflowDefinition>().notNull(),
+  definition: jsonb("definition").$type<DBWorkflowDefinition>().notNull(),
   createdBy: uuid("created_by").references(() => users.id, {
     onDelete: "set null",
   }),
@@ -88,7 +91,7 @@ export const templates = pgTable("templates", {
   workflowId: uuid("workflow_id").references(() => workflows.id, {
     onDelete: "set null",
   }),
-  definition: jsonb("definition").$type<WorkflowDefinition>(),
+  definition: jsonb("definition").$type<DBWorkflowDefinition>(),
   thumbnailUrl: text("thumbnail_url"),
   downloads: integer("downloads").default(0).notNull(),
   views: integer("views").default(0).notNull(),
@@ -187,6 +190,7 @@ export const workflowsRelations = relations(workflows, ({ one, many }) => ({
 
 export type Workflow = typeof workflows.$inferSelect
 export type NewWorkflow = typeof workflows.$inferInsert
+
 export type WorkflowVersion = typeof workflowVersions.$inferSelect
 export type Template = typeof templates.$inferSelect
 export type WorkflowFavorite = typeof workflowFavorites.$inferSelect

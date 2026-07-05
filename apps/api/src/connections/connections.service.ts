@@ -8,18 +8,18 @@ import { and, eq } from 'drizzle-orm';
 import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
 import { providerConnections } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import type { CreateConnectionDto } from './dto/create-connection.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import type { CreateConnectionDto } from './dto/create-connection.dto.js';
 import {
   parseProviderConfig,
   ProviderConfigMap,
   ProviderType,
-} from '../common/utils/config-types';
+} from '../common/utils/config-types.js';
 import {
   decryptConfig,
   encryptConfig,
   EncryptionKeys,
-} from '../common/utils/encryptor';
+} from '../common/utils/encryptor.js';
 
 @Injectable()
 export class ConnectionsService {

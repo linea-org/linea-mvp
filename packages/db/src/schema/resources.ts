@@ -9,8 +9,8 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
-import { workspaces } from "./workspaces"
-import { executions } from "./executions"
+import { workspaces } from "./workspaces.js"
+import { executions } from "./executions.js"
 
 export const poolTypeEnum = pgEnum("pool_type", [
   "shared",

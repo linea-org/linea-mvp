@@ -3,7 +3,7 @@ import { Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { sql } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
-import { DB_TOKEN } from '../../database/database.module';
+import { DB_TOKEN } from '../../database/database.module.js';
 
 export const CLEANUP_QUEUE = 'cleanup';
 

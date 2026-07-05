@@ -10,11 +10,11 @@ import {
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import type { AnyPgColumn } from "drizzle-orm/pg-core"
-import { pods } from "./pods"
-import { workspaces } from "./workspaces"
-import { users } from "./users"
-import { workflows } from "./workflows"
-import { executions } from "./executions"
+import { pods } from "./pods.js"
+import { workspaces } from "./workspaces.js"
+import { users } from "./users.js"
+import { workflows } from "./workflows.js"
+import { executions } from "./executions.js"
 
 export const approvalStatusEnum = pgEnum("approval_status", [
   "pending",

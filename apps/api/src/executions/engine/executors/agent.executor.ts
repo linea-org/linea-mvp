@@ -2,22 +2,22 @@ import { interrupt } from '@langchain/langgraph';
 import {
   AI_MODEL_CATALOG,
   type ModelDefinition,
-} from '../../../services/ai/model-catalog';
+} from '../../../services/ai/model-catalog.js';
 import type {
   ChatMessage,
   NormalizedToolCall,
   CompletionResult,
-} from '../../../services/ai/types';
+} from '../../../services/ai/types.js';
 import type {
   ModelClient,
   ModelChatProps,
-} from '../../../services/ai/clients/interface';
-import { AIService } from '../../../services/ai/ai.service';
-import type { WorkflowState } from '../variable-substitution';
-import { substituteVariables } from '../variable-substitution';
-import { getEnabledTools, toolNeedsApproval } from '../tools/definitions';
-import { executeTool } from '../tools/tool-executor';
-import type { ToolExecutorContext } from '../tools/tool-executor';
+} from '../../../services/ai/clients/interface.js';
+import { AIService } from '../../../services/ai/ai.service.js';
+import type { WorkflowState } from '../variable-substitution.js';
+import { substituteVariables } from '../variable-substitution.js';
+import { getEnabledTools, toolNeedsApproval } from '../tools/definitions.js';
+import { executeTool } from '../tools/tool-executor.js';
+import type { ToolExecutorContext } from '../tools/tool-executor.js';
 
 const DEFAULT_MAX_STEPS = 10;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);

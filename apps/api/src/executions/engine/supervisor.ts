@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { getModelOrDefault } from '../../services/ai/model-catalog';
-import { AIService } from '../../services/ai/ai.service';
-import type { WorkflowState } from './variable-substitution';
+import { getModelOrDefault } from '../../services/ai/model-catalog.js';
+import { AIService } from '../../services/ai/ai.service.js';
+import type { WorkflowState } from './variable-substitution.js';
 
 type SupervisorAction = 'retry' | 'skip' | 'abort' | 'continue';
 

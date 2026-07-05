@@ -10,12 +10,12 @@ import { and, eq, desc, count, inArray, isNull } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { executions, executionLogs, workflows } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { QuotasService } from '../quotas/quotas.service';
-import type { CreateExecutionDto } from './dto/create-execution.dto';
-import type { ListExecutionsDto } from './dto/list-executions.dto';
-import { EXECUTION_QUEUE } from './queue/execution.queue';
-import type { ExecutionJobData } from './queue/execution.queue';
+import { DB_TOKEN } from '../database/database.module.js';
+import { QuotasService } from '../quotas/quotas.service.js';
+import type { CreateExecutionDto } from './dto/create-execution.dto.js';
+import type { ListExecutionsDto } from './dto/list-executions.dto.js';
+import { EXECUTION_QUEUE } from './queue/execution.queue.js';
+import type { ExecutionJobData } from './queue/execution.queue.js';
 
 @Injectable()
 export class ExecutionsService {

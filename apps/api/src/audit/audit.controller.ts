@@ -6,10 +6,10 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
-import { AuditService } from './audit.service';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
+import { AuditService } from './audit.service.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
 
 @ApiTags('Audit')
 @ApiBearerAuth()

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { QuotasService } from './quotas.service';
-import { DatabaseModule } from '../database/database.module';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { QuotasService } from './quotas.service.js';
+import { DatabaseModule } from '../database/database.module.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 
 @Module({
   imports: [DatabaseModule, NotificationsModule],

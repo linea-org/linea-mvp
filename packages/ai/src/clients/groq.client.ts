@@ -1,6 +1,6 @@
 import OpenAI from "openai"
-import { ModelChatProps, ModelClient, ModelDefinition } from "./interface"
-import { withRetry } from "../helpers"
+import { ModelChatProps, ModelClient, ModelDefinition } from "./interface.js"
+import { withRetry } from "../helpers.js"
 import type { CompletionResult, NormalizedToolCall } from "@linea/types"
 import {
   ChatCompletionCreateParamsStreaming,

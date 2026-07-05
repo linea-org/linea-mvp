@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '../executions/engine/tools/definitions';
+import type { ToolDefinition } from '../executions/engine/tools/definitions.js';
 
 export const SYSTEM_PROMPT = `You are Linea's built-in AI assistant. Linea is a visual workflow automation platform (like n8n, Make.com, or Zapier) where automations are built by connecting nodes on a canvas.
 

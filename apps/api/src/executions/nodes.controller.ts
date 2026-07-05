@@ -5,11 +5,11 @@ import {
   ApiOperation,
   ApiParam,
 } from '@nestjs/swagger';
-import { NodeExecutorService } from './engine/node-executor.service';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { PodGuard } from '../common/guards/pod.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
+import { NodeExecutorService } from './engine/node-executor.service.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { PodGuard } from '../common/guards/pod.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
 
 class TestNodeDto {
   nodeType!: string;

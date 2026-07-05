@@ -1,5 +1,5 @@
-import type { NodeContext, NodeExecutor, NodeResult } from "../node"
-import type { HttpNodeConfig } from "./http.types"
+import type { HttpNodeConfig } from "@linea/shared/contracts"
+import type { NodeContext, NodeExecutor, NodeResult } from "../node.js"
 
 export class HttpNode implements NodeExecutor<"http"> {
   readonly type = "http"

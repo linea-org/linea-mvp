@@ -1,4 +1,4 @@
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 export interface SlackNodeData {
   action?: 'send_message' | 'send_dm' | 'list_channels';

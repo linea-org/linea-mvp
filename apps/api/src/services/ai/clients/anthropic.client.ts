@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { CompletionResult, NormalizedToolCall } from '../types';
-import { ModelChatProps, ModelClient, ModelDefinition } from './interface';
-import { withRetry } from '../helpers';
+import { CompletionResult, NormalizedToolCall } from '../types.js';
+import { ModelChatProps, ModelClient, ModelDefinition } from './interface.js';
+import { withRetry } from '../helpers.js';
 
 export class AnthropicClient implements ModelClient {
   private _client: Anthropic;

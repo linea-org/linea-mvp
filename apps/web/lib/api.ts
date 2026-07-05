@@ -1,5 +1,8 @@
 export const API_ORIGIN =
   process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001"
+
+export type V = "v1" | "v2"
+
 export const API_BASE = `${API_ORIGIN}/v1`
 
 export class ApiError extends Error {
@@ -36,11 +39,12 @@ export function friendlyApiError(err: unknown): string {
 }
 
 async function request<T>(
+  v: V,
   path: string,
   token: string,
   init?: RequestInit
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${API_ORIGIN}/${v}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -90,11 +94,18 @@ export function unwrapList<T>(
 
 export function createApiClient(token: string) {
   return {
-    get: <T>(path: string) => request<T>(path, token),
-    post: <T>(path: string, body?: unknown) =>
-      request<T>(path, token, { method: "POST", body: JSON.stringify(body) }),
-    patch: <T>(path: string, body?: unknown) =>
-      request<T>(path, token, { method: "PATCH", body: JSON.stringify(body) }),
-    delete: (path: string) => request<void>(path, token, { method: "DELETE" }),
+    get: <T>(path: string, v: V = "v1") => request<T>(v, path, token),
+    post: <T>(path: string, body?: unknown, v: V = "v1") =>
+      request<T>(v, path, token, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    patch: <T>(path: string, body?: unknown, v: V = "v1") =>
+      request<T>(v, path, token, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    delete: (path: string, v: V = "v1") =>
+      request<void>(v, path, token, { method: "DELETE" }),
   }
 }

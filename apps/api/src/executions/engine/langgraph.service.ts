@@ -13,13 +13,16 @@ import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import { eq } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { workflows } from '@linea/db';
-import { DB_TOKEN } from '../../database/database.module';
-import { NodeExecutorService } from './node-executor.service';
-import type { WorkflowState } from './variable-substitution';
-import { executeLoopNode, checkLoopTimeout } from './executors/loop.executor';
-import type { LoopNodeData, LoopOutput } from './executors/loop.executor';
-import type { AgentResult } from './executors/agent.executor';
-import { drainWithTimeout } from './drain-with-timeout';
+import { DB_TOKEN } from '../../database/database.module.js';
+import { NodeExecutorService } from './node-executor.service.js';
+import type { WorkflowState } from './variable-substitution.js';
+import {
+  executeLoopNode,
+  checkLoopTimeout,
+} from './executors/loop.executor.js';
+import type { LoopNodeData, LoopOutput } from './executors/loop.executor.js';
+import type { AgentResult } from './executors/agent.executor.js';
+import { drainWithTimeout } from './drain-with-timeout.js';
 
 const SUBWORKFLOW_TIMEOUT_MS = 15 * 60 * 1_000; // matches the top-level execution wall-clock cap
 
@@ -54,7 +57,7 @@ export type NodeUpdateCallback = (
 
 export type AgentTokenCallback = (nodeId: string, delta: string) => void;
 
-const WorkflowStateAnnotation = Annotation.Root({
+const WorkflowStateAnnotation: any = Annotation.Root({
   variables: Annotation<Record<string, any>>({
     reducer: (l, r) => ({ ...l, ...r }),
     default: () => ({ input: '', lastOutput: '' }),
@@ -114,7 +117,7 @@ export class LangGraphService {
     workflowId?: string,
     threadId?: string,
     onAgentToken?: AgentTokenCallback,
-  ) {
+  ): any {
     const saver = checkpointer ?? new MemorySaver();
     const builder = new StateGraph(WorkflowStateAnnotation);
     const supervisorModelOverride = definition.settings?.supervisorModel;
@@ -604,7 +607,7 @@ export class LangGraphService {
             SUBWORKFLOW_TIMEOUT_MS,
           );
           const subOutput: unknown =
-            (finalSubState as any)?.variables?.lastOutput ?? null;
+            finalSubState?.variables?.lastOutput ?? null;
 
           const subDurationMs = Date.now() - subStart;
           const nodeKey =
@@ -881,7 +884,7 @@ export class LangGraphService {
     checkpointer: BaseCheckpointSaver,
     workflowId?: string,
     onAgentToken?: AgentTokenCallback,
-  ) {
+  ): any {
     return this.resumeStream(
       definition,
       threadId,

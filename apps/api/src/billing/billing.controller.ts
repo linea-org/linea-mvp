@@ -7,7 +7,7 @@ import {
   Headers,
   UseGuards,
   HttpCode,
-  RawBodyRequest,
+  type RawBodyRequest,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -17,11 +17,11 @@ import {
   ApiOperation,
   ApiParam,
 } from '@nestjs/swagger';
-import { BillingService } from './billing.service';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { Public } from '../common/decorators/public.decorator';
+import { BillingService } from './billing.service.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { Public } from '../common/decorators/public.decorator.js';
 
 class CreateCheckoutDto {
   plan!: string;

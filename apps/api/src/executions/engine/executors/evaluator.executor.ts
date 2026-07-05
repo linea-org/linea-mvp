@@ -1,5 +1,5 @@
-import type { WorkflowState } from '../variable-substitution';
-import type { AIService } from '../../../services/ai/ai.service';
+import type { WorkflowState } from '../variable-substitution.js';
+import type { AIService } from '../../../services/ai/ai.service.js';
 
 export interface EvaluatorNodeData {
   model?: string;

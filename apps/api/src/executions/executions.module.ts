@@ -3,31 +3,31 @@ import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
-import { ExecutionsService } from './executions.service';
-import { ExecutionsController } from './executions.controller';
-import { NodesController } from './nodes.controller';
+import { Redis } from 'ioredis';
+import { ExecutionsService } from './executions.service.js';
+import { ExecutionsController } from './executions.controller.js';
+import { NodesController } from './nodes.controller.js';
 import {
   ExecutionEventsService,
   EXEC_EVENTS_REDIS,
-} from './execution-events.service';
-import { ExecutionProcessor } from './queue/execution.processor';
+} from './execution-events.service.js';
+import { ExecutionProcessor } from './queue/execution.processor.js';
 import {
   CheckpointCleanupProcessor,
   CLEANUP_QUEUE,
-} from './queue/checkpoint-cleanup.processor';
-import { LangGraphService } from './engine/langgraph.service';
-import { NodeExecutorService } from './engine/node-executor.service';
-import { ExecutionSupervisor } from './engine/supervisor';
-import { MemoryService } from './engine/memory.service';
-import { CheckpointerService } from './engine/checkpointer.service';
-import { WorkspacesModule } from '../workspaces/workspaces.module';
-import { PodsModule } from '../pods/pods.module';
-import { NotificationsModule } from '../notifications/notifications.module';
-import { QuotasModule } from '../quotas/quotas.module';
-import { MailModule } from '../mail/mail.module';
-import { EXECUTION_QUEUE } from './queue/execution.queue';
-import { AIModule } from '../services/ai/ai.module';
+} from './queue/checkpoint-cleanup.processor.js';
+import { LangGraphService } from './engine/langgraph.service.js';
+import { NodeExecutorService } from './engine/node-executor.service.js';
+import { ExecutionSupervisor } from './engine/supervisor.js';
+import { MemoryService } from './engine/memory.service.js';
+import { CheckpointerService } from './engine/checkpointer.service.js';
+import { WorkspacesModule } from '../workspaces/workspaces.module.js';
+import { PodsModule } from '../pods/pods.module.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
+import { QuotasModule } from '../quotas/quotas.module.js';
+import { MailModule } from '../mail/mail.module.js';
+import { EXECUTION_QUEUE } from './queue/execution.queue.js';
+import { AIModule } from '../services/ai/ai.module.js';
 
 @Module({
   imports: [

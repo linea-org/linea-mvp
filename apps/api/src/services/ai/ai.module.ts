@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConnectionsModule } from 'src/connections/connections.module';
-import { AIService } from 'src/services/ai/ai.service';
+import { ConnectionsModule } from '../../connections/connections.module.js';
+import { AIService } from './ai.service.js';
 
 @Module({
   imports: [ConnectionsModule],

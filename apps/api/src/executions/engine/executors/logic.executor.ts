@@ -1,5 +1,5 @@
 import jexl from 'jexl';
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 function evalCondition(condition: string, state: WorkflowState): boolean {
   const context = {

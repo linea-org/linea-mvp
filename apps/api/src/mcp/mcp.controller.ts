@@ -9,12 +9,12 @@ import {
   HttpCode,
   UseGuards,
 } from '@nestjs/common';
-import { McpService } from './mcp.service';
-import { CreateMcpServerDto } from './dto/create-mcp-server.dto';
-import { UpdateMcpServerDto } from './dto/update-mcp-server.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
+import { McpService } from './mcp.service.js';
+import { CreateMcpServerDto } from './dto/create-mcp-server.dto.js';
+import { UpdateMcpServerDto } from './dto/update-mcp-server.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
 
 @UseGuards(WorkspaceGuard, RoleGuard)
 @Controller('workspaces/:workspaceId/mcp-servers')

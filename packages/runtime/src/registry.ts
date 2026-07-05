@@ -1,5 +1,5 @@
-import { NodeExecutor } from "./nodes/node"
-import type { WorkflowNodeType } from "./types"
+import { WorkflowNodeType } from "@linea/shared/contracts"
+import { NodeExecutor } from "./nodes/node.js"
 
 export class NodeRegistry {
   private readonly executors = new Map<

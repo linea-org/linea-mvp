@@ -1,11 +1,11 @@
-import { AnthropicClient } from './clients/anthropic.client';
-import { OpenAIClient } from './clients/openai.client';
-import { GroqClient } from './clients/groq.client';
-import { GoogleClient } from './clients/google.client';
-import { XAIClient } from './clients/xai.client';
-import { OllamaClient } from './clients/ollama.client';
-import type { ModelDefinition } from './clients/interface';
-import type { ModelProvider, ModelTier } from './types';
+import { AnthropicClient } from './clients/anthropic.client.js';
+import { OpenAIClient } from './clients/openai.client.js';
+import { GroqClient } from './clients/groq.client.js';
+import { GoogleClient } from './clients/google.client.js';
+import { XAIClient } from './clients/xai.client.js';
+import { OllamaClient } from './clients/ollama.client.js';
+import type { ModelDefinition } from './clients/interface.js';
+import type { ModelProvider, ModelTier } from './types.js';
 
 export type {
   ModelProvider,
@@ -13,8 +13,8 @@ export type {
   ModelUseCase,
   ModelBadge,
   ModelStatus,
-} from './types';
-export type { ModelDefinition } from './clients/interface';
+} from './types.js';
+export type { ModelDefinition } from './clients/interface.js';
 
 export const AI_MODEL_CATALOG: ModelDefinition[] = [
   ...AnthropicClient.displayModels,

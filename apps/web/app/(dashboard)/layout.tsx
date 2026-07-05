@@ -491,6 +491,8 @@ function DashboardSidebar() {
     },
   ]
 
+  // console.log(workspaces)
+
   return (
     <Sidebar className="group-data-[side=left]:border-r-0">
       <SidebarHeader className="space-y-1 px-2 pt-4">

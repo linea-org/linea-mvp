@@ -15,16 +15,16 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { KnowledgeService } from './knowledge.service';
-import { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
-import { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto';
-import { CreateEntryDto } from './dto/create-entry.dto';
-import { SearchEntriesDto } from './dto/search-entries.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuditService } from '../audit/audit.service';
+import { KnowledgeService } from './knowledge.service.js';
+import { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto.js';
+import { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto.js';
+import { CreateEntryDto } from './dto/create-entry.dto.js';
+import { SearchEntriesDto } from './dto/search-entries.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { AuditService } from '../audit/audit.service.js';
 import type { User } from '@linea/db';
 
 @ApiTags('Knowledge')

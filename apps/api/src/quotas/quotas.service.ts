@@ -2,8 +2,8 @@ import { Injectable, Inject, ForbiddenException } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { resourceQuotas } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { NotificationsService } from '../notifications/notifications.service';
+import { DB_TOKEN } from '../database/database.module.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 const QUOTA_ALERT_THRESHOLDS = [0.8, 1];
 

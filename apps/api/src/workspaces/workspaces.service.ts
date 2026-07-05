@@ -16,12 +16,12 @@ import {
   workspaceInvites,
   users,
 } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { MailService } from '../mail/mail.service';
-import type { CreateWorkspaceDto } from './dto/create-workspace.dto';
-import type { UpdateWorkspaceDto } from './dto/update-workspace.dto';
-import type { InviteMemberDto } from './dto/invite-member.dto';
-import type { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import { MailService } from '../mail/mail.service.js';
+import type { CreateWorkspaceDto } from './dto/create-workspace.dto.js';
+import type { UpdateWorkspaceDto } from './dto/update-workspace.dto.js';
+import type { InviteMemberDto } from './dto/invite-member.dto.js';
+import type { UpdateMemberRoleDto } from './dto/update-member-role.dto.js';
 
 const ROLE_LEVEL: Record<string, number> = {
   owner: 4,

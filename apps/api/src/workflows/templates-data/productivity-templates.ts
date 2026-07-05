@@ -1,4 +1,4 @@
-import type { TemplateDefinition } from './types';
+import type { TemplateDefinition } from './types.js';
 
 export const PRODUCTIVITY_TEMPLATES: TemplateDefinition[] = [
   {

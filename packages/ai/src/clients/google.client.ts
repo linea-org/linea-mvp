@@ -4,8 +4,8 @@ import {
   GoogleGenerativeAI,
   TaskType,
 } from "@google/generative-ai"
-import { ModelChatProps, ModelClient, ModelDefinition } from "./interface"
-import { withRetry } from "../helpers"
+import { ModelChatProps, ModelClient, ModelDefinition } from "./interface.js"
+import { withRetry } from "../helpers.js"
 import type { CompletionResult, NormalizedToolCall } from "@linea/types"
 
 export class GoogleClient implements ModelClient {

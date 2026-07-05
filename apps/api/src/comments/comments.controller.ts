@@ -15,15 +15,15 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { CommentsService } from './comments.service';
-import { CreateCommentDto } from './dto/create-comment.dto';
-import { UpdateCommentDto } from './dto/update-comment.dto';
-import { ReactCommentDto } from './dto/react-comment.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { PodGuard } from '../common/guards/pod.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { CommentsService } from './comments.service.js';
+import { CreateCommentDto } from './dto/create-comment.dto.js';
+import { UpdateCommentDto } from './dto/update-comment.dto.js';
+import { ReactCommentDto } from './dto/react-comment.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { PodGuard } from '../common/guards/pod.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { User } from '@linea/db';
 
 @ApiTags('Comments')

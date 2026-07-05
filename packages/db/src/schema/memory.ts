@@ -9,10 +9,10 @@ import {
   integer,
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
-import { vector } from "./_vector"
-import { workspaces } from "./workspaces"
-import { users } from "./users"
-import { workflows } from "./workflows"
+import { vector } from "./_vector.js"
+import { workspaces } from "./workspaces.js"
+import { users } from "./users.js"
+import { workflows } from "./workflows.js"
 
 export const memoryScopeEnum = pgEnum("memory_scope", [
   "thread",
@@ -192,7 +192,4 @@ export type NewKnowledgeEntry = typeof knowledgeEntries.$inferInsert
 
 /** Valid values for knowledgeEntries.status */
 export type KnowledgeEntryStatus =
-  | "pending"
-  | "embedding"
-  | "indexed"
-  | "failed"
+  "pending" | "embedding" | "indexed" | "failed"

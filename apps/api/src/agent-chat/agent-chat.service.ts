@@ -15,21 +15,21 @@ import {
   schedules,
   agentChatSessions,
 } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { SecretsService } from '../secrets/secrets.service';
-import { ExecutionsService } from '../executions/executions.service';
-import { MemoryService } from '../executions/engine/memory.service';
-import { CheckpointerService } from '../executions/engine/checkpointer.service';
-import { McpService } from '../mcp/mcp.service';
+import { DB_TOKEN } from '../database/database.module.js';
+import { SecretsService } from '../secrets/secrets.service.js';
+import { ExecutionsService } from '../executions/executions.service.js';
+import { MemoryService } from '../executions/engine/memory.service.js';
+import { CheckpointerService } from '../executions/engine/checkpointer.service.js';
+import { McpService } from '../mcp/mcp.service.js';
 import type {
   ChatMessage as ModelChatMessage,
   NormalizedToolCall,
-} from '../services/ai/types';
-import { SYSTEM_PROMPT, AGENT_TOOLS } from './agent-chat.prompt';
-import type { ChatDto } from './dto/chat.dto';
-import { AIService } from 'src/services/ai/ai.service';
-import { createEventChannel, EventChannel } from './event.channel';
-import { AgentContext, AgentEvent } from './types';
+} from '../services/ai/types.js';
+import { SYSTEM_PROMPT, AGENT_TOOLS } from './agent-chat.prompt.js';
+import type { ChatDto } from './dto/chat.dto.js';
+import { AIService } from '../services/ai/ai.service.js';
+import { createEventChannel, EventChannel } from './event.channel.js';
+import { AgentContext, AgentEvent } from './types.js';
 import { PinoLogger } from 'nestjs-pino';
 
 const AgentStateAnnotation = Annotation.Root({

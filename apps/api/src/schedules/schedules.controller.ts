@@ -15,15 +15,15 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { SchedulesService } from './schedules.service';
-import { CreateScheduleDto } from './dto/create-schedule.dto';
-import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { PodGuard } from '../common/guards/pod.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuditService } from '../audit/audit.service';
+import { SchedulesService } from './schedules.service.js';
+import { CreateScheduleDto } from './dto/create-schedule.dto.js';
+import { UpdateScheduleDto } from './dto/update-schedule.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { PodGuard } from '../common/guards/pod.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { AuditService } from '../audit/audit.service.js';
 import type { User } from '@linea/db';
 
 @ApiTags('Schedules')

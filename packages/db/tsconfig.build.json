@@ -3,11 +3,14 @@
   "compilerOptions": {
     "noEmit": false,
     "outDir": "./dist",
+     "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
-    "module": "CommonJS",
-    "moduleResolution": "node"
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2022"
   },
-  "include": ["src"],
+  "include": ["src/**/*.ts"],
+
   "exclude": ["node_modules", "dist"]
 }

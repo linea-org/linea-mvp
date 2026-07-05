@@ -1,5 +1,5 @@
-import { WorkflowState } from '../../../executions/engine/variable-substitution';
-import { assertSafeUrl } from '../../../common/utils/ssrf-guard';
+import { WorkflowState } from '../../../executions/engine/variable-substitution.js';
+import { assertSafeUrl } from '../../../common/utils/ssrf-guard.js';
 
 export interface ToolCallRequest {
   id: string;

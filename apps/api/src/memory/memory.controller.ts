@@ -15,15 +15,15 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { MemoryService } from './memory.service';
-import { CreateMemoryDto } from './dto/create-memory.dto';
-import { ListMemoriesDto } from './dto/list-memories.dto';
-import { IngestMemoryDto } from './dto/ingest-memory.dto';
-import { SearchMemoryDto } from './dto/search-memory.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { MemoryService } from './memory.service.js';
+import { CreateMemoryDto } from './dto/create-memory.dto.js';
+import { ListMemoriesDto } from './dto/list-memories.dto.js';
+import { IngestMemoryDto } from './dto/ingest-memory.dto.js';
+import { SearchMemoryDto } from './dto/search-memory.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { User } from '@linea/db';
 
 @ApiTags('Memory')

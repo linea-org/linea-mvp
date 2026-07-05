@@ -2,6 +2,7 @@
   "name": "@linea/shared",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
@@ -15,6 +16,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "default": "./dist/contracts/index.js"
     }
   },
   "dependencies": {
@@ -25,7 +30,7 @@
     "@linea/eslint-config": "workspace:*",
     "@linea/types": "workspace:*",
     "@linea/typescript-config": "workspace:*",
-    "@types/node": "^22.19.17",
+    "@types/node": "^22.20.0",
     "dotenv": "^16.4.5",
     "typescript": "^5.9.3"
   }

@@ -15,17 +15,17 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { WorkspacesService } from './workspaces.service';
-import { CreateWorkspaceDto } from './dto/create-workspace.dto';
-import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
-import { InviteMemberDto } from './dto/invite-member.dto';
-import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
-import { UpdateWorkspaceSettingsDto } from './dto/update-workspace-settings.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { WorkspaceMembership } from '../common/decorators/workspace-membership.decorator';
+import { WorkspacesService } from './workspaces.service.js';
+import { CreateWorkspaceDto } from './dto/create-workspace.dto.js';
+import { UpdateWorkspaceDto } from './dto/update-workspace.dto.js';
+import { InviteMemberDto } from './dto/invite-member.dto.js';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto.js';
+import { UpdateWorkspaceSettingsDto } from './dto/update-workspace-settings.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { WorkspaceMembership } from '../common/decorators/workspace-membership.decorator.js';
 import type { User, WorkspaceMember } from '@linea/db';
 
 @ApiTags('Workspaces')

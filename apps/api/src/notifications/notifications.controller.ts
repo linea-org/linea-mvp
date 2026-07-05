@@ -17,9 +17,9 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { map, takeUntil, timer } from 'rxjs';
-import { NotificationsService } from './notifications.service';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
+import { NotificationsService } from './notifications.service.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
 import type { User } from '@linea/db';
 
 @ApiTags('Notifications')

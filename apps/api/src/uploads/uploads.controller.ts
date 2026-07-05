@@ -1,9 +1,9 @@
 import { Controller, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { UploadsService } from './uploads.service';
-import { PresignDto } from './dto/presign.dto';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { UploadsService } from './uploads.service.js';
+import { PresignDto } from './dto/presign.dto.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { User } from '@linea/db';
 
 @ApiTags('Uploads')

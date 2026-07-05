@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import type { DrizzleDB, User } from '@linea/db';
 import { users, lineaApiKeys } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
+import { DB_TOKEN } from '../database/database.module.js';
 
 interface ClerkUserPayload {
   id: string;

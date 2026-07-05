@@ -1,4 +1,4 @@
-import { ToolDefinition } from '../../../executions/engine/tools/definitions';
+import { ToolDefinition } from '../../../executions/engine/tools/definitions.js';
 import {
   ChatMessage,
   CompletionResult,
@@ -7,7 +7,7 @@ import {
   ModelStatus,
   ModelTier,
   ModelUseCase,
-} from '../types';
+} from '../types.js';
 
 export interface ModelChatProps {
   messages: ChatMessage[];

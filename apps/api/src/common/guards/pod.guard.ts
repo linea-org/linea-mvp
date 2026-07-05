@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Request } from 'express';
 import type { DrizzleDB, Pod } from '@linea/db';
 import { pods } from '@linea/db';
-import { DB_TOKEN } from '../../database/database.module';
+import { DB_TOKEN } from '../../database/database.module.js';
 
 type PodRequest = Request & {
   pod: Pod;

@@ -1,4 +1,4 @@
-import type { TemplateDefinition } from './types';
+import type { TemplateDefinition } from './types.js';
 
 export const INTEGRATION_TEMPLATES: TemplateDefinition[] = [
   {

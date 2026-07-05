@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { and, desc, eq, gte } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { auditLogs, users } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
+import { DB_TOKEN } from '../database/database.module.js';
 
 export interface LogEventOptions {
   workspaceId: string;

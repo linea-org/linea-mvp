@@ -1,11 +1,11 @@
 import OpenAI from 'openai';
-import { CompletionResult, NormalizedToolCall } from '../types';
-import { ModelChatProps, ModelClient, ModelDefinition } from './interface';
-import { withRetry } from '../helpers';
+import { CompletionResult, NormalizedToolCall } from '../types.js';
+import { ModelChatProps, ModelClient, ModelDefinition } from './interface.js';
+import { withRetry } from '../helpers.js';
 import {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
-} from 'openai/resources/chat';
+} from 'openai/resources';
 
 export class XAIClient implements ModelClient {
   static readonly displayModels: ModelDefinition[] = [

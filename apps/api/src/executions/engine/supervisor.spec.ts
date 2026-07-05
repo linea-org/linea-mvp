@@ -1,7 +1,7 @@
-import { ExecutionSupervisor } from './supervisor';
+import { ExecutionSupervisor } from './supervisor.js';
 import { ConfigService } from '@nestjs/config';
-import type { AIService } from '../../services/ai/ai.service';
-import type { SupervisorContext } from './supervisor';
+import type { AIService } from '../../services/ai/ai.service.js';
+import type { SupervisorContext } from './supervisor.js';
 
 function makeConfig(overrides: Record<string, string> = {}): ConfigService {
   return {

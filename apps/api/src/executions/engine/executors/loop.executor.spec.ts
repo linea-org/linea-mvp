@@ -2,8 +2,9 @@ import {
   executeLoopNode,
   checkLoopTimeout,
   MAX_LOOP_TIMEOUT_MS,
-} from './loop.executor';
-import type { WorkflowState } from '../variable-substitution';
+} from './loop.executor.js';
+import type { WorkflowState } from '../variable-substitution.js';
+import { jest } from '@jest/globals';
 
 function state(variables: Record<string, any>): WorkflowState {
   return { variables, chatHistory: [] };

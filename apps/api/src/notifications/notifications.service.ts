@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { and, eq, desc, isNull, or } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { notifications } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
+import { DB_TOKEN } from '../database/database.module.js';
 
 @Injectable()
 export class NotificationsService {

@@ -3,8 +3,8 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { lineaApiKeys } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import type { CreateApiKeyDto } from './dto/create-api-key.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import type { CreateApiKeyDto } from './dto/create-api-key.dto.js';
 
 const EXPIRY_MS: Record<string, number> = {
   '30d': 30 * 86_400_000,

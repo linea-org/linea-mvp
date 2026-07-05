@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { Public } from '../common/decorators/public.decorator';
-import { AI_MODEL_CATALOG } from '../services/ai/model-catalog';
+import { Public } from '../common/decorators/public.decorator.js';
+import { AI_MODEL_CATALOG } from '../services/ai/model-catalog.js';
 
 @ApiTags('Models')
 @Controller('models')

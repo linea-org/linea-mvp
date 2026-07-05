@@ -1228,12 +1228,18 @@ function BuilderInner({
       if (!token) return
       const api = createApiClient(token)
       localStorage.setItem(`linea:autosave:${workflowId}`, String(autoSave))
+
+      const StartNode = nodes.filter((n) => n.type === "start")
+      if (StartNode.length == 0) return
+      if (StartNode.length >= 2) return
+
       await api.patch(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
         {
           name: workflowName,
           ...(opts?.silent ? { skipVersion: true } : {}),
           definition: {
+            startNode: StartNode[0]?.id,
             nodes: nodes.map((n) => ({
               id: n.id,
               type: n.type,
@@ -1254,7 +1260,8 @@ function BuilderInner({
             })),
             settings: { testCases },
           },
-        }
+        },
+        "v2"
       )
       toast.success("Workflow saved")
     } catch (err) {

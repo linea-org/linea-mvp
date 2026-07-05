@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
-import { workspaces } from "./workspaces"
+import { workspaces } from "./workspaces.js"
 import { boolean } from "drizzle-orm/pg-core"
 import { unique } from "drizzle-orm/pg-core"
 import { integer } from "drizzle-orm/pg-core"

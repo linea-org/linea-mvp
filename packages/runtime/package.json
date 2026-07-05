@@ -2,6 +2,7 @@
   "name": "@linea/runtime",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
@@ -18,14 +19,13 @@
       "default": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "@langchain/langgraph": "^0.2.0"
+  "peerDependencies": {
+    "@langchain/langgraph": "0.2.74"
   },
   "devDependencies": {
     "@linea/eslint-config": "workspace:*",
-    "@linea/db": "workspace:*",
-    "@linea/ai": "workspace:*",
     "@linea/shared": "workspace:*",
+    "@linea/ai": "workspace:*",
     "@linea/types": "workspace:*",
     "@linea/typescript-config": "workspace:*",
     "@types/node": "^22.19.17",

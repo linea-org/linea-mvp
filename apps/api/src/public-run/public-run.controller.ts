@@ -9,12 +9,12 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiHeader } from '@nestjs/swagger';
 import { UseGuards } from '@nestjs/common';
-import { PublicRunService } from './public-run.service';
-import { Public } from '../common/decorators/public.decorator';
-import { WorkspaceGuard } from '../common/guards/workspace.guard';
-import { PodGuard } from '../common/guards/pod.guard';
-import { RoleGuard } from '../common/guards/role.guard';
-import { RequireRole } from '../common/decorators/require-role.decorator';
+import { PublicRunService } from './public-run.service.js';
+import { Public } from '../common/decorators/public.decorator.js';
+import { WorkspaceGuard } from '../common/guards/workspace.guard.js';
+import { PodGuard } from '../common/guards/pod.guard.js';
+import { RoleGuard } from '../common/guards/role.guard.js';
+import { RequireRole } from '../common/decorators/require-role.decorator.js';
 
 @ApiTags('Public Run')
 @Controller('run')

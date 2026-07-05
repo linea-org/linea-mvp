@@ -3,9 +3,9 @@ import { eq, and } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import type { DrizzleDB } from '@linea/db';
 import { pods } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import type { CreatePodDto } from './dto/create-pod.dto';
-import type { UpdatePodDto } from './dto/update-pod.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import type { CreatePodDto } from './dto/create-pod.dto.js';
+import type { UpdatePodDto } from './dto/update-pod.dto.js';
 
 function slugify(name: string): string {
   return (

@@ -7,8 +7,8 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
-import { vector } from "./_vector"
-import { workspaces } from "./workspaces"
+import { vector } from "./_vector.js"
+import { workspaces } from "./workspaces.js"
 
 export const mcpAuthTypeEnum = pgEnum("mcp_auth_type", [
   "none",

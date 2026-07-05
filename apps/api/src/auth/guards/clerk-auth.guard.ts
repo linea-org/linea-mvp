@@ -8,8 +8,8 @@ import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { verifyToken } from '@clerk/backend';
 import type { Request } from 'express';
-import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
-import { UsersService } from '../../users/users.service';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator.js';
+import { UsersService } from '../../users/users.service.js';
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {

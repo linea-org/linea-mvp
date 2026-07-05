@@ -8,10 +8,10 @@ import {
 import { eq, and, lte, count } from 'drizzle-orm';
 import type { DrizzleDB } from '@linea/db';
 import { schedules, pods, workflows } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { ExecutionsService } from '../executions/executions.service';
-import type { CreateScheduleDto } from './dto/create-schedule.dto';
-import type { UpdateScheduleDto } from './dto/update-schedule.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import { ExecutionsService } from '../executions/executions.service.js';
+import type { CreateScheduleDto } from './dto/create-schedule.dto.js';
+import type { UpdateScheduleDto } from './dto/update-schedule.dto.js';
 import { CronExpressionParser } from 'cron-parser';
 
 @Injectable()

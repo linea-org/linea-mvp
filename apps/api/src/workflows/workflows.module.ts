@@ -1,20 +1,20 @@
 import { Module } from '@nestjs/common';
-import { WorkflowsService } from './workflows.service';
-import { GenerateWorkflowService } from './generate-workflow.service';
-import { EvalsService } from './evals.service';
+import { WorkflowsService } from './workflows.service.js';
+import { GenerateWorkflowService } from './generate-workflow.service.js';
+import { EvalsService } from './evals.service.js';
 import {
   WorkflowsController,
   TemplatesController,
-} from './workflows.controller';
-import { EvalsController } from './evals.controller';
-import { TemplatesSeeder } from './templates.seeder';
-import { GlobalAdminGuard } from '../common/guards/global-admin.guard';
-import { WorkspacesModule } from '../workspaces/workspaces.module';
-import { PodsModule } from '../pods/pods.module';
-import { UsersModule } from '../users/users.module';
-import { SchedulesModule } from '../schedules/schedules.module';
-import { ExecutionsModule } from '../executions/executions.module';
-import { AuditModule } from '../audit/audit.module';
+} from './workflows.controller.js';
+import { EvalsController } from './evals.controller.js';
+import { TemplatesSeeder } from './templates.seeder.js';
+import { GlobalAdminGuard } from '../common/guards/global-admin.guard.js';
+import { WorkspacesModule } from '../workspaces/workspaces.module.js';
+import { PodsModule } from '../pods/pods.module.js';
+import { UsersModule } from '../users/users.module.js';
+import { SchedulesModule } from '../schedules/schedules.module.js';
+import { ExecutionsModule } from '../executions/executions.module.js';
+import { AuditModule } from '../audit/audit.module.js';
 
 @Module({
   imports: [

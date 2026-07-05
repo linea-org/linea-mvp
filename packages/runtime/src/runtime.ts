@@ -1,13 +1,13 @@
 import { AIClient } from "@linea/ai"
-import { NodeRegistry } from "./registry"
-import { AgentNode } from "./nodes/agent/agent.node"
-import { TransformNode } from "./nodes/transform/transform.node"
-import { HttpNode } from "./nodes/http/http.node"
-import type { WorkflowDefinition } from "./types"
-import { RuntimeState } from "./graph/state"
-import { LangGraphCompiler } from "./graph/compiler"
-import { LangGraphRunner } from "./graph/runner"
-import { TemplateEngine } from "./template/engine"
+import { NodeRegistry } from "./registry.js"
+import { AgentNode } from "./nodes/agent/agent.node.js"
+import { TransformNode } from "./nodes/transform/transform.node.js"
+import { HttpNode } from "./nodes/http/http.node.js"
+import type { RuntimeState } from "./types.js"
+import { LangGraphCompiler } from "./graph/compiler.js"
+import { LangGraphRunner } from "./graph/runner.js"
+import { TemplateEngine } from "./template/engine.js"
+import { WorkflowDefinition } from "@linea/shared/contracts"
 
 export class Runtime {
   private readonly registry: NodeRegistry

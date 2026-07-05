@@ -5,10 +5,9 @@ import {
   IntegrationConfigMap,
   integrationConfigSchemas,
   IntegrationType,
-} from "./schemas/providers.schema"
+} from "./schemas/providers.schema.js"
 
 type ProviderType = AIProviderType | IntegrationType
-
 type ProviderConfigMap = AIProviderConfigMap & IntegrationConfigMap
 
 const providerConfigSchemas = {

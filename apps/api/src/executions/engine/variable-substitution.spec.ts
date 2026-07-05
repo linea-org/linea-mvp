@@ -1,8 +1,8 @@
 import {
   substituteVariables,
   substituteInValue,
-} from './variable-substitution';
-import type { WorkflowState } from './variable-substitution';
+} from './variable-substitution.js';
+import type { WorkflowState } from './variable-substitution.js';
 
 function makeState(variables: Record<string, any>): WorkflowState {
   return { variables, chatHistory: [] };

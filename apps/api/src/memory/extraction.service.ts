@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AIService } from 'src/services/ai/ai.service';
+import { AIService } from '../services/ai/ai.service.js';
 
 export interface ExtractedFact {
   content: string;

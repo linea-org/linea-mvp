@@ -3,15 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import {
   AIProviderConfigMap,
   AIProviderType,
-} from 'src/common/utils/config-types';
-import { ConnectionsService } from 'src/connections/connections.service';
-import { ModelClient } from './clients/interface';
-import { OpenAIClient } from './clients/openai.client';
-import { AnthropicClient } from './clients/anthropic.client';
-import { OllamaClient } from './clients/ollama.client';
-import { XAIClient } from './clients/xai.client';
-import { GoogleClient } from './clients/google.client';
-import { GroqClient } from './clients/groq.client';
+} from '../../common/utils/config-types.js';
+import { ConnectionsService } from '../../connections/connections.service.js';
+import { ModelClient } from './clients/interface.js';
+import { OpenAIClient } from './clients/openai.client.js';
+import { AnthropicClient } from './clients/anthropic.client.js';
+import { OllamaClient } from './clients/ollama.client.js';
+import { XAIClient } from './clients/xai.client.js';
+import { GoogleClient } from './clients/google.client.js';
+import { GroqClient } from './clients/groq.client.js';
 
 @Injectable()
 export class AIService {

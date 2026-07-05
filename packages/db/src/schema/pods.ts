@@ -6,7 +6,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
-import { workspaces } from "./workspaces"
+import { workspaces } from "./workspaces.js"
 
 export const pods = pgTable(
   "pods",

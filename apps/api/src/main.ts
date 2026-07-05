@@ -1,10 +1,10 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
-import { AppModule } from './app.module';
+import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -12,9 +12,14 @@ async function bootstrap() {
     bufferLogs: true,
   });
 
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
   app.useLogger(app.get(Logger));
 
   // Trust exactly one proxy hop (load balancer / Cloudflare). req.ip is then the real client IP.
+
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   // Security headers — minimal CSP; SSE streams JSON, not HTML, so this is safe
@@ -50,9 +55,9 @@ async function bootstrap() {
     credentials: false,
   });
 
-  app.setGlobalPrefix('v1', {
-    exclude: ['/health', '/webhooks/clerk', '/docs'],
-  });
+  // app.setGlobalPrefix('v1', {
+  //   exclude: ['/health', '/webhooks/clerk', '/docs'],
+  // });
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -4,10 +4,10 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import type { DrizzleDB } from '@linea/db';
 import { mcpServers } from '@linea/db';
-import { DB_TOKEN } from '../database/database.module';
-import { assertSafeUrl } from '../common/utils/ssrf-guard';
-import type { CreateMcpServerDto } from './dto/create-mcp-server.dto';
-import type { UpdateMcpServerDto } from './dto/update-mcp-server.dto';
+import { DB_TOKEN } from '../database/database.module.js';
+import { assertSafeUrl } from '../common/utils/ssrf-guard.js';
+import type { CreateMcpServerDto } from './dto/create-mcp-server.dto.js';
+import type { UpdateMcpServerDto } from './dto/update-mcp-server.dto.js';
 
 type McpServerSafeResponse = Omit<
   typeof mcpServers.$inferSelect,

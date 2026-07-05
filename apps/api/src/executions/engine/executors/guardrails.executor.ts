@@ -1,4 +1,4 @@
-import type { WorkflowState } from '../variable-substitution';
+import type { WorkflowState } from '../variable-substitution.js';
 
 export interface GuardrailsNodeData {
   guardrailType?: string; // 'pii' | 'moderation' | 'jailbreak' | 'all'

@@ -8,10 +8,10 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
-import { workspaces } from "./workspaces"
-import { pods } from "./pods"
-import { workflows } from "./workflows"
-import type { NodeResult } from "./types"
+import { workspaces } from "./workspaces.js"
+import { pods } from "./pods.js"
+import { workflows } from "./workflows.js"
+import { VariableMap } from "@linea/shared/contracts"
 
 export const executionStatusEnum = pgEnum("execution_status", [
   "queued",
@@ -44,28 +44,32 @@ export const executions = pgTable("executions", {
   workspaceId: uuid("workspace_id")
     .references(() => workspaces.id, { onDelete: "cascade" })
     .notNull(),
+
   podId: uuid("pod_id").references(() => pods.id, { onDelete: "set null" }),
-  status: executionStatusEnum("status").default("queued").notNull(),
-  input: jsonb("input").$type<Record<string, unknown>>().default({}).notNull(),
-  output: jsonb("output"),
-  error: text("error"),
-  nodeResults: jsonb("node_results")
-    .$type<Record<string, NodeResult>>()
-    .default({})
-    .notNull(),
-  variables: jsonb("variables")
-    .$type<Record<string, unknown>>()
-    .default({})
-    .notNull(),
-  checkpoint: jsonb("checkpoint"),
   threadId: text("thread_id"),
+  queueJobId: text("queue_job_id"),
+
+  status: executionStatusEnum("status").default("queued").notNull(),
+
+  error: text("error"),
+
+  input: jsonb("input").$type<VariableMap>().default({}).notNull(),
+  variables: jsonb("variables").$type<VariableMap>().default({}).notNull(),
+
+  // will remove this
+  output: jsonb("output").default({}),
+  nodeResults: jsonb("node_results").$type<any>().default({}).notNull(),
+
+  checkpoint: jsonb("checkpoint"),
+
   tokenUsage: jsonb("token_usage").$type<{
     input: number
     output: number
     total: number
   }>(),
+
   triggeredBy: executionTriggerEnum("triggered_by").default("manual").notNull(),
-  queueJobId: text("queue_job_id"),
+
   startedAt: timestamp("started_at", { withTimezone: true }),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
