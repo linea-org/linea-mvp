@@ -9,15 +9,17 @@ import { randomUUID } from 'crypto';
 import { MailModule } from '../mail/mail.module.js';
 import { PodsModule } from './pods/pods.module.js';
 import { UsersModule } from './users/users.module.js';
+import { ExecutionsModule } from './executions/executions.module.js';
 
 @Module({
-  // ExecutionModule,
   imports: [
     ConfigModule,
     DatabaseModule,
     QueueModule,
+
     WorkspacesModule,
     WorkflowModule,
+    ExecutionsModule,
     PodsModule,
     UsersModule,
     MailModule,

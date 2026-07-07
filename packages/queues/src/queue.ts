@@ -1,5 +1,5 @@
 import { JobsOptions, Queue } from "bullmq"
-import Redis from "ioredis"
+import { Redis } from "ioredis"
 
 import { DEFAULT_JOB_OPTIONS } from "./constants.js"
 
