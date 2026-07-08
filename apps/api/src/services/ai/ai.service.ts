@@ -176,6 +176,16 @@ export class AIService {
     }
   }
 
+  /** Shared embedding call for the memories table so all writers land in the same vector space. */
+  async embedForMemory(text: string): Promise<number[]> {
+    const client = this.initializeWithSys('google');
+    const vec = await client.embedding('text-embedding-005', text);
+    if (vec == null) {
+      throw new Error('Failed to generate memory embedding');
+    }
+    return vec;
+  }
+
   initializeWithSys(provider: AIProviderType): ModelClient {
     try {
       switch (provider) {

@@ -30,6 +30,7 @@ export class AgentChatController {
   @ApiOperation({ summary: 'Stream a chat response from the AI agent' })
   async chat(
     @Param('workspaceId') workspaceId: string,
+    @CurrentUser() user: User,
     @Body() body: ChatDto,
     @Res() res: Response,
   ): Promise<void> {
@@ -40,7 +41,7 @@ export class AgentChatController {
     res.flushHeaders();
 
     try {
-      for await (const event of this.service.chat(workspaceId, body)) {
+      for await (const event of this.service.chat(workspaceId, user.id, body)) {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
     } catch (err) {

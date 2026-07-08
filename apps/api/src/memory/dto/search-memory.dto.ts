@@ -24,11 +24,6 @@ export class SearchMemoryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  userId?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
   threadId?: string;
 
   @ApiPropertyOptional({ default: 10 })

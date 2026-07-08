@@ -28,6 +28,7 @@ import { QuotasModule } from '../quotas/quotas.module.js';
 import { MailModule } from '../mail/mail.module.js';
 import { EXECUTION_QUEUE } from './queue/execution.queue.js';
 import { AIModule } from '../services/ai/ai.module.js';
+import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AIModule } from '../services/ai/ai.module.js';
     QuotasModule,
     MailModule,
     AIModule,
+    KnowledgeModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => {

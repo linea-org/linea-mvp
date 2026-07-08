@@ -9,19 +9,21 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/ingest` | editor+ | LLM-extract atomic facts from free text, embed, and deduplicate. Body: `{ content, scope, threadId?, workflowId?, userId? }`. Returns `{ inserted: number, superseded: number }`. |
-| POST | `/search` | viewer+ | Hybrid search (pgvector cosine + keyword). Body: `{ query, scope?, limit?, userId?, threadId? }`. Returns `[{ content, factType, score, metadata }]`. |
-| GET | `/profile` | viewer+ | User memory profile grouped by `factType`. Query: `{ userId }`. Returns memories grouped by type; excludes superseded entries. |
+| POST | `/ingest` | editor+ | LLM-extract atomic facts from free text, embed, and deduplicate. Body: `{ content, scope, threadId?, workflowId? }`. `userId` is always the authenticated caller, never a body field. Returns `{ inserted: number, superseded: number }`. |
+| POST | `/search` | viewer+ | Hybrid search (pgvector cosine + keyword), scoped to the caller's own memories. Body: `{ query, scope?, limit?, threadId? }`. Returns `[{ content, factType, score, metadata }]`. |
+| GET | `/profile` | viewer+ | Caller's own memory profile grouped by `factType`. Returns memories grouped by type; excludes superseded entries. |
 | POST | `/` | editor+ | Manually store a memory without LLM extraction. Body: `{ content, scope, factType?, metadata? }`. Returns created memory. |
-| GET | `/` | viewer+ | List memories. Query: `{ scope?, threadId?, workflowId?, userId?, limit?, cursor? }`. Returns paginated array. |
+| GET | `/` | viewer+ | List the caller's own memories. Query: `{ scope?, threadId?, workflowId? }`. Returns paginated array. |
 | DELETE | `/:id` | editor+ | Delete a memory. Returns 204. |
+
+`userId` is always derived from `@CurrentUser()`, never accepted as a client-supplied filter/query param.
 
 ## Key Types
 
-- `IngestMemoryDto` — `{ content: string, scope, threadId?, workflowId?, userId? }`
-- `SearchMemoryDto` — `{ query, scope?, limit?, userId?, threadId? }`
+- `IngestMemoryDto` — `{ content: string, scope, threadId?, workflowId? }`
+- `SearchMemoryDto` — `{ query, scope?, limit?, threadId? }`
 - `CreateMemoryDto` — manual insert: `{ content, scope, factType?, metadata? }`
-- `ListMemoriesDto` — `{ scope?, threadId?, workflowId?, userId?, limit?, cursor? }`
+- `ListMemoriesDto` — `{ scope?, threadId?, workflowId? }`
 - `MemoryScope` — `thread | workflow | user | session`
 - `MemoryFactType` — `fact | preference | event | profile | system`
 - `MemorySource` — `manual | extracted | ingested`
@@ -31,7 +33,7 @@
 - **Extraction pipeline** (`POST /ingest`): sends content to LLM (`ExtractionService`) to identify atomic facts; each fact is embedded via `EmbeddingService` and stored with `source='ingested'`
 - **Conflict resolution**: before inserting an extracted fact, `ExtractionService` checks for semantically similar existing memories (cosine similarity > threshold) and marks the older one `supersededById`
 - **Hybrid search**: `MemoryService.search` runs pgvector cosine similarity + keyword match in parallel and merges scores; same conceptual approach as knowledge hybrid search but applied to the `memories` table
-- **Profile view**: `GET /profile` groups non-superseded memories by `factType` for a given `userId` — used by agent nodes to inject user context into prompts
+- **Profile view**: `GET /profile` groups the caller's own non-superseded memories by `factType`
 
 ## Dependencies
 
@@ -41,7 +43,7 @@
 
 ## Changelog
 
-_No recent changes._
+- `search`/`getProfile`/`findAll` no longer accept a client-supplied `userId` — always bound to the authenticated caller. Added `@RequireRole('viewer')` for consistency with the rest of the controller.
 
 ## Missing / Gaps
 

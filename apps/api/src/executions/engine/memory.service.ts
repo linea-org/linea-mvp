@@ -6,7 +6,6 @@ import type { DrizzleDB } from '@linea/db';
 import { memories, mcpServers, secrets, oauthConnections } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module.js';
 import { AIService } from '../../services/ai/ai.service.js';
-import { AI_EMBEDDING_MODELS } from '../../services/ai/model-catalog.js';
 
 @Injectable()
 export class MemoryService {
@@ -377,39 +376,6 @@ export class MemoryService {
     }
   }
 
-  /**
-   * Generate a 1536-d embedding using the given model via the workspace's configured AI provider.
-   * Returns null when the model/provider is unavailable — callers fall back to text search.
-   * Non-OpenAI models (Google/Ollama) output wrong dimensions for our schema and also return null.
-   */
-  async generateEmbedding(
-    aiService: AIService,
-    workspaceId: string,
-    text: string,
-    modelId = 'text-embedding-3-small',
-  ): Promise<number[] | null> {
-    // Google and Ollama models output 768/1024d which doesn't match the 1536d pgvector column
-    if (
-      modelId === 'text-embedding-004' ||
-      modelId === 'nomic-embed-text' ||
-      modelId === 'mxbai-embed-large'
-    ) {
-      this.logger.warn(
-        `Embedding model ${modelId} outputs dimensions incompatible with 1536d pgvector column — falling back to text search`,
-      );
-      return null;
-    }
-    try {
-      const provider =
-        AI_EMBEDDING_MODELS.find((m) => m.id === modelId)?.provider ?? 'openai';
-      const client = await aiService.initialize(workspaceId, provider);
-      return await client.embedding(modelId, text);
-    } catch (err) {
-      this.logger.warn(`generateEmbedding failed: ${err}`);
-      return null;
-    }
-  }
-
   async storeLongTermMemory(
     workspaceId: string,
     workflowId: string | undefined,
@@ -418,40 +384,32 @@ export class MemoryService {
     value: string,
     aiService: AIService,
   ): Promise<void> {
-    try {
-      const content = `${key}: ${value}`;
-      const embedding = await this.generateEmbedding(
-        aiService,
-        workspaceId,
-        content,
-        'text-embedding-3-small',
+    const content = `${key}: ${value}`;
+    // Shared with the fact-extraction ingest writer to keep both in the same embedding space
+    const embedding = await aiService.embedForMemory(content);
+
+    // Upsert: delete existing entry for this key+scope, then insert fresh
+    await this.db
+      .delete(memories)
+      .where(
+        and(
+          eq(memories.workspaceId, workspaceId),
+          eq(memories.scope, 'workflow'),
+          ...(workflowId ? [eq(memories.workflowId, workflowId)] : []),
+          sql`${memories.metadata}->>'key' = ${key}`,
+        ),
       );
 
-      // Upsert: delete existing entry for this key+scope, then insert fresh
-      await this.db
-        .delete(memories)
-        .where(
-          and(
-            eq(memories.workspaceId, workspaceId),
-            eq(memories.scope, 'workflow'),
-            ...(workflowId ? [eq(memories.workflowId, workflowId)] : []),
-            sql`${memories.metadata}->>'key' = ${key}`,
-          ),
-        );
-
-      await this.db.insert(memories).values({
-        workspaceId,
-        workflowId: workflowId ?? null,
-        threadId,
-        scope: 'workflow',
-        source: 'extracted',
-        content,
-        embedding: embedding ?? undefined,
-        metadata: { key, value },
-      });
-    } catch (err) {
-      this.logger.warn(`storeLongTermMemory failed for key "${key}": ${err}`);
-    }
+    await this.db.insert(memories).values({
+      workspaceId,
+      workflowId: workflowId ?? null,
+      threadId,
+      scope: 'workflow',
+      source: 'extracted',
+      content,
+      embedding,
+      metadata: { key, value },
+    });
   }
 
   async searchSemantic(
@@ -460,61 +418,27 @@ export class MemoryService {
     query: string,
     topK: number,
     aiService: AIService,
+    threadId?: string,
   ): Promise<Array<{ key: string; value: unknown; score: number }>> {
-    try {
-      const queryEmbedding = await this.generateEmbedding(
-        aiService,
-        workspaceId,
-        query,
-        'text-embedding-3-small',
-      );
+    // Must match storeLongTermMemory's embedding call to stay in the same vector space
+    const queryEmbedding = await aiService.embedForMemory(query);
+    const embeddingLiteral = `[${queryEmbedding.join(',')}]`;
+    const rows = await this.db.execute(sql`
+      SELECT metadata, 1 - (embedding <=> ${embeddingLiteral}::vector) AS score
+      FROM memories
+      WHERE workspace_id = ${workspaceId}
+        ${workflowId ? sql`AND workflow_id = ${workflowId}` : sql``}
+        ${threadId ? sql`AND thread_id = ${threadId}` : sql``}
+        AND embedding IS NOT NULL
+      ORDER BY embedding <=> ${embeddingLiteral}::vector
+      LIMIT ${topK}
+    `);
 
-      if (queryEmbedding) {
-        // Vector similarity search using pgvector <=> (cosine distance)
-        const embeddingLiteral = `[${queryEmbedding.join(',')}]`;
-        const rows = await this.db.execute(sql`
-          SELECT metadata, 1 - (embedding <=> ${embeddingLiteral}::vector) AS score
-          FROM memories
-          WHERE workspace_id = ${workspaceId}
-            ${workflowId ? sql`AND workflow_id = ${workflowId}` : sql``}
-            AND embedding IS NOT NULL
-          ORDER BY embedding <=> ${embeddingLiteral}::vector
-          LIMIT ${topK}
-        `);
-
-        return Array.from(rows).map((r: any) => ({
-          key: String(r.metadata?.key ?? ''),
-          value: r.metadata?.value,
-          score: Number(r.score),
-        }));
-      }
-
-      // Fallback: text substring match on content
-      const filter = and(
-        eq(memories.workspaceId, workspaceId),
-        ...(workflowId ? [eq(memories.workflowId, workflowId)] : []),
-      );
-      const rows = await this.db
-        .select({ content: memories.content, metadata: memories.metadata })
-        .from(memories)
-        .where(filter)
-        .limit(topK * 4);
-
-      const q = query.toLowerCase();
-      return rows
-        .filter((r) => r.content.toLowerCase().includes(q))
-        .slice(0, topK)
-        .map((r) => ({
-          key: String(
-            (r.metadata as Record<string, unknown> | null)?.key ?? '',
-          ),
-          value: r.metadata?.value,
-          score: 0.5,
-        }));
-    } catch (err) {
-      this.logger.warn(`searchSemantic failed: ${err}`);
-      return [];
-    }
+    return Array.from(rows).map((r: any) => ({
+      key: String(r.metadata?.key ?? ''),
+      value: r.metadata?.value,
+      score: Number(r.score),
+    }));
   }
 
   async loadRecentForContext(

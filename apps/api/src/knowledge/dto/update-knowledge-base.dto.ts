@@ -8,6 +8,7 @@ import {
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import type { KnowledgeBaseSettings } from '@linea/db';
 
+// embeddingModel is deliberately absent — it's locked at creation and rejected via forbidNonWhitelisted
 export class UpdateKnowledgeBaseDto {
   @ApiPropertyOptional()
   @IsOptional()

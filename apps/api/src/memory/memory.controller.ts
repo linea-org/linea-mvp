@@ -49,25 +49,28 @@ export class MemoryController {
   }
 
   @Post('search')
+  @RequireRole('viewer')
   @ApiOperation({
     summary: 'Hybrid search: pgvector cosine + keyword, merged score',
   })
   @ApiParam({ name: 'workspaceId' })
   search(
     @Param('workspaceId') workspaceId: string,
+    @CurrentUser() user: User,
     @Body() dto: SearchMemoryDto,
   ) {
-    return this.service.search(workspaceId, dto);
+    return this.service.search(workspaceId, user.id, dto);
   }
 
   @Get('profile')
-  @ApiOperation({ summary: 'User memory profile grouped by factType' })
+  @RequireRole('viewer')
+  @ApiOperation({ summary: "Caller's own memory profile grouped by factType" })
   @ApiParam({ name: 'workspaceId' })
   getProfile(
     @Param('workspaceId') workspaceId: string,
-    @Query('userId') userId: string,
+    @CurrentUser() user: User,
   ) {
-    return this.service.getProfile(workspaceId, userId);
+    return this.service.getProfile(workspaceId, user.id);
   }
 
   @Post()
@@ -85,15 +88,18 @@ export class MemoryController {
   }
 
   @Get()
+  @RequireRole('viewer')
   @ApiOperation({
-    summary: 'List memories (filterable by scope, threadId, workflowId)',
+    summary:
+      "List the caller's own memories (filterable by scope, threadId, workflowId)",
   })
   @ApiParam({ name: 'workspaceId' })
   findAll(
     @Param('workspaceId') workspaceId: string,
+    @CurrentUser() user: User,
     @Query() query: ListMemoriesDto,
   ) {
-    return this.service.findAll(workspaceId, query);
+    return this.service.findAll(workspaceId, user.id, query);
   }
 
   @Delete(':id')
