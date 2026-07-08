@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -10,11 +10,9 @@ import {
   Controls,
   type Node,
   type Edge,
-  type Connection,
   type ReactFlowInstance,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { useAuth } from "@clerk/nextjs"
 import { useQuery } from "@tanstack/react-query"
 import { useApiClient } from "@/hooks/use-api-client"
 import { toast } from "@linea/ui/components/sonner"
@@ -23,8 +21,13 @@ import { nodeTypes } from "./nodes/node-types"
 import { Toolbar } from "./toolbar"
 import { LibraryPanel } from "./panels/library-panel"
 import { NodePanel } from "./panels/node-panel/node-panel"
-import type { Workflow, WorkflowBuilderProps } from "./workflow-builder.types"
+import type { WorkflowBuilderProps } from "./workflow-builder.types"
 import { useWorkflowStore } from "./use-workflow-store"
+import {
+  Workflow,
+  PRIMARY_NODE_OUTPUT,
+  WorkflowNodeType,
+} from "@linea/shared/contracts"
 
 function BuilderInner({
   workflowId,
@@ -67,42 +70,34 @@ function BuilderInner({
       )
     },
   })
-
   useEffect(() => {
     if (!wf || seededWorkflowRef.current) return
+
     seededWorkflowRef.current = true
     setWorkflowName(wf.name)
 
-    const rawNodes = (wf.definition?.nodes ?? []).map((n) => ({
+    const rawNodes: Node[] = (wf.definition?.nodes ?? []).map((n) => ({
       id: n.id,
       type: n.type,
-      position: n.position,
-      data: { ...n.data, nodeType: n.type },
-      ...(n.style ? { style: n.style } : {}),
-      ...(n.parentId
-        ? { parentId: n.parentId, extent: "parent" as const }
-        : {}),
-      ...(n.type === "note" ? { connectable: false } : {}),
-      ...(n.type === "frame"
-        ? { connectable: false, selectable: true, zIndex: n.zIndex ?? -1 }
-        : {}),
+      position: n.metadata?.position ?? { x: 0, y: 0 },
+      data: {
+        ...n.config,
+        nodeType: n.type,
+      },
     }))
-    const loadedNodes: Node[] = [
-      ...rawNodes.filter((n) => n.type === "frame"),
-      ...rawNodes.filter((n) => n.type !== "frame"),
-    ]
 
-    const hasStart = loadedNodes.some((n) => n.type === "start")
-    const hasEnd = loadedNodes.some((n) => n.type === "end")
-    if (!hasStart) {
-      loadedNodes.push({
-        id: wf.definition?.startNode || "start-1",
+    const loadedNodes: Node[] = [...rawNodes]
+
+    if (!loadedNodes.some((n) => n.type === "start")) {
+      loadedNodes.unshift({
+        id: "start-1",
         type: "start",
         position: { x: 100, y: 200 },
         data: { nodeType: "start" },
       })
     }
-    if (!hasEnd) {
+
+    if (!loadedNodes.some((n) => n.type === "end")) {
       loadedNodes.push({
         id: "end-1",
         type: "end",
@@ -111,22 +106,34 @@ function BuilderInner({
       })
     }
 
-    setNodes(loadedNodes)
-    setEdges(
-      (wf.definition?.edges ?? []).map((e) => ({
+    const loadedEdges: Edge[] = [
+      {
+        id: `xy-edge__start-1-${wf.definition?.startNode}`,
+        source: "start-1",
+        target: wf.definition?.startNode || "",
+      },
+      ...(wf.definition?.edges ?? []).map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
         sourceHandle: e.sourceHandle,
         targetHandle: e.targetHandle,
-        label: e.label,
-      }))
-    )
+        label: e.id,
+      })),
+    ]
+
+    setNodes(loadedNodes)
+    setEdges(loadedEdges)
 
     pushHistory()
 
-    setTimeout(() => rfInstance?.fitView({ padding: 0.25, duration: 300 }), 100)
-  }, [wf, workflowId, setNodes, setEdges, pushHistory, rfInstance])
+    setTimeout(() => {
+      rfInstance?.fitView({
+        padding: 0.25,
+        duration: 300,
+      })
+    }, 100)
+  }, [wf, setNodes, setEdges, pushHistory, rfInstance])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -307,22 +314,27 @@ function BuilderInner({
 
       const startNode = startEdge?.target ?? ""
 
+      const realNodeIds = new Set(realNodes.map((n) => n.id))
+
       const def = {
         startNode,
         nodes: realNodes.map((n) => ({
           id: n.id,
           type: n.type,
           position: n.position,
-          data: serializeNodeData(n),
+          data: sanitizeConfig(n, realNodes, edges, serializeNodeData(n)),
         })),
-        edges: edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          sourceHandle: e.sourceHandle,
-          targetHandle: e.targetHandle,
-        })),
+        edges: edges
+          .filter((e) => realNodeIds.has(e.source) && realNodeIds.has(e.target))
+          .map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            sourceHandle: e.sourceHandle,
+            targetHandle: e.targetHandle,
+          })),
       }
+
       await api.patch(
         `/workspaces/${workspaceId}/pods/${podId}/workflows/${workflowId}`,
         {
@@ -337,6 +349,56 @@ function BuilderInner({
       toast.error("Failed to save workflow")
     }
   }, [getApi, nodes, edges, workspaceId, podId, workflowId, workflowName])
+
+  function sanitizeConfig(
+    node: Node,
+    nodes: Node[],
+    edges: Edge[],
+    config: unknown
+  ): unknown {
+    const incoming = edges.find((e) => e.target === node.id)
+
+    if (!incoming) {
+      return config
+    }
+
+    const sourceNode = nodes.find((n) => n.id === incoming.source)
+
+    if (!sourceNode?.type) {
+      return config
+    }
+
+    const sourceType = sourceNode.type as WorkflowNodeType
+
+    const prefix = [
+      "nodeResults",
+      incoming.source,
+      ...PRIMARY_NODE_OUTPUT[sourceType],
+    ].join(".")
+
+    return replaceLastOutput(config, prefix)
+  }
+
+  function replaceLastOutput(value: unknown, prefix: string): unknown {
+    if (typeof value === "string") {
+      return value.replace(
+        /\{\{\s*lastOutput(\.[^}]*)?\s*\}\}/g,
+        (_, path = "") => `{{${prefix}${path}}}`
+      )
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((v) => replaceLastOutput(v, prefix))
+    }
+
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [k, replaceLastOutput(v, prefix)])
+      )
+    }
+
+    return value
+  }
 
   const handleRun = useCallback(async () => {
     try {

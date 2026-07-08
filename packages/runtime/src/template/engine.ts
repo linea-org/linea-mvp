@@ -3,32 +3,28 @@ import { VariableMap } from "@linea/shared/contracts"
 const TEMPLATE_REGEX = /\{\{\s*([^}]+?)\s*\}\}/g
 
 export class TemplateEngine {
-  render(template: string, variables: VariableMap): string {
+  render(template: string, context: VariableMap): string {
     return template.replace(TEMPLATE_REGEX, (_, expression) => {
-      const value = this.resolve(expression, variables)
+      const value = this.resolve(expression, context)
 
-      return value == null ? "" : String(value)
+      return value == null ? `{{${expression}}}` : String(value)
     })
   }
 
-  renderWorkflow<T>(workflow: T, variables: VariableMap): T {
-    return this.renderValue(workflow, variables)
-  }
-
-  private renderValue<T>(value: T, variables: VariableMap): T {
+  renderObject<T>(value: T, context: VariableMap): T {
     if (typeof value === "string") {
-      return this.render(value, variables) as T
+      return this.render(value, context) as T
     }
 
     if (Array.isArray(value)) {
-      return value.map((item) => this.renderValue(item, variables)) as T
+      return value.map((item) => this.renderObject(item, context)) as T
     }
 
     if (value && typeof value === "object") {
       return Object.fromEntries(
         Object.entries(value).map(([key, val]) => [
           key,
-          this.renderValue(val, variables),
+          this.renderObject(val, context),
         ])
       ) as T
     }
@@ -36,7 +32,7 @@ export class TemplateEngine {
     return value
   }
 
-  private resolve(path: string, variables: VariableMap): unknown {
+  private resolve(path: string, context: VariableMap): unknown {
     return path
       .trim()
       .split(".")
@@ -50,6 +46,6 @@ export class TemplateEngine {
         }
 
         return (current as Record<string, unknown>)[key]
-      }, variables)
+      }, context)
   }
 }

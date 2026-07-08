@@ -6,7 +6,7 @@ import {
 import { and, eq, desc, count } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { Database } from '@linea/db';
-import { executions, executionLogs, workflows } from '@linea/db';
+import { executions, executionLogs } from '@linea/db';
 import type { CreateExecutionDto } from './dto/create-execution.dto.js';
 import type { ListExecutionsDto } from './dto/list-executions.dto.js';
 import { QueueService } from '../services/queue/queue.service.js';
@@ -59,12 +59,16 @@ export class ExecutionsService {
 
     const threadId = `thread_${randomBytes(8).toString('hex')}`;
 
+    const testInput = {
+      userId: 1,
+    };
+
     const execution = await this.db.execution.create({
       workflowId,
       workspaceId,
       podId,
       status: 'queued',
-      input,
+      input: testInput,
       threadId,
       triggeredBy,
     });
@@ -173,15 +177,16 @@ export class ExecutionsService {
   }
 
   async replay(podId: string, id: string, fromNodeId?: string) {
-    const original = await this.findOne(podId, id);
+    const original = await this.db.execution.findById(id);
 
     // await this.quotas.checkLimit(original.workspaceId);
 
-    if (!original.workflowId) {
+    if (!original) {
       throw new BadRequestException(
         'Cannot replay an execution with no workflow',
       );
     }
+
     if (!['completed', 'failed', 'cancelled'].includes(original.status)) {
       throw new BadRequestException(
         `Can only replay completed, failed, or cancelled executions (current: ${original.status})`,
@@ -189,62 +194,27 @@ export class ExecutionsService {
     }
 
     const threadId = `thread_${randomBytes(8).toString('hex')}`;
-    const input = original.input as Record<string, any>;
 
-    // Build preloaded state: variables from original + nodeResults marked __preloaded
-    // for all nodes that completed before fromNodeId
-    let preloadedState: any | undefined;
-
-    if (fromNodeId) {
-      const origNodeResults = (original.nodeResults ?? {}) as Record<
-        string,
-        any
-      >;
-      const origVariables = (original.variables ?? {}) as Record<string, any>;
-
-      // Load workflow definition to determine topology order
-      const [wf] = await this.db.client
-        .select({ definition: workflows.definition })
-        .from(workflows)
-        .where(eq(workflows.id, original.workflowId))
-        .limit(1);
-
-      // Nodes that completed before fromNodeId (by wall-clock completedAt order)
-      const completedBefore = Object.entries(origNodeResults)
-        .filter(
-          ([nodeId, r]: [string, any]) =>
-            nodeId !== fromNodeId && r?.status === 'completed',
-        )
-        .reduce<Record<string, any>>((acc, [nodeId, r]) => {
-          acc[nodeId] = { ...r, __preloaded: true };
-          return acc;
-        }, {});
-
-      preloadedState = {
-        variables: { ...origVariables, input },
-        nodeResults: completedBefore,
-      };
-
-      void wf; // loaded but not used for ordering (completedAt order is sufficient)
-    }
-
-    const newExecution = await this.db.execution.create({
+    const execution = await this.db.execution.create({
       workflowId: original.workflowId,
       workspaceId: original.workspaceId,
-      podId: original.podId!,
+      podId: original.podId,
       status: 'queued',
-      input,
+      input: original.input,
       threadId,
       triggeredBy: 'manual',
-      checkpoint: { replayOf: id, fromNodeId: fromNodeId ?? null },
+      checkpoint: {
+        replayOf: original.id,
+        resumeFrom: fromNodeId ?? null,
+      },
     });
 
-    if (!newExecution) {
-      throw new Error(`Unable to create workflow execution at the moment`);
+    if (!execution) {
+      throw new Error('Unable to create workflow execution at the moment');
     }
-    await this.queue.enqueueExecution(newExecution.id);
 
-    return newExecution;
+    await this.queue.enqueueExecution(execution.id);
+    return execution;
   }
 
   async getLogs(podId: string, id: string) {

@@ -8,8 +8,9 @@ export class HttpNodeConfigDto implements HttpNodeConfig {
   @IsString()
   url!: string;
 
+  @IsOptional()
   @IsObject()
-  headers!: Record<string, string>;
+  headers: Record<string, string> = {};
 
   @IsOptional()
   body?: unknown;

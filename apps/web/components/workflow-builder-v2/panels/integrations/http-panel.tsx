@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@linea/ui/components/select"
 import type { HttpNodeConfig } from "@linea/shared/contracts"
+import { useEffect, useState } from "react"
 
 interface HttpPanelProps {
   data: Partial<HttpNodeConfig>
@@ -26,10 +27,14 @@ export function HttpPanel({ data, onUpdate }: HttpPanelProps) {
   const method = data.method ?? "GET"
   const url = data.url ?? ""
   const headersStr = JSON.stringify(data.headers ?? {}, null, 2)
-  const bodyStr =
-    typeof data.body === "string"
-      ? data.body
-      : JSON.stringify(data.body ?? {}, null, 2)
+
+  const [bodyText, setBodyText] = useState(() =>
+    JSON.stringify(data.body ?? {}, null, 2)
+  )
+
+  useEffect(() => {
+    setBodyText(JSON.stringify(data.body ?? {}, null, 2))
+  }, [data.body])
 
   return (
     <div className="space-y-4">
@@ -74,9 +79,11 @@ export function HttpPanel({ data, onUpdate }: HttpPanelProps) {
           rows={4}
           value={headersStr}
           onChange={(e) => {
+            const value = e.target.value
+            setBodyText(value)
+
             try {
-              const parsed = JSON.parse(e.target.value)
-              onUpdate({ headers: parsed })
+              onUpdate({ headers: JSON.parse(value) })
             } catch {
               // Ignore invalid JSON while typing
             }
@@ -92,7 +99,7 @@ export function HttpPanel({ data, onUpdate }: HttpPanelProps) {
           <Textarea
             id="http-body"
             rows={5}
-            value={bodyStr}
+            value={bodyText}
             onChange={(e) => {
               try {
                 const parsed = JSON.parse(e.target.value)

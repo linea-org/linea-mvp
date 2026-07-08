@@ -42,21 +42,24 @@ export class ExecutionProcessor {
     await this.db.execution.start(execution.id);
 
     try {
+      const initialState = {
+        workspaceId: execution.workspaceId,
+        workflowId: workflow.id,
+        threadId: execution.threadId ?? execution.id,
+        variables: execution.variables ?? {},
+        nodeResults: execution.nodeResults ?? {},
+      };
+
       const result = await this.runtime.execute(
         workflow.definition,
         execution.input,
-        {
-          threadId: execution.threadId ?? execution.id,
-          variables: execution.variables,
-          workspaceId: execution.workspaceId,
-          workflowId: workflow.id,
-        },
+        initialState,
       );
 
       await this.db.execution.complete(execution.id, {
         variables: result.variables,
-        // output: result.output,
-        // tokenUsage: result.tokenUsage,
+        nodeResults: result.nodeResults,
+        output: result.output,
         finishedAt: new Date(),
       });
 

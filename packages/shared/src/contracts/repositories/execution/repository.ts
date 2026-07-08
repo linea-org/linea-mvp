@@ -16,6 +16,8 @@ export interface ExecutionRepository {
     id: string,
     payload: {
       variables: VariableMap
+      nodeResults: Execution["nodeResults"]
+      output: Execution["output"]
       tokenUsage?: Execution["tokenUsage"]
       finishedAt: Date
     }

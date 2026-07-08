@@ -4,6 +4,9 @@ import { workerConfigSchema } from '@linea/shared';
 import { AIModule } from './ai/ai.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { QueueModule } from './queue/queue.module.js';
+import { ExecutionProcessor } from './execution/execution.processor.js';
+import { ExecutionWorker } from './execution/execution.worker.js';
+import { RuntimeModule } from './runtime/runtime.module.js';
 
 @Module({
   imports: [
@@ -15,8 +18,9 @@ import { QueueModule } from './queue/queue.module.js';
     DatabaseModule,
     AIModule,
     QueueModule,
+    RuntimeModule,
   ],
-  controllers: [],
-  providers: [],
+
+  providers: [ExecutionProcessor, ExecutionWorker],
 })
 export class AppModule {}

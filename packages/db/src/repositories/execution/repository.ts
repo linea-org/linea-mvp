@@ -42,6 +42,8 @@ export class ExecutionRepositoryImpl implements ExecutionRepository {
     id: string,
     payload: {
       variables: VariableMap
+      nodeResults: Execution["nodeResults"]
+      output: Execution["output"]
       tokenUsage?: Execution["tokenUsage"]
       finishedAt: Date
     }
@@ -53,6 +55,8 @@ export class ExecutionRepositoryImpl implements ExecutionRepository {
         variables: payload.variables,
         tokenUsage: payload.tokenUsage,
         finishedAt: payload.finishedAt,
+        nodeResults: payload.nodeResults,
+        output: payload.output,
         error: null,
       })
       .where(eq(executions.id, id))
