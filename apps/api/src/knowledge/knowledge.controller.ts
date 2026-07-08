@@ -148,6 +148,22 @@ export class KnowledgeController {
     return this.service.getEntryStatus(workspaceId, kbId, entryId);
   }
 
+  @Post(':id/entries/:entryId/retry')
+  @RequireRole('editor')
+  @ApiOperation({
+    summary: 'Re-enqueue a failed entry for embedding (editor+)',
+  })
+  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'id' })
+  @ApiParam({ name: 'entryId' })
+  retryEntry(
+    @Param('workspaceId') workspaceId: string,
+    @Param('id') kbId: string,
+    @Param('entryId') entryId: string,
+  ) {
+    return this.service.retryEntry(workspaceId, kbId, entryId);
+  }
+
   @Delete(':id/entries/:entryId')
   @HttpCode(204)
   @RequireRole('editor')

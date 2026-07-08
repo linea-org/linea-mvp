@@ -9,20 +9,21 @@
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| POST | `/` | editor+ | Create a KB. Body: `{ name, description?, settings? }`. Returns the created KB. |
+| POST | `/` | editor+ | Create a KB. Body: `{ name, description?, settings?, embeddingModel? }`. `embeddingModel` is locked for the KB's lifetime (default: `text-embedding-005`). Returns the created KB. |
 | GET | `/` | viewer+ | List all KBs in the workspace. Returns array with `entryCount` per KB. |
 | GET | `/:id` | viewer+ | Get a single KB by ID. Returns KB with settings. |
-| PATCH | `/:id` | editor+ | Update name, description, or `KnowledgeBaseSettings`. Returns updated KB. |
+| PATCH | `/:id` | editor+ | Update name, description, or `KnowledgeBaseSettings`. `embeddingModel` cannot be changed after creation — rejected with 400. Returns updated KB. |
 | DELETE | `/:id` | editor+ | Delete KB and cascade-delete all entries. Returns 204. |
 | POST | `/:id/entries` | editor+ | Add content: splits into chunks, SHA-256 deduplicates, enqueues BullMQ embedding. Body: `{ content, metadata? }`. Returns first chunk with `status: pending`. |
 | GET | `/:id/entries` | viewer+ | List entries with `{ id, content, status, chunkIndex, metadata }`. |
-| GET | `/:id/entries/:entryId/status` | viewer+ | Get ingestion status for one entry. Returns `{ status }` — poll until `indexed` or `failed`. |
+| GET | `/:id/entries/:entryId/status` | viewer+ | Get ingestion status for one entry. Returns `{ status, lastError }` — poll until `indexed` or `failed`. |
+| POST | `/:id/entries/:entryId/retry` | editor+ | Re-enqueue a `failed` entry for embedding. 400 if the entry isn't currently failed. |
 | DELETE | `/:id/entries/:entryId` | editor+ | Delete a single entry. Returns 204. |
 | POST | `/:id/search` | viewer+ | Hybrid RRF search (vector 0.7 + BM25 0.3). Body: `{ query, limit? }`. Returns `[{ content, metadata }]`. |
 
 ## Key Types
 
-- `KnowledgeBaseSettings` — per-KB RAG config: `chunkSize`, `chunkOverlap`, `similarityThreshold`, `embeddingModel`, `enableRerank`, `rerankTopK`, `expandContext`
+- `KnowledgeBaseSettings` — per-KB RAG config: `chunkSize`, `chunkOverlap`, `similarityThreshold`, `enableRerank`, `rerankTopK`, `expandContext`. `embeddingModel` lives on typed `knowledgeBases.embeddingModel`/`embeddingProvider`/`embeddingDimensions` columns instead
 - `KnowledgeEntryStatus` — `pending | embedding | indexed | failed`
 - `CreateEntryDto` — `{ content: string, metadata? }`
 - `SearchEntriesDto` — `{ query: string, limit?: number }`
@@ -43,9 +44,23 @@
 - `PodsModule` — pod guard
 - `AuditModule` — logs `kb.create` and `kb.delete`
 - `BullMQ rag:embed queue` — async embedding worker (`KnowledgeEmbedProcessor`)
-- `OpenAI text-embedding-3-small` (default) — 1536-dim vectors stored in pgvector
+- `@linea/ai`'s embedding-model registry (`resolveEmbeddingBucket`) — default `text-embedding-005` (Google, 768-dim); a KB may lock any registered embedding model, routed to one of three bucketed pgvector columns (768/1536/3072) on `knowledge_entries`
 
 ## Changelog
+
+### Embedding-model lock + dimension-bucketed columns
+- Fixed a live 100%-failure bug: `addEntry`/`searchEntries`/the processor all hardcoded Google `text-embedding-005` (768-dim) writes into a fixed `vector(1536)` column
+- `knowledge_entries.embedding` (single 1536-dim column) replaced with `embedding768`/`embedding1536`, one populated per row per its KB's locked bucket. 3072-dim models (`text-embedding-3-large`, `gemini-embedding-001`) are unsupported — pgvector caps hnsw/ivfflat indexes at 2000 dimensions
+- `knowledgeBases` gets typed `embeddingModel`/`embeddingProvider`/`embeddingDimensions`, resolved once at `createBase` (or lazily for pre-migration rows) and never mutated — PATCHing `embeddingModel` is rejected (400)
+- Reembedding-on-model-change (background reindex) is explicitly deferred, not built — tracked as a follow-up
+- `searchEntries` now embeds queries with the KB's own locked model instead of a second hardcoded call — closes a silent cross-model-embedding-comparison bug
+- Dedup's non-unique index replaced with a real unique index on `(knowledge_base_id, content_hash)`; added `last_error` column for surfacing failed-entry causes
+
+### Ingest/retrieval integrity fixes
+- Retriever node no longer reimplements hybrid search inline — calls `KnowledgeService.hybridSearch` directly, using the target KB's own locked embedding model, closing a cross-model-embedding-comparison bug
+- `splitSentenceAware`'s hard-split loop now guarantees forward progress regardless of `chunkOverlap`/`chunkSize`; `addEntry` throws 400 if `chunkOverlap >= chunkSize` instead of risking a hang
+- Zero-vector embeddings now throw in the processor, routing to `status: 'failed'` with `lastError` populated, instead of silently marking `indexed` with no vector
+- Added `POST .../entries/:entryId/retry` so a `failed` entry can be re-embedded without delete-and-re-add
 
 ### 2026-05-25 — RAG Phase 3: hybrid search, context expansion, Cohere reranking
 - Replaced `vectorSearch` with `hybridSearch` (parallel vector + FTS arms, RRF merge)

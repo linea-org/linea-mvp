@@ -1,4 +1,10 @@
-import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { and, eq, count, desc, sql, inArray } from 'drizzle-orm';
@@ -18,6 +24,12 @@ import type { SearchEntriesDto } from './dto/search-entries.dto.js';
 import { RAG_EMBED_QUEUE } from './knowledge.queue.js';
 import type { RagEmbedJobData } from './knowledge.queue.js';
 import { AIService } from '../services/ai/ai.service.js';
+import {
+  resolveEmbeddingBucket,
+  DEFAULT_EMBEDDING_MODEL,
+  type EmbeddingBucket,
+} from '@linea/ai';
+import { embeddingColumnNameFor } from './embedding-column.util.js';
 
 @Injectable()
 export class KnowledgeService {
@@ -31,6 +43,11 @@ export class KnowledgeService {
   ) {}
 
   async createBase(workspaceId: string, dto: CreateKnowledgeBaseDto) {
+    // Locked for the KB's lifetime
+    const { provider, dimensions } = resolveEmbeddingBucket(
+      dto.embeddingModel ?? DEFAULT_EMBEDDING_MODEL,
+    );
+
     const [kb] = await this.db
       .insert(knowledgeBases)
       .values({
@@ -38,6 +55,9 @@ export class KnowledgeService {
         name: dto.name,
         description: dto.description ?? null,
         settings: dto.settings ?? {},
+        embeddingModel: dto.embeddingModel ?? DEFAULT_EMBEDDING_MODEL,
+        embeddingProvider: provider,
+        embeddingDimensions: dimensions,
       } satisfies Partial<NewKnowledgeBase> as NewKnowledgeBase)
       .returning();
     return kb;
@@ -172,8 +192,8 @@ export class KnowledgeService {
             if (lastSpace > pos) end = lastSpace;
           }
           chunks.push(sentence.slice(pos, end).trim());
-          pos = end - overlap;
-          if (pos < 0) pos = end; // guard infinite loop
+          // Always advance past the current position, regardless of overlap/maxChars
+          pos = Math.max(pos + 1, end - overlap);
         }
         continue;
       }
@@ -204,7 +224,12 @@ export class KnowledgeService {
         .where(eq(workspaces.id, workspaceId))
         .limit(1),
       this.db
-        .select({ settings: knowledgeBases.settings })
+        .select({
+          settings: knowledgeBases.settings,
+          embeddingModel: knowledgeBases.embeddingModel,
+          embeddingProvider: knowledgeBases.embeddingProvider,
+          embeddingDimensions: knowledgeBases.embeddingDimensions,
+        })
         .from(knowledgeBases)
         .where(eq(knowledgeBases.id, kbId))
         .limit(1),
@@ -213,10 +238,29 @@ export class KnowledgeService {
     const wsSettings = ws?.settings ?? {};
     const kbSettings: KnowledgeBaseSettings = kb?.settings ?? {};
 
+    // Lazily resolve and persist for pre-migration rows without a locked model
+    const embeddingModel = kb?.embeddingModel ?? DEFAULT_EMBEDDING_MODEL;
+    const {
+      provider: embeddingProvider,
+      dimensions: embeddingDimensions,
+      bucket,
+    } = resolveEmbeddingBucket(embeddingModel);
+    if (!kb?.embeddingModel) {
+      await this.db
+        .update(knowledgeBases)
+        .set({ embeddingModel, embeddingProvider, embeddingDimensions })
+        .where(eq(knowledgeBases.id, kbId));
+    }
+
     // Settings cascade: KB → workspace → system default
     const CHUNK_SIZE = kbSettings.chunkSize ?? wsSettings.ragChunkSize ?? 1000;
     const CHUNK_OVERLAP =
       kbSettings.chunkOverlap ?? wsSettings.ragChunkOverlap ?? 200;
+    if (CHUNK_OVERLAP >= CHUNK_SIZE) {
+      throw new BadRequestException(
+        `chunkOverlap (${CHUNK_OVERLAP}) must be less than chunkSize (${CHUNK_SIZE})`,
+      );
+    }
 
     // ── Deduplication: skip if whole-document hash already exists in this KB ──
     const contentHash = createHash('sha256').update(dto.content).digest('hex');
@@ -238,9 +282,6 @@ export class KnowledgeService {
       return existing;
     }
 
-    // TODO: get them from kb settings
-    const embeddingModel = 'text-embedding-005';
-    const provider = 'google';
     const chunks = this.splitSentenceAware(
       dto.content,
       CHUNK_SIZE,
@@ -285,7 +326,8 @@ export class KnowledgeService {
           content: chunk,
           contentHash: chunkHash,
           embeddingModel,
-          provider,
+          provider: embeddingProvider,
+          dimensions: bucket,
         } satisfies RagEmbedJobData,
         {
           attempts: 3,
@@ -313,6 +355,7 @@ export class KnowledgeService {
     queryEmbedding: number[],
     limit: number,
     distanceThreshold: number,
+    bucket: EmbeddingBucket,
   ): Promise<
     Array<{
       id: string;
@@ -322,29 +365,26 @@ export class KnowledgeService {
       chunkIndex: number | null;
     }>
   > {
-    try {
-      const embLiteral = `[${queryEmbedding.join(',')}]`;
-      const rows = await this.db.execute(sql`
-        SELECT id, content, metadata, source_id AS "sourceId", chunk_index AS "chunkIndex"
-        FROM knowledge_entries
-        WHERE knowledge_base_id = ${kbId}
-          AND embedding IS NOT NULL
-          AND status = 'indexed'
-          AND (embedding <=> ${embLiteral}::vector) < ${distanceThreshold}
-        ORDER BY embedding <=> ${embLiteral}::vector
-        LIMIT ${limit}
-      `);
-      return Array.from(rows) as Array<{
-        id: string;
-        content: string;
-        metadata: Record<string, unknown>;
-        sourceId: string | null;
-        chunkIndex: number | null;
-      }>;
-    } catch (err) {
-      this.logger.warn(`Vector search failed: ${err}`);
-      return [];
-    }
+    const embLiteral = `[${queryEmbedding.join(',')}]`;
+    // Safe to interpolate raw: column name comes from a fixed internal map, not user input
+    const embeddingCol = sql.raw(embeddingColumnNameFor(bucket));
+    const rows = await this.db.execute(sql`
+      SELECT id, content, metadata, source_id AS "sourceId", chunk_index AS "chunkIndex"
+      FROM knowledge_entries
+      WHERE knowledge_base_id = ${kbId}
+        AND ${embeddingCol} IS NOT NULL
+        AND status = 'indexed'
+        AND (${embeddingCol} <=> ${embLiteral}::vector) < ${distanceThreshold}
+      ORDER BY ${embeddingCol} <=> ${embLiteral}::vector
+      LIMIT ${limit}
+    `);
+    return Array.from(rows) as Array<{
+      id: string;
+      content: string;
+      metadata: Record<string, unknown>;
+      sourceId: string | null;
+      chunkIndex: number | null;
+    }>;
   }
 
   /**
@@ -364,27 +404,22 @@ export class KnowledgeService {
       chunkIndex: number | null;
     }>
   > {
-    try {
-      const rows = await this.db.execute(sql`
-        SELECT id, content, metadata, source_id AS "sourceId", chunk_index AS "chunkIndex"
-        FROM knowledge_entries
-        WHERE knowledge_base_id = ${kbId}
-          AND status = 'indexed'
-          AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
-        ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC
-        LIMIT ${limit}
-      `);
-      return Array.from(rows) as Array<{
-        id: string;
-        content: string;
-        metadata: Record<string, unknown>;
-        sourceId: string | null;
-        chunkIndex: number | null;
-      }>;
-    } catch (err) {
-      this.logger.warn(`FTS failed: ${err}`);
-      return [];
-    }
+    const rows = await this.db.execute(sql`
+      SELECT id, content, metadata, source_id AS "sourceId", chunk_index AS "chunkIndex"
+      FROM knowledge_entries
+      WHERE knowledge_base_id = ${kbId}
+        AND status = 'indexed'
+        AND to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+      ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${query})) DESC
+      LIMIT ${limit}
+    `);
+    return Array.from(rows) as Array<{
+      id: string;
+      content: string;
+      metadata: Record<string, unknown>;
+      sourceId: string | null;
+      chunkIndex: number | null;
+    }>;
   }
 
   /**
@@ -406,38 +441,30 @@ export class KnowledgeService {
         if (!h.sourceId || h.chunkIndex === null) {
           return { content: h.content, metadata: h.metadata };
         }
-        try {
-          const neighbors = await this.db
-            .select({
-              content: knowledgeEntries.content,
-              chunkIndex: knowledgeEntries.chunkIndex,
-            })
-            .from(knowledgeEntries)
-            .where(
-              and(
-                eq(knowledgeEntries.sourceId, h.sourceId),
-                inArray(knowledgeEntries.chunkIndex, [
-                  h.chunkIndex - 1,
-                  h.chunkIndex,
-                  h.chunkIndex + 1,
-                ]),
-              ),
-            )
-            .orderBy(knowledgeEntries.chunkIndex);
-          const combined = neighbors.map((n) => n.content).join('\n');
-          return { content: combined || h.content, metadata: h.metadata };
-        } catch {
-          return { content: h.content, metadata: h.metadata };
-        }
+        const neighbors = await this.db
+          .select({
+            content: knowledgeEntries.content,
+            chunkIndex: knowledgeEntries.chunkIndex,
+          })
+          .from(knowledgeEntries)
+          .where(
+            and(
+              eq(knowledgeEntries.sourceId, h.sourceId),
+              inArray(knowledgeEntries.chunkIndex, [
+                h.chunkIndex - 1,
+                h.chunkIndex,
+                h.chunkIndex + 1,
+              ]),
+            ),
+          )
+          .orderBy(knowledgeEntries.chunkIndex);
+        const combined = neighbors.map((n) => n.content).join('\n');
+        return { content: combined || h.content, metadata: h.metadata };
       }),
     );
   }
 
-  /**
-   * Optional Cohere Rerank v3.5 — retrieve top-50 candidates, return top-K.
-   * 15–30% RAGAS improvement. Falls back gracefully if no Cohere key is set.
-   * Cost: $2 / 1,000 searches.
-   */
+  /** Cohere Rerank v3.5 — retrieve top-50 candidates, return top-K. Throws on failure. */
   private async rerankWithCohere(
     docs: Array<{
       id: string;
@@ -458,33 +485,27 @@ export class KnowledgeService {
       chunkIndex: number | null;
     }>
   > {
-    try {
-      const resp = await fetch('https://api.cohere.ai/v1/rerank', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${cohereApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'rerank-v3.5',
-          query,
-          documents: docs.map((d) => d.content),
-          top_n: topK,
-        }),
-        signal: AbortSignal.timeout(10_000),
-      });
+    const resp = await fetch('https://api.cohere.ai/v1/rerank', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${cohereApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'rerank-v3.5',
+        query,
+        documents: docs.map((d) => d.content),
+        top_n: topK,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
 
-      if (!resp.ok) {
-        this.logger.warn(`Cohere rerank failed: HTTP ${resp.status}`);
-        return docs.slice(0, topK);
-      }
-
-      const json = (await resp.json()) as { results: Array<{ index: number }> };
-      return json.results.map((r) => docs[r.index]);
-    } catch (err) {
-      this.logger.warn(`Cohere rerank error, using RRF order: ${err}`);
-      return docs.slice(0, topK);
+    if (!resp.ok) {
+      throw new Error(`Cohere rerank failed: HTTP ${resp.status}`);
     }
+
+    const json = (await resp.json()) as { results: Array<{ index: number }> };
+    return json.results.map((r) => docs[r.index]);
   }
 
   /**
@@ -505,6 +526,7 @@ export class KnowledgeService {
     queryEmbedding: number[] | null,
     query: string,
     limit: number,
+    bucket: EmbeddingBucket,
     similarityThreshold = 0.75,
     expandContext = false,
     enableRerank = false,
@@ -523,6 +545,7 @@ export class KnowledgeService {
             queryEmbedding,
             candidateK,
             distanceThreshold,
+            bucket,
           )
         : Promise.resolve([]),
       this.runFtsSearch(kbId, query, candidateK),
@@ -585,7 +608,11 @@ export class KnowledgeService {
     await this.assertBaseOwnership(workspaceId, kbId);
 
     const [entry] = await this.db
-      .select({ id: knowledgeEntries.id, status: knowledgeEntries.status })
+      .select({
+        id: knowledgeEntries.id,
+        status: knowledgeEntries.status,
+        lastError: knowledgeEntries.lastError,
+      })
       .from(knowledgeEntries)
       .where(
         and(
@@ -597,6 +624,70 @@ export class KnowledgeService {
 
     if (!entry) throw new NotFoundException(`Entry ${entryId} not found`);
     return entry;
+  }
+
+  async retryEntry(workspaceId: string, kbId: string, entryId: string) {
+    await this.assertBaseOwnership(workspaceId, kbId);
+
+    const [kb] = await this.db
+      .select({
+        embeddingModel: knowledgeBases.embeddingModel,
+        embeddingProvider: knowledgeBases.embeddingProvider,
+      })
+      .from(knowledgeBases)
+      .where(eq(knowledgeBases.id, kbId))
+      .limit(1);
+    const embeddingModel = kb?.embeddingModel ?? DEFAULT_EMBEDDING_MODEL;
+    const { provider, bucket } = resolveEmbeddingBucket(embeddingModel);
+
+    const [entry] = await this.db
+      .select({
+        id: knowledgeEntries.id,
+        content: knowledgeEntries.content,
+        contentHash: knowledgeEntries.contentHash,
+        status: knowledgeEntries.status,
+      })
+      .from(knowledgeEntries)
+      .where(
+        and(
+          eq(knowledgeEntries.id, entryId),
+          eq(knowledgeEntries.knowledgeBaseId, kbId),
+        ),
+      )
+      .limit(1);
+    if (!entry) throw new NotFoundException(`Entry ${entryId} not found`);
+    if (entry.status !== 'failed') {
+      throw new BadRequestException(
+        `Entry ${entryId} is not in a failed state (status: ${entry.status})`,
+      );
+    }
+
+    await this.db
+      .update(knowledgeEntries)
+      .set({ status: 'pending', lastError: null })
+      .where(eq(knowledgeEntries.id, entryId));
+
+    await this.embedQueue.add(
+      'embed',
+      {
+        entryId: entry.id,
+        knowledgeBaseId: kbId,
+        workspaceId,
+        content: entry.content,
+        contentHash: entry.contentHash ?? '',
+        embeddingModel,
+        provider,
+        dimensions: bucket,
+      } satisfies RagEmbedJobData,
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: 500,
+        removeOnFail: 200,
+      },
+    );
+
+    return { id: entry.id, status: 'pending' as const };
   }
 
   async deleteEntry(workspaceId: string, kbId: string, entryId: string) {
@@ -625,41 +716,40 @@ export class KnowledgeService {
 
     // Load KB settings (3-level cascade — node override already applied by caller for workflow context)
     const [kb] = await this.db
-      .select({ settings: knowledgeBases.settings })
+      .select({
+        settings: knowledgeBases.settings,
+        embeddingModel: knowledgeBases.embeddingModel,
+        embeddingProvider: knowledgeBases.embeddingProvider,
+      })
       .from(knowledgeBases)
       .where(eq(knowledgeBases.id, kbId))
       .limit(1);
     const kbSettings: KnowledgeBaseSettings = kb?.settings ?? {};
+    const embeddingModel = kb?.embeddingModel ?? DEFAULT_EMBEDDING_MODEL;
+    const { provider: embeddingProvider, bucket } =
+      resolveEmbeddingBucket(embeddingModel);
 
     const similarityThreshold = kbSettings.similarityThreshold ?? 0.75;
     const expandContext = kbSettings.expandContext ?? false;
     const enableRerank = kbSettings.enableRerank ?? false;
     const rerankTopK = kbSettings.rerankTopK ?? 50;
 
-    let queryEmbedding: number[] | null = null;
-    try {
-      // todo get from kb settings
-      const client = await this.ai.initialize(workspaceId, 'google');
-      // text-embedding-005
-      const vec = await client.embedding('text-embedding-005', dto.query);
-      if (vec == null) {
-        throw new Error('Failed to generate embeddings');
-      }
-      // const vec = await this.embeddingService.embed(
-      //   dto.query,
-      //   kbSettings.embeddingModel,
-      // );
-      const isZero = vec.every((v) => v === 0);
-      if (!isZero) queryEmbedding = vec;
-    } catch {
-      // fall through — hybridSearch will use FTS-only path
+    // Must match the KB's own locked model to stay in the same embedding space
+    const client = await this.ai.initialize(workspaceId, embeddingProvider);
+    const vec = await client.embedding(embeddingModel, dto.query);
+    if (vec == null) {
+      throw new Error('Failed to generate embeddings');
+    }
+    if (vec.every((v) => v === 0)) {
+      throw new Error('Embedding provider returned an all-zero vector');
     }
 
     return this.hybridSearch(
       kbId,
-      queryEmbedding,
+      vec,
       dto.query,
       dto.limit ?? 20,
+      bucket,
       similarityThreshold,
       expandContext,
       enableRerank,

@@ -28,4 +28,13 @@ export class CreateKnowledgeBaseDto {
   @IsOptional()
   @IsObject()
   settings?: KnowledgeBaseSettings;
+
+  @ApiPropertyOptional({
+    description:
+      'Embedding model, locked for the lifetime of this KB (default: text-embedding-005)',
+    example: 'text-embedding-005',
+  })
+  @IsOptional()
+  @IsString()
+  embeddingModel?: string;
 }

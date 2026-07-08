@@ -26,14 +26,8 @@ export class MemoryService {
     const createdIds: string[] = [];
     const updatedIds: string[] = [];
 
-    const client = this.ai.initializeWithSys('google');
-
     for (const fact of facts) {
-      // text-embedding-005
-      const vec = await client.embedding('text-embedding-005', fact.content);
-      if (vec == null) {
-        throw new Error('Failed to generate embeddings');
-      }
+      const vec = await this.ai.embedForMemory(fact.content);
       const vecStr = this.toVectorString(vec);
       const neighbor = await this.db.execute<{
         id: string;
@@ -130,18 +124,19 @@ export class MemoryService {
     };
   }
 
-  async search(workspaceId: string, dto: SearchMemoryDto) {
+  async search(
+    workspaceId: string,
+    callerUserId: string,
+    dto: SearchMemoryDto,
+  ) {
     const limit = dto.limit ?? 10;
 
-    const client = this.ai.initializeWithSys('google');
-    const vec = await client.embedding('text-embedding-005', dto.query);
-    if (vec == null) {
-      throw new Error('Failed to generate embeddings');
-    }
+    const vec = await this.ai.embedForMemory(dto.query);
     const vecStr = this.toVectorString(vec);
     // Build parameterized WHERE clause — never interpolate user values into sql.raw
     const scopeFilter = dto.scope ? sql`AND m.scope = ${dto.scope}` : sql``;
-    const userFilter = dto.userId ? sql`AND m.user_id = ${dto.userId}` : sql``;
+    // userId is always the authenticated caller, never a client-supplied filter
+    const userFilter = sql`AND m.user_id = ${callerUserId}`;
     const threadFilter = dto.threadId
       ? sql`AND m.thread_id = ${dto.threadId}`
       : sql``;
@@ -210,14 +205,14 @@ export class MemoryService {
       .slice(0, limit);
   }
 
-  async getProfile(workspaceId: string, userId: string) {
+  async getProfile(workspaceId: string, callerUserId: string) {
     const rows = await this.db
       .select()
       .from(memories)
       .where(
         and(
           eq(memories.workspaceId, workspaceId),
-          eq(memories.userId, userId),
+          eq(memories.userId, callerUserId),
           eq(memories.scope, 'user'),
           isNull(memories.supersededById),
         ),
@@ -270,9 +265,15 @@ export class MemoryService {
     return memory;
   }
 
-  async findAll(workspaceId: string, query: ListMemoriesDto) {
+  async findAll(
+    workspaceId: string,
+    callerUserId: string,
+    query: ListMemoriesDto,
+  ) {
+    // Bind to the authenticated caller, same as search()/getProfile()
     const conditions = [
       eq(memories.workspaceId, workspaceId),
+      eq(memories.userId, callerUserId),
       isNull(memories.supersededById),
     ];
     if (query.scope) conditions.push(eq(memories.scope, query.scope));

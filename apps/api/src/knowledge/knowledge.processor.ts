@@ -8,6 +8,17 @@ import { DB_TOKEN } from '../database/database.module.js';
 import { RAG_EMBED_QUEUE } from './knowledge.queue.js';
 import type { RagEmbedJobData } from './knowledge.queue.js';
 import { AIService } from '../services/ai/ai.service.js';
+import type { EmbeddingBucket } from '@linea/ai';
+
+// Drizzle's typed .set() doesn't support a computed property name
+function embeddingSetPayload(bucket: EmbeddingBucket, vec: number[]) {
+  switch (bucket) {
+    case 768:
+      return { embedding768: vec };
+    case 1536:
+      return { embedding1536: vec };
+  }
+}
 
 @Processor(RAG_EMBED_QUEUE)
 export class KnowledgeEmbedProcessor extends WorkerHost {
@@ -21,8 +32,14 @@ export class KnowledgeEmbedProcessor extends WorkerHost {
   }
 
   async process(job: Job<RagEmbedJobData>): Promise<void> {
-    const { entryId, content, embeddingModel, workspaceId, provider } =
-      job.data;
+    const {
+      entryId,
+      content,
+      embeddingModel,
+      workspaceId,
+      provider,
+      dimensions,
+    } = job.data;
 
     this.logger.debug(
       `Embedding entry ${entryId} with model ${embeddingModel}`,
@@ -37,29 +54,31 @@ export class KnowledgeEmbedProcessor extends WorkerHost {
     try {
       const client = await this.ai.initialize(workspaceId, provider);
 
-      // text-embedding-005
-      const vec = await client.embedding('text-embedding-005', content);
+      // Use the KB's locked model instead of a hardcoded one
+      const vec = await client.embedding(embeddingModel, content);
       if (vec == null) {
         throw new Error('Failed to generate embeddings');
       }
-      const isZero = vec.every((v) => v === 0);
+      if (vec.every((v) => v === 0)) {
+        throw new Error('Embedding provider returned an all-zero vector');
+      }
 
       await this.db
         .update(knowledgeEntries)
         .set({
-          embedding: isZero ? undefined : vec,
+          ...embeddingSetPayload(dimensions, vec),
           status: 'indexed',
+          lastError: null,
         })
         .where(eq(knowledgeEntries.id, entryId));
 
-      this.logger.debug(
-        `Entry ${entryId} embedded successfully (zero=${isZero})`,
-      );
+      this.logger.debug(`Entry ${entryId} embedded successfully`);
     } catch (err) {
-      this.logger.error(`Failed to embed entry ${entryId}: ${err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to embed entry ${entryId}: ${message}`);
       await this.db
         .update(knowledgeEntries)
-        .set({ status: 'failed' })
+        .set({ status: 'failed', lastError: message })
         .where(eq(knowledgeEntries.id, entryId));
       // Re-throw so BullMQ retries the job with exponential backoff
       throw err;

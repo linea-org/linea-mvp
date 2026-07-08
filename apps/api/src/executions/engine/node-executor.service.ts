@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isGraphInterrupt, interrupt } from '@langchain/langgraph';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { WorkflowState } from './variable-substitution.js';
 import { substituteInValue } from './variable-substitution.js';
 import { executeAgentNode } from './executors/agent.executor.js';
@@ -33,8 +33,10 @@ import { ExecutionSupervisor } from './supervisor.js';
 import { MemoryService } from './memory.service.js';
 import { AIService } from '../../services/ai/ai.service.js';
 import type { DrizzleDB, WorkspaceSettings } from '@linea/db';
-import { knowledgeBases, knowledgeEntries, workspaces } from '@linea/db';
+import { knowledgeBases, workspaces } from '@linea/db';
 import { DB_TOKEN } from '../../database/database.module.js';
+import { KnowledgeService } from '../../knowledge/knowledge.service.js';
+import { resolveEmbeddingBucket, DEFAULT_EMBEDDING_MODEL } from '@linea/ai';
 
 export interface NodeInput {
   nodeId: string;
@@ -98,6 +100,7 @@ export class NodeExecutorService {
     private readonly supervisor: ExecutionSupervisor,
     private readonly memoryService: MemoryService,
     private readonly aiService: AIService,
+    private readonly knowledgeService: KnowledgeService,
     @Inject(DB_TOKEN) private readonly db: DrizzleDB,
   ) {
     this.defaultAgentModel =
@@ -279,6 +282,7 @@ export class NodeExecutorService {
                 query,
                 topK,
                 this.aiService,
+                threadId,
               ),
             loadRecent: (topK) =>
               this.memoryService.loadRecentForContext(
@@ -399,40 +403,29 @@ export class NodeExecutorService {
       }
 
       case 'retriever': {
-        const embModelId =
-          (nodeData.embeddingModel as string | undefined) ??
-          'text-embedding-3-small';
-
-        const rawQuery =
-          (nodeData.query as string | undefined) ??
-          String(state.variables['lastOutput'] ?? '');
-        const resolvedQuery = substituteInValue(rawQuery, state) as string;
-        const queryEmbedding = await this.memoryService.generateEmbedding(
-          this.aiService,
-          workspaceId,
-          resolvedQuery,
-          embModelId,
-        );
-
         const wsSettings = await this.loadWorkspaceSettings(workspaceId);
 
         const r = await executeRetrieverNode(nodeData, state, {
           query: async (q, kbId, topK) => {
-            //   nodeData.[setting] → kbSettings.[setting] → wsSettings → system default
             const [kbRow] = await this.db
-              .select({ settings: knowledgeBases.settings })
+              .select({
+                settings: knowledgeBases.settings,
+                embeddingModel: knowledgeBases.embeddingModel,
+              })
               .from(knowledgeBases)
               .where(eq(knowledgeBases.id, kbId))
               .limit(1);
             const kbSettings = kbRow?.settings ?? {};
+            const embeddingModel =
+              kbRow?.embeddingModel ?? DEFAULT_EMBEDDING_MODEL;
+            const { provider: embeddingProvider, bucket } =
+              resolveEmbeddingBucket(embeddingModel);
 
             const similarityThreshold =
               (nodeData.similarityThreshold as number | undefined) ??
               kbSettings.similarityThreshold ??
               wsSettings.ragSimilarityThreshold ??
               0.75;
-            const distanceThreshold = 1 - similarityThreshold;
-
             const expandContext =
               (nodeData.expandContext as boolean | undefined) ??
               kbSettings.expandContext ??
@@ -445,159 +438,35 @@ export class NodeExecutorService {
               (nodeData.rerankTopK as number | undefined) ??
               kbSettings.rerankTopK ??
               50;
-            const candidateK = enableRerank ? rerankTopK : topK * 3;
 
-            type RagHit = {
-              id: string;
-              content: string;
-              metadata: Record<string, unknown>;
-              sourceId: string | null;
-              chunkIndex: number | null;
-            };
-
-            const [vectorHits, ftsHits] = await Promise.all([
-              // Vector arm (pgvector HNSW)
-              queryEmbedding
-                ? (async (): Promise<RagHit[]> => {
-                    try {
-                      const embLiteral = `[${queryEmbedding.join(',')}]`;
-                      const rows = await this.db.execute(sql`
-                        SELECT id, content, metadata,
-                               source_id AS "sourceId", chunk_index AS "chunkIndex"
-                        FROM knowledge_entries
-                        WHERE knowledge_base_id = ${kbId}
-                          AND embedding IS NOT NULL
-                          AND status = 'indexed'
-                          AND (embedding <=> ${embLiteral}::vector) < ${distanceThreshold}
-                        ORDER BY embedding <=> ${embLiteral}::vector
-                        LIMIT ${candidateK}
-                      `);
-                      return Array.from(rows) as RagHit[];
-                    } catch {
-                      return [];
-                    }
-                  })()
-                : Promise.resolve([]),
-
-              // BM25 arm (PostgreSQL FTS, GIN index from migration 0003)
-              (async (): Promise<RagHit[]> => {
-                try {
-                  const rows = await this.db.execute(sql`
-                    SELECT id, content, metadata,
-                           source_id AS "sourceId", chunk_index AS "chunkIndex"
-                    FROM knowledge_entries
-                    WHERE knowledge_base_id = ${kbId}
-                      AND status = 'indexed'
-                      AND to_tsvector('english', content) @@ plainto_tsquery('english', ${q})
-                    ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', ${q})) DESC
-                    LIMIT ${candidateK}
-                  `);
-                  return Array.from(rows) as RagHit[];
-                } catch {
-                  return [];
-                }
-              })(),
-            ]);
-
-            if (vectorHits.length === 0 && ftsHits.length === 0) return [];
-
-            // score = Σ weight / (60 + rank_i)   k=60 is the standard RRF constant
-            const scores = new Map<string, number>();
-            const docMap = new Map<string, RagHit>();
-
-            const applyRrf = (hits: RagHit[], weight: number) =>
-              hits.forEach((h, i) => {
-                scores.set(h.id, (scores.get(h.id) ?? 0) + weight / (60 + i));
-                docMap.set(h.id, h);
-              });
-
-            applyRrf(vectorHits, 0.7);
-            applyRrf(ftsHits, 0.3);
-
-            const merged = [...scores.entries()]
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, enableRerank ? rerankTopK : topK)
-              .map(([id]) => docMap.get(id)!);
-
-            let ranked = merged;
-            if (enableRerank) {
-              const cohereKey = await this.memoryService.loadSecret(
-                workspaceId,
-                'COHERE_API_KEY',
-              );
-              if (cohereKey) {
-                try {
-                  const resp = await fetch('https://api.cohere.ai/v1/rerank', {
-                    method: 'POST',
-                    headers: {
-                      Authorization: `Bearer ${cohereKey}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      model: 'rerank-v3.5',
-                      query: q,
-                      documents: merged.map((d) => d.content),
-                      top_n: topK,
-                    }),
-                    signal: AbortSignal.timeout(10_000),
-                  });
-                  if (resp.ok) {
-                    const json = (await resp.json()) as {
-                      results: Array<{ index: number }>;
-                    };
-                    ranked = json.results.map((r) => merged[r.index]);
-                  }
-                } catch (err) {
-                  this.logger.warn(
-                    `Cohere rerank failed, using RRF order: ${err}`,
-                  );
-                  ranked = merged.slice(0, topK);
-                }
-              } else {
-                ranked = merged.slice(0, topK);
-              }
-            } else {
-              ranked = merged.slice(0, topK);
+            // Must match the KB's own locked model to stay in the same embedding space
+            const client = await this.aiService.initialize(
+              workspaceId,
+              embeddingProvider,
+            );
+            const queryEmbedding = await client.embedding(embeddingModel, q);
+            if (queryEmbedding == null) {
+              throw new Error('Failed to generate query embedding');
             }
 
-            if (!expandContext) {
-              return ranked.map(({ content, metadata }) => ({
-                content,
-                metadata,
-              }));
-            }
+            const cohereApiKey = enableRerank
+              ? await this.memoryService.loadSecret(
+                  workspaceId,
+                  'COHERE_API_KEY',
+                )
+              : undefined;
 
-            return Promise.all(
-              ranked.map(async (h) => {
-                if (!h.sourceId || h.chunkIndex === null)
-                  return { content: h.content, metadata: h.metadata };
-                try {
-                  const neighbors = await this.db
-                    .select({
-                      content: knowledgeEntries.content,
-                      chunkIndex: knowledgeEntries.chunkIndex,
-                    })
-                    .from(knowledgeEntries)
-                    .where(
-                      and(
-                        eq(knowledgeEntries.sourceId, h.sourceId),
-                        inArray(knowledgeEntries.chunkIndex, [
-                          h.chunkIndex - 1,
-                          h.chunkIndex,
-                          h.chunkIndex + 1,
-                        ]),
-                      ),
-                    )
-                    .orderBy(knowledgeEntries.chunkIndex);
-                  const combined = neighbors.map((n) => n.content).join('\n');
-                  return {
-                    content: combined || h.content,
-                    metadata: h.metadata,
-                  };
-                } catch {
-                  return { content: h.content, metadata: h.metadata };
-                }
-              }),
+            return this.knowledgeService.hybridSearch(
+              kbId,
+              queryEmbedding,
+              q,
+              topK,
+              bucket,
+              similarityThreshold,
+              expandContext,
+              enableRerank,
+              rerankTopK,
+              cohereApiKey,
             );
           },
         });

@@ -9,16 +9,7 @@ export interface RetrieverNodeData {
   outputKey?: string; // panel field — used as variable name; ignored by format logic
 }
 
-/**
- * Retriever node — performs semantic search against a knowledge namespace.
- *
- * The actual vector search runs in the database (pgvector). This executor
- * delegates to the DatabaseService via the DB_TOKEN injection. For now,
- * it performs a simple text-match fallback since vector embeddings require
- * an embeddings API call that would need to be wired in separately.
- *
- * Returns the top-K matching document snippets.
- */
+/** Retriever node — hybrid search against a knowledge base via the injected query callback. */
 export async function executeRetrieverNode(
   nodeData: RetrieverNodeData,
   state: WorkflowState,
@@ -45,16 +36,14 @@ export async function executeRetrieverNode(
   if (!query) {
     return { documents: [], count: 0, query: '' };
   }
-
-  let documents: Array<{ content: string; metadata?: unknown }> = [];
-
-  if (db && kbId) {
-    try {
-      documents = await db.query(query, kbId, topK);
-    } catch {
-      documents = [];
-    }
+  if (!kbId) {
+    throw new Error('Retriever node is missing a knowledgeBaseId');
   }
+  if (!db) {
+    throw new Error('Retriever node has no query backend configured');
+  }
+
+  const documents = await db.query(query, kbId, topK);
 
   const combinedText = documents.map((d) => d.content).join('\n\n---\n\n');
 

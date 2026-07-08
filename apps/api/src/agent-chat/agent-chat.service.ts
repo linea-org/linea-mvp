@@ -1,4 +1,9 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { eq, and, desc } from 'drizzle-orm';
 import {
   StateGraph,
@@ -58,8 +63,30 @@ export class AgentChatService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async *chat(workspaceId: string, dto: ChatDto): AsyncIterable<AgentEvent> {
+  async *chat(
+    workspaceId: string,
+    callerUserId: string,
+    dto: ChatDto,
+  ): AsyncIterable<AgentEvent> {
     const threadId = dto.threadId ?? `agent-chat-${workspaceId}-${Date.now()}`;
+
+    // threadId must belong to the caller to avoid loading another user's memory
+    if (dto.threadId) {
+      const [existing] = await this.db
+        .select({ userId: agentChatSessions.userId })
+        .from(agentChatSessions)
+        .where(
+          and(
+            eq(agentChatSessions.workspaceId, workspaceId),
+            eq(agentChatSessions.threadId, dto.threadId),
+          ),
+        );
+      if (existing && existing.userId && existing.userId !== callerUserId) {
+        throw new ForbiddenException(
+          'This chat thread belongs to another user',
+        );
+      }
+    }
 
     const initialMessages: ModelChatMessage[] = dto.messages.map((m) => ({
       role: m.role,

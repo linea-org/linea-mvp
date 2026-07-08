@@ -77,13 +77,8 @@ export const memorySessions = pgTable("memory_sessions", {
     .notNull(),
 })
 
-/**
- * Per-knowledge-base RAG settings.
- * Priority: per-node override → kbSettings → wsSettings → system default
- */
+/** Per-KB RAG settings. Priority: node override → kbSettings → wsSettings → default. Embedding model is locked separately below. */
 export interface KnowledgeBaseSettings {
-  /** Overrides workspace-level embedding model (must be an OpenAI 1536d model) */
-  embeddingModel?: string
   /** Max chars per chunk (default: 1800 ≈ 512 tokens) */
   chunkSize?: number
   /** Overlap chars between adjacent chunks (default: 360 = 20%) */
@@ -110,6 +105,10 @@ export const knowledgeBases = pgTable("knowledge_bases", {
     .$type<KnowledgeBaseSettings>()
     .default({})
     .notNull(),
+  /** Locked at creation, never mutated once the KB has entries */
+  embeddingModel: text("embedding_model"),
+  embeddingProvider: text("embedding_provider"),
+  embeddingDimensions: integer("embedding_dimensions"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -124,7 +123,10 @@ export const knowledgeEntries = pgTable("knowledge_entries", {
     .references(() => knowledgeBases.id, { onDelete: "cascade" })
     .notNull(),
   content: text("content").notNull(),
-  embedding: vector("embedding", { dimensions: 1536 }),
+  /** Exactly one of these is populated per row, per the owning KB's locked bucket */
+  embedding768: vector("embedding_768", { dimensions: 768 }),
+  embedding1536: vector("embedding_1536", { dimensions: 1536 }),
+  // 3072-dim bucket deferred: pgvector caps hnsw/ivfflat indexes at 2000 dimensions
   metadata: jsonb("metadata")
     .$type<Record<string, unknown>>()
     .default({})
@@ -136,6 +138,8 @@ export const knowledgeEntries = pgTable("knowledge_entries", {
   contentHash: text("content_hash"),
   /** Ingestion lifecycle: pending → embedding → indexed | failed */
   status: text("status").default("indexed").notNull(),
+  /** Populated when status='failed', surfaced via getEntryStatus */
+  lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
