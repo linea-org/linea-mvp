@@ -1,13 +1,11 @@
 import { Processor, Worker, WorkerOptions } from "bullmq"
-import Redis from "ioredis"
+import { Redis } from "ioredis"
 
 import { DEFAULT_WORKER_OPTIONS } from "./constants.js"
 
 export interface CreateWorkerOptions {
   connection: Redis
-
   concurrency?: number
-
   settings?: WorkerOptions["settings"]
 }
 

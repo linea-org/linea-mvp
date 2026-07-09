@@ -1,9 +1,14 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { createConnection, createQueue, QUEUES } from '@linea/queues';
-
-export const REDIS = Symbol('REDIS');
-export const EXECUTION_QUEUE = Symbol('EXECUTION_QUEUE');
+import {
+  createConnection,
+  createQueue,
+  EXECUTION_QUEUE,
+  QUEUES,
+  REDIS,
+} from '@linea/queues';
+import { QueueService } from './queue.service.js';
+import { Redis } from 'ioredis';
 
 @Global()
 @Module({
@@ -20,12 +25,13 @@ export const EXECUTION_QUEUE = Symbol('EXECUTION_QUEUE');
     {
       provide: EXECUTION_QUEUE,
       inject: [REDIS],
-      useFactory: (redis: ReturnType<typeof createConnection>) =>
+      useFactory: (redis: Redis) =>
         createQueue(QUEUES.EXECUTION, {
           connection: redis,
         }),
     },
+    QueueService,
   ],
-  exports: [REDIS, EXECUTION_QUEUE],
+  exports: [REDIS, EXECUTION_QUEUE, QueueService],
 })
 export class QueueModule {}

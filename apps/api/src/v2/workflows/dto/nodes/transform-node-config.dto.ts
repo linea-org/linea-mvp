@@ -1,5 +1,8 @@
-import { TransformNodeConfig, VariableMap } from '@linea/shared/contracts';
+import { IsObject } from 'class-validator';
+
+import { TransformNodeConfig, type VariableMap } from '@linea/shared/contracts';
 
 export class TransformNodeConfigDto implements TransformNodeConfig {
+  @IsObject()
   variables!: VariableMap;
 }

@@ -1,6 +1,7 @@
 import { AIClient } from "@linea/ai"
-import type { NodeContext, NodeExecutor, NodeResult } from "../node.js"
 import type { AgentNodeConfig } from "@linea/shared/contracts"
+
+import type { NodeContext, NodeExecutor, NodeResult } from "../node.js"
 
 export class AgentNode implements NodeExecutor<"agent"> {
   constructor(private readonly ai: AIClient) {}
@@ -18,25 +19,33 @@ export class AgentNode implements NodeExecutor<"agent"> {
       context.state.variables
     )
 
-    const messages = context.config.messages.map((m) => ({
-      ...m,
-      content: context.template.render(m.content, context.state.variables),
+    const messages = context.config.messages.map((message) => ({
+      ...message,
+      content: context.template.render(
+        message.content,
+        context.state.variables
+      ),
     }))
 
     const completion = await client.chat(context.config.model, {
-      system: system,
-      messages: messages,
+      system,
+      messages,
       tools: context.config.tools,
       temperature: context.config.temperature,
       maxTokens: context.config.maxTokens,
     })
 
+    const output = {
+      text: completion.text,
+      usage: completion.usage,
+      finishReason: completion.stopReason,
+      toolCalls: completion.toolCalls,
+    }
+
     return {
-      variables: {
-        text: completion.text,
-        usage: completion.usage,
-        finishReason: completion.stopReason,
-        toolCalls: completion.toolCalls,
+      variables: output,
+      nodeResults: {
+        [context.node.id]: output,
       },
     }
   }

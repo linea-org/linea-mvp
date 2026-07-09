@@ -874,7 +874,8 @@ export default function ExecutionDetailPage() {
       const api = await getApi()
       const newExec = await api.post<{ id: string }>(
         `/workspaces/${wsId}/pods/${podId}/executions/${id}/replay`,
-        fromNodeId ? { fromNodeId } : {}
+        fromNodeId ? { fromNodeId } : {},
+        "v2"
       )
       router.push(`/pods/${podId}/executions/${newExec.id}`)
     } finally {

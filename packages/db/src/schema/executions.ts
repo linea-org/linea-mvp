@@ -57,7 +57,7 @@ export const executions = pgTable("executions", {
   variables: jsonb("variables").$type<VariableMap>().default({}).notNull(),
 
   // will remove this
-  output: jsonb("output").default({}),
+  output: jsonb("output").$type<VariableMap>().default({}),
   nodeResults: jsonb("node_results").$type<any>().default({}).notNull(),
 
   checkpoint: jsonb("checkpoint"),

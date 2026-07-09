@@ -5,12 +5,15 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  ValidateNested,
 } from 'class-validator';
 import { AI_PROVIDERS, type AIProviderType } from '@linea/shared';
 import { AgentNodeConfig } from '@linea/shared/contracts';
 
 export class AgentNodeConfigDto implements AgentNodeConfig {
+  @IsOptional()
+  @IsArray()
+  messages: ChatMessage[] = [];
+
   @IsEnum(AI_PROVIDERS)
   provider!: AIProviderType;
 
@@ -20,9 +23,6 @@ export class AgentNodeConfigDto implements AgentNodeConfig {
   @IsOptional()
   @IsString()
   systemPrompt?: string;
-
-  @ValidateNested({ each: true })
-  messages!: ChatMessage[];
 
   @IsOptional()
   @IsNumber()

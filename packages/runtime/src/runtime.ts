@@ -7,7 +7,7 @@ import type { RuntimeState } from "./types.js"
 import { LangGraphCompiler } from "./graph/compiler.js"
 import { LangGraphRunner } from "./graph/runner.js"
 import { TemplateEngine } from "./template/engine.js"
-import { WorkflowDefinition } from "@linea/shared/contracts"
+import { VariableMap, WorkflowDefinition } from "@linea/shared/contracts"
 
 export class Runtime {
   private readonly registry: NodeRegistry
@@ -23,13 +23,27 @@ export class Runtime {
     ])
 
     this.template = new TemplateEngine()
-
     this.compiler = new LangGraphCompiler(this.registry, this.template)
     this.runner = new LangGraphRunner()
   }
 
-  async execute(workflow: WorkflowDefinition, state: RuntimeState) {
-    const compiled = this.compiler.compile(workflow)
-    return this.runner.run(compiled, state)
+  async execute(
+    workflow: WorkflowDefinition,
+    input: VariableMap,
+    state: RuntimeState
+  ) {
+    const definition = this.template.renderObject(workflow, { input })
+    const compiled = this.compiler.compile(definition)
+
+    const result = await this.runner.run(compiled, state)
+    const endNode = workflow.nodes.find(
+      (node) => !workflow.edges.some((edge) => edge.source === node.id)
+    )
+
+    return {
+      ...result,
+      output: endNode ? result.nodeResults[endNode.id] : {},
+    }
+    // return this.runner.run(compiled, state)
   }
 }

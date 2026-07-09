@@ -1,4 +1,5 @@
 import type { TransformNodeConfig, VariableMap } from "@linea/shared/contracts"
+
 import type { NodeContext, NodeExecutor, NodeResult } from "../node.js"
 
 export class TransformNode implements NodeExecutor<"transform"> {
@@ -7,21 +8,27 @@ export class TransformNode implements NodeExecutor<"transform"> {
   async execute(
     context: NodeContext<TransformNodeConfig>
   ): Promise<NodeResult> {
-    const variables: VariableMap = {}
+    const output: VariableMap = {}
 
     for (const [key, value] of Object.entries(context.config.variables)) {
       if (typeof value === "string") {
-        variables[key] = context.template.render(value, {
-          ...context.state.variables,
-          ...variables,
+        output[key] = context.template.render(value, {
+          variables: {
+            ...context.state.variables,
+            ...output,
+          },
+          nodeResults: context.state.nodeResults,
         })
       } else {
-        variables[key] = value
+        output[key] = value
       }
     }
 
     return {
-      variables,
+      variables: output,
+      nodeResults: {
+        [context.node.id]: output,
+      },
     }
   }
 }

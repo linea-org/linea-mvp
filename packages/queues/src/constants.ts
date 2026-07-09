@@ -17,3 +17,6 @@ export const DEFAULT_JOB_OPTIONS = {
 export const DEFAULT_WORKER_OPTIONS = {
   concurrency: 10,
 }
+
+export const REDIS = Symbol("REDIS")
+export const EXECUTION_QUEUE = Symbol("EXECUTION_QUEUE")

@@ -13,8 +13,8 @@ export type Execution = {
     "queued" | "running" | "suspended" | "completed" | "failed" | "cancelled"
   input: VariableMap
   variables: VariableMap
-  output: unknown
-  nodeResults: any
+  output: VariableMap | null
+  nodeResults: Record<string, VariableMap>
   checkpoint: unknown
   tokenUsage: {
     input: number
@@ -45,7 +45,7 @@ export type NewExecution = {
     | undefined
   input?: VariableMap | undefined
   variables?: VariableMap | undefined
-  output?: unknown
+  output?: VariableMap | null
   nodeResults?: any
   checkpoint?: unknown
   tokenUsage?:

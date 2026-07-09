@@ -12,4 +12,12 @@ export const RuntimeStateAnnotation = Annotation.Root({
     }),
     default: () => ({}),
   }),
+
+  nodeResults: Annotation<Record<string, VariableMap>>({
+    reducer: (left, right) => ({
+      ...left,
+      ...right,
+    }),
+    default: () => ({}),
+  }),
 })

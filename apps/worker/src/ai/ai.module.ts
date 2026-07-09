@@ -1,7 +1,7 @@
 import { AIClient } from '@linea/ai';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '../database/database.module.js';
 import { Database } from '@linea/db';
 
 @Module({

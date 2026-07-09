@@ -37,14 +37,21 @@ export class LangGraphCompiler {
       const executor = this.registry.get(node.type)
 
       graph.addNode(node.id, async (state) => {
+        const renderedConfig = this.template.renderObject(node.config, {
+          variables: state.variables,
+          nodeResults: state.nodeResults,
+        })
+
         const result = await executor.execute({
+          node: node,
           state,
-          config: node.config,
+          config: renderedConfig,
           template: this.template,
         })
 
         return {
           variables: result.variables,
+          nodeResults: result.nodeResults,
         }
       })
     }

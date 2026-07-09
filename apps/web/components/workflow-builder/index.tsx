@@ -83,7 +83,6 @@ import { computeAutoLayout } from "./workflow-auto-layout"
 import { CanvasControls } from "./canvas-controls"
 import { useWorkflowSSE } from "./use-workflow-sse"
 
-// Must render inside ReactFlowProvider — useReactFlow() is used by children.
 function BuilderInner({
   workflowId,
   podId,

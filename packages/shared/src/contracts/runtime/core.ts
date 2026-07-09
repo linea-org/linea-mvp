@@ -30,3 +30,10 @@ export interface WorkflowDefinition {
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
 }
+
+export const PRIMARY_NODE_OUTPUT: Record<WorkflowNodeType, readonly string[]> =
+  {
+    agent: [],
+    transform: [],
+    http: ["body"],
+  }
