@@ -104,11 +104,14 @@ export class ExecutionsService {
     };
   }
 
-  async findOne(_podId: string, id: string) {
-    // todo add podId also
+  async findOne(podId: string, id: string) {
     const execution = await this.db.execution.findById(id);
-
     if (!execution) throw new NotFoundException(`Execution ${id} not found`);
+
+    if (execution.podId == podId) {
+      throw new BadRequestException("PodId don't match from Execution");
+    }
+
     return execution;
   }
 
@@ -207,6 +210,10 @@ export class ExecutionsService {
 
     if (!execution) {
       throw new Error('Unable to create workflow execution at the moment');
+    }
+
+    if (execution.podId == podId) {
+      throw new BadRequestException("PodId don't match from Execution");
     }
 
     await this.queue.enqueueExecution(execution.id);
