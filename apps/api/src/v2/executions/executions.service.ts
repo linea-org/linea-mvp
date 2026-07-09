@@ -108,7 +108,7 @@ export class ExecutionsService {
     const execution = await this.db.execution.findById(id);
     if (!execution) throw new NotFoundException(`Execution ${id} not found`);
 
-    if (execution.podId == podId) {
+    if (execution.podId != podId) {
       throw new BadRequestException("PodId don't match from Execution");
     }
 
@@ -186,6 +186,10 @@ export class ExecutionsService {
       );
     }
 
+    if (original.podId != podId) {
+      throw new BadRequestException("PodId don't match from Execution");
+    }
+
     if (!['completed', 'failed', 'cancelled'].includes(original.status)) {
       throw new BadRequestException(
         `Can only replay completed, failed, or cancelled executions (current: ${original.status})`,
@@ -210,10 +214,6 @@ export class ExecutionsService {
 
     if (!execution) {
       throw new Error('Unable to create workflow execution at the moment');
-    }
-
-    if (execution.podId == podId) {
-      throw new BadRequestException("PodId don't match from Execution");
     }
 
     await this.queue.enqueueExecution(execution.id);
