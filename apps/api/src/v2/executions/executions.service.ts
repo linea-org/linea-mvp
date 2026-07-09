@@ -40,7 +40,7 @@ export class ExecutionsService {
     workflowId: string,
     triggeredBy: 'manual' | 'schedule' | 'webhook' | 'sdk',
     input: Record<string, unknown> = {},
-    userId?: string,
+    _userId?: string,
   ) {
     const wf = await this.db.workflow.findById(workflowId);
     if (!wf) throw new NotFoundException(`Workflow ${workflowId} not found`);
@@ -59,16 +59,12 @@ export class ExecutionsService {
 
     const threadId = `thread_${randomBytes(8).toString('hex')}`;
 
-    const testInput = {
-      userId: 1,
-    };
-
     const execution = await this.db.execution.create({
       workflowId,
       workspaceId,
       podId,
       status: 'queued',
-      input: testInput,
+      input,
       threadId,
       triggeredBy,
     });
@@ -108,7 +104,7 @@ export class ExecutionsService {
     };
   }
 
-  async findOne(podId: string, id: string) {
+  async findOne(_podId: string, id: string) {
     // todo add podId also
     const execution = await this.db.execution.findById(id);
 
@@ -136,7 +132,7 @@ export class ExecutionsService {
   async respond(
     podId: string,
     id: string,
-    dto: { approved?: boolean; answer?: string; comment?: string },
+    _dto: { approved?: boolean; answer?: string; comment?: string },
   ) {
     const execution = await this.findOne(podId, id);
     if (execution.status !== 'suspended') {
@@ -145,18 +141,18 @@ export class ExecutionsService {
       );
     }
 
-    const pendingInterrupt = (execution.variables as any)?.__pendingInterrupt;
-    let resumeValue: unknown;
+    // const pendingInterrupt = (execution.variables as any)?.__pendingInterrupt;
+    // let resumeValue: unknown;
 
-    if (pendingInterrupt?.type === 'ask_human') {
-      resumeValue = { answer: dto.answer ?? dto.comment ?? '' };
-    } else {
-      if (dto.approved === false) {
-        resumeValue = { approved: false, reason: dto.comment ?? 'User denied' };
-      } else {
-        resumeValue = { approved: true, comment: dto.comment };
-      }
-    }
+    // if (pendingInterrupt?.type === 'ask_human') {
+    //   resumeValue = { answer: dto.answer ?? dto.comment ?? '' };
+    // } else {
+    //   if (dto.approved === false) {
+    //     resumeValue = { approved: false, reason: dto.comment ?? 'User denied' };
+    //   } else {
+    //     resumeValue = { approved: true, comment: dto.comment };
+    //   }
+    // }
 
     await this.db.client
       .update(executions)

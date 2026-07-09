@@ -4,10 +4,10 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
-import { Worker } from 'bullmq';
+import { Job, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 
-import { REDIS, QUEUES, createWorker } from '@linea/queues';
+import { REDIS, QUEUES, createWorker, ExecutionJob } from '@linea/queues';
 import { ExecutionProcessor } from './execution.processor.js';
 
 @Injectable()
@@ -22,7 +22,7 @@ export class ExecutionWorker implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     this.worker = createWorker(
       QUEUES.EXECUTION,
-      async (job) => {
+      async (job: Job<ExecutionJob>) => {
         await this.processor.execute(job.data.executionId);
       },
       {

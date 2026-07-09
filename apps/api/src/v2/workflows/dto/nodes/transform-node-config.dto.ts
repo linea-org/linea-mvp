@@ -1,4 +1,4 @@
-import { IsObject, IsString } from 'class-validator';
+import { IsObject } from 'class-validator';
 
 import { TransformNodeConfig, type VariableMap } from '@linea/shared/contracts';
 
