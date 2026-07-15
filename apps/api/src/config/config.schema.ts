@@ -29,4 +29,10 @@ export const configSchema = z.object({
   // Default model IDs (override per-node, fallback to these)
   DEFAULT_AGENT_MODEL: z.string().default('claude-sonnet-4-6'),
   SUPERVISOR_MODEL: z.string().default('claude-haiku-4-5'),
+
+  // Email delivery (Resend). Optional — when RESEND_API_KEY is absent,
+  // emails are logged instead of sent.
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM: z.string().optional(),
+  WEB_URL: z.string().url().optional(),
 });

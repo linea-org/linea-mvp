@@ -294,7 +294,7 @@ export class WorkspacesService {
       .where(eq(users.id, actor.userId))
       .limit(1);
 
-    void this.mail.sendInvite({
+    void this.mail.sendInvitation({
       toEmail: dto.email,
       workspaceName: ws?.name ?? 'a workspace',
       role: dto.role,
